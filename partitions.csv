@@ -1,0 +1,5 @@
+# 16 MB flash: NVS and PHY data as in the default table (keeps stored banks), 6 MB for the app.
+# Name,   Type, SubType, Offset,  Size
+nvs,      data, nvs,     0x9000,  0x6000
+phy_init, data, phy,     0xf000,  0x1000
+factory,  app,  factory, 0x10000, 6M

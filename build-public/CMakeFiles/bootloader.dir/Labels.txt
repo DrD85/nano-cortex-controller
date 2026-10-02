@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+/Users/dominikschmidt/Music/nano/nano-controller/build-public/CMakeFiles/bootloader
+/Users/dominikschmidt/Music/nano/nano-controller/build-public/CMakeFiles/bootloader.rule
+/Users/dominikschmidt/Music/nano/nano-controller/build-public/CMakeFiles/bootloader-complete.rule
+/Users/dominikschmidt/Music/nano/nano-controller/build-public/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+/Users/dominikschmidt/Music/nano/nano-controller/build-public/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+/Users/dominikschmidt/Music/nano/nano-controller/build-public/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+/Users/dominikschmidt/Music/nano/nano-controller/build-public/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+/Users/dominikschmidt/Music/nano/nano-controller/build-public/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+/Users/dominikschmidt/Music/nano/nano-controller/build-public/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+/Users/dominikschmidt/Music/nano/nano-controller/build-public/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule

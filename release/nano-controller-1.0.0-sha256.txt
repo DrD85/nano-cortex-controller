@@ -1,0 +1,2 @@
+251600203d08f49a18a92760dbf6d166f9817af736879ec584a75b80455e11a4  nano-controller-1.0.0-full.bin
+81e9f419f3ca81e5f4e201eb96ed1b488970aa3ab1356ea17cbc4e7caf62bc8b  nano-controller-1.0.0-update.bin

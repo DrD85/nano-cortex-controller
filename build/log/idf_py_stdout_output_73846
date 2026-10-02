@@ -1,0 +1,3 @@
+Command: ninja app
+[1/1] cd /Users/dominikschmidt/Music/nano/nano-controller/build && /Users/dominikschmidt/.espressif/python_env/idf6.0_py3.14_env/bin/python /Users/dominikschmidt/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /Users/dominikschmidt/Music/nano/nano-controller/build/partition_table/partition-table.bin /Users/dominikschmidt/Music/nano/nano-controller/build/nano_controller.bin
+nano_controller.bin binary size 0x121960 bytes. Smallest app partition is 0x177000 bytes. 0x556a0 bytes (23%) free.

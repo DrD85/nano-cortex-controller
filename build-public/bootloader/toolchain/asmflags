@@ -1,0 +1,5 @@
+"-specs=/Users/dominikschmidt/Music/nano/nano-controller/build-public/bootloader/specs/picolibc.specs"
+-mlongcalls
+-fno-builtin-memcpy
+-fno-builtin-memset
+-fno-builtin-bzero

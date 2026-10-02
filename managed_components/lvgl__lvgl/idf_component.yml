@@ -1,0 +1,31 @@
+dependencies:
+  espressif/freetype:
+    require: private
+    rules:
+    - if: idf_version >=5.5 && $CONFIG{LV_USE_FREETYPE} == True
+    version: ^2.14.3
+  espressif/libjpeg-turbo:
+    require: private
+    rules:
+    - if: idf_version >=5.5 && $CONFIG{LV_USE_LIBJPEG_TURBO} == True
+    version: ^3.1.1
+  espressif/libpng:
+    require: private
+    rules:
+    - if: idf_version >=5.5 && $CONFIG{LV_USE_LIBPNG} == True
+    version: ^1.6.58
+  espressif/lz4:
+    require: private
+    rules:
+    - if: idf_version >=5.5 && $CONFIG{LV_USE_LZ4} == True && $CONFIG{LV_USE_LZ4_INTERNAL}
+        == False
+    version: ^1.10.0
+description: LVGL - Light and Versatile Graphics Library
+documentation: https://docs.lvgl.io/
+issues: https://github.com/lvgl/lvgl/issues
+repository: git://github.com/lvgl/lvgl.git
+repository_info:
+  commit_sha: 60b614c23c816ca5edc5f2840c9945eff7da0ad4
+  path: .
+url: https://lvgl.io/
+version: 9.6.0~1

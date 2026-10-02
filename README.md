@@ -1,0 +1,271 @@
+# Nano Cortex Controller (unofficial)
+
+A touch screen and footswitch controller for the **Neural DSP Nano Cortex**, connected over Bluetooth.
+It runs on a **Waveshare ESP32-S3-Touch-LCD-4.3** and turns it into a Quad-Cortex-style floor controller:
+eight coloured tiles for eight footswitches, a full FX editor, the capture and IR library, a tuner and
+your own preset banks. It is the hardware companion of the
+[Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).
+
+> **Unofficial community project.** Not affiliated with, endorsed by or supported by Neural DSP.
+> "Nano Cortex", "Quad Cortex" and "Neural DSP" are trademarks of Neural DSP Technologies.
+> The controller writes to your device. Use it at your own risk and keep backups of your presets
+> (for example with the official Cortex Cloud app).
+
+**Deutsch:** [Anleitung auf Deutsch](README.de.md)
+
+## Features
+
+- **Presets**: six presets per bank on footswitches 3–8, 16 own banks with colour and symbol per switch,
+  previous/next preset by swiping, rename and save on the Nano, follows preset changes made on the pedal
+- **FX mode**: footswitches 3–7 switch Pre FX 1–2 and Post FX 1–3, tiles in the effect category colours
+- **FX editor** (long press on an FX tile): choose the model and edit every parameter live
+- **Capture and Cab/IR**: pick one of the 25 capture slots or 5 cab slots, or load any capture or IR from the
+  Nano's library (factory and user) into the active slot
+- **Reverb switch** (footswitch 8): toggles the reverb mix between Pos 1 and Pos 2 of the preset's expression
+  setting – or switches between the preset's reverb and a **second reverb** with its own settings
+- **Tuner** with large note display and needle (footswitch 2)
+- **USB audio volume** of the Nano (playback from the computer), as in the official app
+- **Footswitch learn**: assign any footswitch to any function
+- **Full-screen tiles** (swipe up) for reading from a distance
+- Up to 8 footswitches on an SX1509 I/O expander (optional – the touch screen works on its own)
+
+## What you need
+
+| Part | Notes |
+|---|---|
+| [Waveshare ESP32-S3-Touch-LCD-4.3](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-4.3) | 800 × 480 touch screen, version with two USB-C ports (**USB** and **UART**) |
+| Neural DSP Nano Cortex | Bluetooth on; no pairing needed |
+| Optional: SX1509 breakout + up to 8 momentary footswitches | see [Footswitches](#footswitches) |
+
+## Install the firmware (in the browser, no tools needed)
+
+The firmware is on the [Releases](../../releases) page. Each release has two files:
+
+| File | Flash at | Use it for |
+|---|---|---|
+| `nano-controller-<version>-full.bin` | `0x0` | the **first installation** (bootloader, partition table and app). Erases stored banks and settings. |
+| `nano-controller-<version>-update.bin` | `0x10000` | **updates**: only the app – your banks, symbols, footswitch order and second reverbs stay |
+
+1. Open **[esptool.spacehuhn.com](https://esptool.spacehuhn.com)** in **Chrome** or **Edge** on a computer
+   (Safari and Firefox have no Web Serial).
+2. Connect the board with the USB-C port labelled **USB** (not UART).
+3. Click **Connect** and choose the port of the board (usually "USB JTAG/serial debug unit").
+   If no port shows up: hold the **BOOT** button, press and release **RESET**, then release **BOOT** and try again.
+4. Add the `.bin` file and set the address: `0x0` for the `-full.bin`, `0x10000` for the `-update.bin`.
+5. Click **Program** and wait until it says it is done.
+6. Press **RESET** on the board (or unplug and plug it in again).
+
+The checksums of both files are in `nano-controller-<version>-sha256.txt`.
+
+## First start
+
+1. Switch the Nano Cortex on.
+2. Close the **Cortex Cloud** app and the **Nano Cortex Editor** – the Nano accepts only one Bluetooth
+   connection at a time.
+3. Power the board. It searches for the Nano ("SEARCHING FOR THE NANO…"), connects, reads all preset names and
+   shows the current preset. If it does not find the Nano within a minute, switch the Nano off and on again.
+
+## Using it
+
+### The screen
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  ◀   ● PRESET 7   BANK 2   EDITED         USB   SAVE   ▶  │  preset card: arrows = bank −/+
+│              Revv NF53 Clean                              │  long press on the name: rename
+├────────────────────────────┬─────────────────────────────┤
+│ CAPTURE  Revv D20 clean    │ CAB / IR  810 Amped VT      │  tap: choose slot or library item
+├──────────┬──────────┬──────┴───┬──────────────────────────┤
+│ 1 MODE   │ 2 TUNER  │ 3        │ 4                        │  eight tiles = eight footswitches
+├──────────┼──────────┼──────────┼──────────────────────────┤
+│ 5        │ 6        │ 7        │ 8                        │
+└──────────┴──────────┴──────────┴──────────────────────────┘
+```
+
+- **Tap a tile** = press its footswitch.
+- **Swipe left / right**: next / previous preset.
+- **Swipe up**: tiles in full screen (larger names). **Swipe down**: back.
+- The green dot shows the Bluetooth connection, **EDITED** unsaved changes on the Nano.
+
+### Footswitches and tiles
+
+| Switch | Preset mode | FX mode |
+|---|---|---|
+| 1 | switch to FX mode | switch to preset mode |
+| 2 | tuner on/off | tuner on/off |
+| 3–8 | the six presets of the current bank | 3–7: Pre FX 1, Pre FX 2, Post FX 1–3 on/off |
+| 8 | (sixth preset) | reverb: mix Pos 1 ↔ Pos 2, or reverb A ↔ B |
+
+Active tiles light up in full colour, inactive ones are dimmed. FX tiles use the effect category colours.
+
+### Long presses
+
+| Where | What opens |
+|---|---|
+| Tile 1 or 2 | **Learn** for this footswitch (see below) |
+| Preset tile (3–8, preset mode) | **Bank editor**: colour, symbol and preset of this switch; `DEFAULT` restores the standard preset; `LEARN SWITCH` |
+| FX tile (3–7, FX mode) | **FX editor**: model (tap the model name), on/off and all parameters |
+| Tile 8 (FX mode) | **Reverb dialog** with the tabs *MIX POS 1 / 2* and *2ND REVERB* |
+| Preset name | **Rename** with on-screen keyboard (at least 4 characters, unique) |
+
+### Own banks
+
+16 banks with six switches each. By default bank 1 holds presets 1–6, bank 2 presets 7–12 and so on.
+A long press on a preset tile lets you choose any preset, one of ten colours and one of 14 symbols
+(Clean, Edge, Drive, Solo, Fuzz, Atmospheric, Metal, Boost, Rhythm, Bass, Acoustic, Blues, Live, Favorite).
+The banks are stored on the controller, the presets themselves stay on the Nano.
+
+### Capture and Cab/IR
+
+Tap the CAPTURE or CAB / IR card. **SLOTS** lists the 25 capture slots (5 banks × 5) or 5 cab slots;
+**LIBRARY** shows all captures or IRs stored on the Nano with category filters (AMP, CAB, PEDAL, OTHER).
+A library item is loaded into the active slot after a confirmation.
+
+### FX editor
+
+Changes are sent to the Nano while you move a control. The Nano only reports parameter values of effects that
+are switched on – switch an effect on to see and edit its values. **SAVE** in the preset card stores the preset
+on the Nano.
+
+### Reverb switch (footswitch 8)
+
+- **MIX POS 1 / 2**: footswitch 8 sets the reverb's Mix to Pos 1 or Pos 2. These are the heel and toe values of
+  the preset's expression setting for the reverb ("Post FX 3 Amount"). Moving a slider plays that mix;
+  **SAVE** writes both values into the preset (and creates the expression setting if there is none).
+- **2ND REVERB**: choose a second reverb (B) for this preset. Footswitch 8 then switches between the preset's
+  reverb (A) and B; the Nano has one reverb slot, so the controller swaps the model and sends the stored values
+  (takes about half a second). **EDIT B** loads B and opens the FX editor to set it up. Reverb B is stored on the
+  controller, per preset. If you save the preset while B is active, B becomes the preset's reverb.
+
+### Tuner
+
+Footswitch 2 or the TUNER tile. Shows the note, the deviation in cents and a needle (green = in tune).
+Tap the screen or press footswitch 2 again to close it.
+
+### USB audio volume
+
+**USB** in the preset card: volume of the audio played from the computer over USB, −40 dB (OFF) to 0 dB,
+as in the official app. The value is read from the Nano each time.
+
+### Footswitch learn
+
+Long press on tile 1 or 2, or **LEARN SWITCH** in the bank editor. Then press the footswitch that should have
+this function within 15 seconds. If it had another function, the two are swapped. **DEFAULT ORDER** restores
+the standard order.
+
+### What is stored where
+
+| On the Nano | On the controller |
+|---|---|
+| presets, names, captures, cabs, FX and their values, expression settings (Pos 1 / Pos 2), USB volume | own banks (preset, colour, symbol), footswitch order, second reverbs |
+
+## Footswitches
+
+The footswitches are read by an **SX1509** I/O expander (for example the SparkFun breakout), as in
+[TonexOneController](https://github.com/Builty/TonexOneController).
+
+- Connect the SX1509 to the board's **I2C** bus: SDA = GPIO 8, SCL = GPIO 9, 3.3 V and GND
+  (see Waveshare's wiki for the connector of your board).
+- Set the SX1509 address to **0x71** (or 0x70). 0x3E/0x3F are taken by the board's own I/O expander.
+- Wire each footswitch (momentary, normally open) between an SX1509 I/O pin and **GND**. Internal pull-ups are
+  used, no resistors needed.
+- Default order: switch 1–8 on SX1509 pins **11, 10, 0, 1, 2, 3, 8, 9**. Any other pins work too – use
+  footswitch learn to assign them.
+
+Without an SX1509 the controller works with the touch screen only.
+
+## Serial console
+
+With the board on the **USB** port, any serial monitor at 115200 baud (for example `idf.py monitor --no-reset`)
+shows a log of all messages and accepts commands: `n`/`p` next/previous preset, a number (1–64) selects a preset,
+`a`–`e` switch FX slots 1–5, `m` mode, `t` tuner, `x` reverb switch, `s` read the preset again,
+`l` list the preset names, `h` help.
+
+## Build from source
+
+Requirements: [ESP-IDF](https://docs.espressif.com/projects/esp-idf/) **v6.0.2**. The components (LVGL, display
+port, touch driver) are downloaded by the component manager on the first build.
+
+```bash
+. ~/esp/esp-idf/export.sh
+idf.py build
+idf.py -p /dev/cu.usbmodem1101 flash
+idf.py -p /dev/cu.usbmodem1101 monitor --no-reset
+```
+
+Open the monitor with `--no-reset`; otherwise the reset over the native USB port can leave the board in
+download mode. Use the port name of your system (`ls /dev/cu.*` on a Mac).
+
+`tools/release.sh` builds the release files (`release/…-full.bin` and `…-update.bin`) as published.
+
+### Project layout
+
+| Path | Contents |
+|---|---|
+| `main/main.c` | app task: events from Bluetooth, touch screen, footswitches and console; modes, banks, FX editor, reverb switch |
+| `main/nano_link.c` | Bluetooth LE central (NimBLE): scan, connect, MTU 517, notifications, reassembly of long messages, write queue |
+| `main/nano_state.c` | protobuf parsing of the Nano's state and all request messages |
+| `main/library.c` | capture / IR library (reading, sorting, loading into a slot) |
+| `main/ui.c` | LVGL user interface |
+| `main/board.c` | display (RGB 800 × 480), GT911 touch, CH422G I/O expander, LVGL port |
+| `main/footswitches.c` | SX1509 polling, debouncing, learn |
+| `main/fx_models.c`, `main/fx_icons.c`, `main/preset_icons.c` | generated tables and icons (see `tools/`) |
+| `tools/gen_tables.py` | FX models and parameters (`tools/editor_models.json`, exported from the editor) and effect icons |
+| `tools/preset_icons.py` | the preset symbols (own drawings), rendered by `tools/svg_render.py` |
+| `tools/gen_pedals.py` | optional pedal pictures for an own build (see below) |
+
+### Own artwork (optional, own builds only)
+
+`main/fx_icons.c` contains drawn effect icons and `main/fx_pedals.c` no pedal pictures. If you have your own icon
+set or pedal pictures, `tools/gen_tables.py` and `tools/gen_pedals.py` can turn them into
+`main/private/fx_icons_private.c` and `main/private/fx_pedals_private.c`: the build uses them automatically, they
+are ignored by git and never part of the published firmware (`-DNANO_PUBLIC=1`). Do not publish artwork you have
+no rights to.
+
+## How it works
+
+The Nano Cortex offers a Bluetooth LE service `A002` with a write characteristic `C304` and a notify
+characteristic `C305`. Every message is a protobuf payload framed as
+`[length] C0 [payload] [32-bit little-endian message type]`; long replies are split into several packets.
+The controller is a Bluetooth central: it connects without pairing, requests an MTU of 517 and reads the full
+state (all preset names) once, then the current preset after every change.
+
+Message types used (request → reply): 1 → 2 state, 3 save, 28 capture/cab slot, 29 → 30 preset change,
+31 FX on/off, 60 → 61 and 62 expression settings, 65 → 66 and 67 → 68 settings, 76 → 77 library,
+78 → 79 / 80 → 81 load IR / capture, 99 FX parameter, 111 → 112 rename, 115 unsaved changes,
+127 / 128 tuner, 136 FX model, 137 → 138 FX parameter values. The message layouts are documented in the
+comments of `main/nano_state.c`, `main/library.c` and in the
+[Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).
+
+When the preset is changed on the pedal, the Nano sends message 29 and waits for the acknowledgement 30
+(`06 C0 20 01 1E 00 00 00`); the controller answers it and reads the new preset.
+
+## Credits
+
+This project stands on the shoulders of:
+
+- [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) (MIT) – the Bluetooth protocol as tested
+  against the device, the FX model and parameter tables and the effect icon drawings
+- [rixrix/deskop-nano-cortex](https://github.com/rixrix/deskop-nano-cortex) (Apache-2.0) – protocol notes on the
+  state layout and the preset-change acknowledgement (via the editor)
+- [Builty/TonexOneController](https://github.com/Builty/TonexOneController) (Apache-2.0) – the idea of a touch
+  screen controller on this Waveshare board, its display and touch setup (pins, timing, touch reset) and the
+  SX1509 footswitch wiring
+- [ESP-IDF](https://github.com/espressif/esp-idf) (Apache-2.0) by Espressif, including the
+  [NimBLE](https://github.com/apache/mynewt-nimble) Bluetooth stack (Apache-2.0)
+- [LVGL](https://github.com/lvgl/lvgl) (MIT) – the graphics library, including TinyTTF with
+  [stb_truetype](https://github.com/nothings/stb) (MIT / public domain)
+- [esp_lvgl_port](https://components.espressif.com/components/espressif/esp_lvgl_port),
+  [esp_lcd_touch](https://components.espressif.com/components/espressif/esp_lcd_touch) and
+  [esp_lcd_touch_gt911](https://components.espressif.com/components/espressif/esp_lcd_touch_gt911)
+  (Apache-2.0) by Espressif
+- [Montserrat](https://github.com/JulietaUla/Montserrat) font (SIL Open Font License 1.1) by
+  The Montserrat Project Authors – the built-in LVGL fonts and the large tuner note
+- [ESPWebTool](https://github.com/SpacehuhnTech/espwebtool) (MIT) by Spacehuhn – flashing in the browser
+- [esptool](https://github.com/espressif/esptool) (GPL-2.0) by Espressif – flashing and release images
+- [Pillow](https://github.com/python-pillow/Pillow) (MIT-CMU) – rendering the icons in `tools/`
+- [Waveshare](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-4.3) – board documentation and demos
+
+## License
+
+[MIT](LICENSE) for the code of this project. The components above keep their own licenses.
