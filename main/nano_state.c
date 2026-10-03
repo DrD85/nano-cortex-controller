@@ -286,6 +286,26 @@ size_t nano_fx_bypass(int slot, bool on, uint8_t *out)
     return 6;
 }
 
+static size_t put_int32(uint8_t *out, int v)
+{
+    return put_varint(out, v < 0 ? UINT64_MAX : (uint64_t)v);   // negative int32 values are sign-extended
+}
+
+size_t nano_preset_changed_notice(const nano_state_t *st, uint8_t *out)
+{
+    int index = st->current_preset - 1, current_slot = 4;
+    size_t n = 0;
+    out[n++] = 0x18; out[n++] = 0x00;
+    out[n++] = 0x20; n += put_varint(out + n, (uint64_t)index);
+    for (int i = 0; i < 4; i++) {
+        out[n++] = (uint8_t)((5 + i) << 3);
+        n += put_int32(out + n, st->slot_preset[i]);
+        if (st->slot_preset[i] == index && current_slot == 4) current_slot = i;
+    }
+    out[n++] = 0x48; out[n++] = (uint8_t)current_slot;
+    return n;
+}
+
 // SetPresetSlotsResponse { 4: status = success }. Without it the Nano waits in a pending preset change.
 size_t nano_preset_change_ack(uint8_t *out)
 {

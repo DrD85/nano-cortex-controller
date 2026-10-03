@@ -74,6 +74,9 @@ void ui_set_library(const nano_library_t *library);
 // USB playback volume (dB, -40 = off) read from the Nano's settings.
 void ui_set_usb_gain(float db);
 
+// The Nano Cortex Editor is connected through the controller (shown in the status line).
+void ui_set_app(bool connected);
+
 // Footswitch learn finished (or not possible): closes the learn window and shows the message.
 void ui_learn_done(const char *message);
 

@@ -33,6 +33,7 @@
 #include "nvs_flash.h"
 
 #include "board.h"
+#include "app_link.h"
 #include "footswitches.h"
 #include "library.h"
 #include "midi_ble.h"
@@ -70,6 +71,10 @@ static bool s_waiting_full_state;
 static int s_incomplete_retries;   // replies that arrived broken (lost packet) and were asked for again
 static bool s_refresh_library;     // refresh button: read the library again after the presets
 static esp_timer_handle_t s_midi_gate_timer;   // MIDI waits while the Nano connects and loads its presets
+// App bridge: after the app changed something the controller reads the state; after the controller changed something
+// the app is told "preset changed" and reads it again (as after a change on the pedal).
+static esp_timer_handle_t s_app_read_timer, s_app_notify_timer;
+static bool s_app_names_changed;
 #define MIDI_GATE_US (20 * 1000 * 1000)
 
 static bool s_fx_mode;          // footswitches 3-8: FX (true) or bank + presets (false)
@@ -248,6 +253,44 @@ static void exp_timer_cb(void *arg)
 static void midi_gate_cb(void *arg)
 {
     command('q', 0);
+}
+
+static void app_read_cb(void *arg)
+{
+    command('j', 0);
+}
+
+static void app_notify_cb(void *arg)
+{
+    command('f', 0);
+}
+
+// From the NimBLE host task: the app sent a message (type) / the app connected or left.
+static void on_app_write(uint32_t type)
+{
+    switch (type) {
+    case 3: case 111:                               // save, rename: names may have changed
+        command('i', 1);
+        break;
+    case 28: case 29: case 31: case 62: case 67: case 78: case 80: case 136:
+        command('i', 0);
+        break;
+    default:                                        // reads and parameter values change nothing the controller shows
+        break;
+    }
+}
+
+static void on_app_state(bool connected)
+{
+    command('o', connected);
+}
+
+// The controller changed something on the Nano: tell the app shortly after (several changes, one notice).
+static void app_sync_later(void)
+{
+    if (!app_link_connected()) return;
+    esp_timer_stop(s_app_notify_timer);
+    esp_timer_start_once(s_app_notify_timer, 500 * 1000);
 }
 
 static void rev_timer_cb(void *arg)
@@ -441,6 +484,7 @@ static void request_current_state(void)
 
 static void select_preset(int preset)
 {
+    app_sync_later();
     if (preset < 1) preset = NANO_PRESETS;
     if (preset > NANO_PRESETS) preset = 1;
     uint8_t buf[64];
@@ -456,6 +500,7 @@ static void select_preset(int preset)
 
 static void toggle_fx(int slot)
 {
+    app_sync_later();
     if (!s_state.fx_known || !s_state.fx_type[slot]) {
         ESP_LOGW(TAG, "%s is empty", NANO_FX_SLOT_NAMES[slot]);
         return;
@@ -487,6 +532,7 @@ static void editor_read(void)
 
 static void send_param(int slot, int param, float value)
 {
+    app_sync_later();
     uint8_t buf[16];
     char label[40];
     snprintf(label, sizeof(label), "%s parameter %d", NANO_FX_SLOT_NAMES[slot], param);
@@ -582,6 +628,7 @@ static void rev_model_chosen(int slot, uint32_t type);
 
 static void editor_choose_model(uint32_t type)
 {
+    app_sync_later();
     int slot = s_edit.slot;
     if (slot < 0 || !nano_fx_model(type)) return;
     rev_model_chosen(slot, type);
@@ -634,6 +681,7 @@ static void toggle_mix(void)
     char label[40];
     snprintf(label, sizeof(label), "Reverb mix Pos %d (%ld%%)", next + 1, lroundf(s_mix.pos[next] * 100));
     send(label, NANO_MSG_FX_VALUE, buf, nano_fx_param(s_mix.slot, param, s_mix.pos[next], buf));
+    app_sync_later();
     s_mix.active = next;
     show();
     if (s_mix.slot == s_edit.slot && s_edit.known) {
@@ -852,6 +900,7 @@ static void rev_step(void)
             break;
         }
         s_rev.phase = REV_IDLE;
+        app_sync_later();
         ESP_LOGI(TAG, "Reverb %c active (%d values)", s_rev.active ? 'B' : 'A', count);
         schedule_refresh(300);
         if (s_rev.open_editor) {
@@ -910,6 +959,7 @@ static void set_tuner(bool on)
 
 static void select_capture(int slot)
 {
+    app_sync_later();
     if (slot < 0 || slot > NANO_CAPTURE_SLOTS) return;
     uint8_t buf[8];
     char label[32];
@@ -923,6 +973,7 @@ static void select_capture(int slot)
 
 static void select_cab(int slot)
 {
+    app_sync_later();
     if (slot < 0 || slot > NANO_CAB_SLOTS) return;
     uint8_t buf[8];
     char label[32];
@@ -956,6 +1007,7 @@ static void step_bank(int step)
 
 static void save_preset(void)
 {
+    app_sync_later();
     int preset = s_state.current_preset;
     const char *name = s_state.preset_names[preset - 1];
     uint8_t buf[96];
@@ -970,6 +1022,7 @@ static void save_preset(void)
 
 static void rename_preset(const char *name)
 {
+    app_sync_later();
     int preset = s_state.current_preset;
     size_t len = strlen(name);
     if (len < 4 || len > 32) {
@@ -1008,6 +1061,7 @@ static void library_timer_cb(void *arg)
 // Loads library item `position` (alphabetical) into the active capture or cab slot. arg = kind << 16 | position.
 static void load_library_item(int arg)
 {
+    app_sync_later();
     bool cab = (arg >> 16) & 1;
     int position = arg & 0xFFFF;
     const lib_list_t *list = s_library ? (cab ? &s_library->cabs : &s_library->captures) : NULL;
@@ -1149,6 +1203,12 @@ static void handle_command(char c, int arg)
     if (c == 'D' || c == 'Z') { footswitch_learn(c, arg); return; }   // works without the Nano
     if (c == 'X' || c == 'P' || c == 'N') { midi_command(c, arg); return; }
     if (c == 'q') { midi_ble_allow(true); return; }   // MIDI gate timer: the Nano did not come
+    if (c == 'o') {                                    // app connected / left through the controller
+        ESP_LOGI(TAG, "App %s", arg ? "connected through the controller" : "disconnected");
+        ui_set_app(arg != 0);
+        ui_show_message(arg ? "App connected through the controller." : "App disconnected.");
+        return;
+    }
     if (c == 'r') {                                    // refresh button / console: read everything again
         if (!nano_link_ready()) {
             ui_show_message("Not connected - still searching for the Nano.");
@@ -1203,6 +1263,22 @@ static void handle_command(char c, int arg)
     case 'V': request_settings(); break;
     case 'U': set_usb_gain(arg); break;
     case 'G': usb_throttle_done(); break;
+    case 'i':   // the app changed something: read it shortly after (once for several changes)
+        if (arg) s_app_names_changed = true;
+        esp_timer_stop(s_app_read_timer);
+        esp_timer_start_once(s_app_read_timer, 600 * 1000);
+        break;
+    case 'j':
+        if (s_app_names_changed) request_full_state();
+        else request_current_state();
+        s_app_names_changed = false;
+        break;
+    case 'f':   // tell the app: preset "changed" -> it reads the current state again
+        if (app_link_connected()) {
+            uint8_t buf[64];
+            app_link_send(NANO_MSG_SET_PRESET_SLOTS, buf, nano_preset_changed_notice(&s_state, buf));
+        }
+        break;
     case 'Q': mix_preview(arg); break;
     case 'W': mix_save(arg); break;
     case 'J': mix_verify_request(); break;
@@ -1248,9 +1324,10 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             if (names) print_presets();
             print_help();
             request_current_state();
-            // Presets are in: MIDI may scan and connect now.
+            // Presets are in: MIDI may scan and connect now, and the app may connect through the controller.
             esp_timer_stop(s_midi_gate_timer);
             midi_ble_allow(true);
+            app_link_enable(true);
             if (s_refresh_library) {
                 s_refresh_library = false;
                 esp_timer_start_once(s_library_timer, 1500 * 1000);
@@ -1440,6 +1517,7 @@ static void app_task(void *arg)
             ESP_LOGW(TAG, "Connection lost - searching again");
             s_waiting_full_state = false;
             midi_ble_allow(false);   // until the Nano is back (or the gate timer opens it)
+            app_link_enable(false);  // the app can only use the Nano through the controller while it is connected
             esp_timer_stop(s_midi_gate_timer);
             esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
             s_tuner_on = false;
@@ -1547,6 +1625,10 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&rev_timer, &s_rev_timer));
     const esp_timer_create_args_t gate_timer = { .callback = midi_gate_cb, .name = "midi_gate" };
     ESP_ERROR_CHECK(esp_timer_create(&gate_timer, &s_midi_gate_timer));
+    const esp_timer_create_args_t app_read_timer = { .callback = app_read_cb, .name = "app_read" };
+    ESP_ERROR_CHECK(esp_timer_create(&app_read_timer, &s_app_read_timer));
+    const esp_timer_create_args_t app_notify_timer = { .callback = app_notify_cb, .name = "app_notify" };
+    ESP_ERROR_CHECK(esp_timer_create(&app_notify_timer, &s_app_notify_timer));
     const esp_timer_create_args_t library_timer = { .callback = library_timer_cb, .name = "library" };
     ESP_ERROR_CHECK(esp_timer_create(&library_timer, &s_library_timer));
     banks_load();
@@ -1565,6 +1647,7 @@ void app_main(void)
     esp_reset_reason_t reason = esp_reset_reason();
     printf("\nNano Cortex Controller %s - started after: %s\n", esp_app_get_description()->version,
            reason < sizeof(reasons) / sizeof(reasons[0]) ? reasons[reason] : "?");
+    app_link_start(on_app_write, on_app_state);
     nano_link_start(on_message, on_link);
     midi_ble_start(on_midi, on_midi_change);
     midi_ble_allow(false);   // first the Nano and its presets

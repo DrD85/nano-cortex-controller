@@ -24,6 +24,20 @@ bool nano_link_ready(void);
 // Queues a message for C304. Writes go out strictly one at a time (write with response).
 bool nano_link_send(const char *label, uint32_t type, const uint8_t *payload, size_t len);
 
+// ---- app bridge ----
+
+enum { NANO_OWNER_BOARD, NANO_OWNER_APP, NANO_OWNER_BOTH };
+
+// A complete framed message from the app ([len] C0 payload type), sent on to the Nano. Its reply goes back to the app.
+bool nano_link_send_frame(const uint8_t *frame, size_t len);
+
+// Messages for the app (replies to its requests and messages the Nano sends on its own): payload + u32 type.
+// Called from the NimBLE host task.
+typedef void (*nano_forward_cb)(const uint8_t *message, size_t len);
+void nano_link_set_forward(nano_forward_cb cb);
+
+uint8_t nano_link_own_addr_type(void);
+
 // ---- shared with other Bluetooth clients (MIDI) ----
 
 // Every advertisement seen while scanning. Called from the NimBLE host task.

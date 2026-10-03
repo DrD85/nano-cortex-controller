@@ -17,7 +17,15 @@ import re
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MODELS = json.loads((ROOT / 'tools' / 'editor_models.json').read_text())
-ICONS_CSS = ROOT.parent / 'nano-cortex-editor' / 'img' / 'icons.css'
+def find_editor():
+    """The Nano Cortex Editor folder next to this project or further up (its img/ holds the private artwork)."""
+    for folder in ROOT.parents:
+        if (folder / 'nano-cortex-editor').is_dir():
+            return folder / 'nano-cortex-editor'
+    return ROOT.parent / 'nano-cortex-editor'
+
+
+ICONS_CSS = find_editor() / 'img' / 'icons.css'
 ICON_SIZE = 36
 
 ICON_KEYS = ['overdrive', 'bass-overdrive', 'fuzz', 'compressor', 'equalizer', 'filter', 'wah', 'utility',

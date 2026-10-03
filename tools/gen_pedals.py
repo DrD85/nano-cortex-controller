@@ -15,10 +15,21 @@ import re
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-EDITOR = ROOT.parent / 'nano-cortex-editor'
+EDITOR = None   # set below
 MODELS = json.loads((ROOT / 'tools' / 'editor_models.json').read_text())
 BOX = (320, 330)   # largest size on the screen (px)
 TILE_H, TILE_VISIBLE, TILE_RADIUS = 124, 0.58, 12   # tile drawing: height, visible part, corner of the tile
+
+
+def find_editor():
+    """The Nano Cortex Editor folder next to this project or further up (its img/ holds the private artwork)."""
+    for folder in ROOT.parents:
+        if (folder / 'nano-cortex-editor').is_dir():
+            return folder / 'nano-cortex-editor'
+    return ROOT.parent / 'nano-cortex-editor'
+
+
+EDITOR = find_editor()
 
 
 def model_images():

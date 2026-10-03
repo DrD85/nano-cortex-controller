@@ -15,6 +15,8 @@
 #include "host/util/util.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
+#include "esp_timer.h"
+#include "app_link.h"
 
 static const char *TAG = "nano_link";
 
@@ -34,7 +36,34 @@ typedef struct {
     char label[40];
     uint16_t len;
     uint8_t *data;
+    uint8_t owner;                      // NANO_OWNER_BOARD / NANO_OWNER_APP
 } write_job_t;
+
+// Replies carry no request id. The Nano answers in order, so every request with a known reply type is noted
+// with its sender; a reply goes to the sender of the oldest open request of its type. Messages the Nano sends
+// on its own (preset changed on the pedal, tuner, ...) go to both.
+typedef struct {
+    uint32_t reply;
+    uint8_t owner;
+    int64_t at_us;
+} pending_t;
+#define PENDING_MAX 24
+#define PENDING_TIMEOUT_US (5 * 1000 * 1000)
+static pending_t s_pending[PENDING_MAX];
+static int s_pending_count;
+static SemaphoreHandle_t s_pending_lock;
+static nano_forward_cb s_forward;
+
+// App parameter values (FxValue 99) arrive faster than the Nano takes them: only the newest per slot/parameter
+// is kept until the writer is free.
+#define COALESCE_MAX 8
+static struct {
+    bool pending;
+    uint8_t slot, param;
+    uint8_t len;
+    uint8_t data[32];
+} s_coalesce[COALESCE_MAX];
+static SemaphoreHandle_t s_coalesce_lock;
 
 static nano_message_cb s_on_message;
 static nano_link_cb s_on_link;
@@ -305,18 +334,71 @@ static int on_mtu(uint16_t conn, const struct ble_gatt_error *err, uint16_t mtu,
 
 // ---- incoming packets ----
 
+static uint32_t reply_type(uint32_t request)
+{
+    switch (request) {
+    case 1: return 2;      // state
+    case 29: return 30;    // preset change
+    case 60: return 61;    // expression assignments
+    case 65: return 66;    // settings
+    case 67: return 68;    // update settings
+    case 76: return 77;    // library
+    case 78: return 79;    // load IR
+    case 80: return 81;    // load capture
+    case 111: return 112;  // rename
+    case 137: return 138;  // FX parameters
+    default: return 0;
+    }
+}
+
+static void note_request(uint32_t request, uint8_t owner)
+{
+    uint32_t reply = reply_type(request);
+    if (!reply) return;
+    xSemaphoreTake(s_pending_lock, portMAX_DELAY);
+    if (s_pending_count == PENDING_MAX) {
+        memmove(s_pending, s_pending + 1, sizeof(s_pending[0]) * (PENDING_MAX - 1));
+        s_pending_count--;
+    }
+    s_pending[s_pending_count++] = (pending_t){ .reply = reply, .owner = owner, .at_us = esp_timer_get_time() };
+    xSemaphoreGive(s_pending_lock);
+}
+
+// Owner of a reply (and the open request is closed), or NANO_OWNER_BOTH for messages nobody asked for.
+static int route(uint32_t type)
+{
+    int owner = NANO_OWNER_BOTH;
+    int64_t now = esp_timer_get_time();
+    xSemaphoreTake(s_pending_lock, portMAX_DELAY);
+    int keep = 0;
+    for (int i = 0; i < s_pending_count; i++) {   // drop requests that never got an answer
+        if (now - s_pending[i].at_us < PENDING_TIMEOUT_US) s_pending[keep++] = s_pending[i];
+    }
+    s_pending_count = keep;
+    for (int i = 0; i < s_pending_count; i++) {
+        if (s_pending[i].reply != type) continue;
+        owner = s_pending[i].owner;
+        memmove(s_pending + i, s_pending + i + 1, sizeof(s_pending[0]) * (size_t)(s_pending_count - i - 1));
+        s_pending_count--;
+        break;
+    }
+    xSemaphoreGive(s_pending_lock);
+    return owner;
+}
+
 static void deliver(const uint8_t *body, size_t n)
 {
     if (n < 4) return;
     uint32_t type = body[n - 4] | (body[n - 3] << 8) | (body[n - 2] << 16) | ((uint32_t)body[n - 1] << 24);
-    if (s_on_message) s_on_message(type, body, n - 4);
+    int owner = route(type);
+    if (owner != NANO_OWNER_APP && s_on_message) s_on_message(type, body, n - 4);
+    if (owner != NANO_OWNER_BOARD && s_forward) s_forward(body, n);
 }
 
 static void on_packet(const uint8_t *d, size_t n)
 {
     if (n < 2) return;
     uint8_t flags = d[1];
-    if (flags != 0xC0) ESP_LOGI(TAG, "PKT n=%u b0=%02X b1=%02X b2=%02X", (unsigned)n, d[0], d[1], n > 2 ? d[2] : 0);   // TEMP stream format
     if (flags == 0xC0) {   // complete single-packet message
         deliver(d + 2, n - 2);
         return;
@@ -351,22 +433,50 @@ static int on_written(uint16_t conn, const struct ble_gatt_error *err, struct bl
     return 0;
 }
 
+static uint32_t frame_type(const uint8_t *d, size_t n)
+{
+    return n < 6 ? 0 : d[n - 4] | (d[n - 3] << 8) | (d[n - 2] << 16) | ((uint32_t)d[n - 1] << 24);
+}
+
+static void write_frame(const char *label, const uint8_t *data, size_t len, uint8_t owner, bool log)
+{
+    if (!s_ready) {
+        ESP_LOGW(TAG, "Not connected - dropped: %s", label);
+        return;
+    }
+    xSemaphoreTake(s_write_done, 0);
+    if (log) log_hex(label, data, len);
+    note_request(frame_type(data, len), owner);
+    int rc = ble_gattc_write_flat(s_conn, s_c304, data, len, on_written, NULL);
+    if (rc != 0) ESP_LOGE(TAG, "Write not started (%d): %s", rc, label);
+    else if (xSemaphoreTake(s_write_done, pdMS_TO_TICKS(3000)) != pdTRUE) ESP_LOGW(TAG, "No write response: %s", label);
+    else if (s_write_status != 0) ESP_LOGW(TAG, "Write failed (%d): %s", s_write_status, label);
+}
+
+// The newest coalesced app parameter value, if any (one per call).
+static bool take_coalesced(uint8_t *data, uint8_t *len)
+{
+    bool found = false;
+    xSemaphoreTake(s_coalesce_lock, portMAX_DELAY);
+    for (int i = 0; i < COALESCE_MAX && !found; i++) {
+        if (!s_coalesce[i].pending) continue;
+        memcpy(data, s_coalesce[i].data, s_coalesce[i].len);
+        *len = s_coalesce[i].len;
+        s_coalesce[i].pending = false;
+        found = true;
+    }
+    xSemaphoreGive(s_coalesce_lock);
+    return found;
+}
+
 static void writer_task(void *arg)
 {
     write_job_t job;
+    uint8_t value[32], value_len;
     for (;;) {
-        xQueueReceive(s_write_queue, &job, portMAX_DELAY);
-        if (!s_ready) {
-            ESP_LOGW(TAG, "Not connected - dropped: %s", job.label);
-            free(job.data);
-            continue;
-        }
-        xSemaphoreTake(s_write_done, 0);
-        log_hex(job.label, job.data, job.len);
-        int rc = ble_gattc_write_flat(s_conn, s_c304, job.data, job.len, on_written, NULL);
-        if (rc != 0) ESP_LOGE(TAG, "Write not started (%d): %s", rc, job.label);
-        else if (xSemaphoreTake(s_write_done, pdMS_TO_TICKS(3000)) != pdTRUE) ESP_LOGW(TAG, "No write response: %s", job.label);
-        else if (s_write_status != 0) ESP_LOGW(TAG, "Write failed (%d): %s", s_write_status, job.label);
+        while (take_coalesced(value, &value_len)) write_frame("App parameter", value, value_len, NANO_OWNER_APP, false);
+        if (xQueueReceive(s_write_queue, &job, pdMS_TO_TICKS(10)) != pdTRUE) continue;
+        write_frame(job.label, job.data, job.len, job.owner, job.owner == NANO_OWNER_BOARD);
         free(job.data);
     }
 }
@@ -382,11 +492,59 @@ bool nano_link_send(const char *label, uint32_t type, const uint8_t *payload, si
     memcpy(job.data + 2, payload, len);
     for (int i = 0; i < 4; i++) job.data[2 + len + i] = (uint8_t)(type >> (8 * i));
     strlcpy(job.label, label, sizeof(job.label));
+    job.owner = NANO_OWNER_BOARD;
     if (xQueueSend(s_write_queue, &job, 0) != pdTRUE) {
         free(job.data);
         return false;
     }
     return true;
+}
+
+bool nano_link_send_frame(const uint8_t *frame, size_t len)
+{
+    if (len < 6 || len > 300) return false;
+    uint32_t type = frame_type(frame, len);
+    // FxValue { 1: 1, 3: slot, 4: parameter, 5: float } = 08 01 18 ss 20 pp 2D ...: keep only the newest per slot/parameter
+    if (type == 99 && len <= 32 && frame[2] == 0x08 && frame[4] == 0x18 && frame[6] == 0x20) {
+        uint8_t slot = frame[5], param = frame[7];
+        int free_index = -1, index = -1;
+        xSemaphoreTake(s_coalesce_lock, portMAX_DELAY);
+        for (int i = 0; i < COALESCE_MAX; i++) {
+            if (s_coalesce[i].pending && s_coalesce[i].slot == slot && s_coalesce[i].param == param) index = i;
+            else if (!s_coalesce[i].pending && free_index < 0) free_index = i;
+        }
+        if (index < 0) index = free_index;
+        if (index >= 0) {
+            s_coalesce[index].pending = true;
+            s_coalesce[index].slot = slot;
+            s_coalesce[index].param = param;
+            s_coalesce[index].len = (uint8_t)len;
+            memcpy(s_coalesce[index].data, frame, len);
+        }
+        xSemaphoreGive(s_coalesce_lock);
+        if (index >= 0) return true;
+    }
+    write_job_t job = { .len = (uint16_t)len, .owner = NANO_OWNER_APP };
+    job.data = malloc(len);
+    if (!job.data) return false;
+    memcpy(job.data, frame, len);
+    snprintf(job.label, sizeof(job.label), "App message %lu", (unsigned long)type);
+    if (xQueueSend(s_write_queue, &job, 0) != pdTRUE) {
+        free(job.data);
+        ESP_LOGW(TAG, "Write queue full - app message %lu dropped", (unsigned long)type);
+        return false;
+    }
+    return true;
+}
+
+void nano_link_set_forward(nano_forward_cb cb)
+{
+    s_forward = cb;
+}
+
+uint8_t nano_link_own_addr_type(void)
+{
+    return s_own_addr_type;
 }
 
 bool nano_link_ready(void)
@@ -514,9 +672,11 @@ void nano_link_start(nano_message_cb on_message, nano_link_cb on_link)
     s_on_message = on_message;
     s_on_link = on_link;
     s_rx = heap_caps_malloc(MAX_MESSAGE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    s_write_queue = xQueueCreate(16, sizeof(write_job_t));
+    s_write_queue = xQueueCreate(32, sizeof(write_job_t));
     s_write_done = xSemaphoreCreateBinary();
-    configASSERT(s_rx && s_write_queue && s_write_done);
+    s_pending_lock = xSemaphoreCreateMutex();
+    s_coalesce_lock = xSemaphoreCreateMutex();
+    configASSERT(s_rx && s_write_queue && s_write_done && s_pending_lock && s_coalesce_lock);
 
     ESP_ERROR_CHECK(nimble_port_init());
     ble_hs_cfg.reset_cb = on_reset;
@@ -529,6 +689,7 @@ void nano_link_start(nano_message_cb on_message, nano_link_cb on_link)
     ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
     ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
     ble_store_config_init();
+    app_link_register();   // GATT server for the app bridge (before the host starts)
 
     xTaskCreate(writer_task, "nano_tx", 4096, NULL, 5, NULL);
     nimble_port_freertos_init(host_task);

@@ -29,6 +29,8 @@ your own preset banks. It is the hardware companion of the
   setting – or switches between the preset's reverb and a **second reverb** with its own settings
 - **Tuner** with large note display and needle (footswitch 2)
 - **USB audio volume** of the Nano (playback from the computer), as in the official app
+- **App bridge**: the Nano Cortex Editor (Mac app or browser) can connect through the controller while the controller
+  is connected to the Nano – app and controller work at the same time
 - **Bluetooth MIDI**: connect a MIDI controller wirelessly – for example a Morningstar MC6 with a WIDI adapter –
   using the Nano's own MIDI messages (program change, CC 37–41, CC 1)
 - **Footswitch learn**: assign any footswitch to any function
@@ -192,6 +194,20 @@ for the Nano (for example with the MC6 export of the Nano Cortex Editor) work ov
 
 A wired MIDI input is not possible on this board without extra hardware; use a Bluetooth MIDI adapter instead.
 
+### Nano Cortex Editor through the controller
+
+The Nano accepts only one Bluetooth connection. When the controller is connected to the Nano, it offers itself as
+**"Nano Cortex Controller"** with the same Bluetooth service as the Nano, so the
+[Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) connects to the controller instead:
+**app ↔ controller ↔ Nano**. The Mac app picks it automatically; in the browser choose "Nano Cortex Controller".
+Without the controller (or before it has connected) the app connects to the Nano directly, as before.
+
+- Everything the app sends goes on to the Nano; replies to the app's requests go back to the app, replies to the
+  controller's own requests stay on the controller, and messages the Nano sends on its own reach both.
+- Changes made in the app appear on the controller a moment later; changes made on the controller (footswitches,
+  touch, MIDI) make the app read the preset again, as after a change on the pedal.
+- While the app is connected, **APP** is shown in the status line.
+
 ### Footswitch learn
 
 Long press on tile 1 or 2, or **LEARN SWITCH** in the bank editor. Then press the footswitch that should have
@@ -252,6 +268,7 @@ download mode. Use the port name of your system (`ls /dev/cu.*` on a Mac).
 | `main/nano_state.c` | protobuf parsing of the Nano's state and all request messages |
 | `main/library.c` | capture / IR library (reading, sorting, loading into a slot) |
 | `main/midi_ble.c` | Bluetooth LE MIDI client: device list, connection, BLE MIDI packets |
+| `main/app_link.c` | app bridge: Nano service (A002 / C304 / C305) for the editor, packets as the Nano sends them |
 | `main/ui.c` | LVGL user interface |
 | `main/board.c` | display (RGB 800 × 480), GT911 touch, CH422G I/O expander, LVGL port |
 | `main/footswitches.c` | SX1509 polling, debouncing, learn |
@@ -283,6 +300,11 @@ Message types used (request → reply): 1 → 2 state, 3 save, 28 capture/cab sl
 127 / 128 tuner, 136 FX model, 137 → 138 FX parameter values. The message layouts are documented in the
 comments of `main/nano_state.c`, `main/library.c` and in the
 [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).
+
+For the app bridge the controller is also a Bluetooth peripheral with the Nano's service. Replies carry no request
+id, so every request with a known reply type is noted with its sender (controller or app); the Nano answers in
+order, and each reply goes to the sender of the oldest open request of its type. Long replies are split for the app
+exactly as the Nano does: `[length low] [0x40 first | 0x80 last | length high] data`, up to 510 bytes per packet.
 
 Bluetooth MIDI runs on a second connection next to the Nano: the controller looks for the BLE MIDI service
 (`03B80E5A-EDE8-4B33-A751-6CE34EC4C700`), subscribes to its characteristic and decodes the BLE MIDI packets

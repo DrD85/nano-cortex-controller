@@ -40,7 +40,7 @@ static char s_ask_command;
 static int s_current_preset;
 static bool s_fx_mode;
 
-static lv_obj_t *s_status_dot, *s_status, *s_edited;
+static lv_obj_t *s_status_dot, *s_status, *s_edited, *s_app;
 static lv_obj_t *s_preset_number, *s_preset_name, *s_capture, *s_cab;
 static lv_obj_t *s_tile[TILES], *s_tile_caption[TILES], *s_tile_name[TILES], *s_tile_number[TILES];
 static lv_obj_t *s_tile_square[TILES], *s_tile_pedal[TILES];
@@ -1484,6 +1484,10 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_style_text_letter_space(s_preset_number, 2, 0);
     s_edited = label(status_row, &lv_font_montserrat_14, 0xFF7000);   // unsaved changes: the SAVE button turns orange
     lv_obj_set_hidden(s_edited, true);
+    s_app = label(status_row, &lv_font_montserrat_14, 0x3D8BFF);    // editor connected through the controller
+    lv_obj_set_style_text_letter_space(s_app, 2, 0);
+    lv_label_set_text(s_app, "APP");
+    lv_obj_set_hidden(s_app, true);
     lv_obj_t *refresh = button(preset, 86, 4, 44, 30, on_refresh);   // read everything from the Nano again
     lv_obj_t *refresh_label = label(refresh, &lv_font_montserrat_14, MUTED);
     lv_label_set_text(refresh_label, LV_SYMBOL_REFRESH);
@@ -1543,6 +1547,13 @@ static void set_fullscreen(bool on)
         place_tile(i);
         fit_name(i);
     }
+}
+
+void ui_set_app(bool connected)
+{
+    lvgl_port_lock(0);
+    lv_obj_set_hidden(s_app, !connected);
+    lvgl_port_unlock();
 }
 
 void ui_set_link(bool connected)

@@ -81,6 +81,8 @@ size_t nano_current_state_request(uint8_t *out);        // current preset only
 size_t nano_preset_change(const nano_state_t *st, int preset, uint8_t *out);
 size_t nano_fx_bypass(int slot, bool on, uint8_t *out); // slot 0-4
 size_t nano_preset_change_ack(uint8_t *out);            // answer to a preset change made on the device
+// SetPresetSlots as the Nano sends it after a change on the pedal (current preset and footswitch slots) - for the app.
+size_t nano_preset_changed_notice(const nano_state_t *st, uint8_t *out);
 size_t nano_tuner_mode(bool on, float base_hz, uint8_t *out);
 size_t nano_fx_param(int slot, int param, float normalized, uint8_t *out);
 size_t nano_exp_request(int preset, uint8_t *out);
