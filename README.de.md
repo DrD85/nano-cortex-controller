@@ -1,5 +1,7 @@
 # Nano Cortex Controller (inoffiziell)
 
+![Nano Cortex Controller](docs/images/00-overview.png)
+
 Ein Touchscreen- und Fußschalter-Controller für den **Neural DSP Nano Cortex**, verbunden per Bluetooth.
 Er läuft auf einem **Waveshare ESP32-S3-Touch-LCD-4.3** und macht daraus einen Bodencontroller im Stil des
 Quad Cortex: acht farbige Kacheln für acht Fußschalter, ein vollständiger FX-Editor, die Capture- und

@@ -35,4 +35,10 @@ from PIL import Image
 for f in sorted(glob.glob("build-screens/shots/*.ppm")):
     Image.open(f).save(os.path.join("docs/images", os.path.basename(f)[:-4] + ".png"))
     print("docs/images/" + os.path.basename(f)[:-4] + ".png")
+# Title picture of the README: preset mode, FX mode, full screen and FX editor in a 2 x 2 grid
+grid = Image.new("RGB", (2 * 800 + 10, 2 * 480 + 10), (60, 60, 60))
+for i, name in enumerate(["01-preset-mode", "02-fx-mode", "03-fullscreen", "04-fx-editor"]):
+    grid.paste(Image.open("docs/images/" + name + ".png"), ((i % 2) * 810, (i // 2) * 490))
+grid.save("docs/images/00-overview.png")
+print("docs/images/00-overview.png")
 '
