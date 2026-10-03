@@ -4,7 +4,7 @@
 
 #include "lvgl.h"
 
-#define PRESET_ICON_COUNT 14
+#define PRESET_ICON_COUNT 19
 
 typedef struct {
     const char *name;

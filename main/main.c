@@ -1080,7 +1080,7 @@ static void select_cab(int slot)
 // Long press on a preset tile: arg = bank << 14 | slot << 11 | colour << 7 | preset (0 = back to default).
 static void set_bank_slot(int arg)
 {
-    int icon = (arg >> 18) & 0xF, bank = (arg >> 14) & 0xF, slot = (arg >> 11) & 0x7, color = (arg >> 7) & 0xF, preset = arg & 0x7F;
+    int icon = (arg >> 18) & 0x1F, bank = (arg >> 14) & 0xF, slot = (arg >> 11) & 0x7, color = (arg >> 7) & 0xF, preset = arg & 0x7F;
     if (bank >= BANKS || slot >= BANK_SLOTS || preset > NANO_PRESETS) return;
     int default_preset = bank * BANK_SLOTS + slot + 1;
     s_banks[bank][slot] = preset ? (bank_slot_t){ .preset = (uint8_t)preset, .color = (uint8_t)color, .icon = (uint8_t)icon }

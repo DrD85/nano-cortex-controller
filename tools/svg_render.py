@@ -1,7 +1,8 @@
 """Renders small line icons (24x24 SVG subset) into 8-bit alpha masks with Pillow.
 
 Supported: <path d> with M L H V C S Q A Z (absolute and relative), <circle>, <rect> (with rx), <line>.
-Elements are stroked; fill="..." (anything but "none") fills them as well. No other SVG features.
+Elements are stroked; fill="..." (anything but "none") fills them as well. cut="1" erases instead of drawing
+(a gap around a shape on a filled silhouette). No other SVG features.
 """
 import math
 import re
@@ -158,10 +159,11 @@ def render(svg_body, size, stroke=1.5, view=24, supersample=8):
     for tag, attrs in _ELEMENT.findall(svg_body):
         a = dict(_ATTR.findall(attrs))
         width = float(a.get('stroke-width', stroke))
+        ink = 0 if a.get('cut') else 255
         for points, closed in _element_subpaths(tag, a):
             pts = [(x * k, y * k) for x, y in points]
             if a.get('fill', 'none') != 'none' and len(pts) > 2:
-                d.polygon(pts, fill=255)
+                d.polygon(pts, fill=ink)
             if a.get('stroke', '') == 'none':
                 continue
             if closed:
@@ -172,7 +174,7 @@ def render(svg_body, size, stroke=1.5, view=24, supersample=8):
                 if length == 0:
                     continue
                 nx, ny = -(y1 - y0) / length * w / 2, (x1 - x0) / length * w / 2
-                d.polygon([(x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny), (x0 - nx, y0 - ny)], fill=255)
+                d.polygon([(x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny), (x0 - nx, y0 - ny)], fill=ink)
             for x, y in pts:   # round joins and caps
-                d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=255)
+                d.ellipse([x - w / 2, y - w / 2, x + w / 2, y + w / 2], fill=ink)
     return img.resize((size, size), Image.LANCZOS)

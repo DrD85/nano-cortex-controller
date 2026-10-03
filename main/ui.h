@@ -21,7 +21,7 @@
 //   'a'-'e'        FX editor: switch the edited slot on/off
 //   'C' / 'I', n   capture slot 1-25 / cab slot 1-5 (0 = bypass)
 //   'L', k<<16|i   load library item i (alphabetical) into the active slot; k: 0 capture, 1 cab
-//   'B', packed    own bank: symbol << 18 | bank << 14 | slot << 11 | colour << 7 | preset (preset 0 = default)
+//   'B', packed    own bank: symbol << 18 (5 bits) | bank << 14 | slot << 11 | colour << 7 | preset (preset 0 = default)
 //   'S', 0         save the current preset (after the user confirmed it)
 //   'r', 0         refresh: read presets, names and the library again
 //   'V', 0         USB volume opened: read the Nano's settings (answer with ui_set_usb_gain)

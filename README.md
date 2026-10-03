@@ -146,8 +146,9 @@ Active tiles light up in full colour, inactive ones are dimmed. FX tiles use the
 ### Own banks
 
 16 banks with six switches each. By default bank 1 holds presets 1–6, bank 2 presets 7–12 and so on.
-A long press on a preset tile lets you choose any preset, one of ten colours and one of 14 symbols
-(Clean, Edge, Drive, Solo, Fuzz, Atmospheric, Metal, Boost, Rhythm, Bass, Acoustic, Blues, Live, Favorite).
+A long press on a preset tile lets you choose any preset, one of ten colours and one of 19 symbols
+(Clean, Edge, Drive, Solo, Fuzz, Atmospheric, Metal, Boost, Rhythm, Bass, Acoustic, Blues, Live, Favorite,
+Fuzz Wave, Guitarist, Rocket, Space, Swell).
 The banks are stored on the controller, the presets themselves stay on the Nano.
 
 ### Capture and Cab/IR

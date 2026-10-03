@@ -146,8 +146,9 @@ Aktive Kacheln leuchten in voller Farbe, inaktive sind gedimmt. FX-Kacheln trage
 ### Eigene Bänke
 
 16 Bänke mit je sechs Schaltern. Ab Werk liegen in Bank 1 die Presets 1–6, in Bank 2 die Presets 7–12 und so weiter.
-Lange auf eine Preset-Kachel drücken, dann beliebiges Preset, eine von zehn Farben und eines von 14 Symbolen wählen
-(Clean, Edge, Drive, Solo, Fuzz, Atmospheric, Metal, Boost, Rhythm, Bass, Acoustic, Blues, Live, Favorite).
+Lange auf eine Preset-Kachel drücken, dann beliebiges Preset, eine von zehn Farben und eines von 19 Symbolen wählen
+(Clean, Edge, Drive, Solo, Fuzz, Atmospheric, Metal, Boost, Rhythm, Bass, Acoustic, Blues, Live, Favorite,
+Fuzz Wave, Guitarist, Rocket, Space, Swell).
 Die Bänke speichert der Controller, die Presets selbst bleiben auf dem Nano.
 
 ### Capture und Cab/IR

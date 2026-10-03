@@ -100,7 +100,7 @@ static void example_state(void)
     st.capture_volume = nano_capture_volume_raw(1.5f);
 
     view.bank = 1;   // BANK 2: presets 7-12
-    static const uint8_t colors[6] = { 0, 3, 2, 1, 8, 5 }, icons[6] = { 1, 2, 9, 4, 5, 6 };
+    static const uint8_t colors[6] = { 0, 3, 2, 1, 8, 5 }, icons[6] = { 1, 2, 9, 16, 5, 19 };
     for (int i = 0; i < 6; i++) {
         view.bank_presets[i] = (uint8_t)(7 + i);
         view.bank_colors[i] = colors[i];
