@@ -145,6 +145,19 @@ static struct {
 } s_usb;
 static esp_timer_handle_t s_usb_timer, s_exp_timer, s_rev_timer;
 
+// Capture volume (VOL button) and cab settings (long press on the cab card): each slider sends at most one
+// value per PARAM_SEND_MS, the last one when the timer fires. The cab settings are read while the dialog is open.
+enum { SRC_CAPTURE_VOLUME, SRC_CAB_OUTPUT, SRC_CAB_HIGH_PASS, SRC_CAB_LOW_PASS, SRC_COUNT };
+#define CAB_SLIDER_MAX 1000              // cab values from the UI: 0-1000 = 0-1
+static struct {
+    bool throttling;
+    bool pending[SRC_COUNT];
+    int value[SRC_COUNT];                // capture volume 0-255, cab settings 0-1000
+    bool cab_open;                       // cab settings dialog open
+    int cab_preset, cab_slot;            // preset and cab slot the shown settings belong to
+} s_src;
+static esp_timer_handle_t s_src_timer;
+
 // Reverb A/B (long press on the mix tile): the Nano has one reverb slot, so footswitch 8 swaps the model in
 // that slot between the preset's reverb (A) and a second one (B) and sends the stored values of the other one.
 // Reverb B (model and values) is stored per preset on the controller; it is edited in the FX editor while
@@ -245,6 +258,11 @@ static void usb_timer_cb(void *arg)
     command('G', 0);
 }
 
+static void source_timer_cb(void *arg)
+{
+    command('u', 0);
+}
+
 static void exp_timer_cb(void *arg)
 {
     command('J', 0);
@@ -272,8 +290,11 @@ static void on_app_write(uint32_t type)
     case 3: case 111:                               // save, rename: names may have changed
         command('i', 1);
         break;
-    case 28: case 29: case 31: case 62: case 67: case 78: case 80: case 136:
+    case 26: case 28: case 29: case 31: case 62: case 67: case 78: case 80: case 136:
         command('i', 0);
+        break;
+    case 94:                                        // cab setting: read it again if the cab dialog is open
+        command('y', 2);
         break;
     default:                                        // reads and parameter values change nothing the controller shows
         break;
@@ -612,6 +633,77 @@ static void usb_throttle_done(void)
     if (!s_usb.pending) return;
     s_usb.pending = false;
     send_usb_gain(s_usb.pending_db);
+}
+
+static void send_source_value(int what, int value)
+{
+    app_sync_later();
+    uint8_t buf[16];
+    char label[40];
+    if (what == SRC_CAPTURE_VOLUME) {
+        snprintf(label, sizeof(label), "Capture volume %+.1f dB", nano_capture_volume_db(value));
+        send(label, NANO_MSG_VALUE, buf, nano_capture_volume(value, buf));
+        s_state.capture_volume = value;
+        return;
+    }
+    static const char *const names[NANO_CAB_SETTINGS] = { "output", "high pass", "low pass" };
+    int which = what - SRC_CAB_OUTPUT;
+    float normalized = value / (float)CAB_SLIDER_MAX;
+    snprintf(label, sizeof(label), "Cab %s %.1f", names[which], nano_cab_setting_value(which, normalized));
+    send(label, NANO_MSG_CAB_SETTING, buf, nano_cab_setting(which, normalized, buf));
+}
+
+// A capture volume / cab slider moved: arg = what << 16 | value.
+static void source_value(int arg)
+{
+    int what = arg >> 16, value = arg & 0xFFFF;
+    if (what < 0 || what >= SRC_COUNT) return;
+    if (what != SRC_CAPTURE_VOLUME && !s_state.cab_slot) return;   // cab bypassed
+    if (s_src.throttling) {
+        s_src.pending[what] = true;
+        s_src.value[what] = value;
+        return;
+    }
+    send_source_value(what, value);
+    s_src.throttling = true;
+    esp_timer_start_once(s_src_timer, PARAM_SEND_MS * 1000);
+}
+
+static void source_throttle_done(void)
+{
+    s_src.throttling = false;
+    bool sent = false;
+    for (int i = 0; i < SRC_COUNT; i++) {
+        if (!s_src.pending[i]) continue;
+        s_src.pending[i] = false;
+        send_source_value(i, s_src.value[i]);
+        sent = true;
+    }
+    if (sent) {
+        s_src.throttling = true;
+        esp_timer_start_once(s_src_timer, PARAM_SEND_MS * 1000);
+    }
+}
+
+// Reads the settings of the active cab for the dialog (a bypassed cab has none).
+static void request_cab_settings(void)
+{
+    s_src.cab_preset = s_state.current_preset;
+    s_src.cab_slot = s_state.cab_slot;
+    if (!s_state.cab_slot) {
+        ui_set_cab_settings(NULL, false, "The cab is bypassed - switch it on to change its settings.");
+        return;
+    }
+    uint8_t buf[8];
+    send("Cab settings request", NANO_MSG_CAB_SETTINGS_REQUEST, buf, nano_cab_settings_request(s_state.cab_slot, buf));
+}
+
+// Cab settings dialog: 1 = opened, 0 = closed, 2 = the app changed a cab setting.
+static void cab_settings_command(int arg)
+{
+    if (arg == 2 && !s_src.cab_open) return;
+    s_src.cab_open = arg != 0;
+    if (s_src.cab_open) request_cab_settings();
 }
 
 static void editor_open(int slot)
@@ -1263,6 +1355,9 @@ static void handle_command(char c, int arg)
     case 'V': request_settings(); break;
     case 'U': set_usb_gain(arg); break;
     case 'G': usb_throttle_done(); break;
+    case 'v': source_value(arg); break;
+    case 'u': source_throttle_done(); break;
+    case 'y': cab_settings_command(arg); break;
     case 'i':   // the app changed something: read it shortly after (once for several changes)
         if (arg) s_app_names_changed = true;
         esp_timer_stop(s_app_read_timer);
@@ -1356,6 +1451,10 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
                 request_mix_range();
             }
             show();
+            // Other preset or cab while the cab dialog is open: read its settings.
+            if (s_src.cab_open && (s_src.cab_preset != s_state.current_preset || s_src.cab_slot != s_state.cab_slot)) {
+                request_cab_settings();
+            }
             if (s_edit.slot >= 0) {
                 editor_show();
                 if (s_state.fx_on[s_edit.slot] && !s_edit.known && s_edit.request_slot < 0) editor_read_later(100);
@@ -1484,6 +1583,23 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         ui_set_usb_gain(s_usb.db);
         break;
     }
+    case NANO_MSG_CAB_SETTINGS_RESPONSE: {
+        float values[NANO_CAB_SETTINGS];
+        if (!s_src.cab_open) break;
+        char info[96];
+        snprintf(info, sizeof(info), "%s  -  slot %d", s_state.cab[0] ? s_state.cab : "Cab", s_state.cab_slot);
+        if (nano_cab_settings_values(payload, len, values)) {
+            ESP_LOGI(TAG, "Cab settings: output %.1f dB, high pass %.0f Hz, low pass %.0f Hz",
+                     nano_cab_setting_value(NANO_CAB_OUTPUT, values[0]), nano_cab_setting_value(NANO_CAB_HIGH_PASS, values[1]),
+                     nano_cab_setting_value(NANO_CAB_LOW_PASS, values[2]));
+            ui_set_cab_settings(values, true, info);
+        } else {
+            ESP_LOGW(TAG, "Cab settings reply without the values (%u bytes)", (unsigned)len);
+            ESP_LOG_BUFFER_HEX(TAG, payload, len < 64 ? len : 64);
+            ui_set_cab_settings(NULL, true, "Values not readable - moving a slider still sets it.");
+        }
+        break;
+    }
     case NANO_MSG_UPDATE_SETTINGS_RESPONSE:
         ESP_LOGI(TAG, "Settings update answered (%u bytes)", (unsigned)len);
         ESP_LOG_BUFFER_HEX(TAG, payload, len < 32 ? len : 32);
@@ -1524,6 +1640,7 @@ static void app_task(void *arg)
             s_last_preset = 0;
             s_mix.pending = 0;
             s_usb.known = false;
+            memset(&s_src, 0, sizeof(s_src));   // also a throttle whose timer command came while disconnected
             s_edit.slot = -1;
             s_edit.request_slot = -1;
             ui_set_link(false);
@@ -1549,10 +1666,11 @@ static void app_task(void *arg)
     }
 }
 
-// Characters typed into the serial monitor: letters are commands. Digits select a preset: the number is
+// Characters typed into the serial monitor: the letters of the help are commands. Digits select a preset: the number is
 // shown while typing and taken on Enter or after a short pause, so Enter is not required.
 // The console runs on the board's native "USB" port (USB Serial/JTAG) or, if configured, on the "UART" port.
 #define DIGIT_PAUSE_MS 1200
+#define CONSOLE_COMMANDS "npabcdemtxsrlh"
 
 static int console_read(uint8_t *c, TickType_t wait)
 {
@@ -1596,7 +1714,8 @@ static void console_task(void *arg)
             continue;
         }
         count = 0;
-        command((char)tolower(c), 0);
+        c = (uint8_t)tolower(c);
+        if (c && strchr(CONSOLE_COMMANDS, c)) command((char)c, 0);   // other letters are used by the screen
     }
 }
 
@@ -1619,6 +1738,8 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&read_timer, &s_read_timer));
     const esp_timer_create_args_t usb_timer = { .callback = usb_timer_cb, .name = "usb" };
     ESP_ERROR_CHECK(esp_timer_create(&usb_timer, &s_usb_timer));
+    const esp_timer_create_args_t source_timer = { .callback = source_timer_cb, .name = "source" };
+    ESP_ERROR_CHECK(esp_timer_create(&source_timer, &s_src_timer));
     const esp_timer_create_args_t exp_timer = { .callback = exp_timer_cb, .name = "exp" };
     ESP_ERROR_CHECK(esp_timer_create(&exp_timer, &s_exp_timer));
     const esp_timer_create_args_t rev_timer = { .callback = rev_timer_cb, .name = "rev" };

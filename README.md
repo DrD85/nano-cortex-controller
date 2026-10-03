@@ -25,6 +25,7 @@ your own preset banks. It is the hardware companion of the
 - **FX editor** (long press on an FX tile): choose the model and edit every parameter live
 - **Capture and Cab/IR**: pick one of the 25 capture slots or 5 cab slots, or load any capture or IR from the
   Nano's library (factory and user) into the active slot
+- **Capture volume** (VOL) and **cab settings** (long press on the cab card: output, high pass, low pass)
 - **Reverb switch** (footswitch 8): toggles the reverb mix between Pos 1 and Pos 2 of the preset's expression
   setting – or switches between the preset's reverb and a **second reverb** with its own settings
 - **Tuner** with large note display and needle (footswitch 2)
@@ -49,8 +50,10 @@ your own preset banks. It is the hardware companion of the
 | Capture library | Reverb switch: second reverb |
 | ![Tuner](docs/images/08-tuner.png) | ![USB audio volume](docs/images/09-usb-volume.png) |
 | Tuner | USB audio volume |
-| ![Bluetooth MIDI](docs/images/10-bluetooth-midi.png) | |
-| Bluetooth MIDI | |
+| ![Bluetooth MIDI](docs/images/10-bluetooth-midi.png) | ![Capture volume](docs/images/11-capture-volume.png) |
+| Bluetooth MIDI | Capture volume |
+| ![Cab settings](docs/images/12-cab-settings.png) | |
+| Cab settings (long press on the cab card) | |
 
 The screenshots show example presets. They are rendered from the firmware's own UI code
 (`tools/screenshots/make_screenshots.sh`).
@@ -97,10 +100,11 @@ The checksums of both files are in `nano-controller-<version>-sha256.txt`.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  ◀  ↻    ● PRESET 7   BANK 2       MIDI   USB   SAVE   ▶  │  preset card: arrows = bank −/+
+│  ◀  ↻  VOL   ● PRESET 7   BANK 2   MIDI   USB   SAVE   ▶  │  preset card: arrows = bank −/+
 │              Revv NF53 Clean                              │  long press on the name: rename
 ├────────────────────────────┬─────────────────────────────┤
 │ CAPTURE  Revv D20 clean    │ CAB / IR  810 Amped VT      │  tap: choose slot or library item
+│                            │                             │  long press: capture volume / cab settings
 ├──────────┬──────────┬──────┴───┬──────────────────────────┤
 │ 1 MODE   │ 2 TUNER  │ 3        │ 4                        │  eight tiles = eight footswitches
 ├──────────┼──────────┼──────────┼──────────────────────────┤
@@ -110,6 +114,7 @@ The checksums of both files are in `nano-controller-<version>-sha256.txt`.
 
 - **Tap a tile** = press its footswitch.
 - **↻** (top left) reads everything from the Nano again: preset names, the current preset and the library.
+- **VOL** next to it sets the capture volume of the current preset.
 - **Swipe left / right**: next / previous preset.
 - **Swipe up**: tiles in full screen (larger names). **Swipe down**: back.
 - The green dot shows the Bluetooth connection to the Nano; **SAVE** turns orange when the preset has unsaved
@@ -148,6 +153,11 @@ The banks are stored on the controller, the presets themselves stay on the Nano.
 Tap the CAPTURE or CAB / IR card. **SLOTS** lists the 25 capture slots (5 banks × 5) or 5 cab slots;
 **LIBRARY** shows all captures or IRs stored on the Nano with category filters (AMP = head or combo, AMP+CAB, CAB, PEDAL, OTHER).
 A library item is loaded into the active slot after a confirmation.
+
+**Capture volume**: **VOL** in the preset card or a long press on the CAPTURE card, −24 dB to +12 dB
+(**0 dB** resets). **Cab settings**: a long press on the CAB / IR card – **OUTPUT** (−96 dB to +12 dB),
+**HIGH PASS** (20–800 Hz) and **LOW PASS** (1–20 kHz) of the active cab, read from the Nano when the dialog opens.
+Both are part of the preset: changes are heard at once, **SAVE** keeps them.
 
 ### FX editor
 
@@ -295,8 +305,8 @@ The controller is a Bluetooth central: it connects without pairing, requests an 
 state (all preset names) once, then the current preset after every change.
 
 Message types used (request → reply): 1 → 2 state, 3 save, 28 capture/cab slot, 29 → 30 preset change,
-31 FX on/off, 60 → 61 and 62 expression settings, 65 → 66 and 67 → 68 settings, 76 → 77 library,
-78 → 79 / 80 → 81 load IR / capture, 99 FX parameter, 111 → 112 rename, 115 unsaved changes,
+26 capture volume, 31 FX on/off, 60 → 61 and 62 expression settings, 65 → 66 and 67 → 68 settings, 76 → 77 library,
+78 → 79 / 80 → 81 load IR / capture, 94 cab setting, 95 → 96 cab settings, 99 FX parameter, 111 → 112 rename, 115 unsaved changes,
 127 / 128 tuner, 136 FX model, 137 → 138 FX parameter values. The message layouts are documented in the
 comments of `main/nano_state.c`, `main/library.c` and in the
 [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).

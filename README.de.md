@@ -24,6 +24,7 @@ IR-Library, ein Stimmgerät und eigene Preset-Bänke. Er ist das Hardware-Gegens
 - **FX-Editor** (lange auf eine FX-Kachel drücken): Modell wählen und alle Parameter live einstellen
 - **Capture und Cab/IR**: einen der 25 Capture-Slots oder 5 Cab-Slots wählen oder jedes Capture bzw. IR aus der
   Library des Nano (Werk und eigene) in den aktiven Slot laden
+- **Capture-Lautstärke** (VOL) und **Cab-Einstellungen** (lange auf das Cab-Feld drücken: Output, High Pass, Low Pass)
 - **Reverb-Schalter** (Fußschalter 8): schaltet den Reverb-Mix zwischen Pos 1 und Pos 2 der Expression-Einstellung
   des Presets um – oder zwischen dem Reverb des Presets und einem **zweiten Reverb** mit eigenen Einstellungen
 - **Stimmgerät** mit großer Notenanzeige und Nadel (Fußschalter 2)
@@ -48,8 +49,10 @@ IR-Library, ein Stimmgerät und eigene Preset-Bänke. Er ist das Hardware-Gegens
 | Capture-Library | Reverb-Schalter: zweites Reverb |
 | ![Stimmgerät](docs/images/08-tuner.png) | ![USB-Audio-Lautstärke](docs/images/09-usb-volume.png) |
 | Stimmgerät | USB-Audio-Lautstärke |
-| ![Bluetooth-MIDI](docs/images/10-bluetooth-midi.png) | |
-| Bluetooth-MIDI | |
+| ![Bluetooth-MIDI](docs/images/10-bluetooth-midi.png) | ![Capture-Lautstärke](docs/images/11-capture-volume.png) |
+| Bluetooth-MIDI | Capture-Lautstärke |
+| ![Cab-Einstellungen](docs/images/12-cab-settings.png) | |
+| Cab-Einstellungen (lange auf das Cab-Feld drücken) | |
 
 Die Bilder zeigen Beispiel-Presets. Sie werden aus dem UI-Code der Firmware gezeichnet
 (`tools/screenshots/make_screenshots.sh`).
@@ -97,10 +100,11 @@ Die Prüfsummen beider Dateien stehen in `nano-controller-<version>-sha256.txt`.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  ◀  ↻    ● PRESET 7   BANK 2       MIDI   USB   SAVE   ▶  │  Preset-Feld: Pfeile = Bank −/+
+│  ◀  ↻  VOL   ● PRESET 7   BANK 2   MIDI   USB   SAVE   ▶  │  Preset-Feld: Pfeile = Bank −/+
 │              Revv NF53 Clean                              │  lange auf den Namen: umbenennen
 ├────────────────────────────┬─────────────────────────────┤
 │ CAPTURE  Revv D20 clean    │ CAB / IR  810 Amped VT      │  antippen: Slot oder Library wählen
+│                            │                             │  lange drücken: Capture-Lautstärke / Cab-Einstellungen
 ├──────────┬──────────┬──────┴───┬──────────────────────────┤
 │ 1 MODE   │ 2 TUNER  │ 3        │ 4                        │  acht Kacheln = acht Fußschalter
 ├──────────┼──────────┼──────────┼──────────────────────────┤
@@ -110,6 +114,7 @@ Die Prüfsummen beider Dateien stehen in `nano-controller-<version>-sha256.txt`.
 
 - **Kachel antippen** = ihren Fußschalter drücken.
 - **↻** (oben links) liest alles neu vom Nano: Preset-Namen, aktuelles Preset und die Library.
+- **VOL** daneben stellt die Capture-Lautstärke des aktuellen Presets ein.
 - **Nach links / rechts wischen**: nächstes / vorheriges Preset.
 - **Nach oben wischen**: Kacheln im Vollbild (größere Namen). **Nach unten wischen**: zurück.
 - Der grüne Punkt zeigt die Bluetooth-Verbindung zum Nano; **SAVE** wird orange, wenn das Preset ungespeicherte
@@ -148,6 +153,11 @@ Die Bänke speichert der Controller, die Presets selbst bleiben auf dem Nano.
 Auf das Feld CAPTURE oder CAB / IR tippen. **SLOTS** zeigt die 25 Capture-Slots (5 Bänke × 5) bzw. die 5 Cab-Slots,
 **LIBRARY** alle auf dem Nano gespeicherten Captures bzw. IRs mit Kategorie-Filtern (AMP = Topteil oder Combo, AMP+CAB, CAB, PEDAL, OTHER).
 Ein Library-Eintrag wird nach einer Rückfrage in den aktiven Slot geladen.
+
+**Capture-Lautstärke**: **VOL** im Preset-Feld oder lange auf das CAPTURE-Feld drücken, −24 dB bis +12 dB
+(**0 dB** setzt zurück). **Cab-Einstellungen**: lange auf das CAB / IR-Feld drücken – **OUTPUT** (−96 dB bis +12 dB),
+**HIGH PASS** (20–800 Hz) und **LOW PASS** (1–20 kHz) des aktiven Cabs, beim Öffnen vom Nano gelesen.
+Beides gehört zum Preset: Änderungen sind sofort zu hören, **SAVE** behält sie.
 
 ### FX-Editor
 
@@ -298,9 +308,9 @@ Benachrichtigungs-Characteristic `C305`. Jede Nachricht ist ein Protobuf-Payload
 Der Controller ist Bluetooth-Central: Er verbindet sich ohne Pairing, fordert eine MTU von 517 an, liest einmal
 den vollständigen Zustand (alle Preset-Namen) und danach nach jedem Wechsel das aktuelle Preset.
 
-Verwendete Nachrichtentypen (Anfrage → Antwort): 1 → 2 Zustand, 3 Speichern, 28 Capture-/Cab-Slot,
+Verwendete Nachrichtentypen (Anfrage → Antwort): 1 → 2 Zustand, 3 Speichern, 26 Capture-Lautstärke, 28 Capture-/Cab-Slot,
 29 → 30 Preset-Wechsel, 31 FX an/aus, 60 → 61 und 62 Expression-Einstellungen, 65 → 66 und 67 → 68 Einstellungen,
-76 → 77 Library, 78 → 79 / 80 → 81 IR / Capture laden, 99 FX-Parameter, 111 → 112 Umbenennen,
+76 → 77 Library, 78 → 79 / 80 → 81 IR / Capture laden, 94 Cab-Einstellung, 95 → 96 Cab-Einstellungen, 99 FX-Parameter, 111 → 112 Umbenennen,
 115 ungespeicherte Änderungen, 127 / 128 Stimmgerät, 136 FX-Modell, 137 → 138 FX-Parameterwerte.
 Der Aufbau der Nachrichten steht in den Kommentaren von `main/nano_state.c`, `main/library.c` und im
 [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).

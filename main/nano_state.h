@@ -12,6 +12,7 @@
 #define NANO_MSG_STATE_REQUEST 1
 #define NANO_MSG_STATE_RESPONSE 2
 #define NANO_MSG_SAVE_PRESET 3
+#define NANO_MSG_VALUE 26                     // one value of the current preset (capture volume)
 #define NANO_MSG_SELECTOR 28                  // capture / cab slot selection
 #define NANO_MSG_SET_PRESET_SLOTS 29          // preset change (both directions)
 #define NANO_MSG_SET_PRESET_SLOTS_RESPONSE 30
@@ -28,6 +29,9 @@
 #define NANO_MSG_CAB_LOAD_RESPONSE 79
 #define NANO_MSG_CAPTURE_LOAD 80              // library capture into a capture slot
 #define NANO_MSG_CAPTURE_LOAD_RESPONSE 81
+#define NANO_MSG_CAB_SETTING 94               // one cab setting of the current preset (output, high pass, low pass)
+#define NANO_MSG_CAB_SETTINGS_REQUEST 95
+#define NANO_MSG_CAB_SETTINGS_RESPONSE 96
 #define NANO_MSG_EXP_RESPONSE 61
 #define NANO_MSG_FX_VALUE 99                  // one FX parameter
 #define NANO_MSG_DIRTY_CHANGED 115
@@ -56,6 +60,7 @@ typedef struct {
     char cab[64];
     int capture_slot;                   // 1-25, 0 = capture bypassed
     int cab_slot;                       // 1-5, 0 = cab bypassed
+    int capture_volume;                 // 0-255, NANO_CAPTURE_VOLUME_0DB = 0 dB
     char capture_names[NANO_CAPTURE_SLOTS][48];
     char cab_names[NANO_CAB_SLOTS][48];
     float tuner_base_hz;                // reference pitch (default 440)
@@ -101,6 +106,21 @@ size_t nano_settings_request(uint8_t *out);
 size_t nano_usb_gain(float db, uint8_t *out);
 // USB playback volume from a settings reply. False if the field is missing (0 dB, or an older firmware).
 bool nano_settings_usb_gain(const uint8_t *payload, size_t len, float *db);
+
+// Capture volume of the current preset: 0-255 on the Nano, -24 dB .. 0 dB below 128, 0 .. +12 dB above.
+#define NANO_CAPTURE_VOLUME_0DB 128
+float nano_capture_volume_db(int raw);
+int nano_capture_volume_raw(float db);
+size_t nano_capture_volume(int raw, uint8_t *out);
+
+// Cab settings of the current preset (Level, High Pass and Low Pass in the editor), 0-1 on the Nano.
+enum { NANO_CAB_OUTPUT, NANO_CAB_HIGH_PASS, NANO_CAB_LOW_PASS, NANO_CAB_SETTINGS };
+float nano_cab_setting_value(int which, float normalized);   // output in dB (-96 .. +12), filters in Hz
+float nano_cab_setting_normalized(int which, float value);
+size_t nano_cab_settings_request(int slot, uint8_t *out);    // slot 1-5
+size_t nano_cab_setting(int which, float normalized, uint8_t *out);
+// The three settings (0-1) of a cab settings reply. False if the reply does not carry them.
+bool nano_cab_settings_values(const uint8_t *payload, size_t len, float normalized[NANO_CAB_SETTINGS]);
 
 // Parameter values (0-1, in parameter index order) of an FxParameters reply. Returns the count.
 int nano_fx_params_values(const uint8_t *payload, size_t len, float *values, int max);

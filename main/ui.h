@@ -2,6 +2,8 @@
 // and six tiles that match footswitches 3-8:
 //   preset mode: the six presets of the bank (bank with the arrow buttons)
 //   FX mode:     FX slots 1-5 on/off, reverb mix Pos 1 / Pos 2 (long press: set Pos 1 / Pos 2)
+// VOL (top left) or a long press on the capture card: capture volume; long press on the cab card: cab output,
+// high pass and low pass.
 #pragma once
 
 #include <stdbool.h>
@@ -24,6 +26,8 @@
 //   'r', 0         refresh: read presets, names and the library again
 //   'V', 0         USB volume opened: read the Nano's settings (answer with ui_set_usb_gain)
 //   'U', tenths    USB playback volume in tenths of a dB (-400 = off .. 0)
+//   'v', w<<16|v   capture volume (w 0: v = 0-255) or cab setting (w 1-3 = output, high pass, low pass: v = 0-1000)
+//   'y', 1 / 0     cab settings opened (read them, answer with ui_set_cab_settings) / closed
 //   'Q', w<<8|v    reverb mix editor: Pos w+1 (0/1) moved to v (0-255), play that mix
 //   'W', p1<<8|p2  reverb mix editor: save Pos 1 / Pos 2 (0-255) in the preset
 //   'K', 0         reverb mix editor closed
@@ -73,6 +77,10 @@ void ui_set_library(const nano_library_t *library);
 
 // USB playback volume (dB, -40 = off) read from the Nano's settings.
 void ui_set_usb_gain(float db);
+
+// Cab settings dialog: values = output, high pass, low pass (0-1, NANO_CAB_SETTINGS) or NULL while unknown;
+// enabled = the sliders can be used; info = line under the title (cab name or why the values are missing).
+void ui_set_cab_settings(const float *values, bool enabled, const char *info);
 
 // The Nano Cortex Editor is connected through the controller (shown in the status line).
 void ui_set_app(bool connected);

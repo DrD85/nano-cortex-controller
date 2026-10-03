@@ -1,5 +1,6 @@
 #include "nano_state.h"
 
+#include <math.h>
 #include <string.h>
 
 const char *const NANO_FX_SLOT_NAMES[NANO_FX_SLOTS] = { "Pre FX 1", "Pre FX 2", "Post FX 1", "Post FX 2", "Post FX 3" };
@@ -106,7 +107,7 @@ uint64_t nano_field_varint(const uint8_t *payload, size_t len, uint32_t field)
 // 17 captures[] { 2 name }, 19 cabinets[] { 1 short name } (full state only),
 // 13 currentPresetIndex, 14/15/38/39 presets on slots A1/B1/A2/B2, 18 presets[] { 1 name },
 // 31 fxBypass (5 bytes, 0 = on), 32 current capture { 2 name }, 33 current cab { 2 short name },
-// 41 currentPresetDirty, 46 tunerBaseFrequency (float32), 48-52 FX model type per slot.
+// 41 currentPresetDirty, 44 capture volume (0-255), 46 tunerBaseFrequency (float32), 48-52 FX model type per slot.
 // The Nano omits fields whose value is 0.
 bool nano_payload_complete(const uint8_t *payload, size_t len)
 {
@@ -119,7 +120,7 @@ bool nano_payload_complete(const uint8_t *payload, size_t len)
 bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
 {
     int preset_index = 0, slots[4] = { 0 }, names = 0, captures = 0, cabs = 0;
-    int bank = 1, capture_position = 0, cab_selector = 0;
+    int bank = 1, capture_position = 0, cab_selector = 0, capture_volume = 0;
     bool dirty = false, fx_seen = false, names_seen = false, capture_seen = false, cab_seen = false;
     bool capture_names_seen = false, cab_names_seen = false;
     uint32_t types[NANO_FX_SLOTS] = { 0 };
@@ -154,6 +155,7 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
         case 38: slots[2] = (int)field_number(&f); break;
         case 39: slots[3] = (int)field_number(&f); break;
         case 41: dirty = field_number(&f) != 0; break;
+        case 44: capture_volume = (int)field_number(&f); break;
         case 46:
             if (f.wire == 5) {
                 float hz;
@@ -201,6 +203,7 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
     if (bank < 1 || bank > 5) bank = 1;
     st->capture_slot = capture_position > 0 ? (bank - 1) * 5 + capture_position : 0;
     st->cab_slot = cab_selector >= 0 && cab_selector <= NANO_CAB_SLOTS ? cab_selector : 0;
+    st->capture_volume = capture_volume <= 255 ? capture_volume : 255;
     if (capture_names_seen) {
         for (int i = captures; i < NANO_CAPTURE_SLOTS; i++) st->capture_names[i][0] = 0;
     }
@@ -502,6 +505,107 @@ bool nano_settings_usb_gain(const uint8_t *payload, size_t len, float *db)
         if (f.wire == 1) { double d; memcpy(&d, f.data, sizeof(d)); *db = (float)d; return true; }
     }
     return false;
+}
+
+// ---- capture volume and cab settings (as the editor sends them) ----
+
+float nano_capture_volume_db(int raw)
+{
+    if (raw < 0) raw = 0;
+    if (raw > 255) raw = 255;
+    if (raw <= NANO_CAPTURE_VOLUME_0DB) return raw / 128.0f * 24 - 24;
+    return (raw - 128) / 127.0f * 12;
+}
+
+int nano_capture_volume_raw(float db)
+{
+    if (db < -24) db = -24;
+    if (db > 12) db = 12;
+    if (db <= 0) return (int)lroundf((db + 24) / 24 * 128);
+    return (int)lroundf(128 + db / 12 * 127);
+}
+
+// ValueMessage { 3: 10 = capture volume, 4: value 0-255, 5: 0 }.
+size_t nano_capture_volume(int raw, uint8_t *out)
+{
+    if (raw < 0) raw = 0;
+    if (raw > 255) raw = 255;
+    size_t n = 0;
+    out[n++] = 0x18; out[n++] = 0x0A;
+    out[n++] = 0x20; n += put_varint(out + n, (uint64_t)raw);
+    out[n++] = 0x28; out[n++] = 0x00;
+    return n;
+}
+
+// Output: 0 dB sits at 0.66212219, -96 dB .. 0 below it, 0 .. +12 dB above (as in the editor).
+#define CAB_OUTPUT_0DB 0.66212219f
+static const float CAB_FILTER_RANGE[3][2] = { { 0, 0 }, { 20, 800 }, { 1000, 20000 } };   // Hz
+
+float nano_cab_setting_value(int which, float n)
+{
+    if (n < 0) n = 0;
+    if (n > 1) n = 1;
+    if (which == NANO_CAB_OUTPUT) return n <= CAB_OUTPUT_0DB ? n / CAB_OUTPUT_0DB * 96 - 96 : (n - CAB_OUTPUT_0DB) / (1 - CAB_OUTPUT_0DB) * 12;
+    return CAB_FILTER_RANGE[which][0] + n * (CAB_FILTER_RANGE[which][1] - CAB_FILTER_RANGE[which][0]);
+}
+
+float nano_cab_setting_normalized(int which, float value)
+{
+    float n;
+    if (which == NANO_CAB_OUTPUT) n = value <= 0 ? (value + 96) / 96 * CAB_OUTPUT_0DB : CAB_OUTPUT_0DB + value / 12 * (1 - CAB_OUTPUT_0DB);
+    else n = (value - CAB_FILTER_RANGE[which][0]) / (CAB_FILTER_RANGE[which][1] - CAB_FILTER_RANGE[which][0]);
+    return n < 0 ? 0 : n > 1 ? 1 : n;
+}
+
+// RetrievePresetCabinetSettingsLite { 3: 0, 4: cab slot 0-4 } -> reply 96.
+size_t nano_cab_settings_request(int slot, uint8_t *out)
+{
+    out[0] = 0x18; out[1] = 0x00; out[2] = 0x20; out[3] = (uint8_t)(slot - 1);
+    return 4;
+}
+
+// { 5: output, 6: high pass, 7: low pass } (float32, 0-1); the Nano takes one at a time.
+size_t nano_cab_setting(int which, float normalized, uint8_t *out)
+{
+    if (normalized < 0) normalized = 0;
+    if (normalized > 1) normalized = 1;
+    out[0] = (uint8_t)((5 + which) << 3 | 5);
+    memcpy(out + 1, &normalized, sizeof(normalized));
+    return 1 + sizeof(normalized);
+}
+
+// The settings are a field 8 { 1: output, 2: high pass, 3: low pass (float32) } in the reply (the editor finds
+// it by its bytes); fields equal to 0 are left out. Looked for on each level first, then in the nested messages.
+static bool cab_settings_block(const uint8_t *data, size_t len, float values[NANO_CAB_SETTINGS], int depth)
+{
+    pb_reader_t r = { data, data + len };
+    pb_field_t f;
+    while (pb_next(&r, &f)) {
+        if (f.field != 8 || f.wire != 2 || f.len < 5 || f.len > 15 || f.len % 5) continue;
+        float found[NANO_CAB_SETTINGS] = { 0 };
+        pb_reader_t inner = { f.data, f.data + f.len };
+        pb_field_t g;
+        bool ok = true;
+        while (ok && inner.p < inner.end) {
+            ok = pb_next(&inner, &g) && g.wire == 5 && g.field >= 1 && g.field <= NANO_CAB_SETTINGS;
+            if (ok) memcpy(&found[g.field - 1], g.data, sizeof(float));
+        }
+        if (ok) {
+            memcpy(values, found, sizeof(found));
+            return true;
+        }
+    }
+    if (depth >= 3) return false;
+    r = (pb_reader_t){ data, data + len };
+    while (pb_next(&r, &f)) {
+        if (f.wire == 2 && f.len && cab_settings_block(f.data, f.len, values, depth + 1)) return true;
+    }
+    return false;
+}
+
+bool nano_cab_settings_values(const uint8_t *payload, size_t len, float normalized[NANO_CAB_SETTINGS])
+{
+    return cab_settings_block(payload, len, normalized, 0);
 }
 
 // FxParameters reply { 1: 6, 4: values (packed float32, 0-1) }.

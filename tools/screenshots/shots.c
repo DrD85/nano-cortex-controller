@@ -97,6 +97,7 @@ static void example_state(void)
     static const char *const cabs[] = { "412 Brit V30", "810 Amped VT Aln 70s", "212 Blue Alnico", "110 US PRN C10R", "412 Recto" };
     for (int i = 0; i < NANO_CAB_SLOTS; i++) snprintf(st.cab_names[i], sizeof(st.cab_names[i]), "%s", cabs[i]);
     st.tuner_base_hz = 440;
+    st.capture_volume = nano_capture_volume_raw(1.5f);
 
     view.bank = 1;   // BANK 2: presets 7-12
     static const uint8_t colors[6] = { 0, 3, 2, 1, 8, 5 }, icons[6] = { 1, 2, 9, 4, 5, 6 };
@@ -138,7 +139,8 @@ static nano_library_t *example_library(void)
 
 static void close_all(void)
 {
-    lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi, s_toast };
+    lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
+                                   s_volume, s_cab_settings, s_toast };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) lv_obj_set_hidden(overlays[i], true);
 }
 
@@ -216,5 +218,19 @@ int main(void)
     ui_set_midi(&midi);
     open_midi(NULL);
     shot("10-bluetooth-midi");
+    close_all();
+
+    open_volume(NULL);
+    shot("11-capture-volume");
+    close_all();
+
+    open_cab_settings(NULL);
+    const float cab[NANO_CAB_SETTINGS] = { nano_cab_setting_normalized(NANO_CAB_OUTPUT, -2.0f),
+                                           nano_cab_setting_normalized(NANO_CAB_HIGH_PASS, 80),
+                                           nano_cab_setting_normalized(NANO_CAB_LOW_PASS, 7500) };
+    char info[96];
+    snprintf(info, sizeof(info), "%s  -  slot %d", st.cab, st.cab_slot);
+    ui_set_cab_settings(cab, true, info);
+    shot("12-cab-settings");
     return 0;
 }

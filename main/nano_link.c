@@ -345,6 +345,7 @@ static uint32_t reply_type(uint32_t request)
     case 76: return 77;    // library
     case 78: return 79;    // load IR
     case 80: return 81;    // load capture
+    case 95: return 96;    // cab settings
     case 111: return 112;  // rename
     case 137: return 138;  // FX parameters
     default: return 0;
