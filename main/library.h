@@ -6,7 +6,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-typedef enum { LIB_ALL, LIB_AMP, LIB_CAB, LIB_PEDAL, LIB_OTHER, LIB_CATEGORY_COUNT } lib_category_t;
+// Capture categories as in the editor: AMP = amp head or combo alone, AMP_CAB = amp captured with its cab.
+typedef enum { LIB_ALL, LIB_AMP, LIB_AMP_CAB, LIB_CAB, LIB_PEDAL, LIB_OTHER, LIB_CATEGORY_COUNT } lib_category_t;
 
 typedef struct {
     char name[64];

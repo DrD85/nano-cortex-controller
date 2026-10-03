@@ -63,6 +63,9 @@ typedef struct {
     char preset_names[NANO_PRESETS][65];
 } nano_state_t;
 
+// True if the payload is a complete protobuf message (every field parses up to the end).
+bool nano_payload_complete(const uint8_t *payload, size_t len);
+
 // Applies a StateResponse payload. Returns true if it contained the preset name list.
 bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len);
 

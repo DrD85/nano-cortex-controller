@@ -1,0 +1,19 @@
+# macOS
+.DS_Store
+
+# ESP-IDF build output and generated configuration (sdkconfig.defaults is the source)
+build/
+build-public/
+build-screens/
+sdkconfig
+sdkconfig.old
+managed_components/
+
+# Private artwork for the own build (third-party icons and pedal pictures) - never publish
+main/private/
+
+# Release files (uploaded to GitHub Releases, not committed)
+release/
+
+# Python
+__pycache__/

@@ -1,7 +1,0 @@
--mlongcalls
--fno-builtin-memcpy
--fno-builtin-memset
--fno-builtin-bzero
--mdisable-hardware-atomics
-"-specs=/Users/dominikschmidt/Music/nano/nano-controller/build-public/specs/picolibc.specs"
--fno-rtti

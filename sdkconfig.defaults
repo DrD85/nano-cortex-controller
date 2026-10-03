@@ -53,3 +53,6 @@ CONFIG_LV_DEF_REFR_PERIOD=16
 
 # LVGL objects from the normal heap (internal RAM, then PSRAM) for long lists
 CONFIG_LV_USE_CLIB_MALLOC=y
+# Two connections (Nano + Bluetooth MIDI) and long replies: more host buffers
+CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=24
+CONFIG_BT_NIMBLE_MSYS_2_BLOCK_COUNT=40

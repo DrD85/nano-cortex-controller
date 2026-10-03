@@ -21,6 +21,7 @@
 //   'L', k<<16|i   load library item i (alphabetical) into the active slot; k: 0 capture, 1 cab
 //   'B', packed    own bank: symbol << 18 | bank << 14 | slot << 11 | colour << 7 | preset (preset 0 = default)
 //   'S', 0         save the current preset (after the user confirmed it)
+//   'r', 0         refresh: read presets, names and the library again
 //   'V', 0         USB volume opened: read the Nano's settings (answer with ui_set_usb_gain)
 //   'U', tenths    USB playback volume in tenths of a dB (-400 = off .. 0)
 //   'Q', w<<8|v    reverb mix editor: Pos w+1 (0/1) moved to v (0-255), play that mix
@@ -28,6 +29,8 @@
 //   'K', 0         reverb mix editor closed
 //   'A', type      reverb B model for this preset (0 = none: footswitch 8 is the mix switch)
 //   'H', 0         edit reverb B: load it and open the FX editor
+//   'X', 1 / 0     Bluetooth MIDI dialog opened / closed (search for devices while open)
+//   'P', n         connect MIDI device n of the list (-1 = disconnect and forget)
 //   'D', n         footswitch learn: 1-8 = the next pressed footswitch becomes switch n, 0 = cancel,
 //                  -1 = default order (answer with ui_learn_done)
 typedef void (*ui_command_cb)(char command, int arg);
@@ -73,6 +76,19 @@ void ui_set_usb_gain(float db);
 
 // Footswitch learn finished (or not possible): closes the learn window and shows the message.
 void ui_learn_done(const char *message);
+
+// Bluetooth MIDI: connection and the devices found while the MIDI dialog is open.
+typedef struct {
+    bool connected;
+    char name[32];       // connected or stored device, "" = none
+    int count;
+    struct {
+        char name[32];
+        int8_t rssi;
+        bool remembered;
+    } devices[8];
+} ui_midi_t;
+void ui_set_midi(const ui_midi_t *midi);
 
 // Short message at the top of the screen.
 void ui_show_message(const char *text);

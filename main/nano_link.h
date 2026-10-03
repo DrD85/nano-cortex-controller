@@ -9,6 +9,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "host/ble_hs.h"
+
 // A complete message from the Nano: protobuf payload (frame header and type removed) and its type.
 // Called from the NimBLE host task; the payload is only valid during the call.
 typedef void (*nano_message_cb)(uint32_t type, const uint8_t *payload, size_t len);
@@ -21,3 +23,17 @@ bool nano_link_ready(void);
 
 // Queues a message for C304. Writes go out strictly one at a time (write with response).
 bool nano_link_send(const char *label, uint32_t type, const uint8_t *payload, size_t len);
+
+// ---- shared with other Bluetooth clients (MIDI) ----
+
+// Every advertisement seen while scanning. Called from the NimBLE host task.
+typedef void (*nano_link_adv_cb)(const ble_addr_t *addr, int8_t rssi, const struct ble_hs_adv_fields *fields);
+void nano_link_set_adv_hook(nano_link_adv_cb cb);
+
+// Another client wants scanning: fast = actively searching (dialog open), otherwise a slow background scan.
+void nano_link_scan_request(bool on, bool fast);
+
+// Connects another device with its own GAP event handler (scanning pauses meanwhile). The handler must call
+// nano_link_other_connect_done() on its BLE_GAP_EVENT_CONNECT. Returns false if a connection is being set up.
+bool nano_link_connect_other(const ble_addr_t *addr, ble_gap_event_fn *cb, void *arg);
+void nano_link_other_connect_done(void);

@@ -1,4 +1,6 @@
 # Nano Cortex Controller (unofficial)
+<img width="1610" height="970" alt="image" src="https://github.com/user-attachments/assets/44baf147-e5b6-49bc-af0a-1e5dea99fed6" />
+
 
 A touch screen and footswitch controller for the **Neural DSP Nano Cortex**, connected over Bluetooth.
 It runs on a **Waveshare ESP32-S3-Touch-LCD-4.3** and turns it into a Quad-Cortex-style floor controller:
@@ -13,6 +15,8 @@ your own preset banks. It is the hardware companion of the
 
 **Deutsch:** [Anleitung auf Deutsch](README.de.md)
 
+![Preset mode](docs/images/01-preset-mode.png)
+
 ## Features
 
 - **Presets**: six presets per bank on footswitches 3–8, 16 own banks with colour and symbol per switch,
@@ -25,9 +29,29 @@ your own preset banks. It is the hardware companion of the
   setting – or switches between the preset's reverb and a **second reverb** with its own settings
 - **Tuner** with large note display and needle (footswitch 2)
 - **USB audio volume** of the Nano (playback from the computer), as in the official app
+- **Bluetooth MIDI**: connect a MIDI controller wirelessly – for example a Morningstar MC6 with a WIDI adapter –
+  using the Nano's own MIDI messages (program change, CC 37–41, CC 1)
 - **Footswitch learn**: assign any footswitch to any function
 - **Full-screen tiles** (swipe up) for reading from a distance
 - Up to 8 footswitches on an SX1509 I/O expander (optional – the touch screen works on its own)
+
+## Screenshots
+
+| | |
+|---|---|
+| ![FX mode](docs/images/02-fx-mode.png) | ![Full-screen tiles (swipe up)](docs/images/03-fullscreen.png) |
+| FX mode | Full-screen tiles (swipe up) |
+| ![FX editor](docs/images/04-fx-editor.png) | ![Own banks: colour, symbol and preset](docs/images/05-bank-editor.png) |
+| FX editor | Own banks: colour, symbol and preset |
+| ![Capture library](docs/images/06-capture-library.png) | ![Reverb switch: second reverb](docs/images/07-reverb.png) |
+| Capture library | Reverb switch: second reverb |
+| ![Tuner](docs/images/08-tuner.png) | ![USB audio volume](docs/images/09-usb-volume.png) |
+| Tuner | USB audio volume |
+| ![Bluetooth MIDI](docs/images/10-bluetooth-midi.png) | |
+| Bluetooth MIDI | |
+
+The screenshots show example presets. They are rendered from the firmware's own UI code
+(`tools/screenshots/make_screenshots.sh`).
 
 ## What you need
 
@@ -71,7 +95,7 @@ The checksums of both files are in `nano-controller-<version>-sha256.txt`.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  ◀   ● PRESET 7   BANK 2   EDITED         USB   SAVE   ▶  │  preset card: arrows = bank −/+
+│  ◀  ↻    ● PRESET 7   BANK 2       MIDI   USB   SAVE   ▶  │  preset card: arrows = bank −/+
 │              Revv NF53 Clean                              │  long press on the name: rename
 ├────────────────────────────┬─────────────────────────────┤
 │ CAPTURE  Revv D20 clean    │ CAB / IR  810 Amped VT      │  tap: choose slot or library item
@@ -83,9 +107,11 @@ The checksums of both files are in `nano-controller-<version>-sha256.txt`.
 ```
 
 - **Tap a tile** = press its footswitch.
+- **↻** (top left) reads everything from the Nano again: preset names, the current preset and the library.
 - **Swipe left / right**: next / previous preset.
 - **Swipe up**: tiles in full screen (larger names). **Swipe down**: back.
-- The green dot shows the Bluetooth connection, **EDITED** unsaved changes on the Nano.
+- The green dot shows the Bluetooth connection to the Nano; **SAVE** turns orange when the preset has unsaved
+  changes. **MIDI** turns green while a Bluetooth MIDI controller is connected.
 
 ### Footswitches and tiles
 
@@ -118,7 +144,7 @@ The banks are stored on the controller, the presets themselves stay on the Nano.
 ### Capture and Cab/IR
 
 Tap the CAPTURE or CAB / IR card. **SLOTS** lists the 25 capture slots (5 banks × 5) or 5 cab slots;
-**LIBRARY** shows all captures or IRs stored on the Nano with category filters (AMP, CAB, PEDAL, OTHER).
+**LIBRARY** shows all captures or IRs stored on the Nano with category filters (AMP = head or combo, AMP+CAB, CAB, PEDAL, OTHER).
 A library item is loaded into the active slot after a confirmation.
 
 ### FX editor
@@ -134,7 +160,7 @@ on the Nano.
   **SAVE** writes both values into the preset (and creates the expression setting if there is none).
 - **2ND REVERB**: choose a second reverb (B) for this preset. Footswitch 8 then switches between the preset's
   reverb (A) and B; the Nano has one reverb slot, so the controller swaps the model and sends the stored values
-  (takes about half a second). **EDIT B** loads B and opens the FX editor to set it up. Reverb B is stored on the
+  (takes about half a second). Tile 8 shows reverb B and lights up while it runs; tile 7 shows the reverb in the slot. **EDIT B** loads B and opens the FX editor to set it up. Reverb B is stored on the
   controller, per preset. If you save the preset while B is active, B becomes the preset's reverb.
 
 ### Tuner
@@ -147,6 +173,25 @@ Tap the screen or press footswitch 2 again to close it.
 **USB** in the preset card: volume of the audio played from the computer over USB, −40 dB (OFF) to 0 dB,
 as in the official app. The value is read from the Nano each time.
 
+### Bluetooth MIDI
+
+**MIDI** in the preset card opens the device list. It shows Bluetooth MIDI devices nearby – for example a
+CME WIDI adapter on the MIDI port of a Morningstar MC6, or a Bluetooth MIDI
+footswitch. Tap one to connect it; the controller remembers it and connects again by itself whenever it is
+switched on. **FORGET DEVICE** disconnects and forgets it. The Nano stays connected at the same time.
+
+The controller understands the same messages as the Nano's own MIDI over USB, on all MIDI channels, so banks made
+for the Nano (for example with the MC6 export of the Nano Cortex Editor) work over Bluetooth too:
+
+| Message | Action |
+|---|---|
+| Program Change 0–63 | preset 1–64 |
+| CC 37–41 | FX slot 1–5 (Pre FX 1, Pre FX 2, Post FX 1–3): value 64–127 on, 0–63 off |
+| CC 1 | expression: reverb mix from Pos 1 (0) to Pos 2 (127) |
+| CC 50–57, value 64–127 | press footswitch 1–8 (mode, tuner, presets or FX, reverb switch) |
+
+A wired MIDI input is not possible on this board without extra hardware; use a Bluetooth MIDI adapter instead.
+
 ### Footswitch learn
 
 Long press on tile 1 or 2, or **LEARN SWITCH** in the bank editor. Then press the footswitch that should have
@@ -157,7 +202,7 @@ the standard order.
 
 | On the Nano | On the controller |
 |---|---|
-| presets, names, captures, cabs, FX and their values, expression settings (Pos 1 / Pos 2), USB volume | own banks (preset, colour, symbol), footswitch order, second reverbs |
+| presets, names, captures, cabs, FX and their values, expression settings (Pos 1 / Pos 2), USB volume | own banks (preset, colour, symbol), footswitch order, second reverbs, the Bluetooth MIDI device |
 
 ## Footswitches
 
@@ -178,7 +223,7 @@ Without an SX1509 the controller works with the touch screen only.
 
 With the board on the **USB** port, any serial monitor at 115200 baud (for example `idf.py monitor --no-reset`)
 shows a log of all messages and accepts commands: `n`/`p` next/previous preset, a number (1–64) selects a preset,
-`a`–`e` switch FX slots 1–5, `m` mode, `t` tuner, `x` reverb switch, `s` read the preset again,
+`a`–`e` switch FX slots 1–5, `m` mode, `t` tuner, `x` reverb switch, `s` read the preset again, `r` read everything again,
 `l` list the preset names, `h` help.
 
 ## Build from source
@@ -206,6 +251,7 @@ download mode. Use the port name of your system (`ls /dev/cu.*` on a Mac).
 | `main/nano_link.c` | Bluetooth LE central (NimBLE): scan, connect, MTU 517, notifications, reassembly of long messages, write queue |
 | `main/nano_state.c` | protobuf parsing of the Nano's state and all request messages |
 | `main/library.c` | capture / IR library (reading, sorting, loading into a slot) |
+| `main/midi_ble.c` | Bluetooth LE MIDI client: device list, connection, BLE MIDI packets |
 | `main/ui.c` | LVGL user interface |
 | `main/board.c` | display (RGB 800 × 480), GT911 touch, CH422G I/O expander, LVGL port |
 | `main/footswitches.c` | SX1509 polling, debouncing, learn |
@@ -213,6 +259,7 @@ download mode. Use the port name of your system (`ls /dev/cu.*` on a Mac).
 | `tools/gen_tables.py` | FX models and parameters (`tools/editor_models.json`, exported from the editor) and effect icons |
 | `tools/preset_icons.py` | the preset symbols (own drawings), rendered by `tools/svg_render.py` |
 | `tools/gen_pedals.py` | optional pedal pictures for an own build (see below) |
+| `tools/screenshots/` | renders the screenshots in `docs/images` on the computer from `main/ui.c` with example data |
 
 ### Own artwork (optional, own builds only)
 
@@ -236,6 +283,10 @@ Message types used (request → reply): 1 → 2 state, 3 save, 28 capture/cab sl
 127 / 128 tuner, 136 FX model, 137 → 138 FX parameter values. The message layouts are documented in the
 comments of `main/nano_state.c`, `main/library.c` and in the
 [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).
+
+Bluetooth MIDI runs on a second connection next to the Nano: the controller looks for the BLE MIDI service
+(`03B80E5A-EDE8-4B33-A751-6CE34EC4C700`), subscribes to its characteristic and decodes the BLE MIDI packets
+(timestamps, running status) into channel messages.
 
 When the preset is changed on the pedal, the Nano sends message 29 and waits for the acknowledgement 30
 (`06 C0 20 01 1E 00 00 00`); the controller answers it and reads the new preset.

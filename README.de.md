@@ -13,6 +13,8 @@ IR-Library, ein Stimmgerät und eigene Preset-Bänke. Er ist das Hardware-Gegens
 
 **English:** [README](README.md)
 
+![Preset-Modus](docs/images/01-preset-mode.png)
+
 ## Funktionen
 
 - **Presets**: sechs Presets pro Bank auf den Fußschaltern 3–8, 16 eigene Bänke mit Farbe und Symbol pro
@@ -26,9 +28,29 @@ IR-Library, ein Stimmgerät und eigene Preset-Bänke. Er ist das Hardware-Gegens
   des Presets um – oder zwischen dem Reverb des Presets und einem **zweiten Reverb** mit eigenen Einstellungen
 - **Stimmgerät** mit großer Notenanzeige und Nadel (Fußschalter 2)
 - **USB-Audio-Lautstärke** des Nano (Wiedergabe vom Computer), wie in der offiziellen App
+- **Bluetooth-MIDI**: einen MIDI-Controller kabellos verbinden – zum Beispiel ein Morningstar MC6 mit einem
+  WIDI-Adapter – mit den MIDI-Befehlen des Nano selbst (Program Change, CC 37–41, CC 1)
 - **Fußschalter-Learn**: jeden Fußschalter jeder Funktion zuordnen
 - **Vollbild-Kacheln** (nach oben wischen), gut lesbar aus der Entfernung
 - Bis zu 8 Fußschalter an einem SX1509-I/O-Expander (optional – der Touchscreen funktioniert auch allein)
+
+## Bildschirmfotos
+
+| | |
+|---|---|
+| ![FX-Modus](docs/images/02-fx-mode.png) | ![Vollbild-Kacheln (nach oben wischen)](docs/images/03-fullscreen.png) |
+| FX-Modus | Vollbild-Kacheln (nach oben wischen) |
+| ![FX-Editor](docs/images/04-fx-editor.png) | ![Eigene Bänke: Farbe, Symbol und Preset](docs/images/05-bank-editor.png) |
+| FX-Editor | Eigene Bänke: Farbe, Symbol und Preset |
+| ![Capture-Library](docs/images/06-capture-library.png) | ![Reverb-Schalter: zweites Reverb](docs/images/07-reverb.png) |
+| Capture-Library | Reverb-Schalter: zweites Reverb |
+| ![Stimmgerät](docs/images/08-tuner.png) | ![USB-Audio-Lautstärke](docs/images/09-usb-volume.png) |
+| Stimmgerät | USB-Audio-Lautstärke |
+| ![Bluetooth-MIDI](docs/images/10-bluetooth-midi.png) | |
+| Bluetooth-MIDI | |
+
+Die Bilder zeigen Beispiel-Presets. Sie werden aus dem UI-Code der Firmware gezeichnet
+(`tools/screenshots/make_screenshots.sh`).
 
 ## Was du brauchst
 
@@ -73,7 +95,7 @@ Die Prüfsummen beider Dateien stehen in `nano-controller-<version>-sha256.txt`.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  ◀   ● PRESET 7   BANK 2   EDITED         USB   SAVE   ▶  │  Preset-Feld: Pfeile = Bank −/+
+│  ◀  ↻    ● PRESET 7   BANK 2       MIDI   USB   SAVE   ▶  │  Preset-Feld: Pfeile = Bank −/+
 │              Revv NF53 Clean                              │  lange auf den Namen: umbenennen
 ├────────────────────────────┬─────────────────────────────┤
 │ CAPTURE  Revv D20 clean    │ CAB / IR  810 Amped VT      │  antippen: Slot oder Library wählen
@@ -85,9 +107,11 @@ Die Prüfsummen beider Dateien stehen in `nano-controller-<version>-sha256.txt`.
 ```
 
 - **Kachel antippen** = ihren Fußschalter drücken.
+- **↻** (oben links) liest alles neu vom Nano: Preset-Namen, aktuelles Preset und die Library.
 - **Nach links / rechts wischen**: nächstes / vorheriges Preset.
 - **Nach oben wischen**: Kacheln im Vollbild (größere Namen). **Nach unten wischen**: zurück.
-- Der grüne Punkt zeigt die Bluetooth-Verbindung, **EDITED** ungespeicherte Änderungen auf dem Nano.
+- Der grüne Punkt zeigt die Bluetooth-Verbindung zum Nano; **SAVE** wird orange, wenn das Preset ungespeicherte
+  Änderungen hat. **MIDI** wird grün, solange ein Bluetooth-MIDI-Controller verbunden ist.
 
 ### Fußschalter und Kacheln
 
@@ -120,7 +144,7 @@ Die Bänke speichert der Controller, die Presets selbst bleiben auf dem Nano.
 ### Capture und Cab/IR
 
 Auf das Feld CAPTURE oder CAB / IR tippen. **SLOTS** zeigt die 25 Capture-Slots (5 Bänke × 5) bzw. die 5 Cab-Slots,
-**LIBRARY** alle auf dem Nano gespeicherten Captures bzw. IRs mit Kategorie-Filtern (AMP, CAB, PEDAL, OTHER).
+**LIBRARY** alle auf dem Nano gespeicherten Captures bzw. IRs mit Kategorie-Filtern (AMP = Topteil oder Combo, AMP+CAB, CAB, PEDAL, OTHER).
 Ein Library-Eintrag wird nach einer Rückfrage in den aktiven Slot geladen.
 
 ### FX-Editor
@@ -137,7 +161,8 @@ Preset-Feld speichert das Preset auf dem Nano.
   falls es noch keine gibt).
 - **2ND REVERB**: ein zweites Reverb (B) für dieses Preset wählen. Fußschalter 8 wechselt dann zwischen dem
   Reverb des Presets (A) und B. Der Nano hat nur einen Reverb-Platz, deshalb tauscht der Controller das Modell aus
-  und schickt die gespeicherten Werte (dauert etwa eine halbe Sekunde). **EDIT B** lädt B und öffnet den FX-Editor
+  und schickt die gespeicherten Werte (dauert etwa eine halbe Sekunde). Kachel 8 zeigt Reverb B und leuchtet,
+  solange es läuft; Kachel 7 zeigt das Reverb, das gerade im Slot ist. **EDIT B** lädt B und öffnet den FX-Editor
   zum Einstellen. Reverb B speichert der Controller, pro Preset. Wird das Preset gespeichert, während B läuft,
   wird B zum Reverb des Presets.
 
@@ -151,6 +176,26 @@ Bildschirm antippen oder Fußschalter 2 erneut drücken zum Schließen.
 **USB** im Preset-Feld: Lautstärke des Audios, das der Computer über USB abspielt, −40 dB (OFF) bis 0 dB,
 wie in der offiziellen App. Der Wert wird jedes Mal frisch vom Nano gelesen.
 
+### Bluetooth-MIDI
+
+**MIDI** im Preset-Feld öffnet die Geräteliste. Sie zeigt Bluetooth-MIDI-Geräte in der Nähe – zum Beispiel einen
+CME-WIDI-Adapter an der MIDI-Buchse eines Morningstar MC6 oder einen
+Bluetooth-MIDI-Fußschalter. Antippen verbindet; der Controller merkt sich das Gerät und verbindet sich wieder von
+selbst, sobald es eingeschaltet ist. **FORGET DEVICE** trennt und vergisst es. Der Nano bleibt dabei verbunden.
+
+Der Controller versteht dieselben Befehle wie der Nano selbst über USB-MIDI, auf allen MIDI-Kanälen. Bänke für den
+Nano (zum Beispiel aus dem MC6-Export des Nano Cortex Editors) funktionieren also auch über Bluetooth:
+
+| Befehl | Wirkung |
+|---|---|
+| Program Change 0–63 | Preset 1–64 |
+| CC 37–41 | FX-Slot 1–5 (Pre FX 1, Pre FX 2, Post FX 1–3): Wert 64–127 an, 0–63 aus |
+| CC 1 | Expression: Reverb-Mix von Pos 1 (0) bis Pos 2 (127) |
+| CC 50–57, Wert 64–127 | Fußschalter 1–8 drücken (Modus, Stimmgerät, Presets oder FX, Reverb-Schalter) |
+
+Ein MIDI-Kabeleingang ist auf diesem Board ohne zusätzliche Hardware nicht möglich; dafür einen
+Bluetooth-MIDI-Adapter verwenden.
+
 ### Fußschalter-Learn
 
 Lange auf Kachel 1 oder 2 drücken oder **LEARN SWITCH** im Bank-Fenster. Dann innerhalb von 15 Sekunden den
@@ -161,7 +206,7 @@ Fußschalter drücken, der diese Funktion bekommen soll. Hatte er eine andere Fu
 
 | Auf dem Nano | Auf dem Controller |
 |---|---|
-| Presets, Namen, Captures, Cabs, FX und ihre Werte, Expression-Einstellungen (Pos 1 / Pos 2), USB-Lautstärke | eigene Bänke (Preset, Farbe, Symbol), Fußschalter-Reihenfolge, zweite Reverbs |
+| Presets, Namen, Captures, Cabs, FX und ihre Werte, Expression-Einstellungen (Pos 1 / Pos 2), USB-Lautstärke | eigene Bänke (Preset, Farbe, Symbol), Fußschalter-Reihenfolge, zweite Reverbs, das Bluetooth-MIDI-Gerät |
 
 ## Fußschalter
 
@@ -183,7 +228,7 @@ Ohne SX1509 funktioniert der Controller nur mit dem Touchscreen.
 Am **USB**-Anschluss zeigt jeder serielle Monitor mit 115200 Baud (zum Beispiel `idf.py monitor --no-reset`)
 ein Protokoll aller Nachrichten und nimmt Befehle an: `n`/`p` nächstes/vorheriges Preset, eine Zahl (1–64)
 wählt ein Preset, `a`–`e` schalten FX-Slot 1–5, `m` Modus, `t` Stimmgerät, `x` Reverb-Schalter,
-`s` Preset neu lesen, `l` alle Preset-Namen, `h` Hilfe.
+`s` Preset neu lesen, `r` alles neu lesen, `l` alle Preset-Namen, `h` Hilfe.
 
 ## Selbst bauen
 
@@ -210,6 +255,7 @@ lassen. Den Anschlussnamen deines Systems verwenden (`ls /dev/cu.*` auf dem Mac)
 | `main/nano_link.c` | Bluetooth-LE-Central (NimBLE): suchen, verbinden, MTU 517, Benachrichtigungen, Zusammensetzen langer Nachrichten, Sende-Warteschlange |
 | `main/nano_state.c` | Protobuf-Auswertung des Nano-Zustands und alle Anfrage-Nachrichten |
 | `main/library.c` | Capture-/IR-Library (lesen, sortieren, in einen Slot laden) |
+| `main/midi_ble.c` | Bluetooth-LE-MIDI-Client: Geräteliste, Verbindung, BLE-MIDI-Pakete |
 | `main/ui.c` | LVGL-Oberfläche |
 | `main/board.c` | Display (RGB 800 × 480), GT911-Touch, CH422G-I/O-Expander, LVGL-Port |
 | `main/footswitches.c` | SX1509 abfragen, entprellen, Learn |
@@ -217,6 +263,7 @@ lassen. Den Anschlussnamen deines Systems verwenden (`ls /dev/cu.*` auf dem Mac)
 | `tools/gen_tables.py` | FX-Modelle und Parameter (`tools/editor_models.json`, aus dem Editor exportiert) und Effekt-Symbole |
 | `tools/preset_icons.py` | die Preset-Symbole (eigene Zeichnungen), gezeichnet von `tools/svg_render.py` |
 | `tools/gen_pedals.py` | optionale Pedalbilder für einen eigenen Build (siehe unten) |
+| `tools/screenshots/` | zeichnet die Bildschirmfotos in `docs/images` am Computer aus `main/ui.c` mit Beispieldaten |
 
 ### Eigene Grafiken (optional, nur für eigene Builds)
 
@@ -240,6 +287,10 @@ Verwendete Nachrichtentypen (Anfrage → Antwort): 1 → 2 Zustand, 3 Speichern,
 115 ungespeicherte Änderungen, 127 / 128 Stimmgerät, 136 FX-Modell, 137 → 138 FX-Parameterwerte.
 Der Aufbau der Nachrichten steht in den Kommentaren von `main/nano_state.c`, `main/library.c` und im
 [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).
+
+Bluetooth-MIDI läuft über eine zweite Verbindung neben dem Nano: Der Controller sucht den BLE-MIDI-Dienst
+(`03B80E5A-EDE8-4B33-A751-6CE34EC4C700`), abonniert dessen Characteristic und zerlegt die BLE-MIDI-Pakete
+(Zeitstempel, Running Status) in Kanal-Nachrichten.
 
 Wird das Preset am Pedal gewechselt, schickt der Nano die Nachricht 29 und wartet auf die Bestätigung 30
 (`06 C0 20 01 1E 00 00 00`); der Controller bestätigt und liest das neue Preset.

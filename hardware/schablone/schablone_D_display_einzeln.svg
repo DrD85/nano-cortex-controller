@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="130mm" height="90mm" viewBox="0 0 130 90">
+<rect width="100%" height="100%" fill="white"/>
+<rect x="0.000" y="0.000" width="130.000" height="90.000" fill="none" stroke="rgb(0,0,0)" stroke-width="0.25"/>
+<rect x="11.650" y="10.800" width="106.700" height="68.400" fill="none" stroke="rgb(0,90,230)" stroke-width="0.25" stroke-dasharray="1.5 1"/>
+<rect x="16.680" y="14.950" width="96.540" height="55.360" fill="none" stroke="rgb(0,0,0)" stroke-width="0.25"/>
+<line x1="14.400" y1="15.000" x2="17.600" y2="15.000" fill="none" stroke="rgb(150,150,150)" stroke-width="0.25"/>
+<line x1="16.000" y1="13.400" x2="16.000" y2="16.600" fill="none" stroke="rgb(150,150,150)" stroke-width="0.25"/>
+<line x1="112.400" y1="15.000" x2="115.600" y2="15.000" fill="none" stroke="rgb(150,150,150)" stroke-width="0.25"/>
+<line x1="114.000" y1="13.400" x2="114.000" y2="16.600" fill="none" stroke="rgb(150,150,150)" stroke-width="0.25"/>
+<line x1="14.400" y1="75.000" x2="17.600" y2="75.000" fill="none" stroke="rgb(150,150,150)" stroke-width="0.25"/>
+<line x1="16.000" y1="73.400" x2="16.000" y2="76.600" fill="none" stroke="rgb(150,150,150)" stroke-width="0.25"/>
+<line x1="112.400" y1="75.000" x2="115.600" y2="75.000" fill="none" stroke="rgb(150,150,150)" stroke-width="0.25"/>
+<line x1="114.000" y1="73.400" x2="114.000" y2="76.600" fill="none" stroke="rgb(150,150,150)" stroke-width="0.25"/>
+<text x="43.000" y="23.450" font-family="Helvetica, Arial" font-size="2.60" fill="rgb(0,0,0)">Fenster 96.5 x 55.4 (durchfräsen)</text>
+<text x="43.000" y="28.450" font-family="Helvetica, Arial" font-size="2.60" fill="rgb(0,90,230)">Tasche von unten 106.7 x 68.4</text>
+<text x="43.000" y="33.450" font-family="Helvetica, Arial" font-size="2.20" fill="rgb(150,150,150)">Kreuze: Platinenlöcher 98 x 60 (Rückseite)</text>
+<text x="56.000" y="9.500" font-family="Helvetica, Arial" font-size="2.20" fill="rgb(150,150,150)">OBEN (Glas)</text>
+<rect x="118.050" y="37.900" width="12.000" height="12.000" fill="none" stroke="rgb(150,150,150)" stroke-width="0.25" stroke-dasharray="1.5 1"/>
+<text x="118.850" y="52.900" font-family="Helvetica, Arial" font-size="2.00" fill="rgb(150,150,150)">USB-C 90°</text>
+<rect x="1.950" y="36.270" width="10.000" height="8.000" fill="none" stroke="rgb(150,150,150)" stroke-width="0.25" stroke-dasharray="1.5 1"/>
+<text x="1.950" y="47.270" font-family="Helvetica, Arial" font-size="2.00" fill="rgb(150,150,150)">I2C</text>
+</svg>

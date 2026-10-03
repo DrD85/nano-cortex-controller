@@ -47,6 +47,13 @@ static uint16_t s_c304, s_c305, s_c305_cccd;
 static volatile bool s_ready;
 static bool s_security_tried;
 
+// Scanning is shared: it runs while the Nano is not connected or another client (MIDI) asks for it.
+static bool s_synced;
+static volatile bool s_connecting;                 // a GAP connect procedure is running (Nano or other)
+static volatile bool s_scan_other, s_scan_other_fast;
+static int s_scan_mode;                            // running scan: 0 none, 1 fast, 2 slow
+static nano_link_adv_cb s_adv_hook;
+
 static QueueHandle_t s_write_queue;
 static SemaphoreHandle_t s_write_done;
 static volatile int s_write_status;
@@ -57,6 +64,7 @@ static bool s_rx_active;
 
 static int gap_event(struct ble_gap_event *event, void *arg);
 static void discover_characteristics(void);
+static void scan_update(void);
 
 // ---- helpers ----
 
@@ -89,14 +97,75 @@ static void fail_link(const char *why, int rc)
 
 // ---- scanning ----
 
-static void start_scan(void)
+// Starts, stops or changes the scan to what is needed now: fast while the Nano is missing or a device list is
+// shown, slow (10 % of the radio time) while another client only waits for its stored device.
+static void scan_update(void)
 {
+    if (!s_synced) return;
+    int want = 0;
+    if (!s_connecting) {
+        // While the Nano link is being set up (connect, MTU, discovery) the radio belongs to it.
+        bool nano_busy = s_conn != BLE_HS_CONN_HANDLE_NONE && !s_ready;
+        if (s_conn == BLE_HS_CONN_HANDLE_NONE || (s_scan_other && s_scan_other_fast && !nano_busy)) want = 1;
+        else if (s_scan_other && !nano_busy) want = 2;
+    }
+    if (want == s_scan_mode && (want == 0) == !ble_gap_disc_active()) return;
+    if (ble_gap_disc_active()) ble_gap_disc_cancel();
+    s_scan_mode = 0;
+    if (!want) return;
     struct ble_gap_disc_params params = { 0 };
     params.filter_duplicates = 1;
     params.passive = 0;   // active scan: the name may only be in the scan response
+    if (want == 2) {
+        params.itvl = 0x00A0;     // 100 ms
+        params.window = 0x0010;   // 10 ms
+    }
     int rc = ble_gap_disc(s_own_addr_type, BLE_HS_FOREVER, &params, gap_event, NULL);
-    if (rc != 0) ESP_LOGE(TAG, "Scan start failed: %d", rc);
-    else ESP_LOGI(TAG, "Scanning for the Nano Cortex (Bluetooth on, Cortex Cloud and the editor disconnected)...");
+    if (rc != 0) {
+        ESP_LOGE(TAG, "Scan start failed: %d", rc);
+        return;
+    }
+    s_scan_mode = want;
+    if (s_conn == BLE_HS_CONN_HANDLE_NONE) ESP_LOGI(TAG, "Scanning for the Nano Cortex (Bluetooth on, Cortex Cloud and the editor disconnected)...");
+}
+
+static void start_scan(void)
+{
+    scan_update();
+}
+
+void nano_link_set_adv_hook(nano_link_adv_cb cb)
+{
+    s_adv_hook = cb;
+}
+
+void nano_link_scan_request(bool on, bool fast)
+{
+    s_scan_other = on;
+    s_scan_other_fast = fast;
+    scan_update();
+}
+
+bool nano_link_connect_other(const ble_addr_t *addr, ble_gap_event_fn *cb, void *arg)
+{
+    if (s_connecting || !s_synced) return false;
+    if (ble_gap_disc_active()) ble_gap_disc_cancel();
+    s_scan_mode = 0;
+    s_connecting = true;
+    int rc = ble_gap_connect(s_own_addr_type, addr, 10000, NULL, cb, arg);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "Connect not started: %d", rc);
+        s_connecting = false;
+        scan_update();
+        return false;
+    }
+    return true;
+}
+
+void nano_link_other_connect_done(void)
+{
+    s_connecting = false;
+    scan_update();
 }
 
 static bool is_nano(const struct ble_hs_adv_fields *f)
@@ -110,7 +179,7 @@ static bool is_nano(const struct ble_hs_adv_fields *f)
         size_t n = f->name_len < sizeof(name) - 1 ? f->name_len : sizeof(name) - 1;
         for (size_t i = 0; i < n; i++) name[i] = (char)tolower(f->name[i]);
         name[n] = 0;
-        if (strstr(name, "nano")) return true;
+        if (strstr(name, "nano cortex")) return true;   // "Mini Board Nano Cortex" (not other "nano" devices)
     }
     return false;
 }
@@ -134,6 +203,7 @@ static int on_subscribed(uint16_t conn, const struct ble_gatt_error *err, struct
         s_ready = true;
         ESP_LOGI(TAG, "Notifications on - link ready");
         if (s_on_link) s_on_link(true);
+        scan_update();
         return 0;
     }
     if ((err->status == BLE_HS_ATT_ERR(BLE_ATT_ERR_INSUFFICIENT_AUTHEN) ||
@@ -246,6 +316,7 @@ static void on_packet(const uint8_t *d, size_t n)
 {
     if (n < 2) return;
     uint8_t flags = d[1];
+    if (flags != 0xC0) ESP_LOGI(TAG, "PKT n=%u b0=%02X b1=%02X b2=%02X", (unsigned)n, d[0], d[1], n > 2 ? d[2] : 0);   // TEMP stream format
     if (flags == 0xC0) {   // complete single-packet message
         deliver(d + 2, n - 2);
         return;
@@ -342,20 +413,28 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         struct ble_hs_adv_fields fields;
         if (ble_hs_adv_parse_fields(&fields, event->disc.data, event->disc.length_data) != 0) return 0;
         log_seen(&fields, &event->disc.addr, event->disc.rssi);
-        if (!is_nano(&fields)) return 0;
-        ESP_LOGI(TAG, "Nano Cortex found - connecting");
-        ble_gap_disc_cancel();
-        int rc = ble_gap_connect(s_own_addr_type, &event->disc.addr, 30000, NULL, gap_event, NULL);
-        if (rc != 0) {
-            ESP_LOGE(TAG, "Connect not started: %d", rc);
-            start_scan();
+        if (s_conn == BLE_HS_CONN_HANDLE_NONE && !s_connecting && is_nano(&fields)) {
+            ESP_LOGI(TAG, "Nano Cortex found - connecting");
+            ble_gap_disc_cancel();
+            s_scan_mode = 0;
+            s_connecting = true;
+            int rc = ble_gap_connect(s_own_addr_type, &event->disc.addr, 30000, NULL, gap_event, NULL);
+            if (rc != 0) {
+                ESP_LOGE(TAG, "Connect not started: %d", rc);
+                s_connecting = false;
+                start_scan();
+            }
+            return 0;
         }
+        if (s_adv_hook) s_adv_hook(&event->disc.addr, event->disc.rssi, &fields);
         return 0;
     }
     case BLE_GAP_EVENT_DISC_COMPLETE:
-        if (s_conn == BLE_HS_CONN_HANDLE_NONE) start_scan();
+        s_scan_mode = 0;
+        start_scan();
         return 0;
     case BLE_GAP_EVENT_CONNECT:
+        s_connecting = false;
         if (event->connect.status != 0) {
             ESP_LOGW(TAG, "Connection failed: %d", event->connect.status);
             start_scan();
@@ -365,6 +444,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         s_conn = event->connect.conn_handle;
         ESP_LOGI(TAG, "Connected - exchanging MTU");
         ble_gattc_exchange_mtu(s_conn, on_mtu, NULL);
+        start_scan();   // continues only if another client needs it
         return 0;
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGW(TAG, "Disconnected (reason 0x%X)", event->disconnect.reason);
@@ -414,6 +494,7 @@ static void on_sync(void)
 {
     ble_hs_util_ensure_addr(0);
     ble_hs_id_infer_auto(0, &s_own_addr_type);
+    s_synced = true;
     start_scan();
 }
 

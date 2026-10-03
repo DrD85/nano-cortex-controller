@@ -60,6 +60,8 @@ static uint32_t s_rev_types[16];           // reverb models for the dropdown (in
 static int s_rev_type_count;
 static lv_obj_t *s_learn, *s_learn_title, *s_learn_text;
 static lv_obj_t *s_preset_card, *s_source_card[2];
+static lv_obj_t *s_midi_label, *s_midi, *s_midi_status, *s_midi_list;
+static ui_midi_t s_midi_state;
 static bool s_fullscreen;
 static uint32_t s_gesture_tick;   // a swipe ends with a click on the tile under the finger: ignore that one
 static lv_timer_t *s_toast_timer;
@@ -106,6 +108,7 @@ static void send(char command, int arg)
 }
 
 static void on_previous(lv_event_t *e) { send('k', -1); }
+static void on_refresh(lv_event_t *e) { send('r', 0); }
 static void on_next(lv_event_t *e) { send('k', 1); }
 static void on_tuner(lv_event_t *e) { send('w', 2); }
 static void on_tile(lv_event_t *e)
@@ -133,7 +136,7 @@ static void on_gesture(lv_event_t *e)
 {
     s_gesture_tick = lv_tick_get();
     // Swipes work only on the main screen, not in an open dialog.
-    lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn };
+    lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
         if (overlays[i] && !lv_obj_is_hidden(overlays[i])) return;
     }
@@ -590,7 +593,7 @@ static void build_picker(lv_obj_t *screen)
     lv_obj_set_style_pad_all(s_picker_chips, 0, 0);
     lv_obj_set_scrollable(s_picker_chips, false);
     for (int c = 0; c < LIB_CATEGORY_COUNT; c++) {
-        s_picker_chip[c] = small_button(s_picker_chips, c * 116, 2, 108, 40, LIB_CATEGORY_NAMES[c], on_picker_chip, c);
+        s_picker_chip[c] = small_button(s_picker_chips, c * 97, 2, 92, 40, LIB_CATEGORY_NAMES[c], on_picker_chip, c);
     }
 
     s_picker_list = lv_obj_create(s_picker);
@@ -957,6 +960,21 @@ static void build_toast(lv_obj_t *screen)
     lv_timer_set_repeat_count(s_toast_timer, -1);
 }
 
+static void on_midi_device(lv_event_t *e)
+{
+    send('P', (int)(intptr_t)lv_event_get_user_data(e));
+}
+
+static void fill_midi(void);
+
+static void open_midi(lv_event_t *e)
+{
+    fill_midi();
+    lv_obj_set_hidden(s_midi, false);
+    lv_obj_move_foreground(s_midi);
+    send('X', 1);
+}
+
 // ---- USB playback volume ----
 
 #define USB_SLIDER_MAX 1000
@@ -1240,6 +1258,97 @@ static void build_mix_editor(lv_obj_t *screen)
     lv_obj_set_hidden(s_mix_editor, true);
 }
 
+// ---- Bluetooth MIDI ----
+
+static void fill_midi(void)
+{
+    const ui_midi_t *m = &s_midi_state;
+    if (m->connected) lv_label_set_text_fmt(s_midi_status, LV_SYMBOL_BLUETOOTH " %s", m->name);
+    else if (m->name[0]) lv_label_set_text_fmt(s_midi_status, "Waiting for %s", m->name);
+    else lv_label_set_text(s_midi_status, "Not connected");
+    lv_obj_set_style_text_color(s_midi_status, lv_color_hex(m->connected ? 0x45E35F : MUTED), 0);
+
+    lv_obj_clean(s_midi_list);
+    if (!m->count) {
+        lv_obj_t *l = label(s_midi_list, &lv_font_montserrat_20, MUTED);
+        lv_label_set_text(l, "Searching for Bluetooth MIDI devices...");
+        return;
+    }
+    for (int i = 0; i < m->count; i++) {
+        bool current = m->devices[i].remembered && m->connected;
+        lv_obj_t *btn = lv_button_create(s_midi_list);
+        lv_obj_set_size(btn, LV_PCT(100), 48);
+        lv_obj_set_style_bg_color(btn, lv_color_hex(current ? 0x1E3A24 : 0x1C1E20), 0);
+        lv_obj_set_style_border_width(btn, current ? 2 : 0, 0);
+        lv_obj_set_style_border_color(btn, lv_color_hex(0x45E35F), 0);
+        lv_obj_set_style_shadow_width(btn, 0, 0);
+        lv_obj_set_style_radius(btn, 8, 0);
+        lv_obj_add_event_cb(btn, on_midi_device, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        lv_obj_t *name = label(btn, &lv_font_montserrat_20, TEXT);
+        lv_label_set_text_fmt(name, "%s%s", m->devices[i].name, current ? "  -  connected" : m->devices[i].remembered ? "  -  stored" : "");
+        lv_obj_align(name, LV_ALIGN_LEFT_MID, 0, 0);
+        lv_obj_t *rssi = label(btn, &lv_font_montserrat_14, MUTED);
+        lv_label_set_text_fmt(rssi, "%d dBm", m->devices[i].rssi);
+        lv_obj_align(rssi, LV_ALIGN_RIGHT_MID, 0, 0);
+    }
+}
+
+void ui_set_midi(const ui_midi_t *midi)
+{
+    lvgl_port_lock(0);
+    s_midi_state = *midi;
+    lv_obj_set_style_text_color(s_midi_label, lv_color_hex(midi->connected ? 0x45E35F : MUTED), 0);
+    if (!lv_obj_is_hidden(s_midi)) fill_midi();
+    lvgl_port_unlock();
+}
+
+static void on_midi_button(lv_event_t *e)
+{
+    int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 close, -1 forget
+    if (action < 0) {
+        send('P', -1);
+        return;
+    }
+    lv_obj_set_hidden(s_midi, true);
+    send('X', 0);
+}
+
+static void build_midi(lv_obj_t *screen)
+{
+    s_midi = card(screen, 110, 60, 580, 400);
+    lv_obj_set_style_border_color(s_midi, lv_color_hex(0x4A4D50), 0);
+    lv_obj_t *title = label(s_midi, &lv_font_montserrat_14, MUTED);
+    lv_obj_set_style_text_letter_space(title, 2, 0);
+    lv_label_set_text(title, "BLUETOOTH MIDI");
+    lv_obj_set_pos(title, 20, 16);
+    s_midi_status = label(s_midi, &lv_font_montserrat_14, MUTED);
+    lv_obj_align(s_midi_status, LV_ALIGN_TOP_RIGHT, -20, 16);
+    lv_obj_t *info = label(s_midi, &lv_font_montserrat_14, MUTED);
+    lv_obj_set_width(info, 540);
+    lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(info, "Tap a device to connect it, e.g. an MC6 with a WIDI adapter. It reconnects by itself.");
+    lv_obj_set_pos(info, 20, 40);
+    lv_obj_t *map = label(s_midi, &lv_font_montserrat_14, MUTED);
+    lv_obj_set_width(map, 540);
+    lv_label_set_long_mode(map, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(map, "PC 0-63 = presets   CC 37-41 = FX 1-5   CC 1 = reverb mix   CC 50-57 = footswitches 1-8");
+    lv_obj_set_pos(map, 20, 292);
+
+    s_midi_list = lv_obj_create(s_midi);
+    lv_obj_set_pos(s_midi_list, 10, 82);
+    lv_obj_set_size(s_midi_list, 560, 204);
+    lv_obj_set_style_bg_opa(s_midi_list, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_midi_list, 0, 0);
+    lv_obj_set_style_pad_all(s_midi_list, 6, 0);
+    lv_obj_set_style_pad_row(s_midi_list, 6, 0);
+    lv_obj_set_flex_flow(s_midi_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_scroll_dir(s_midi_list, LV_DIR_VER);
+
+    small_button(s_midi, 20, 336, 180, 46, "FORGET DEVICE", on_midi_button, -1);
+    small_button(s_midi, 380, 336, 180, 46, "CLOSE", on_midi_button, 0);
+    lv_obj_set_hidden(s_midi, true);
+}
+
 void ui_set_library(const nano_library_t *library)
 {
     lvgl_port_lock(0);
@@ -1373,15 +1482,23 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_style_text_letter_space(s_status, 2, 0);
     s_preset_number = label(status_row, &lv_font_montserrat_14, MUTED);
     lv_obj_set_style_text_letter_space(s_preset_number, 2, 0);
-    s_edited = label(status_row, &lv_font_montserrat_14, 0xFF7000);
-    lv_obj_set_style_text_letter_space(s_edited, 2, 0);
-    lv_label_set_text(s_edited, "EDITED");
-    lv_obj_t *usb = button(preset, 540, 4, 70, 30, open_usb);
+    s_edited = label(status_row, &lv_font_montserrat_14, 0xFF7000);   // unsaved changes: the SAVE button turns orange
+    lv_obj_set_hidden(s_edited, true);
+    lv_obj_t *refresh = button(preset, 86, 4, 44, 30, on_refresh);   // read everything from the Nano again
+    lv_obj_t *refresh_label = label(refresh, &lv_font_montserrat_14, MUTED);
+    lv_label_set_text(refresh_label, LV_SYMBOL_REFRESH);
+    lv_obj_center(refresh_label);
+    lv_obj_t *midi = button(preset, 504, 4, 52, 30, open_midi);
+    s_midi_label = label(midi, &lv_font_montserrat_14, MUTED);
+    lv_obj_set_style_text_letter_space(s_midi_label, 1, 0);
+    lv_label_set_text(s_midi_label, "MIDI");
+    lv_obj_center(s_midi_label);
+    lv_obj_t *usb = button(preset, 560, 4, 52, 30, open_usb);
     lv_obj_t *usb_label = label(usb, &lv_font_montserrat_14, MUTED);
-    lv_obj_set_style_text_letter_space(usb_label, 2, 0);
+    lv_obj_set_style_text_letter_space(usb_label, 1, 0);
     lv_label_set_text(usb_label, "USB");
     lv_obj_center(usb_label);
-    s_save_button = button(preset, 618, 4, 74, 30, on_save_button);
+    s_save_button = button(preset, 616, 4, 76, 30, on_save_button);
     s_save_label = label(s_save_button, &lv_font_montserrat_14, TEXT);
     lv_obj_set_style_text_letter_space(s_save_label, 2, 0);
     lv_label_set_text(s_save_label, "SAVE");
@@ -1408,6 +1525,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     build_usb(screen);
     build_mix_editor(screen);
     build_learn(screen);
+    build_midi(screen);
     build_toast(screen);
 
     lvgl_port_unlock();
@@ -1431,7 +1549,7 @@ void ui_set_link(bool connected)
 {
     lvgl_port_lock(0);
     lv_obj_set_style_bg_color(s_status_dot, lv_color_hex(connected ? 0x45E35F : 0x555555), 0);
-    lv_label_set_text(s_status, connected ? "CONNECTED" : "SEARCHING FOR THE NANO...");
+    lv_label_set_text(s_status, connected ? "CONNECTED" : "SEARCHING FOR NANO");
     lv_obj_set_hidden(s_status, false);   // until the first preset is shown
     if (!connected) {
         set_fullscreen(false);   // show the search status
@@ -1490,10 +1608,10 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
     // Footswitch 8: reverb A/B, or the reverb mix between Pos 1 and Pos 2 of the expression assignment.
     char caption[32];
     const lv_image_dsc_t *icon = NANO_ICONS[NANO_ICON_REVERB];
-    if (view->rev_b_type) {
+    if (view->rev_b_type) {   // the switch for reverb B: lit while B runs (tile 7 shows what is in the slot)
         bool none = view->mix_slot < 0;
-        set_tile(7, view->rev_active ? "REVERB B" : "REVERB A", none ? "No reverb" : nano_fx_name(st->fx_type[view->mix_slot]),
-                 0x00FFDD, view->rev_active == 1, none, icon, NULL);
+        set_tile(7, "REVERB B", none ? "No reverb" : nano_fx_name(view->rev_b_type), 0x00FFDD, view->rev_active == 1, none, icon, NULL);
+        if (!none) set_tile_pedal(7, view->rev_b_type);
     } else if (view->mix_slot < 0) {
         set_tile(7, "REV MIX", "No reverb", 0x00FFDD, false, true, icon, NULL);
     } else if (!view->mix_known) {
@@ -1503,7 +1621,7 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
         set_tile(7, caption, view->mix_active == 1 ? "Pos 2" : view->mix_active == 0 ? "Pos 1" : "Rev Mix",
                  0x00FFDD, view->mix_active == 1, false, icon, NULL);
     }
-    if (view->mix_slot >= 0 && (view->rev_b_type || view->mix_known)) set_tile_pedal(7, st->fx_type[view->mix_slot]);
+    if (view->mix_slot >= 0 && !view->rev_b_type && view->mix_known) set_tile_pedal(7, st->fx_type[view->mix_slot]);
 }
 
 // Preset tiles carry no caption, so the name gets the whole tile.
@@ -1539,7 +1657,6 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     lv_label_set_text(s_preset_number, text);
     lv_obj_set_hidden(s_preset_number, false);
     lv_obj_set_hidden(s_status, true);    // the green dot says "connected"
-    lv_obj_set_hidden(s_edited, !st->dirty);
     s_current_preset = st->current_preset;
     lv_obj_set_style_bg_color(s_save_button, lv_color_hex(st->dirty ? 0xFF7000 : 0x191B1D), 0);
     lv_obj_set_style_bg_grad_dir(s_save_button, st->dirty ? LV_GRAD_DIR_NONE : LV_GRAD_DIR_VER, 0);

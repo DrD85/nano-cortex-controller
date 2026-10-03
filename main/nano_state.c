@@ -108,6 +108,14 @@ uint64_t nano_field_varint(const uint8_t *payload, size_t len, uint32_t field)
 // 31 fxBypass (5 bytes, 0 = on), 32 current capture { 2 name }, 33 current cab { 2 short name },
 // 41 currentPresetDirty, 46 tunerBaseFrequency (float32), 48-52 FX model type per slot.
 // The Nano omits fields whose value is 0.
+bool nano_payload_complete(const uint8_t *payload, size_t len)
+{
+    pb_reader_t r = { payload, payload + len };
+    pb_field_t f;
+    while (pb_next(&r, &f)) {}
+    return r.p == r.end;
+}
+
 bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
 {
     int preset_index = 0, slots[4] = { 0 }, names = 0, captures = 0, cabs = 0;

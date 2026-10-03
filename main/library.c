@@ -6,7 +6,7 @@
 
 #include "esp_heap_caps.h"
 
-const char *const LIB_CATEGORY_NAMES[LIB_CATEGORY_COUNT] = { "ALL", "AMP", "CAB", "PEDAL", "OTHER" };
+const char *const LIB_CATEGORY_NAMES[LIB_CATEGORY_COUNT] = { "ALL", "AMP", "AMP+CAB", "CAB", "PEDAL", "OTHER" };
 
 // Minimal protobuf walk over a buffer: calls back for every length-delimited field.
 static bool next_field(const uint8_t **p, const uint8_t *end, uint32_t *field, uint32_t *wire,
@@ -52,7 +52,8 @@ static void copy_name(char *dst, size_t size, const uint8_t *src, size_t len)
 
 static lib_category_t category_of(const char *type)
 {
-    if (!strcmp(type, "amp_head") || !strcmp(type, "amp_combo") || !strcmp(type, "amp_and_cab")) return LIB_AMP;
+    if (!strcmp(type, "amp_head") || !strcmp(type, "amp_combo")) return LIB_AMP;
+    if (!strcmp(type, "amp_and_cab")) return LIB_AMP_CAB;
     if (!strcmp(type, "cab")) return LIB_CAB;
     if (!strcmp(type, "pedal") || !strcmp(type, "overdrive") || !strcmp(type, "fuzz") || !strcmp(type, "compressor")) return LIB_PEDAL;
     return LIB_OTHER;

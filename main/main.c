@@ -25,6 +25,7 @@
 #include "sdkconfig.h"
 #include "esp_app_desc.h"
 #include "esp_log.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
@@ -34,6 +35,7 @@
 #include "board.h"
 #include "footswitches.h"
 #include "library.h"
+#include "midi_ble.h"
 #include "nano_link.h"
 #include "nano_state.h"
 #include "ui.h"
@@ -42,7 +44,7 @@ static const char *TAG = "nano_ctrl";
 
 #define CONSOLE_UART UART_NUM_0  // "UART" USB-C port (CH343), used when the console is set to UART
 
-typedef enum { EV_LINK_UP, EV_LINK_DOWN, EV_MESSAGE, EV_COMMAND, EV_PARAM, EV_TEXT } event_kind_t;
+typedef enum { EV_LINK_UP, EV_LINK_DOWN, EV_MESSAGE, EV_COMMAND, EV_PARAM, EV_TEXT, EV_MIDI } event_kind_t;
 
 typedef struct {
     event_kind_t kind;
@@ -50,7 +52,7 @@ typedef struct {
     uint8_t *data;   // EV_MESSAGE / EV_TEXT, owned by the event
     size_t len;
     char command;    // EV_COMMAND
-    int arg;         // EV_COMMAND; EV_PARAM: slot
+    int arg;         // EV_COMMAND; EV_PARAM: slot; EV_MIDI: status << 16 | data1 << 8 | data2
     int param;       // EV_PARAM
     float value;     // EV_PARAM, 0-1
 } app_event_t;
@@ -65,6 +67,10 @@ static QueueHandle_t s_events;
 static nano_state_t s_state;
 static esp_timer_handle_t s_refresh_timer;
 static bool s_waiting_full_state;
+static int s_incomplete_retries;   // replies that arrived broken (lost packet) and were asked for again
+static bool s_refresh_library;     // refresh button: read the library again after the presets
+static esp_timer_handle_t s_midi_gate_timer;   // MIDI waits while the Nano connects and loads its presets
+#define MIDI_GATE_US (20 * 1000 * 1000)
 
 static bool s_fx_mode;          // footswitches 3-8: FX (true) or bank + presets (false)
 static bool s_footswitches;     // SX1509 found
@@ -199,6 +205,20 @@ static void on_footswitch_learned(int number, int swapped)
     command('Z', number << 8 | swapped);
 }
 
+// Bluetooth MIDI. An expression pedal sends many CC 1 values: only one event is queued, it takes the latest.
+static int s_cc1 = -1;
+
+static void on_midi(uint8_t status, uint8_t data1, uint8_t data2)
+{
+    if ((status & 0xF0) == 0xB0 && data1 == 1 && __atomic_exchange_n(&s_cc1, data2, __ATOMIC_SEQ_CST) >= 0) return;
+    post((app_event_t){ .kind = EV_MIDI, .arg = status << 16 | data1 << 8 | data2 });
+}
+
+static void on_midi_change(void)
+{
+    command('N', 0);
+}
+
 static void on_text(char kind, const char *text)
 {
     app_event_t ev = { .kind = EV_TEXT, .command = kind, .data = (uint8_t *)strdup(text) };
@@ -223,6 +243,11 @@ static void usb_timer_cb(void *arg)
 static void exp_timer_cb(void *arg)
 {
     command('J', 0);
+}
+
+static void midi_gate_cb(void *arg)
+{
+    command('q', 0);
 }
 
 static void rev_timer_cb(void *arg)
@@ -281,6 +306,7 @@ static void print_help(void)
            "  a-e          FX on/off: a = Pre FX 1 ... e = Post FX 3\n"
            "  m / t / x    mode (footswitch 1) / tuner (2) / reverb switch (8 in FX mode)\n"
            "  s            read the current preset again\n"
+           "  r            read everything again (presets, names, library)\n"
            "  l            list all preset names\n"
            "  h            this help\n\n");
 }
@@ -710,23 +736,28 @@ static void rev_load(int preset)
 }
 
 // The FX editor shows reverb B: keep its values (called when the editor closes or the preset changes).
+// The model of B only changes by an explicit choice (dialog, or the editor's model list while B runs).
 static void rev_capture_editor(void)
 {
     if (s_rev.active != 1 || s_edit.slot < 0 || s_edit.slot != s_rev.slot || !s_edit.known) return;
-    s_rev.b.type = s_state.fx_type[s_rev.slot];
     s_rev.b.count = (uint8_t)s_edit.count;
     memcpy(s_rev.b.values, s_edit.values, sizeof(s_rev.b.values));
     rev_store();
 }
 
-// A model was chosen in the FX editor: while B runs, that is the new reverb B.
+// A reverb model was chosen in the FX editor: it replaces the running reverb (A or B).
 static void rev_model_chosen(int slot, uint32_t type)
 {
     const nano_fx_model_t *model = nano_fx_model(type);
-    if (s_rev.active != 1 || slot != s_rev.slot || !model || model->icon != NANO_ICON_REVERB) return;
-    s_rev.b.type = type;
-    s_rev.b.count = 0;
-    rev_store();
+    if (!s_rev.b.type || slot != s_rev.slot || !model || model->icon != NANO_ICON_REVERB) return;
+    if (s_rev.active == 1) {
+        s_rev.b.type = type;
+        s_rev.b.count = 0;
+        rev_store();
+    } else if (s_rev.a_type) {
+        s_rev.a_type = type;
+        s_rev.a_count = 0;
+    }
 }
 
 static void rev_step_later(int ms)
@@ -791,11 +822,10 @@ static void rev_values_read(const uint8_t *payload, size_t len)
         return;
     }
     if (s_rev.active == 0) {
-        s_rev.a_type = s_state.fx_type[s_rev.slot];
+        if (!s_rev.a_type) s_rev.a_type = s_state.fx_type[s_rev.slot];   // the preset's reverb, kept from now on
         s_rev.a_count = (uint8_t)count;
         memcpy(s_rev.a_values, values, sizeof(values));
-    } else {
-        s_rev.b.type = s_state.fx_type[s_rev.slot];
+    } else {   // values only: a state reply can still name the previous model
         s_rev.b.count = (uint8_t)count;
         memcpy(s_rev.b.values, values, sizeof(values));
         rev_store();
@@ -1047,11 +1077,89 @@ static void footswitch_learn(char c, int arg)
     }
 }
 
+// ---- Bluetooth MIDI ----
+
+// MIDI dialog and device state: 'X' dialog open (1) / closed (0), 'P' connect device n (-1 = forget),
+// 'N' devices or connection changed.
+static void midi_command(char c, int arg)
+{
+    static bool was_connected;
+    if (c == 'X') midi_ble_search(arg != 0);
+    else if (c == 'P' && arg < 0) midi_ble_forget();
+    else if (c == 'P' && !midi_ble_connect(arg)) ui_show_message("MIDI: busy connecting - try again in a moment.");
+
+    ui_midi_t m = { 0 };
+    midi_device_t devices[MIDI_MAX_DEVICES];
+    m.connected = midi_ble_status(m.name, sizeof(m.name));
+    m.count = midi_ble_devices(devices, MIDI_MAX_DEVICES);
+    for (int i = 0; i < m.count; i++) {
+        strlcpy(m.devices[i].name, devices[i].name, sizeof(m.devices[i].name));
+        m.devices[i].rssi = devices[i].rssi;
+        m.devices[i].remembered = devices[i].remembered;
+    }
+    ui_set_midi(&m);
+    if (m.connected != was_connected) {
+        char text[64];
+        snprintf(text, sizeof(text), "MIDI: %s %s", m.name, m.connected ? "connected" : "disconnected");
+        ui_show_message(text);
+        was_connected = m.connected;
+    }
+}
+
+// CC 1 (expression pedal): reverb mix between Pos 1 (heel, 0) and Pos 2 (toe, 127).
+static void midi_expression(int value)
+{
+    int param = mix_param();
+    if (s_mix.slot < 0 || !s_mix.known || param < 0) return;
+    throttled_param(s_mix.slot, param, s_mix.pos[0] + (s_mix.pos[1] - s_mix.pos[0]) * value / 127.0f);
+    int side = value >= 64 ? 1 : 0;
+    if (side != s_mix.active) {
+        s_mix.active = side;
+        show();
+    }
+}
+
+// As the Nano's own MIDI over USB: PC 0-63 = presets, CC 37-41 = FX 1-5 (127 on, 0 off), CC 1 = expression.
+// In addition CC 50-57 (value 64-127) press footswitches 1-8. All channels.
+static void handle_midi(int arg)
+{
+    uint8_t status = (uint8_t)(arg >> 16), d1 = (uint8_t)(arg >> 8), d2 = (uint8_t)arg;
+    uint8_t type = status & 0xF0;
+    if (type == 0xB0 && d1 == 1) {
+        int value = __atomic_exchange_n(&s_cc1, -1, __ATOMIC_SEQ_CST);
+        if (value >= 0 && nano_link_ready()) midi_expression(value);
+        return;
+    }
+    ESP_LOGI(TAG, "MIDI %02X %u %u", status, d1, d2);
+    if (!nano_link_ready()) return;
+    if (type == 0xC0) {
+        if (d1 < NANO_PRESETS) select_preset(d1 + 1);
+    } else if (type == 0xB0 && d1 >= 37 && d1 <= 41) {
+        int slot = d1 - 37;
+        if (s_state.fx_known && s_state.fx_type[slot] && s_state.fx_on[slot] != (d2 >= 64)) toggle_fx(slot);
+    } else if (type == 0xB0 && d1 >= 50 && d1 <= 57 && d2 >= 64) {
+        handle_switch(d1 - 49);
+    }
+}
+
 static void handle_command(char c, int arg)
 {
     if (c == 'h') { print_help(); return; }
     if (c == 'l') { print_presets(); return; }
     if (c == 'D' || c == 'Z') { footswitch_learn(c, arg); return; }   // works without the Nano
+    if (c == 'X' || c == 'P' || c == 'N') { midi_command(c, arg); return; }
+    if (c == 'q') { midi_ble_allow(true); return; }   // MIDI gate timer: the Nano did not come
+    if (c == 'r') {                                    // refresh button / console: read everything again
+        if (!nano_link_ready()) {
+            ui_show_message("Not connected - still searching for the Nano.");
+            return;
+        }
+        ui_show_message("Reading the Nano again...");
+        s_incomplete_retries = 0;
+        s_refresh_library = true;
+        request_full_state();
+        return;
+    }
     if (!nano_link_ready()) {
         ESP_LOGW(TAG, "Not connected yet");
         return;
@@ -1107,6 +1215,15 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
 {
     switch (type) {
     case NANO_MSG_STATE_RESPONSE: {
+        if (!nano_payload_complete(payload, len) && s_incomplete_retries < 3) {
+            // A lost packet leaves a broken message (garbled names): ask again.
+            s_incomplete_retries++;
+            ESP_LOGW(TAG, "%s state reply incomplete (%u bytes) - asking again", s_waiting_full_state ? "Full" : "Current", (unsigned)len);
+            if (s_waiting_full_state) request_full_state();
+            else request_current_state();
+            break;
+        }
+        s_incomplete_retries = 0;
         if (!s_waiting_full_state && s_expect_preset) {
             int reply_preset = (int)nano_field_varint(payload, len, 13) + 1;
             if (reply_preset != s_expect_preset && esp_timer_get_time() - s_expect_us < 2000000) {
@@ -1116,6 +1233,12 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             s_expect_preset = 0;
         }
         bool names = nano_state_apply(&s_state, payload, len);
+        // After a reverb swap the slot holds the reverb that was loaded (a reply sent before the model change
+        // still names the previous one).
+        if (s_rev.preset == s_state.current_preset) {
+            if (s_rev.active == 1 && s_rev.b.type) s_state.fx_type[s_rev.slot] = s_rev.b.type;
+            else if (s_rev.active == 0 && s_rev.a_type) s_state.fx_type[s_rev.slot] = s_rev.a_type;
+        }
         if (s_waiting_full_state) {
             // The full state carries all names; the current preset is read separately, as the editor does.
             s_waiting_full_state = false;
@@ -1125,6 +1248,13 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             if (names) print_presets();
             print_help();
             request_current_state();
+            // Presets are in: MIDI may scan and connect now.
+            esp_timer_stop(s_midi_gate_timer);
+            midi_ble_allow(true);
+            if (s_refresh_library) {
+                s_refresh_library = false;
+                esp_timer_start_once(s_library_timer, 1500 * 1000);
+            }
         } else {
             print_summary();
             if (s_save_pending && s_save_pending == s_state.current_preset) {
@@ -1189,21 +1319,27 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         break;
     }
     case NANO_MSG_LIBRARY_RESPONSE: {
+        if (!nano_payload_complete(payload, len) && s_incomplete_retries < 3) {
+            s_incomplete_retries++;
+            ESP_LOGW(TAG, "Library reply incomplete (%u bytes) - asking again", (unsigned)len);
+            request_library();
+            break;
+        }
+        s_incomplete_retries = 0;
         nano_library_t *lib = nano_library_parse(payload, len);
         if (!lib) {
             ESP_LOGW(TAG, "Library reply (%u bytes) could not be read", (unsigned)len);
             break;
         }
-        if (s_library) {
-            ESP_LOGI(TAG, "Library already loaded - newer reply ignored");
-            free(lib->captures.items);
-            free(lib->cabs.items);
-            free(lib);
-            break;
-        }
+        nano_library_t *old = s_library;   // a refresh replaces it
         s_library = lib;
         ESP_LOGI(TAG, "Library: %d captures, %d cabs (%u bytes)", lib->captures.count, lib->cabs.count, (unsigned)len);
         ui_set_library(lib);
+        if (old) {
+            free(old->captures.items);
+            free(old->cabs.items);
+            free(old);
+        }
         break;
     }
     case NANO_MSG_RENAME_PRESET_RESPONSE: {
@@ -1297,11 +1433,15 @@ static void app_task(void *arg)
         case EV_LINK_UP:
             ESP_LOGI(TAG, "Connected to the Nano Cortex - reading presets");
             ui_set_link(true);
+            s_incomplete_retries = 0;
             request_full_state();
             break;
         case EV_LINK_DOWN:
             ESP_LOGW(TAG, "Connection lost - searching again");
             s_waiting_full_state = false;
+            midi_ble_allow(false);   // until the Nano is back (or the gate timer opens it)
+            esp_timer_stop(s_midi_gate_timer);
+            esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
             s_tuner_on = false;
             s_last_preset = 0;
             s_mix.pending = 0;
@@ -1323,6 +1463,9 @@ static void app_task(void *arg)
         case EV_TEXT:
             if (ev.command == 'N' && nano_link_ready()) rename_preset((const char *)ev.data);
             free(ev.data);
+            break;
+        case EV_MIDI:
+            handle_midi(ev.arg);
             break;
         }
     }
@@ -1402,6 +1545,8 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&exp_timer, &s_exp_timer));
     const esp_timer_create_args_t rev_timer = { .callback = rev_timer_cb, .name = "rev" };
     ESP_ERROR_CHECK(esp_timer_create(&rev_timer, &s_rev_timer));
+    const esp_timer_create_args_t gate_timer = { .callback = midi_gate_cb, .name = "midi_gate" };
+    ESP_ERROR_CHECK(esp_timer_create(&gate_timer, &s_midi_gate_timer));
     const esp_timer_create_args_t library_timer = { .callback = library_timer_cb, .name = "library" };
     ESP_ERROR_CHECK(esp_timer_create(&library_timer, &s_library_timer));
     banks_load();
@@ -1413,6 +1558,15 @@ void app_main(void)
     xTaskCreate(app_task, "app", 6144, NULL, 4, NULL);
     xTaskCreate(console_task, "console", 3072, NULL, 3, NULL);
 
-    printf("\nNano Cortex Controller %s\n", esp_app_get_description()->version);
+    static const char *const reasons[] = { "unknown", "power-on", "external pin", "software", "panic (crash)",
+                                           "interrupt watchdog", "task watchdog", "other watchdog", "deep sleep",
+                                           "brownout (supply voltage too low)", "SDIO", "USB", "JTAG", "eFuse",
+                                           "power glitch", "CPU lockup" };
+    esp_reset_reason_t reason = esp_reset_reason();
+    printf("\nNano Cortex Controller %s - started after: %s\n", esp_app_get_description()->version,
+           reason < sizeof(reasons) / sizeof(reasons[0]) ? reasons[reason] : "?");
     nano_link_start(on_message, on_link);
+    midi_ble_start(on_midi, on_midi_change);
+    midi_ble_allow(false);   // first the Nano and its presets
+    esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
 }
