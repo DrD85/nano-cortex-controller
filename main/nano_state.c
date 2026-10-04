@@ -446,16 +446,19 @@ size_t nano_rename_preset(int preset, const char *name, uint8_t *out, size_t max
     return preset_name_message(preset, 4, name, out, max);
 }
 
-// SelectorValue { 3: selector (1 = capture, 3 = cabinet), 4: value }.
+// SelectorValue { 3: selector, 4: value }: 1 = capture (position 1-5 in the bank active on the Nano, 0 = bypass),
+// 3 = cabinet (slot 1-5, 0 = bypass), 4 = bank and capture (slot 0-24 over all five banks).
 static size_t selector(int which, int value, uint8_t *out)
 {
     out[0] = 0x18; out[1] = (uint8_t)which; out[2] = 0x20; out[3] = (uint8_t)value;
     return 4;
 }
 
+// Slots 1-25 go by "bank and capture", as the editor selects them; "capture" alone would pick that position in
+// whatever bank is active on the Nano.
 size_t nano_capture_select(int slot, uint8_t *out)
 {
-    return selector(1, slot, out);
+    return slot ? selector(4, slot - 1, out) : selector(1, 0, out);
 }
 
 size_t nano_cab_select(int slot, uint8_t *out)
