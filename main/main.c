@@ -7,7 +7,8 @@
 //   footswitch 2   tuner on/off
 //   preset mode    3-8 = the six presets of the bank; the arrow buttons on the screen change the bank
 //                  (own banks: long press on a preset tile picks preset, colour and symbol; stored on the board)
-//   FX mode        3-7 = FX slots 1-5 on/off, 8 = reverb mix Pos 1 <-> Pos 2, or reverb A <-> B
+//   FX mode        3-7 = FX slots 1-5 on/off, 8 = reverb mix Pos 1 <-> Pos 2, or reverb A <-> B;
+//                  with a second effect for Pre FX 1, holding 3 swaps it A <-> B
 // A long press on an FX tile opens the FX editor (model and parameters of that slot), on tile 8 the reverb
 // dialog, on tiles 1-2 the footswitch learn.
 
@@ -136,6 +137,30 @@ static struct {
 } s_edit = { .slot = -1, .request_slot = -1, .pending_param = -1 };
 static esp_timer_handle_t s_param_timer, s_read_timer;
 
+// FX presets: up to FXP_COUNT named settings per effect model, stored on the controller and shown above the
+// parameters in the FX editor. A tap loads one into the edited slot (sent like the sliders, a few values at a time);
+// a long press saves the current values under a name. ORIGINAL goes back to the values the effect had when the
+// editor opened (or when its model was chosen: the model's defaults).
+#define FXP_COUNT 4
+#define FXP_SEND_CHUNK 4
+typedef struct {
+    char name[16];                    // "" = empty
+    uint8_t count, reserved;
+    uint16_t values[NANO_MAX_PARAMS]; // 0-65535 = 0-1
+} fxp_t;                              // stored in NVS as an array of FXP_COUNT
+static struct {
+    uint32_t type;                    // model of the list, 0 = none
+    int slot;                         // slot the original values belong to
+    fxp_t list[FXP_COUNT];
+    bool original_known;
+    int original_count;
+    float original[NANO_MAX_PARAMS];
+    int active;                       // loaded or saved last: -1 = none, 0 = original, 1-FXP_COUNT = presets
+    int send_slot, send_count, sent;  // values being sent
+    float send_values[NANO_MAX_PARAMS];
+} s_fxp = { .active = -1 };
+static esp_timer_handle_t s_fxp_timer;
+
 // USB playback volume (dB) from the Nano's settings; the slider sends at most one value per PARAM_SEND_MS.
 static struct {
     bool known;
@@ -143,7 +168,7 @@ static struct {
     bool pending, throttling;
     float pending_db;
 } s_usb;
-static esp_timer_handle_t s_usb_timer, s_exp_timer, s_rev_timer;
+static esp_timer_handle_t s_usb_timer, s_exp_timer, s_ab_timer;
 
 // Capture volume (VOL button) and cab settings (long press on the cab card): each slider sends at most one
 // value per PARAM_SEND_MS, the last one when the timer fires. The cab settings are read while the dialog is open.
@@ -158,27 +183,38 @@ static struct {
 } s_src;
 static esp_timer_handle_t s_src_timer;
 
-// Reverb A/B (long press on the mix tile): the Nano has one reverb slot, so footswitch 8 swaps the model in
-// that slot between the preset's reverb (A) and a second one (B) and sends the stored values of the other one.
-// Reverb B (model and values) is stored per preset on the controller; it is edited in the FX editor while
-// it is active. Before each swap the values of the running reverb are read, so edits are kept.
+// Second effect (A/B) of a slot: the Nano holds one model per slot, so the controller swaps the model in the slot
+// between the preset's effect (A) and a second one (B) and sends the stored values of the other one. B (model and
+// values) is stored per preset on the controller and edited in the FX editor while it runs. The values of the
+// running effect are read before a swap (only possible while it is on), so edits are kept; with values read earlier
+// a switched-off effect need not be switched on for that. After a swap the new effect is on.
+//   reverb:   the reverb dialog (long press on tile 8) chooses B; footswitch 8 swaps A <-> B
+//   Pre FX 1: the 2ND button in its FX editor chooses B; footswitch 3 short = on/off, held = A <-> B
 typedef struct {
-    uint32_t type;                    // model of reverb B, 0 = off (footswitch 8 = mix Pos 1 / Pos 2)
+    uint32_t type;                    // model of B, 0 = none
     uint8_t count;                    // stored values, 0 = model defaults
     float values[NANO_MAX_PARAMS];
-} rev_b_t;
-enum { REV_IDLE, REV_TURNING_ON, REV_READING, REV_LOADING };
-#define REV_SEND_CHUNK 4              // parameter values per step (the BLE write queue holds 16)
-static struct {
+} fx_b_t;                             // stored in NVS as it is
+enum { AB_REVERB, AB_PRE1, AB_COUNT };
+enum { AB_IDLE, AB_TURNING_ON, AB_READING, AB_LOADING };
+#define AB_SEND_CHUNK 4               // parameter values per step (the BLE write queue holds 16)
+typedef struct {
     int preset;                       // preset the data belongs to
-    rev_b_t b;
-    uint32_t a_type;                  // preset's own reverb, read at the first swap
-    uint8_t a_count;
+    fx_b_t b;
+    uint32_t a_type;                  // preset's own effect, kept from the first read
+    uint8_t a_count;                  // values of A read so far, 0 = none
     float a_values[NANO_MAX_PARAMS];
     int active;                       // 0 = A, 1 = B
-    int slot, target, phase, sent;
+    int slot, target, phase, sent;    // slot -1 = not known yet (reverb)
+    bool cache_only;                  // reading the values for later, no swap
+    bool turn_on;                     // the effect was off: switch it on before sending the values
     bool open_editor;                 // open the FX editor once B is loaded
-} s_rev;
+} ab_t;
+static ab_t s_ab[AB_COUNT];
+static const char *const AB_NAMES[AB_COUNT] = { "Reverb", "Pre FX 1" };
+static const char *const AB_KEYS[AB_COUNT] = { "rvb%02d", "pf1%02d" };
+// Switches whose short press acts on release because they have a held function (bit n = footswitch n).
+static volatile uint32_t s_hold_switches;
 
 // ---- events (all state is handled in the app task) ----
 
@@ -213,9 +249,17 @@ static void command(char c, int arg)
     post((app_event_t){ .kind = EV_COMMAND, .command = c, .arg = arg });
 }
 
-static void on_footswitch(int number)
+// A switch with a held function (s_hold_switches) acts on release when it was not held; the others at once.
+static void on_footswitch(int number, footswitch_event_t event)
 {
-    command('w', number);
+    static bool waiting[FOOTSWITCH_COUNT + 1];   // footswitch task only
+    if (event == FOOTSWITCH_PRESS) {
+        waiting[number] = (s_hold_switches >> number) & 1;
+        if (!waiting[number]) command('w', number);
+    } else if (waiting[number]) {
+        waiting[number] = false;
+        command('w', event == FOOTSWITCH_HOLD ? UI_SWITCH_HOLD | number : number);
+    }
 }
 
 static void on_footswitch_learned(int number, int swapped)
@@ -256,6 +300,11 @@ static void param_timer_cb(void *arg)
 static void usb_timer_cb(void *arg)
 {
     command('G', 0);
+}
+
+static void fxp_timer_cb(void *arg)
+{
+    command('#', 0);
 }
 
 static void source_timer_cb(void *arg)
@@ -314,7 +363,7 @@ static void app_sync_later(void)
     esp_timer_start_once(s_app_notify_timer, 500 * 1000);
 }
 
-static void rev_timer_cb(void *arg)
+static void ab_timer_cb(void *arg)
 {
     command('F', 0);
 }
@@ -451,9 +500,12 @@ static void show(void)
         .mix_known = s_mix.known,
         .mix_pos = { s_mix.pos[0], s_mix.pos[1] },
         .mix_active = s_mix.active,
-        .rev_b_type = s_rev.b.type,
-        .rev_active = s_rev.active,
+        .rev_b_type = s_ab[AB_REVERB].b.type,
+        .rev_active = s_ab[AB_REVERB].active,
+        .pre1_b_type = s_ab[AB_PRE1].b.type,
+        .pre1_active = s_ab[AB_PRE1].active,
     };
+    s_hold_switches = s_fx_mode && s_ab[AB_PRE1].b.type ? 1u << 3 : 0;
     for (int i = 0; i < BANK_SLOTS; i++) {
         view.bank_presets[i] = s_banks[s_bank][i].preset;
         view.bank_colors[i] = s_banks[s_bank][i].color;
@@ -462,17 +514,21 @@ static void show(void)
     ui_show_state(&s_state, &view);
 }
 
+static void fxp_show(void);
+
 static void editor_show(void)
 {
     if (s_edit.slot < 0) return;
     ui_fx_editor_show(s_edit.slot, s_state.fx_type[s_edit.slot], s_state.fx_on[s_edit.slot],
                       s_edit.known ? s_edit.values : NULL, s_edit.count);
+    fxp_show();
 }
 
 static void editor_close(void)
 {
     if (s_edit.slot < 0) return;
     s_edit.slot = -1;
+    s_fxp.slot = -2;   // the next editor reads its own original values
     ui_fx_editor_close();
 }
 
@@ -502,6 +558,8 @@ static void request_current_state(void)
     uint8_t buf[16];
     send("Current state request", NANO_MSG_STATE_REQUEST, buf, nano_current_state_request(buf));
 }
+
+static void ab_cache(int slot, int delay_ms);
 
 static void select_preset(int preset)
 {
@@ -538,6 +596,8 @@ static void toggle_fx(int slot)
         if (!on) s_edit.known = false;
         editor_show();
         if (on) editor_read_later(400);
+    } else if (on) {
+        ab_cache(slot, 400);   // values of A for a later swap, if this slot has a second effect
     }
 }
 
@@ -583,6 +643,10 @@ static void editor_param(int slot, int param, float value)
 {
     if (slot != s_edit.slot || param < 0 || param >= NANO_MAX_PARAMS) return;
     s_edit.values[param] = value;
+    if (s_fxp.active >= 0) {   // changed by hand: no FX preset is current any more
+        s_fxp.active = -1;
+        fxp_show();
+    }
     throttled_param(slot, param, value);
 }
 
@@ -706,6 +770,126 @@ static void cab_settings_command(int arg)
     if (s_src.cab_open) request_cab_settings();
 }
 
+// ---- FX presets ----
+
+static void fxp_key(uint32_t type, char *key)
+{
+    snprintf(key, 16, "fxp%lu", (unsigned long)type);
+}
+
+// The presets of the model in the editor, and its original values once they are read.
+static void fxp_show(void)
+{
+    int slot = s_edit.slot;
+    uint32_t type = slot >= 0 ? s_state.fx_type[slot] : 0;
+    if (type != s_fxp.type || slot != s_fxp.slot) {
+        s_fxp.type = type;
+        s_fxp.slot = slot;
+        s_fxp.original_known = false;
+        s_fxp.active = -1;
+        memset(s_fxp.list, 0, sizeof(s_fxp.list));
+        nvs_handle_t nvs;
+        char key[16];
+        fxp_key(type, key);
+        if (type && nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) == ESP_OK) {
+            size_t size = sizeof(s_fxp.list);
+            if (nvs_get_blob(nvs, key, s_fxp.list, &size) != ESP_OK || size != sizeof(s_fxp.list)) memset(s_fxp.list, 0, sizeof(s_fxp.list));
+            nvs_close(nvs);
+        }
+    }
+    if (slot >= 0 && s_edit.known && !s_fxp.original_known) {
+        s_fxp.original_known = true;
+        s_fxp.original_count = s_edit.count;
+        memcpy(s_fxp.original, s_edit.values, sizeof(s_fxp.original));
+    }
+    char names[FXP_COUNT][16];
+    for (int i = 0; i < FXP_COUNT; i++) strlcpy(names[i], s_fxp.list[i].name, sizeof(names[i]));
+    ui_fx_presets_show(names, s_fxp.active, slot >= 0 && s_edit.known && s_state.fx_on[slot]);
+}
+
+static void fxp_send_step(void)
+{
+    int slot = s_fxp.send_slot;
+    for (int n = 0; n < FXP_SEND_CHUNK && s_fxp.sent < s_fxp.send_count; n++, s_fxp.sent++) {
+        send_param(slot, s_fxp.sent, s_fxp.send_values[s_fxp.sent]);
+    }
+    if (s_fxp.sent < s_fxp.send_count) esp_timer_start_once(s_fxp_timer, 60 * 1000);
+}
+
+// 'z', n: load FX preset n into the edited slot (0 = the original values).
+static void fxp_load(int n)
+{
+    int slot = s_edit.slot;
+    if (slot < 0 || n < 0 || n > FXP_COUNT || !s_edit.known || !s_state.fx_on[slot]) return;
+    const nano_fx_model_t *model = nano_fx_model(s_state.fx_type[slot]);
+    if (!model) return;
+    int count;
+    float values[NANO_MAX_PARAMS];
+    if (n == 0) {
+        if (!s_fxp.original_known) return;
+        count = s_fxp.original_count;
+        memcpy(values, s_fxp.original, sizeof(values));
+    } else {
+        const fxp_t *p = &s_fxp.list[n - 1];
+        if (!p->name[0]) return;
+        count = p->count;
+        for (int i = 0; i < NANO_MAX_PARAMS; i++) values[i] = p->values[i] / 65535.0f;
+    }
+    if (count > model->param_count) count = model->param_count;
+    if (count > NANO_MAX_PARAMS) count = NANO_MAX_PARAMS;
+    ESP_LOGI(TAG, "%s: FX preset %s (%d values)", NANO_FX_SLOT_NAMES[slot], n ? s_fxp.list[n - 1].name : "original", count);
+    esp_timer_stop(s_fxp_timer);
+    s_fxp.send_slot = slot;
+    s_fxp.send_count = count;
+    s_fxp.sent = 0;
+    memcpy(s_fxp.send_values, values, sizeof(values));
+    memcpy(s_edit.values, values, sizeof(float) * count);
+    s_fxp.active = n;
+    editor_show();
+    fxp_send_step();
+}
+
+// Text from the keyboard for FX preset n (1-FXP_COUNT): save the current values under this name, "" = delete.
+static void fxp_save(int n, const char *name)
+{
+    int slot = s_edit.slot;
+    if (slot < 0 || n < 1 || n > FXP_COUNT || s_fxp.type != s_state.fx_type[slot]) return;
+    fxp_t *p = &s_fxp.list[n - 1];
+    while (*name == ' ') name++;
+    if (!name[0]) {
+        memset(p, 0, sizeof(*p));
+        if (s_fxp.active == n) s_fxp.active = -1;
+    } else {
+        if (!s_edit.known) {
+            ui_show_message("Switch the effect on first - its values are read only while it is on.");
+            return;
+        }
+        memset(p, 0, sizeof(*p));
+        strlcpy(p->name, name, sizeof(p->name));
+        p->count = (uint8_t)s_edit.count;
+        for (int i = 0; i < s_edit.count && i < NANO_MAX_PARAMS; i++) {
+            float v = s_edit.values[i] < 0 ? 0 : s_edit.values[i] > 1 ? 1 : s_edit.values[i];
+            p->values[i] = (uint16_t)lroundf(v * 65535);
+        }
+        s_fxp.active = n;
+    }
+    nvs_handle_t nvs;
+    char key[16];
+    fxp_key(s_fxp.type, key);
+    bool empty = true;
+    for (int i = 0; i < FXP_COUNT; i++) empty &= !s_fxp.list[i].name[0];
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
+        esp_err_t err = empty ? nvs_erase_key(nvs, key) : nvs_set_blob(nvs, key, s_fxp.list, sizeof(s_fxp.list));
+        if ((err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) || nvs_commit(nvs) != ESP_OK) {
+            ui_show_message("Could not store the FX preset (memory full?).");
+        }
+        nvs_close(nvs);
+    }
+    ESP_LOGI(TAG, "%s FX preset %d: %s", nano_fx_name(s_fxp.type), n, name[0] ? name : "deleted");
+    ui_show_message(name[0] ? "FX preset saved." : "FX preset deleted.");
+    editor_show();
+}
+
 static void editor_open(int slot)
 {
     if (slot < 0 || slot >= NANO_FX_SLOTS || !s_state.fx_known) return;
@@ -716,14 +900,14 @@ static void editor_open(int slot)
     editor_read();
 }
 
-static void rev_model_chosen(int slot, uint32_t type);
+static void ab_model_chosen(int slot, uint32_t type);
 
 static void editor_choose_model(uint32_t type)
 {
     app_sync_later();
     int slot = s_edit.slot;
     if (slot < 0 || !nano_fx_model(type)) return;
-    rev_model_chosen(slot, type);
+    ab_model_chosen(slot, type);
     uint8_t buf[16];
     char label[48];
     snprintf(label, sizeof(label), "%s model %s", NANO_FX_SLOT_NAMES[slot], nano_fx_name(type));
@@ -841,164 +1025,251 @@ static void mix_editor_closed(void)
     show();
 }
 
-// ---- reverb A/B ----
+// ---- second effect (A/B) ----
 
-static void rev_key(int preset, char *key)
+static void ab_step_later(int ms)
 {
-    snprintf(key, 16, "rvb%02d", preset);
+    esp_timer_stop(s_ab_timer);
+    esp_timer_start_once(s_ab_timer, (uint64_t)ms * 1000);
 }
 
-static void rev_store(void)
+// The A/B that is switching or reading right now (one at a time: the timer and the parameter reply are its).
+static ab_t *ab_running(void)
+{
+    for (int i = 0; i < AB_COUNT; i++) if (s_ab[i].phase != AB_IDLE) return &s_ab[i];
+    return NULL;
+}
+
+static void ab_store(ab_t *ab)
 {
     char key[16];
     nvs_handle_t nvs;
-    if (!s_rev.preset || nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
-    rev_key(s_rev.preset, key);
-    esp_err_t err = s_rev.b.type ? nvs_set_blob(nvs, key, &s_rev.b, sizeof(s_rev.b)) : nvs_erase_key(nvs, key);
-    if ((err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) || nvs_commit(nvs) != ESP_OK) ESP_LOGW(TAG, "Could not store reverb B");
-    nvs_close(nvs);
-}
-
-static void rev_load(int preset)
-{
-    char key[16];
-    memset(&s_rev, 0, sizeof(s_rev));
-    s_rev.preset = preset;
-    nvs_handle_t nvs;
-    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
-    rev_key(preset, key);
-    size_t size = sizeof(s_rev.b);
-    if (nvs_get_blob(nvs, key, &s_rev.b, &size) != ESP_OK || size != sizeof(s_rev.b) || !nano_fx_model(s_rev.b.type)) {
-        memset(&s_rev.b, 0, sizeof(s_rev.b));
+    if (!ab->preset || nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
+    snprintf(key, sizeof(key), AB_KEYS[ab - s_ab], ab->preset);
+    esp_err_t err = ab->b.type ? nvs_set_blob(nvs, key, &ab->b, sizeof(ab->b)) : nvs_erase_key(nvs, key);
+    if ((err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) || nvs_commit(nvs) != ESP_OK) {
+        ESP_LOGW(TAG, "Could not store the second effect of %s", AB_NAMES[ab - s_ab]);
     }
     nvs_close(nvs);
-    if (s_rev.b.type) ESP_LOGI(TAG, "Reverb B of preset %d: %s", preset, nano_fx_name(s_rev.b.type));
 }
 
-// The FX editor shows reverb B: keep its values (called when the editor closes or the preset changes).
-// The model of B only changes by an explicit choice (dialog, or the editor's model list while B runs).
-static void rev_capture_editor(void)
+// New preset: its second effects, A not known yet.
+static void ab_load(int preset)
 {
-    if (s_rev.active != 1 || s_edit.slot < 0 || s_edit.slot != s_rev.slot || !s_edit.known) return;
-    s_rev.b.count = (uint8_t)s_edit.count;
-    memcpy(s_rev.b.values, s_edit.values, sizeof(s_rev.b.values));
-    rev_store();
+    esp_timer_stop(s_ab_timer);
+    nvs_handle_t nvs;
+    bool open = nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) == ESP_OK;
+    for (int i = 0; i < AB_COUNT; i++) {
+        ab_t *ab = &s_ab[i];
+        memset(ab, 0, sizeof(*ab));
+        ab->preset = preset;
+        ab->slot = i == AB_PRE1 ? 0 : -1;
+        char key[16];
+        snprintf(key, sizeof(key), AB_KEYS[i], preset);
+        size_t size = sizeof(ab->b);
+        if (!open || nvs_get_blob(nvs, key, &ab->b, &size) != ESP_OK || size != sizeof(ab->b) || !nano_fx_model(ab->b.type)) {
+            memset(&ab->b, 0, sizeof(ab->b));
+        }
+        if (ab->b.type) ESP_LOGI(TAG, "%s B of preset %d: %s", AB_NAMES[i], preset, nano_fx_name(ab->b.type));
+    }
+    if (open) nvs_close(nvs);
 }
 
-// A reverb model was chosen in the FX editor: it replaces the running reverb (A or B).
-static void rev_model_chosen(int slot, uint32_t type)
+// The slot of an A/B now (the reverb's slot comes from the preset), -1 = none.
+static int ab_slot(const ab_t *ab)
+{
+    return ab - s_ab == AB_REVERB ? s_mix.slot : 0;
+}
+
+// The FX editor shows the effect of an A/B slot: keep its values (called when the editor closes or the preset
+// changes). The model of B only changes by an explicit choice.
+static void ab_capture_editor(void)
+{
+    for (int i = 0; i < AB_COUNT; i++) {
+        ab_t *ab = &s_ab[i];
+        if (!ab->b.type || ab->slot < 0 || s_edit.slot != ab->slot || !s_edit.known) continue;
+        if (ab->active == 1) {
+            ab->b.count = (uint8_t)s_edit.count;
+            memcpy(ab->b.values, s_edit.values, sizeof(ab->b.values));
+            ab_store(ab);
+        } else {
+            if (!ab->a_type) ab->a_type = s_state.fx_type[ab->slot];
+            ab->a_count = (uint8_t)s_edit.count;
+            memcpy(ab->a_values, s_edit.values, sizeof(ab->a_values));
+        }
+    }
+}
+
+// A model was chosen in the FX editor: it replaces the running effect (A or B) of an A/B slot.
+static void ab_model_chosen(int slot, uint32_t type)
 {
     const nano_fx_model_t *model = nano_fx_model(type);
-    if (!s_rev.b.type || slot != s_rev.slot || !model || model->icon != NANO_ICON_REVERB) return;
-    if (s_rev.active == 1) {
-        s_rev.b.type = type;
-        s_rev.b.count = 0;
-        rev_store();
-    } else if (s_rev.a_type) {
-        s_rev.a_type = type;
-        s_rev.a_count = 0;
+    for (int i = 0; i < AB_COUNT; i++) {
+        ab_t *ab = &s_ab[i];
+        if (!ab->b.type || slot != ab->slot || !model) continue;
+        if (i == AB_REVERB && model->icon != NANO_ICON_REVERB) continue;
+        if (ab->active == 1) {
+            ab->b.type = type;
+            ab->b.count = 0;
+            ab_store(ab);
+        } else if (ab->a_type) {
+            ab->a_type = type;
+            ab->a_count = 0;
+        }
     }
 }
 
-static void rev_step_later(int ms)
+// Puts the target effect into the slot: the model now, its values in the following steps.
+static void ab_load_target(ab_t *ab)
 {
-    esp_timer_stop(s_rev_timer);
-    esp_timer_start_once(s_rev_timer, (uint64_t)ms * 1000);
-}
-
-// Puts the target reverb into the slot: the model now, its values in the following steps.
-static void rev_load_target(void)
-{
-    uint32_t type = s_rev.target ? s_rev.b.type : s_rev.a_type;
+    uint32_t type = ab->target ? ab->b.type : ab->a_type;
     uint8_t buf[16];
-    char label[48];
-    snprintf(label, sizeof(label), "Reverb %c: %s", s_rev.target ? 'B' : 'A', nano_fx_name(type));
-    send(label, NANO_MSG_FX_TYPE, buf, nano_fx_model_select(s_rev.slot, type, buf));
-    s_state.fx_type[s_rev.slot] = type;
-    s_rev.active = s_rev.target;
-    s_rev.phase = REV_LOADING;
-    s_rev.sent = 0;
-    rev_step_later(400);   // the Nano needs a moment for the model change
+    char label[64];
+    snprintf(label, sizeof(label), "%s %c: %s", AB_NAMES[ab - s_ab], ab->target ? 'B' : 'A', nano_fx_name(type));
+    send(label, NANO_MSG_FX_TYPE, buf, nano_fx_model_select(ab->slot, type, buf));
+    s_state.fx_type[ab->slot] = type;
+    ab->active = ab->target;
+    ab->phase = AB_LOADING;
+    ab->sent = 0;
+    ab_step_later(400);   // the Nano needs a moment for the model change
     show();
 }
 
-static void rev_read(void)
+static void ab_read(ab_t *ab)
 {
+    if (ab->cache_only && s_edit.request_slot >= 0) {   // the editor's reply comes first: try another time
+        ab->phase = AB_IDLE;
+        return;
+    }
     uint8_t buf[8];
-    s_rev.phase = REV_READING;
-    send("Reverb values request", NANO_MSG_FX_PARAMS_REQUEST, buf, nano_fx_params_request(s_rev.slot, buf));
-    rev_step_later(1500);   // timeout
+    char label[48];
+    snprintf(label, sizeof(label), "%s values request", AB_NAMES[ab - s_ab]);
+    ab->phase = AB_READING;
+    send(label, NANO_MSG_FX_PARAMS_REQUEST, buf, nano_fx_params_request(ab->slot, buf));
+    ab_step_later(1500);   // timeout
 }
 
-// Footswitch 8 with a reverb B: swap A <-> B.
-static void rev_toggle(void)
+// Reads the values of A while it is on (preset loaded, or switched on), so a later swap need not switch it on.
+static void ab_cache(int slot, int delay_ms)
 {
-    if (s_rev.phase != REV_IDLE) return;
-    if (s_mix.slot < 0) {
-        ui_show_message("No reverb in this preset.");
+    if (ab_running() || s_edit.request_slot >= 0 || slot < 0 || !s_state.fx_on[slot] || !s_state.fx_type[slot]) return;
+    for (int i = 0; i < AB_COUNT; i++) {
+        ab_t *ab = &s_ab[i];
+        if (!ab->b.type || ab->active != 0 || ab_slot(ab) != slot) continue;
+        ab->slot = slot;
+        ab->cache_only = true;
+        ab->phase = AB_TURNING_ON;
+        ab_step_later(delay_ms);
         return;
     }
-    s_rev.slot = s_mix.slot;
-    s_rev.target = s_rev.active ? 0 : 1;
-    rev_capture_editor();
-    if (!s_state.fx_on[s_rev.slot]) {   // values can only be read from an active effect
-        toggle_fx(s_rev.slot);
-        s_rev.phase = REV_TURNING_ON;
-        rev_step_later(400);
-        return;
-    }
-    rev_read();
 }
 
-// Values of the running reverb arrived: keep them, then load the other one.
-static void rev_values_read(const uint8_t *payload, size_t len)
+// Footswitch (8 for the reverb, 3 held for Pre FX 1): swap A <-> B; the new effect is on afterwards.
+static void ab_swap(int which)
 {
-    esp_timer_stop(s_rev_timer);
+    ab_t *ab = &s_ab[which];
+    if (!ab->b.type) return;
+    ab_t *running = ab_running();
+    if (running && !running->cache_only) {
+        ui_show_message("Still switching - try again in a moment.");
+        return;
+    }
+    if (running) {   // a read for later: the swap reads anyway
+        esp_timer_stop(s_ab_timer);
+        running->phase = AB_IDLE;
+        running->cache_only = false;
+    }
+    int slot = ab_slot(ab);
+    if (slot < 0 || !s_state.fx_type[slot]) {
+        ui_show_message(which == AB_REVERB ? "No reverb in this preset." : "Pre FX 1 is empty in this preset.");
+        return;
+    }
+    ab->slot = slot;
+    ab->target = ab->active ? 0 : 1;
+    ab->cache_only = false;
+    ab_capture_editor();
+    if (!s_state.fx_on[slot]) {
+        if (ab->active == 1 || ab->a_count) {   // values known: load the other effect, switch it on, send its values
+            ab->turn_on = true;
+            ab_load_target(ab);
+            return;
+        }
+        ab->phase = AB_TURNING_ON;   // values can only be read from an effect that is on
+        toggle_fx(slot);
+        ab_step_later(400);
+        return;
+    }
+    ab_read(ab);
+}
+
+// FX parameter values arrived: true if they were for an A/B (kept, then the swap goes on).
+static bool ab_values_read(const uint8_t *payload, size_t len)
+{
+    ab_t *ab = ab_running();
+    if (!ab || ab->phase != AB_READING) return false;
+    esp_timer_stop(s_ab_timer);
     float values[NANO_MAX_PARAMS];
     int count = nano_fx_params_values(payload, len, values, NANO_MAX_PARAMS);
     if (count <= 0) {
-        s_rev.phase = REV_IDLE;
-        ui_show_message("Reverb not switched: the Nano sent no values.");
-        return;
+        ab->phase = AB_IDLE;
+        if (!ab->cache_only) ui_show_message("Not switched: the Nano sent no values.");
+        ab->cache_only = false;
+        return true;
     }
-    if (s_rev.active == 0) {
-        if (!s_rev.a_type) s_rev.a_type = s_state.fx_type[s_rev.slot];   // the preset's reverb, kept from now on
-        s_rev.a_count = (uint8_t)count;
-        memcpy(s_rev.a_values, values, sizeof(values));
+    if (ab->active == 0) {
+        if (!ab->a_type) ab->a_type = s_state.fx_type[ab->slot];   // the preset's effect, kept from now on
+        ab->a_count = (uint8_t)count;
+        memcpy(ab->a_values, values, sizeof(values));
     } else {   // values only: a state reply can still name the previous model
-        s_rev.b.count = (uint8_t)count;
-        memcpy(s_rev.b.values, values, sizeof(values));
-        rev_store();
+        ab->b.count = (uint8_t)count;
+        memcpy(ab->b.values, values, sizeof(values));
+        ab_store(ab);
     }
-    rev_load_target();
+    if (ab->cache_only) {
+        ab->cache_only = false;
+        ab->phase = AB_IDLE;
+        ESP_LOGI(TAG, "%s A: %d values kept", AB_NAMES[ab - s_ab], count);
+        return true;
+    }
+    ab_load_target(ab);
+    return true;
 }
 
-static void rev_step(void)
+static void ab_step(void)
 {
-    switch (s_rev.phase) {
-    case REV_TURNING_ON:
-        rev_read();
+    ab_t *ab = ab_running();
+    if (!ab) return;
+    switch (ab->phase) {
+    case AB_TURNING_ON:
+        ab_read(ab);
         break;
-    case REV_READING:
-        s_rev.phase = REV_IDLE;
-        ui_show_message("Reverb not switched: the Nano did not send the reverb's values.");
+    case AB_READING:
+        ab->phase = AB_IDLE;
+        if (!ab->cache_only) ui_show_message("Not switched: the Nano did not send the effect's values.");
+        ab->cache_only = false;
         break;
-    case REV_LOADING: {
-        int count = s_rev.target ? s_rev.b.count : s_rev.a_count;
-        const float *values = s_rev.target ? s_rev.b.values : s_rev.a_values;
-        for (int n = 0; n < REV_SEND_CHUNK && s_rev.sent < count; n++, s_rev.sent++) send_param(s_rev.slot, s_rev.sent, values[s_rev.sent]);
-        if (s_rev.sent < count) {
-            rev_step_later(60);
+    case AB_LOADING: {
+        if (ab->turn_on) {
+            ab->turn_on = false;
+            if (!s_state.fx_on[ab->slot]) toggle_fx(ab->slot);
+            ab_step_later(100);
             break;
         }
-        s_rev.phase = REV_IDLE;
+        int count = ab->target ? ab->b.count : ab->a_count;
+        const float *values = ab->target ? ab->b.values : ab->a_values;
+        for (int n = 0; n < AB_SEND_CHUNK && ab->sent < count; n++, ab->sent++) send_param(ab->slot, ab->sent, values[ab->sent]);
+        if (ab->sent < count) {
+            ab_step_later(60);
+            break;
+        }
+        ab->phase = AB_IDLE;
         app_sync_later();
-        ESP_LOGI(TAG, "Reverb %c active (%d values)", s_rev.active ? 'B' : 'A', count);
+        ESP_LOGI(TAG, "%s %c active (%d values)", AB_NAMES[ab - s_ab], ab->active ? 'B' : 'A', count);
         schedule_refresh(300);
-        if (s_rev.open_editor) {
-            s_rev.open_editor = false;
-            editor_open(s_rev.slot);
-        } else if (s_edit.slot == s_rev.slot) {
+        if (ab->open_editor) {
+            ab->open_editor = false;
+            editor_open(ab->slot);
+        } else if (s_edit.slot == ab->slot) {
             s_edit.known = false;
             editor_show();
             editor_read_later(300);
@@ -1010,34 +1281,41 @@ static void rev_step(void)
     }
 }
 
-// From the reverb dialog: reverb B model for this preset (0 = none: footswitch 8 is the mix switch again).
-static void rev_set_b(uint32_t type)
+// From the reverb dialog or the 2ND list of Pre FX 1: arg = which << 24 | model of B (0 = none).
+static void ab_set_b(int arg)
 {
-    if (type && !nano_fx_model(type)) return;
-    if (s_rev.phase != REV_IDLE) {
-        ui_show_message("Reverb is switching - try again in a moment.");
+    int which = arg >> 24;
+    uint32_t type = (uint32_t)arg & 0xFFFFFF;
+    if (which < 0 || which >= AB_COUNT || (type && !nano_fx_model(type))) return;
+    ab_t *ab = &s_ab[which];
+    ab_t *running = ab_running();
+    if (running && !running->cache_only) {
+        ui_show_message("Still switching - try again in a moment.");
         return;
     }
-    if (type == s_rev.b.type) return;
-    s_rev.b.type = type;
-    s_rev.b.count = 0;
-    rev_store();
-    if (s_rev.active == 1) {   // B is running: show the new choice, or go back to A
-        s_rev.target = type ? 1 : 0;
-        if (type || s_rev.a_type) rev_load_target();
-        else s_rev.active = 0;
+    if (type == ab->b.type) return;
+    ab->b.type = type;
+    ab->b.count = 0;
+    ab_store(ab);
+    ESP_LOGI(TAG, "%s B: %s", AB_NAMES[which], type ? nano_fx_name(type) : "none");
+    if (ab->active == 1) {   // B is running: show the new choice, or go back to A
+        ab->target = type ? 1 : 0;
+        if (type || ab->a_type) ab_load_target(ab);
+        else ab->active = 0;
     }
     show();
+    if (s_edit.slot == ab->slot) editor_show();
 }
 
 // From the reverb dialog: edit reverb B in the FX editor (B is loaded first).
-static void rev_edit_b(void)
+static void ab_edit_b(int which)
 {
-    if (!s_rev.b.type) return;
-    if (s_rev.active == 1) editor_open(s_rev.slot);
+    ab_t *ab = &s_ab[which];
+    if (!ab->b.type) return;
+    if (ab->active == 1) editor_open(ab->slot);
     else {
-        s_rev.open_editor = true;
-        rev_toggle();
+        ab->open_editor = true;
+        ab_swap(which);
     }
 }
 
@@ -1192,7 +1470,7 @@ static void handle_switch(int number)
         set_tuner(!s_tuner_on);
     } else if (s_fx_mode) {
         if (number <= 7) toggle_fx(number - 3);
-        else if (s_rev.b.type) rev_toggle();
+        else if (s_ab[AB_REVERB].b.type) ab_swap(AB_REVERB);
         else toggle_mix();
     } else if (number >= 3 && number <= 8) {
         int preset = s_banks[s_bank][number - 3].preset;
@@ -1285,6 +1563,8 @@ static void handle_midi(int arg)
         if (s_state.fx_known && s_state.fx_type[slot] && s_state.fx_on[slot] != (d2 >= 64)) toggle_fx(slot);
     } else if (type == 0xB0 && d1 >= 50 && d1 <= 57 && d2 >= 64) {
         handle_switch(d1 - 49);
+    } else if (type == 0xB0 && d1 == 58 && d2 >= 64) {   // as footswitch 3 held: Pre FX 1 A <-> B
+        ab_swap(AB_PRE1);
     }
 }
 
@@ -1328,20 +1608,25 @@ static void handle_command(char c, int arg)
     case 'm': handle_switch(1); break;
     case 't': handle_switch(2); break;
     case 'x':   // as footswitch 8 in FX mode
-        if (s_rev.b.type) rev_toggle();
+        if (s_ab[AB_REVERB].b.type) ab_swap(AB_REVERB);
         else toggle_mix();
         break;
-    case 'w':
-        if (arg >= 1 && arg <= FOOTSWITCH_COUNT) handle_switch(arg);
+    case 'w': {
+        int number = arg & 0xFF;
+        if (number < 1 || number > FOOTSWITCH_COUNT) break;
+        if ((arg & UI_SWITCH_HOLD) && number == 3 && s_ab[AB_PRE1].b.type) ab_swap(AB_PRE1);   // held: Pre FX 1 A <-> B
+        else handle_switch(number);
         break;
+    }
     case 'O': editor_open(arg); break;
     case 'E':
-        rev_capture_editor();
+        ab_capture_editor();
         s_edit.slot = -1;
+        s_fxp.slot = -2;   // the next editor reads its own original values
         break;
-    case 'A': rev_set_b((uint32_t)arg); break;
-    case 'H': rev_edit_b(); break;
-    case 'F': rev_step(); break;
+    case 'A': ab_set_b(arg); break;
+    case 'H': ab_edit_b(arg); break;
+    case 'F': ab_step(); break;
     case 'M': editor_choose_model((uint32_t)arg); break;
     case 'R': editor_read(); break;
     case 'C': select_capture(arg); break;
@@ -1356,6 +1641,8 @@ static void handle_command(char c, int arg)
     case 'U': set_usb_gain(arg); break;
     case 'G': usb_throttle_done(); break;
     case 'v': source_value(arg); break;
+    case 'z': fxp_load(arg); break;
+    case '#': fxp_send_step(); break;
     case 'u': source_throttle_done(); break;
     case 'y': cab_settings_command(arg); break;
     case 'i':   // the app changed something: read it shortly after (once for several changes)
@@ -1406,9 +1693,11 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         bool names = nano_state_apply(&s_state, payload, len);
         // After a reverb swap the slot holds the reverb that was loaded (a reply sent before the model change
         // still names the previous one).
-        if (s_rev.preset == s_state.current_preset) {
-            if (s_rev.active == 1 && s_rev.b.type) s_state.fx_type[s_rev.slot] = s_rev.b.type;
-            else if (s_rev.active == 0 && s_rev.a_type) s_state.fx_type[s_rev.slot] = s_rev.a_type;
+        for (int i = 0; i < AB_COUNT; i++) {
+            const ab_t *ab = &s_ab[i];
+            if (ab->preset != s_state.current_preset || ab->slot < 0) continue;
+            if (ab->active == 1 && ab->b.type) s_state.fx_type[ab->slot] = ab->b.type;
+            else if (ab->active == 0 && ab->a_type) s_state.fx_type[ab->slot] = ab->a_type;
         }
         if (s_waiting_full_state) {
             // The full state carries all names; the current preset is read separately, as the editor does.
@@ -1444,11 +1733,11 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
                     s_library_requested = true;
                     esp_timer_start_once(s_library_timer, 1500 * 1000);
                 }
-                rev_capture_editor();   // reverb B edits of the previous preset
-                esp_timer_stop(s_rev_timer);
-                rev_load(s_state.current_preset);
+                ab_capture_editor();   // edits of a second effect in the previous preset
+                ab_load(s_state.current_preset);
                 editor_close();
                 request_mix_range();
+                ab_cache(0, 700);      // values of Pre FX 1 A for a later swap, if it has a B and is on
             }
             show();
             // Other preset or cab while the cab dialog is open: read its settings.
@@ -1538,10 +1827,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         break;
     }
     case NANO_MSG_FX_PARAMS_RESPONSE: {
-        if (s_rev.phase == REV_READING) {
-            rev_values_read(payload, len);
-            break;
-        }
+        if (ab_values_read(payload, len)) break;
         int slot = s_edit.request_slot;
         s_edit.request_slot = -1;
         if (slot < 0 || slot != s_edit.slot) break;   // editor closed or another slot meanwhile
@@ -1657,6 +1943,7 @@ static void app_task(void *arg)
             break;
         case EV_TEXT:
             if (ev.command == 'N' && nano_link_ready()) rename_preset((const char *)ev.data);
+            else if (ev.command >= '1' && ev.command < '1' + FXP_COUNT) fxp_save(ev.command - '0', (const char *)ev.data);
             free(ev.data);
             break;
         case EV_MIDI:
@@ -1738,12 +2025,14 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&read_timer, &s_read_timer));
     const esp_timer_create_args_t usb_timer = { .callback = usb_timer_cb, .name = "usb" };
     ESP_ERROR_CHECK(esp_timer_create(&usb_timer, &s_usb_timer));
+    const esp_timer_create_args_t fxp_timer = { .callback = fxp_timer_cb, .name = "fxp" };
+    ESP_ERROR_CHECK(esp_timer_create(&fxp_timer, &s_fxp_timer));
     const esp_timer_create_args_t source_timer = { .callback = source_timer_cb, .name = "source" };
     ESP_ERROR_CHECK(esp_timer_create(&source_timer, &s_src_timer));
     const esp_timer_create_args_t exp_timer = { .callback = exp_timer_cb, .name = "exp" };
     ESP_ERROR_CHECK(esp_timer_create(&exp_timer, &s_exp_timer));
-    const esp_timer_create_args_t rev_timer = { .callback = rev_timer_cb, .name = "rev" };
-    ESP_ERROR_CHECK(esp_timer_create(&rev_timer, &s_rev_timer));
+    const esp_timer_create_args_t ab_timer = { .callback = ab_timer_cb, .name = "ab" };
+    ESP_ERROR_CHECK(esp_timer_create(&ab_timer, &s_ab_timer));
     const esp_timer_create_args_t gate_timer = { .callback = midi_gate_cb, .name = "midi_gate" };
     ESP_ERROR_CHECK(esp_timer_create(&gate_timer, &s_midi_gate_timer));
     const esp_timer_create_args_t app_read_timer = { .callback = app_read_cb, .name = "app_read" };

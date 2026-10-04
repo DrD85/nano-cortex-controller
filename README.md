@@ -24,7 +24,9 @@ your own preset banks. It is the hardware companion of the
 - **Presets**: six presets per bank on footswitches 3–8, 16 own banks with colour and symbol per switch,
   previous/next preset by swiping, rename and save on the Nano, follows preset changes made on the pedal
 - **FX mode**: footswitches 3–7 switch Pre FX 1–2 and Post FX 1–3, tiles in the effect category colours
-- **FX editor** (long press on an FX tile): choose the model and edit every parameter live
+- **Second effect on Pre FX 1**: footswitch 3 short = on/off, held = swap to a second effect (e.g. an auto-wah)
+- **FX editor** (long press on an FX tile): choose the model and edit every parameter live, with four named
+  **FX presets** per effect model
 - **Capture and Cab/IR**: pick one of the 25 capture slots or 5 cab slots, or load any capture or IR from the
   Nano's library (factory and user) into the active slot
 - **Capture volume** (VOL) and **cab settings** (long press on the cab card: output, high pass, low pass)
@@ -54,8 +56,8 @@ your own preset banks. It is the hardware companion of the
 | Tuner | USB audio volume |
 | ![Bluetooth MIDI](docs/images/10-bluetooth-midi.png) | ![Capture volume](docs/images/11-capture-volume.png) |
 | Bluetooth MIDI | Capture volume |
-| ![Cab settings](docs/images/12-cab-settings.png) | |
-| Cab settings (long press on the cab card) | |
+| ![Cab settings](docs/images/12-cab-settings.png) | ![Second effect on Pre FX 1](docs/images/13-second-effect.png) |
+| Cab settings (long press on the cab card) | Second effect on Pre FX 1 (2ND in its FX editor) |
 
 The screenshots show example presets. They are rendered from the firmware's own UI code
 (`tools/screenshots/make_screenshots.sh`).
@@ -168,6 +170,17 @@ Changes are sent to the Nano while you move a control. The Nano only reports par
 are switched on – switch an effect on to see and edit its values. **SAVE** in the preset card stores the preset
 on the Nano.
 
+**FX presets** (the row above the parameters): four named settings per effect model, stored on the controller and
+usable in every preset and slot with that model.
+
+- **Hold** a place: the keyboard opens and the current settings are saved under the name you type. An empty name
+  deletes the place.
+- **Tap** a place: its settings are loaded at once.
+- **ORIGINAL** goes back to the settings the effect had when you opened the editor. Right after choosing a new
+  model, these are the model's defaults.
+
+Loaded settings count as changes to the Nano preset: **SAVE** keeps them there.
+
 ### Reverb switch (footswitch 8)
 
 - **MIX POS 1 / 2**: footswitch 8 sets the reverb's Mix to Pos 1 or Pos 2. These are the heel and toe values of
@@ -177,6 +190,19 @@ on the Nano.
   reverb (A) and B; the Nano has one reverb slot, so the controller swaps the model and sends the stored values
   (takes about half a second). Tile 8 shows reverb B and lights up while it runs; tile 7 shows the reverb in the slot. **EDIT B** loads B and opens the FX editor to set it up. Reverb B is stored on the
   controller, per preset. If you save the preset while B is active, B becomes the preset's reverb.
+
+### Second effect on Pre FX 1 (footswitch 3)
+
+Long press on the Pre FX 1 tile, then **2ND** in the FX editor: choose a second effect (B) for this preset, for
+example the Envelope Filter as an auto-wah next to a drive. Then footswitch 3 in FX mode:
+
+- **short press**: the effect in the slot on / off (it acts when you lift your foot)
+- **hold** (0.6 s): swap A ↔ B – the other effect comes in, switched on
+
+The tile shows *Pre FX 1 A* or *Pre FX 1 B*. The Nano has one model per slot, so the controller swaps the model and
+sends the stored values of the other effect: this takes about half a second with a short gap in the sound.
+For a gapless change put the second effect into a free slot instead and switch it on and off.
+B is edited in the FX editor while it runs and is stored on the controller, per preset (MIDI: CC 58).
 
 ### Tuner
 
@@ -204,6 +230,7 @@ for the Nano (for example with the MC6 export of the Nano Cortex Editor) work ov
 | CC 37–41 | FX slot 1–5 (Pre FX 1, Pre FX 2, Post FX 1–3): value 64–127 on, 0–63 off |
 | CC 1 | expression: reverb mix from Pos 1 (0) to Pos 2 (127) |
 | CC 50–57, value 64–127 | press footswitch 1–8 (mode, tuner, presets or FX, reverb switch) |
+| CC 58, value 64–127 | hold footswitch 3: Pre FX 1 swaps to its second effect and back |
 
 A wired MIDI input is not possible on this board without extra hardware; use a Bluetooth MIDI adapter instead.
 

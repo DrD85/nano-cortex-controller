@@ -8,8 +8,12 @@
 
 #define FOOTSWITCH_COUNT 8
 
-// Called from the footswitch task with the number (1-8) of a pressed switch.
-typedef void (*footswitch_cb)(int number);
+// What a footswitch did: pressed, released, or held down for FOOTSWITCH_HOLD_MS (once per press, before the release).
+typedef enum { FOOTSWITCH_PRESS, FOOTSWITCH_RELEASE, FOOTSWITCH_HOLD } footswitch_event_t;
+#define FOOTSWITCH_HOLD_MS 600
+
+// Called from the footswitch task with the number (1-8) of a switch and what it did.
+typedef void (*footswitch_cb)(int number, footswitch_event_t event);
 
 // Called from the footswitch task when a learn ends: number = the learned switch (0 = nothing pressed in time),
 // swapped = the switch that got the old pin of the learned one (0 = none).

@@ -113,6 +113,8 @@ static void example_state(void)
     view.mix_active = -1;
     view.rev_b_type = type_of("Room");
     view.rev_active = 0;
+    view.pre1_b_type = type_of("Envelope Filter");
+    view.pre1_active = 0;
 }
 
 static nano_library_t *example_library(void)
@@ -174,7 +176,16 @@ int main(void)
     ui_show_state(&st, &view);
     static const float values[] = { 0.42f, 0.55f, 0.30f, 0.65f, 0.25f, 0.70f, 0.50f, 0.35f };
     ui_fx_editor_show(3, st.fx_type[3], true, values, 8);
+    static const char fx_presets[UI_FX_PRESETS][16] = { "Slapback", "Ambient Wash", "", "" };
+    ui_fx_presets_show(fx_presets, 1, true);
     shot("04-fx-editor");
+    ui_fx_editor_close();
+    close_all();
+
+    ui_fx_editor_show(0, st.fx_type[0], true, values, 3);
+    on_second_button(NULL);
+    shot("13-second-effect");
+    lv_obj_set_hidden(s_model_list, true);
     ui_fx_editor_close();
     close_all();
 

@@ -1,7 +1,8 @@
 // Touch screen: current preset with capture and cab, previous/next buttons, a mode button, a tuner button
 // and six tiles that match footswitches 3-8:
 //   preset mode: the six presets of the bank (bank with the arrow buttons)
-//   FX mode:     FX slots 1-5 on/off, reverb mix Pos 1 / Pos 2 (long press: set Pos 1 / Pos 2)
+//   FX mode:     FX slots 1-5 on/off, reverb mix Pos 1 / Pos 2 (long press: set Pos 1 / Pos 2); Pre FX 1 can have
+//                a second effect (2ND in its FX editor), swapped by holding footswitch 3
 // VOL (top left) or a long press on the capture card: capture volume; long press on the cab card: cab output,
 // high pass and low pass.
 #pragma once
@@ -14,7 +15,7 @@
 // Called from the LVGL task when the user taps something. Must not block.
 //   'p' / 'n'      previous / next preset (swipe)
 //   'k', -1 / +1   previous / next bank (arrow buttons)
-//   'w', 1..8      same as footswitch 1-8 (1 = mode, 2 = tuner, 3-8 = tiles)
+//   'w', 1..8      same as footswitch 1-8 (1 = mode, 2 = tuner, 3-8 = tiles); UI_SWITCH_HOLD | n = footswitch n held
 //   'O', slot      long press on an FX tile: open the FX editor for that slot
 //   'E', 0         FX editor closed
 //   'M', type      FX editor: choose this model for the edited slot
@@ -28,18 +29,22 @@
 //   'U', tenths    USB playback volume in tenths of a dB (-400 = off .. 0)
 //   'v', w<<16|v   capture volume (w 0: v = 0-255) or cab setting (w 1-3 = output, high pass, low pass: v = 0-1000)
 //   'y', 1 / 0     cab settings opened (read them, answer with ui_set_cab_settings) / closed
+//   'z', n         FX editor: load FX preset n into the slot (0 = the original values, 1-UI_FX_PRESETS)
 //   'Q', w<<8|v    reverb mix editor: Pos w+1 (0/1) moved to v (0-255), play that mix
 //   'W', p1<<8|p2  reverb mix editor: save Pos 1 / Pos 2 (0-255) in the preset
 //   'K', 0         reverb mix editor closed
-//   'A', type      reverb B model for this preset (0 = none: footswitch 8 is the mix switch)
+//   'A', w<<24|t   second effect (B) of this preset: w 0 = reverb (0 = none: footswitch 8 is the mix switch),
+//                  w 1 = Pre FX 1 (footswitch 3 held swaps A/B); t = model, 0 = none
 //   'H', 0         edit reverb B: load it and open the FX editor
 //   'X', 1 / 0     Bluetooth MIDI dialog opened / closed (search for devices while open)
 //   'P', n         connect MIDI device n of the list (-1 = disconnect and forget)
 //   'D', n         footswitch learn: 1-8 = the next pressed footswitch becomes switch n, 0 = cancel,
 //                  -1 = default order (answer with ui_learn_done)
 typedef void (*ui_command_cb)(char command, int arg);
+#define UI_SWITCH_HOLD 0x100
 
-// Text input from the on-screen keyboard: 'N' = new name for the current preset.
+// Text input from the on-screen keyboard: 'N' = new name for the current preset; '1'-'4' = save the FX editor's
+// values as FX preset 1-4 under this name ("" deletes it).
 typedef void (*ui_text_cb)(char kind, const char *text);
 
 // FX editor: a parameter was moved. value = 0-1, as the Nano expects it.
@@ -54,6 +59,8 @@ typedef struct {
     int mix_active;      // -1 = as stored in the preset, 0 = Pos 1, 1 = Pos 2
     uint32_t rev_b_type; // second reverb of this preset (footswitch 8 swaps A/B), 0 = none
     int rev_active;      // 0 = reverb A (the preset's), 1 = reverb B
+    uint32_t pre1_b_type; // second effect of Pre FX 1 (footswitch 3 held swaps A/B), 0 = none
+    int pre1_active;     // 0 = A (the preset's), 1 = B
     uint8_t bank_presets[6];   // own bank: preset per switch 3-8, 0 = empty
     uint8_t bank_colors[6];    // colour index (UI_BANK_COLOR_COUNT)
     uint8_t bank_icons[6];     // symbol: 0 = none, n = PRESET_ICONS[n - 1]
@@ -77,6 +84,11 @@ void ui_set_library(const nano_library_t *library);
 
 // USB playback volume (dB, -40 = off) read from the Nano's settings.
 void ui_set_usb_gain(float db);
+
+// FX presets of the model in the FX editor (a row above its parameters): names of the places ("" = empty), the one
+// loaded or saved last (-1 = none, 0 = ORIGINAL, 1-UI_FX_PRESETS) and whether they can be used (the effect is on).
+#define UI_FX_PRESETS 4
+void ui_fx_presets_show(const char names[][16], int active, bool usable);
 
 // Cab settings dialog: values = output, high pass, low pass (0-1, NANO_CAB_SETTINGS) or NULL while unknown;
 // enabled = the sliders can be used; info = line under the title (cab name or why the values are missing).

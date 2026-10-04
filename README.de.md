@@ -23,7 +23,9 @@ IR-Library, ein Stimmgerät und eigene Preset-Bänke. Er ist das Hardware-Gegens
   Schalter, vorheriges/nächstes Preset per Wischen, Umbenennen und Speichern auf dem Nano, folgt
   Preset-Wechseln am Pedal
 - **FX-Modus**: Fußschalter 3–7 schalten Pre FX 1–2 und Post FX 1–3, Kacheln in den Farben der Effektkategorien
-- **FX-Editor** (lange auf eine FX-Kachel drücken): Modell wählen und alle Parameter live einstellen
+- **Zweiter Effekt auf Pre FX 1**: Fußschalter 3 kurz = an/aus, gehalten = Wechsel zu einem zweiten Effekt (z. B. Auto-Wah)
+- **FX-Editor** (lange auf eine FX-Kachel drücken): Modell wählen und alle Parameter live einstellen, mit vier
+  benannten **FX-Presets** pro Effektmodell
 - **Capture und Cab/IR**: einen der 25 Capture-Slots oder 5 Cab-Slots wählen oder jedes Capture bzw. IR aus der
   Library des Nano (Werk und eigene) in den aktiven Slot laden
 - **Capture-Lautstärke** (VOL) und **Cab-Einstellungen** (lange auf das Cab-Feld drücken: Output, High Pass, Low Pass)
@@ -53,8 +55,8 @@ IR-Library, ein Stimmgerät und eigene Preset-Bänke. Er ist das Hardware-Gegens
 | Stimmgerät | USB-Audio-Lautstärke |
 | ![Bluetooth-MIDI](docs/images/10-bluetooth-midi.png) | ![Capture-Lautstärke](docs/images/11-capture-volume.png) |
 | Bluetooth-MIDI | Capture-Lautstärke |
-| ![Cab-Einstellungen](docs/images/12-cab-settings.png) | |
-| Cab-Einstellungen (lange auf das Cab-Feld drücken) | |
+| ![Cab-Einstellungen](docs/images/12-cab-settings.png) | ![Zweiter Effekt auf Pre FX 1](docs/images/13-second-effect.png) |
+| Cab-Einstellungen (lange auf das Cab-Feld drücken) | Zweiter Effekt auf Pre FX 1 (2ND im FX-Editor) |
 
 Die Bilder zeigen Beispiel-Presets. Sie werden aus dem UI-Code der Firmware gezeichnet
 (`tools/screenshots/make_screenshots.sh`).
@@ -168,6 +170,17 @@ Beides gehört zum Preset: Änderungen sind sofort zu hören, **SAVE** behält s
 eingeschalteten Effekten – einen Effekt also einschalten, um seine Werte zu sehen und zu ändern. **SAVE** im
 Preset-Feld speichert das Preset auf dem Nano.
 
+**FX-Presets** (die Reihe über den Reglern): vier benannte Einstellungen pro Effektmodell, gespeichert auf dem
+Controller und in jedem Preset und Slot mit diesem Modell nutzbar.
+
+- **Halten** auf einem Platz: Die Tastatur öffnet sich, und die aktuellen Einstellungen werden unter dem
+  eingegebenen Namen gespeichert. Ein leerer Name löscht den Platz.
+- **Antippen** lädt die Einstellungen sofort.
+- **ORIGINAL** holt die Einstellungen zurück, die der Effekt beim Öffnen des Editors hatte. Direkt nach der Wahl
+  eines neuen Modells sind das seine Grundeinstellungen.
+
+Geladene Einstellungen zählen als Änderung am Nano-Preset: **SAVE** behält sie dort.
+
 ### Reverb-Schalter (Fußschalter 8)
 
 - **MIX POS 1 / 2**: Fußschalter 8 setzt den Mix des Reverbs auf Pos 1 oder Pos 2. Das sind die Fersen- und
@@ -180,6 +193,20 @@ Preset-Feld speichert das Preset auf dem Nano.
   solange es läuft; Kachel 7 zeigt das Reverb, das gerade im Slot ist. **EDIT B** lädt B und öffnet den FX-Editor
   zum Einstellen. Reverb B speichert der Controller, pro Preset. Wird das Preset gespeichert, während B läuft,
   wird B zum Reverb des Presets.
+
+### Zweiter Effekt auf Pre FX 1 (Fußschalter 3)
+
+Lange auf die Pre-FX-1-Kachel drücken, dann **2ND** im FX-Editor: einen zweiten Effekt (B) für dieses Preset wählen,
+zum Beispiel das Envelope Filter als Auto-Wah neben einem Drive. Dann Fußschalter 3 im FX-Modus:
+
+- **kurz drücken**: den Effekt im Slot an / aus (schaltet beim Loslassen)
+- **halten** (0,6 s): A ↔ B wechseln – der andere Effekt kommt, eingeschaltet
+
+Die Kachel zeigt *Pre FX 1 A* oder *Pre FX 1 B*. Der Nano hat pro Slot ein Modell, deshalb tauscht der Controller
+das Modell und schickt die gespeicherten Werte des anderen Effekts: das dauert etwa eine halbe Sekunde mit einem
+kurzen Aussetzer. Ohne Aussetzer geht es, wenn der zweite Effekt in einem freien Slot liegt und nur an- und
+ausgeschaltet wird. B wird im FX-Editor eingestellt, während es läuft, und auf dem Controller pro Preset gespeichert
+(MIDI: CC 58).
 
 ### Stimmgerät
 
@@ -207,6 +234,7 @@ Nano (zum Beispiel aus dem MC6-Export des Nano Cortex Editors) funktionieren als
 | CC 37–41 | FX-Slot 1–5 (Pre FX 1, Pre FX 2, Post FX 1–3): Wert 64–127 an, 0–63 aus |
 | CC 1 | Expression: Reverb-Mix von Pos 1 (0) bis Pos 2 (127) |
 | CC 50–57, Wert 64–127 | Fußschalter 1–8 drücken (Modus, Stimmgerät, Presets oder FX, Reverb-Schalter) |
+| CC 58, Wert 64–127 | Fußschalter 3 halten: Pre FX 1 wechselt zum zweiten Effekt und zurück |
 
 Ein MIDI-Kabeleingang ist auf diesem Board ohne zusätzliche Hardware nicht möglich; dafür einen
 Bluetooth-MIDI-Adapter verwenden.

@@ -113,6 +113,8 @@ static void footswitch_task(void *arg)
     int same = 0;
     int learn = 0;                     // switch waiting for a press, 0 = none
     TickType_t learn_start = 0;
+    TickType_t down_since[FOOTSWITCH_COUNT + 1] = { 0 };
+    bool down[FOOTSWITCH_COUNT + 1] = { false };   // pressed and not held long enough yet
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(POLL_MS));
         if (s_reset) {
@@ -130,6 +132,13 @@ static void footswitch_task(void *arg)
             learn = 0;
             if (s_on_learn) s_on_learn(0, 0);
         }
+        for (int number = 1; number <= FOOTSWITCH_COUNT; number++) {
+            if (down[number] && xTaskGetTickCount() - down_since[number] >= pdMS_TO_TICKS(FOOTSWITCH_HOLD_MS)) {
+                down[number] = false;
+                ESP_LOGI(TAG, "Footswitch %d held", number);
+                if (s_on_press) s_on_press(number, FOOTSWITCH_HOLD);
+            }
+        }
         uint16_t pins;
         if (read_pins(&pins) != ESP_OK) continue;
         same = pins == last ? same + 1 : 0;
@@ -137,8 +146,16 @@ static void footswitch_task(void *arg)
         if (same != STABLE_POLLS || pins == stable) continue;
 
         uint16_t pressed = stable & ~pins;   // high -> low
+        uint16_t released = ~stable & pins;  // low -> high
         stable = pins;
         for (int pin = 0; pin < PINS; pin++) {
+            if (released & (1u << pin)) {
+                int number = switch_for_pin(pin);
+                if (number) {
+                    down[number] = false;
+                    if (s_on_press) s_on_press(number, FOOTSWITCH_RELEASE);
+                }
+            }
             if (!(pressed & (1u << pin))) continue;
             if (learn) {
                 learn_pin(learn, pin);
@@ -151,7 +168,9 @@ static void footswitch_task(void *arg)
                 continue;
             }
             ESP_LOGI(TAG, "Footswitch %d (SX1509 pin %d)", number, pin);
-            if (s_on_press) s_on_press(number);
+            down[number] = true;
+            down_since[number] = xTaskGetTickCount();
+            if (s_on_press) s_on_press(number, FOOTSWITCH_PRESS);
         }
     }
 }

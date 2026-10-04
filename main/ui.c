@@ -36,6 +36,8 @@ static ui_command_cb s_on_command;
 static ui_param_cb s_on_param;
 static ui_text_cb s_on_text;
 static lv_obj_t *s_save_button, *s_save_label, *s_ask, *s_ask_text, *s_rename, *s_rename_title, *s_rename_area;
+static lv_obj_t *s_rename_ok;
+static char s_rename_kind = 'N';   // 'N' preset name, '1'-'4' FX preset
 static char s_ask_command;
 static int s_current_preset;
 static bool s_fx_mode;
@@ -93,6 +95,12 @@ static lv_obj_t *s_tuner, *s_tuner_note, *s_tuner_needle, *s_tuner_cents;
 // FX editor
 static lv_obj_t *s_editor, *s_editor_icon, *s_editor_slot, *s_editor_model, *s_editor_onoff, *s_editor_onoff_label;
 static lv_obj_t *s_editor_body, *s_editor_info, *s_model_list, *s_editor_pedal;
+static lv_obj_t *s_editor_model_button, *s_editor_second, *s_editor_second_label;
+static bool s_model_list_second;   // the model list chooses the second effect (Pre FX 1)
+static lv_obj_t *s_fxp_chip[UI_FX_PRESETS + 1];   // FX presets above the parameters: 0 = ORIGINAL
+static char s_fxp_names[UI_FX_PRESETS][16];
+static int s_fxp_active = -1;
+static bool s_fxp_usable;
 static lv_obj_t *s_param_control[NANO_MAX_PARAMS], *s_param_value[NANO_MAX_PARAMS];
 static int s_editor_slot_index = -1;
 static uint32_t s_editor_model_type;
@@ -865,11 +873,11 @@ static void submit_rename(void)
 {
     const char *text = lv_textarea_get_text(s_rename_area);
     while (*text == ' ') text++;
-    if (strlen(text) < 4) {
+    if (s_rename_kind == 'N' && strlen(text) < 4) {
         ui_show_message("Preset names need at least 4 characters.");
         return;
     }
-    if (s_on_text) s_on_text('N', text);
+    if (s_on_text) s_on_text(s_rename_kind, text);
     close_rename();
 }
 
@@ -886,13 +894,23 @@ static void on_rename_button(lv_event_t *e)
     else close_rename();
 }
 
-static void open_rename(lv_event_t *e)
+static void show_rename(char kind, const char *title, const char *ok, const char *text, int max_length)
 {
-    const char *name = s_preset_names[s_current_preset - 1];
-    lv_label_set_text_fmt(s_rename_title, "RENAME PRESET %d", s_current_preset);
-    lv_textarea_set_text(s_rename_area, name);
+    s_rename_kind = kind;
+    lv_label_set_text(s_rename_title, title);
+    lv_label_set_text(lv_obj_get_child(s_rename_ok, 0), ok);
+    lv_textarea_set_max_length(s_rename_area, max_length);
+    lv_textarea_set_placeholder_text(s_rename_area, kind == 'N' ? "" : "Name (empty name = delete)");
+    lv_textarea_set_text(s_rename_area, text);
     lv_obj_set_hidden(s_rename, false);
     lv_obj_move_foreground(s_rename);
+}
+
+static void open_rename(lv_event_t *e)
+{
+    char title[32];
+    snprintf(title, sizeof(title), "RENAME PRESET %d", s_current_preset);
+    show_rename('N', title, "RENAME", s_preset_names[s_current_preset - 1], 32);
 }
 
 static void build_rename(lv_obj_t *screen)
@@ -910,7 +928,7 @@ static void build_rename(lv_obj_t *screen)
     lv_obj_set_style_text_letter_space(s_rename_title, 2, 0);
     lv_obj_set_pos(s_rename_title, 20, 22);
     small_button(s_rename, 470, 10, 150, 48, "CANCEL", on_rename_button, 0);
-    small_button(s_rename, 630, 10, 150, 48, "RENAME", on_rename_button, 1);
+    s_rename_ok = small_button(s_rename, 630, 10, 150, 48, "RENAME", on_rename_button, 1);
 
     s_rename_area = lv_textarea_create(s_rename);
     lv_obj_set_pos(s_rename_area, 20, 72);
@@ -1833,7 +1851,10 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
         const nano_fx_model_t *model = nano_fx_model(st->fx_type[slot]);
         bool empty = !st->fx_known || !st->fx_type[slot];
         bool on = !empty && st->fx_on[slot];
-        set_tile(2 + slot, NANO_FX_SLOT_NAMES[slot], empty ? "Empty" : nano_fx_name(st->fx_type[slot]),
+        char slot_caption[24];
+        if (slot == 0 && view->pre1_b_type) snprintf(slot_caption, sizeof(slot_caption), "%s %c", NANO_FX_SLOT_NAMES[0], view->pre1_active ? 'B' : 'A');
+        else snprintf(slot_caption, sizeof(slot_caption), "%s", NANO_FX_SLOT_NAMES[slot]);
+        set_tile(2 + slot, slot_caption, empty ? "Empty" : nano_fx_name(st->fx_type[slot]),
                  model ? model->color : 0x6A6A6A, on, empty, model ? NANO_ICONS[model->icon] : NULL, NULL);
         if (!empty) set_tile_pedal(2 + slot, st->fx_type[slot]);
     }
@@ -1990,9 +2011,35 @@ static void on_editor_onoff(lv_event_t *e)
     if (s_editor_slot_index >= 0) send('a' + s_editor_slot_index, 0);
 }
 
+static void build_model_list(int slot);
+
 static void on_model_button(lv_event_t *e)
 {
+    if (s_model_list_second) {
+        s_model_list_second = false;
+        build_model_list(s_editor_slot_index);
+        lv_obj_set_hidden(s_model_list, false);
+        return;
+    }
     lv_obj_set_hidden(s_model_list, !lv_obj_is_hidden(s_model_list));
+}
+
+// 2ND (Pre FX 1): the model list chooses the second effect, which footswitch 3 swaps in when held.
+static void on_second_button(lv_event_t *e)
+{
+    bool open = !lv_obj_is_hidden(s_model_list) && s_model_list_second;
+    s_model_list_second = !open;
+    build_model_list(s_editor_slot_index);
+    lv_obj_set_hidden(s_model_list, open);
+}
+
+static void on_second_choice(lv_event_t *e)
+{
+    int choice = (int)(intptr_t)lv_event_get_user_data(e);   // model, 0 = none, -1 = swap now
+    lv_obj_set_hidden(s_model_list, true);
+    s_model_list_second = false;
+    if (choice < 0) send('w', UI_SWITCH_HOLD | 3);
+    else if ((uint32_t)choice != s_view.pre1_b_type) send('A', 1 << 24 | choice);
 }
 
 static void on_model_choice(lv_event_t *e)
@@ -2047,9 +2094,16 @@ static void build_editor(lv_obj_t *screen)
     s_editor_slot = label(s_editor, &lv_font_montserrat_20, 0x9A9A9A);
     lv_obj_set_pos(s_editor_slot, 188, 20);
 
-    lv_obj_t *model = button(s_editor, 300, 8, 300, 48, on_model_button);
-    s_editor_model = label(model, &lv_font_montserrat_20, 0xF2F2F2);
+    s_editor_model_button = button(s_editor, 300, 8, 300, 48, on_model_button);
+    s_editor_model = label(s_editor_model_button, &lv_font_montserrat_20, 0xF2F2F2);
+    lv_label_set_long_mode(s_editor_model, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(s_editor_model, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_center(s_editor_model);
+    s_editor_second = button(s_editor, 530, 8, 70, 48, on_second_button);   // Pre FX 1 only
+    s_editor_second_label = label(s_editor_second, &lv_font_montserrat_20, TEXT);
+    lv_label_set_text(s_editor_second_label, "2ND");
+    lv_obj_center(s_editor_second_label);
+    lv_obj_set_hidden(s_editor_second, true);
 
     s_editor_onoff = button(s_editor, 612, 8, 180, 48, on_editor_onoff);
     s_editor_onoff_label = label(s_editor_onoff, &lv_font_montserrat_20, 0xF2F2F2);
@@ -2087,6 +2141,64 @@ static void build_editor(lv_obj_t *screen)
     lv_obj_set_hidden(s_editor, true);
 }
 
+// ---- FX presets (row above the parameters) ----
+
+static void style_fxp_chips(void)
+{
+    uint32_t color = s_editor_model_def ? s_editor_model_def->color : 0x5A5A5A;
+    for (int i = 0; i <= UI_FX_PRESETS; i++) {
+        lv_obj_t *chip = s_fxp_chip[i];
+        if (!chip) continue;
+        bool filled = i == 0 || s_fxp_names[i - 1][0];
+        bool active = i == s_fxp_active && filled;
+        lv_obj_t *l = lv_obj_get_child(chip, 0);
+        const char *text = i == 0 ? "ORIGINAL" : filled ? s_fxp_names[i - 1] : "Hold to save";
+        lv_label_set_text(l, text);
+        // One line: the large font if the name fits, otherwise the small one (and dots if it is still too long).
+        const lv_font_t *font = &lv_font_montserrat_14;
+        lv_point_t size;
+        lv_text_get_size(&size, text, &lv_font_montserrat_20, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        if (filled && size.x <= 130) font = &lv_font_montserrat_20;
+        lv_obj_set_style_text_font(l, font, 0);
+        lv_obj_set_height(l, lv_font_get_line_height(font));
+        lv_obj_set_style_text_color(l, lv_color_hex(active ? ink_for(color) : filled ? TEXT : MUTED), 0);
+        lv_obj_set_style_bg_color(chip, lv_color_hex(active ? color : 0x191B1D), 0);
+        lv_obj_set_style_bg_grad_dir(chip, active ? LV_GRAD_DIR_NONE : LV_GRAD_DIR_VER, 0);
+        lv_obj_set_hidden(chip, !s_fxp_usable);   // the info line ("effect is off", "reading values") is there then
+    }
+}
+
+void ui_fx_presets_show(const char names[][16], int active, bool usable)
+{
+    lvgl_port_lock(0);
+    memcpy(s_fxp_names, names, sizeof(s_fxp_names));
+    s_fxp_active = active;
+    s_fxp_usable = usable;
+    style_fxp_chips();
+    lvgl_port_unlock();
+}
+
+static void on_fxp_chip(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    if (i && !s_fxp_names[i - 1][0]) {
+        ui_show_message("Empty - hold to save the current settings here.");
+        return;
+    }
+    send('z', i);
+}
+
+// Hold: save the current values here under a name (the keyboard opens).
+static void on_fxp_chip_long(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    char title[48], name[16];
+    snprintf(title, sizeof(title), "FX PRESET %d  -  %.24s", i, s_editor_model_def ? s_editor_model_def->name : "");
+    if (s_fxp_names[i - 1][0]) strlcpy(name, s_fxp_names[i - 1], sizeof(name));
+    else snprintf(name, sizeof(name), "Preset %d", i);
+    show_rename((char)('0' + i), title, "SAVE", name, 15);
+}
+
 // One row per parameter, in the model's display order.
 static void build_param_rows(void)
 {
@@ -2095,15 +2207,30 @@ static void build_param_rows(void)
     memset(s_param_value, 0, sizeof(s_param_value));
     s_editor_info = label(s_editor_body, &lv_font_montserrat_20, 0xFF7000);
     lv_obj_set_pos(s_editor_info, 16, 10);
+    memset(s_fxp_chip, 0, sizeof(s_fxp_chip));
 
     const nano_fx_model_t *m = s_editor_model_def;
     if (!m) return;
     uint32_t color = m->color;
+    // FX presets: ORIGINAL and the stored places of this model (tap = load, hold = save under a name).
+    for (int i = 0; i <= UI_FX_PRESETS; i++) {
+        lv_obj_t *chip = small_button(s_editor_body, 16 + i * 154, 8, 146, 46, "", on_fxp_chip, i);   // where the info line is
+        lv_obj_remove_event_cb(chip, on_fxp_chip);
+        lv_obj_add_event_cb(chip, on_fxp_chip, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)i);
+        if (i) lv_obj_add_event_cb(chip, on_fxp_chip_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)i);
+        lv_obj_t *l = lv_obj_get_child(chip, 0);
+        lv_obj_set_width(l, 132);
+        lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_center(l);
+        s_fxp_chip[i] = chip;
+    }
+    style_fxp_chips();
     for (int row = 0; row < m->param_count; row++) {
         int idx = m->order ? m->order[row] : row;
         if (idx >= m->param_count || idx >= NANO_MAX_PARAMS) continue;
         const nano_param_t *p = &m->params[idx];
-        int y = 44 + row * EDITOR_ROW_H;
+        int y = 64 + row * EDITOR_ROW_H;
 
         lv_obj_t *name = label(s_editor_body, &lv_font_montserrat_20, 0xD8D8D8);
         lv_label_set_text(name, p->name);
@@ -2140,19 +2267,42 @@ static void build_param_rows(void)
 }
 
 // The models that the Nano allows in this slot.
+static lv_obj_t *model_list_entry(const char *text, uint32_t color, bool selected, lv_event_cb_t cb, intptr_t data)
+{
+    lv_obj_t *btn = lv_button_create(s_model_list);
+    lv_obj_set_size(btn, LV_PCT(100), 52);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(selected ? 0x3A3A3A : 0x262626), 0);
+    lv_obj_set_style_shadow_width(btn, 0, 0);
+    lv_obj_set_style_radius(btn, 8, 0);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, (void *)data);
+    if (text) {
+        lv_obj_t *l = label(btn, &lv_font_montserrat_20, color);
+        lv_label_set_text(l, text);
+        lv_obj_align(l, LV_ALIGN_LEFT_MID, 44, 0);
+    }
+    return btn;
+}
+
+// The models allowed in the slot; for the second effect of Pre FX 1 also "swap now" and "none".
 static void build_model_list(int slot)
 {
     lv_obj_clean(s_model_list);
+    bool second = s_model_list_second && slot == 0;
+    uint32_t current = second ? s_view.pre1_b_type : s_editor_model_type;
+    if (second) {
+        lv_obj_t *title = label(s_model_list, &lv_font_montserrat_14, MUTED);
+        lv_obj_set_width(title, LV_PCT(100));
+        lv_label_set_long_mode(title, LV_LABEL_LONG_WRAP);
+        lv_label_set_text(title, "2ND EFFECT - hold switch 3 for A / B");
+        if (s_view.pre1_b_type) model_list_entry(s_view.pre1_active ? LV_SYMBOL_SHUFFLE "  Back to A now" : LV_SYMBOL_SHUFFLE "  Swap to B now",
+                                                 0xFF7000, false, on_second_choice, -1);
+        model_list_entry("None", TEXT, current == 0, on_second_choice, 0);
+    }
     for (int i = 0; i < NANO_SLOT_MODEL_COUNT[slot]; i++) {
         uint32_t type = NANO_SLOT_MODELS[slot][i];
         const nano_fx_model_t *m = nano_fx_model(type);
         if (!m) continue;
-        lv_obj_t *btn = lv_button_create(s_model_list);
-        lv_obj_set_size(btn, LV_PCT(100), 52);
-        lv_obj_set_style_bg_color(btn, lv_color_hex(type == s_editor_model_type ? 0x3A3A3A : 0x262626), 0);
-        lv_obj_set_style_shadow_width(btn, 0, 0);
-        lv_obj_set_style_radius(btn, 8, 0);
-        lv_obj_add_event_cb(btn, on_model_choice, LV_EVENT_CLICKED, (void *)(uintptr_t)type);
+        lv_obj_t *btn = model_list_entry(NULL, 0, type == current, second ? on_second_choice : on_model_choice, (intptr_t)type);
         if (NANO_ICONS[m->icon]) {
             lv_obj_t *icon = lv_image_create(btn);
             lv_image_set_src(icon, NANO_ICONS[m->icon]);
@@ -2175,6 +2325,7 @@ void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, i
     s_editor_model_def = nano_fx_model(model);
     const nano_fx_model_t *m = s_editor_model_def;
     if (rebuild) {
+        s_model_list_second = false;
         build_param_rows();
         build_model_list(slot);
     }
@@ -2195,6 +2346,19 @@ void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, i
     lv_label_set_text(s_editor_slot, NANO_FX_SLOT_NAMES[slot]);
     snprintf(text, sizeof(text), "%s  " LV_SYMBOL_DOWN, m ? m->name : "Choose a model");
     lv_label_set_text(s_editor_model, text);
+    // Pre FX 1: the 2ND button (second effect) takes the right end of the model button.
+    bool second = slot == 0;
+    lv_obj_set_width(s_editor_model_button, second ? 224 : 300);
+    lv_obj_set_width(s_editor_model, second ? 204 : 280);
+    lv_obj_set_hidden(s_editor_second, !second);
+    if (second) {
+        bool b_active = s_view.pre1_b_type && s_view.pre1_active;
+        lv_label_set_text(s_editor_second_label, s_view.pre1_b_type ? (b_active ? "B" : "A/B") : "2ND");
+        lv_obj_set_style_bg_color(s_editor_second, lv_color_hex(b_active ? 0xFF7000 : 0x191B1D), 0);
+        lv_obj_set_style_bg_grad_dir(s_editor_second, b_active ? LV_GRAD_DIR_NONE : LV_GRAD_DIR_VER, 0);
+        lv_obj_set_style_text_color(s_editor_second_label, lv_color_hex(b_active ? 0x000000 : TEXT), 0);
+    }
+
     lv_label_set_text(s_editor_onoff_label, on ? "ON" : "OFF");
     lv_obj_set_style_bg_color(s_editor_onoff, lv_color_hex(on ? color : 0x1C1C1C), 0);
     lv_obj_set_style_text_color(s_editor_onoff_label, lv_color_hex(on ? ink_for(color) : 0xF2F2F2), 0);
