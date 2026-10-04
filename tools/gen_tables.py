@@ -190,7 +190,7 @@ def gen_icons():
     """Public icons from the own drawings; private ones too if the private icon set is there."""
     from svg_render import render
     from fx_icon_drawings import ICONS
-    public = {key: render(ICONS[key], ICON_SIZE, 1.6).tobytes() for key in ICON_KEYS if key in ICONS}
+    public = {key: render(ICONS[key], ICON_SIZE, 1.3).tobytes() for key in ICON_KEYS if key in ICONS}
     count = write_icons(ROOT / 'main' / 'fx_icons.c', public,
                         '// Effect icons (own drawings, tools/fx_icon_drawings.py) as LVGL A8 masks.')
     if not ICONS_CSS.exists():

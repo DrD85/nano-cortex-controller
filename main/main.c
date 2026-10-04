@@ -219,7 +219,9 @@ typedef struct {
     bool cache_only;                  // reading the values for later, no swap
     bool restore_off;                 // A was switched on only to read it: off again before the swap
     bool open_editor;                 // open the FX editor once B is loaded
+    int64_t swapped_us;               // last model change by the controller (state replies may still be older)
 } ab_t;
+#define AB_SETTLE_US (1500 * 1000)
 static ab_t s_ab[AB_COUNT];
 static const char *const AB_NAMES[AB_COUNT] = { "Reverb", "Pre FX 1" };
 static const char *const AB_KEYS[AB_COUNT] = { "rvb%02d", "pf1%02d" };
@@ -1180,6 +1182,7 @@ static void ab_load_target(ab_t *ab)
     send(label, NANO_MSG_FX_TYPE, buf, nano_fx_model_select(ab->slot, type, buf));
     s_state.fx_type[ab->slot] = type;
     ab->active = ab->target;
+    ab->swapped_us = esp_timer_get_time();
     ab->phase = AB_LOADING;
     ab->sent = 0;
     ab_step_later(400);   // the Nano needs a moment for the model change
@@ -1736,6 +1739,16 @@ static void handle_command(char c, int arg)
     }
 }
 
+// The Nano reports a change made elsewhere (its own knobs, the editor connected to it directly, USB MIDI from an
+// MC6): read the preset again shortly after (once for a burst), and the values of the open FX editor.
+static void external_change(uint32_t type)
+{
+    esp_timer_stop(s_app_read_timer);
+    esp_timer_start_once(s_app_read_timer, 400 * 1000);
+    if (type == NANO_MSG_FX_VALUE && s_edit.slot >= 0 && s_edit.request_slot < 0) editor_read_later(500);
+    if (type == NANO_MSG_CAB_SETTING) cab_settings_command(2);
+}
+
 static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
 {
     switch (type) {
@@ -1759,13 +1772,27 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             s_expect_preset = 0;
         }
         bool names = nano_state_apply(&s_state, payload, len);
-        // After a reverb swap the slot holds the reverb that was loaded (a reply sent before the model change
-        // still names the previous one).
+        // Right after an A/B swap a reply sent before the model change still names the previous model: the slot
+        // holds the loaded one. Later a different model was chosen elsewhere (editor, app): it becomes A or B.
         for (int i = 0; i < AB_COUNT; i++) {
-            const ab_t *ab = &s_ab[i];
-            if (ab->preset != s_state.current_preset || ab->slot < 0) continue;
-            if (ab->active == 1 && ab->b.type) s_state.fx_type[ab->slot] = ab->b.type;
-            else if (ab->active == 0 && ab->a_type) s_state.fx_type[ab->slot] = ab->a_type;
+            ab_t *ab = &s_ab[i];
+            if (ab->preset != s_state.current_preset || ab->slot < 0 || ab->phase != AB_IDLE) continue;
+            uint32_t expected = ab->active ? ab->b.type : ab->a_type, now = s_state.fx_type[ab->slot];
+            if (!expected || now == expected) continue;
+            if (esp_timer_get_time() - ab->swapped_us < AB_SETTLE_US) {
+                s_state.fx_type[ab->slot] = expected;
+            } else if (now) {
+                ESP_LOGI(TAG, "%s %c changed elsewhere: %s", AB_NAMES[i], ab->active ? 'B' : 'A', nano_fx_name(now));
+                if (ab->active) {
+                    ab->b.type = now;
+                    ab->b.count = 0;
+                    ab_store(ab);
+                } else {
+                    ab->a_type = now;
+                    ab->a_count = 0;
+                    ab_store_a(ab);
+                }
+            }
         }
         if (s_waiting_full_state) {
             // The full state carries all names; the current preset is read separately, as the editor does.
@@ -1964,6 +1991,24 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         s_state.dirty = nano_field_varint(payload, len, 3) != 0;
         ESP_LOGI(TAG, "Preset %s", s_state.dirty ? "edited (unsaved changes)" : "without unsaved changes");
         show();
+        if (s_state.dirty) external_change(type);
+        break;
+    case NANO_MSG_VALUE: {   // a knob on the Nano, or the editor connected to the Nano: shown at once
+        int id = (int)nano_field_varint(payload, len, 3), value = (int)nano_field_varint(payload, len, 4);
+        if (id >= 0 && id < NANO_AMP_KNOBS) s_state.amp[id] = value;
+        else if (id == 10) s_state.capture_volume = value;
+        ESP_LOGI(TAG, "Value %d = %d (changed on the Nano or by another app)", id, value);
+        show();
+        external_change(type);
+        break;
+    }
+    case NANO_MSG_SELECTOR:
+    case NANO_MSG_BYPASS:
+    case NANO_MSG_CAB_SETTING:
+    case NANO_MSG_FX_VALUE:
+    case NANO_MSG_FX_TYPE:
+        ESP_LOGI(TAG, "Message type %lu (%u bytes) - changed elsewhere, reading again", (unsigned long)type, (unsigned)len);
+        external_change(type);
         break;
     default:
         ESP_LOGI(TAG, "Message type %lu (%u bytes)", (unsigned long)type, (unsigned)len);

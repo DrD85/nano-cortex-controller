@@ -8,6 +8,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "host/ble_hs.h"
+#include "os/os_mbuf.h"
 #include "nano_link.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
@@ -16,6 +17,9 @@ static const char *TAG = "app_link";
 
 #define NAME "Nano Cortex Controller"
 #define MAX_PACKET_DATA 510   // the Nano's packets carry at most 510 bytes after the 2-byte header
+// Bluetooth buffers (msys blocks) kept free while sending to the app. Without a reserve a long reply (the preset
+// list, 18 KB) took all of them, and the app's next request was dropped for lack of memory ("ble_att_svr_pkt rc=6").
+#define TX_RESERVE_BLOCKS 20
 
 typedef struct {
     uint8_t *data;
@@ -115,7 +119,18 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         s_subscribed = false;
         s_mtu = 23;
         ESP_LOGI(TAG, "App connected");
-        if (!s_enabled) ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+        if (!s_enabled) {
+            ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+            return 0;
+        }
+        {
+            // A shorter connection interval (Apple's limits: min >= 15 ms, max >= min + 15 ms, timeout 2-6 s): long
+            // replies such as the preset list reach the app sooner. The app may keep its own choice.
+            struct ble_gap_upd_params params = { .itvl_min = 0x000C, .itvl_max = 0x0018, .latency = 0,
+                                                 .supervision_timeout = 0x01F4, .min_ce_len = 0, .max_ce_len = 0 };
+            int rc = ble_gap_update_params(s_conn, &params);
+            if (rc != 0) ESP_LOGW(TAG, "Connection interval request not sent (%d)", rc);
+        }
         return 0;
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "App disconnected (reason 0x%X)", event->disconnect.reason);
@@ -135,6 +150,13 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_MTU:
         if (event->mtu.conn_handle == s_conn) s_mtu = event->mtu.value;
         return 0;
+    case BLE_GAP_EVENT_CONN_UPDATE: {
+        struct ble_gap_conn_desc desc;
+        if (event->conn_update.status == 0 && ble_gap_conn_find(event->conn_update.conn_handle, &desc) == 0) {
+            ESP_LOGI(TAG, "App connection interval %.2f ms", desc.conn_itvl * 1.25f);
+        }
+        return 0;
+    }
     case BLE_GAP_EVENT_ADV_COMPLETE:
         advertise();
         return 0;
@@ -164,8 +186,12 @@ static void tx_task(void *arg)
             packet[0] = (uint8_t)chunk;
             packet[1] = (uint8_t)((off == 0 ? 0x40 : 0) | (off + chunk >= m.len ? 0x80 : 0) | ((chunk >> 8) & 0x3F));
             memcpy(packet + 2, m.data + off, chunk);
+            // Wait until the host has sent enough of the earlier packets (at most a second).
+            for (int wait = 0; os_msys_num_free() < TX_RESERVE_BLOCKS && wait < 200 && s_subscribed; wait++) {
+                vTaskDelay(pdMS_TO_TICKS(5));
+            }
             int tries = 0, rc;
-            do {   // the host may be out of buffers for a moment
+            do {   // the host may still be out of buffers for a moment
                 struct os_mbuf *om = ble_hs_mbuf_from_flat(packet, (uint16_t)(chunk + 2));
                 rc = om ? ble_gatts_notify_custom(s_conn, s_c305_handle, om) : BLE_HS_ENOMEM;
                 if (rc == BLE_HS_ENOMEM) vTaskDelay(pdMS_TO_TICKS(5));
