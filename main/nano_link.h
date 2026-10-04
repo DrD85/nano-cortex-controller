@@ -51,3 +51,6 @@ void nano_link_scan_request(bool on, bool fast);
 // nano_link_other_connect_done() on its BLE_GAP_EVENT_CONNECT. Returns false if a connection is being set up.
 bool nano_link_connect_other(const ble_addr_t *addr, ble_gap_event_fn *cb, void *arg);
 void nano_link_other_connect_done(void);
+
+// Logs whether Bluetooth is ready, scanning and connected (for the serial monitor).
+void nano_link_log_status(void);

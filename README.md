@@ -29,7 +29,8 @@ your own preset banks. It is the hardware companion of the
   **FX presets** per effect model
 - **Capture and Cab/IR**: pick one of the 25 capture slots or 5 cab slots, or load any capture or IR from the
   Nano's library (factory and user) into the active slot
-- **Capture volume** (VOL) and **cab settings** (long press on the cab card: output, high pass, low pass)
+- **Capture volume** (VOL), **capture tone** (long press on the capture card: gain, bass, mid, treble) and
+  **cab settings** (long press on the cab card: output, high pass, low pass)
 - **Reverb switch** (footswitch 8): toggles the reverb mix between Pos 1 and Pos 2 of the preset's expression
   setting – or switches between the preset's reverb and a **second reverb** with its own settings
 - **Tuner** with large note display and needle (footswitch 2)
@@ -58,6 +59,8 @@ your own preset banks. It is the hardware companion of the
 | Bluetooth MIDI | Capture volume |
 | ![Cab settings](docs/images/12-cab-settings.png) | ![Second effect on Pre FX 1](docs/images/13-second-effect.png) |
 | Cab settings (long press on the cab card) | Second effect on Pre FX 1 (2ND in its FX editor) |
+| ![Capture tone](docs/images/14-capture-amp.png) | ![Start screen](docs/images/15-start-screen.png) |
+| Capture tone (long press on the capture card) | Start screen while connecting |
 
 The screenshots show example presets. They are rendered from the firmware's own UI code
 (`tools/screenshots/make_screenshots.sh`).
@@ -108,7 +111,7 @@ The checksums of both files are in `nano-controller-<version>-sha256.txt`.
 │              Revv NF53 Clean                              │  long press on the name: rename
 ├────────────────────────────┬─────────────────────────────┤
 │ CAPTURE  Revv D20 clean    │ CAB / IR  810 Amped VT      │  tap: choose slot or library item
-│                            │                             │  long press: capture volume / cab settings
+│                            │                             │  long press: gain, bass, mid, treble / cab settings
 ├──────────┬──────────┬──────┴───┬──────────────────────────┤
 │ 1 MODE   │ 2 TUNER  │ 3        │ 4                        │  eight tiles = eight footswitches
 ├──────────┼──────────┼──────────┼──────────────────────────┤
@@ -159,10 +162,10 @@ Tap the CAPTURE or CAB / IR card. **SLOTS** lists the 25 capture slots (5 banks 
 **LIBRARY** shows all captures or IRs stored on the Nano with category filters (AMP = head or combo, AMP+CAB, CAB, PEDAL, OTHER).
 A library item is loaded into the active slot after a confirmation.
 
-**Capture volume**: **VOL** in the preset card or a long press on the CAPTURE card, −24 dB to +12 dB
-(**0 dB** resets). **Cab settings**: a long press on the CAB / IR card – **OUTPUT** (−96 dB to +12 dB),
+**Capture volume**: **VOL** in the preset card, −24 dB to +12 dB (**0 dB** resets). **Capture tone**: a long press
+on the CAPTURE card – **GAIN**, **BASS**, **MID** and **TREBLE** of the capture, 0–10. **Cab settings**: a long press on the CAB / IR card – **OUTPUT** (−96 dB to +12 dB),
 **HIGH PASS** (20–800 Hz) and **LOW PASS** (1–20 kHz) of the active cab, read from the Nano when the dialog opens.
-Both are part of the preset: changes are heard at once, **SAVE** keeps them.
+All of them are part of the preset: changes are heard at once, **SAVE** keeps them.
 
 ### FX editor
 
@@ -197,12 +200,14 @@ Long press on the Pre FX 1 tile, then **2ND** in the FX editor: choose a second 
 example the Envelope Filter as an auto-wah next to a drive. Then footswitch 3 in FX mode:
 
 - **short press**: the effect in the slot on / off (it acts when you lift your foot)
-- **hold** (0.6 s): swap A ↔ B – the other effect comes in, switched on
+- **hold** (0.6 s): swap A ↔ B – the effect stays on or off, as it was
 
-The tile shows *Pre FX 1 A* or *Pre FX 1 B*. The Nano has one model per slot, so the controller swaps the model and
+The tile shows *Pre FX 1 A* or *Pre FX 1 B* and, below it, the other effect (⇄ name). The Nano has one model per slot, so the controller swaps the model and
 sends the stored values of the other effect: this takes about half a second with a short gap in the sound.
 For a gapless change put the second effect into a free slot instead and switch it on and off.
-B is edited in the FX editor while it runs and is stored on the controller, per preset (MIDI: CC 58).
+B is edited in the FX editor while it runs and is stored on the controller, per preset (MIDI: CC 58). The controller
+also keeps the settings of A, read whenever A is on. Only if A was never on since B was set up, the first swap
+switches A on for a moment to read them.
 
 ### Tuner
 
@@ -335,7 +340,7 @@ The controller is a Bluetooth central: it connects without pairing, requests an 
 state (all preset names) once, then the current preset after every change.
 
 Message types used (request → reply): 1 → 2 state, 3 save, 28 capture/cab slot, 29 → 30 preset change,
-26 capture volume, 31 FX on/off, 60 → 61 and 62 expression settings, 65 → 66 and 67 → 68 settings, 76 → 77 library,
+26 capture volume and amp knobs, 31 FX on/off, 60 → 61 and 62 expression settings, 65 → 66 and 67 → 68 settings, 76 → 77 library,
 78 → 79 / 80 → 81 load IR / capture, 94 cab setting, 95 → 96 cab settings, 99 FX parameter, 111 → 112 rename, 115 unsaved changes,
 127 / 128 tuner, 136 FX model, 137 → 138 FX parameter values. The message layouts are documented in the
 comments of `main/nano_state.c`, `main/library.c` and in the

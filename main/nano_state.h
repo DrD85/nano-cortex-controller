@@ -49,6 +49,9 @@
 #define NANO_CAPTURE_SLOTS 25                 // 5 banks x 5
 #define NANO_CAB_SLOTS 5
 
+// The capture's amp knobs, in the order of their value ids (ValueMessage) and state fields (3-7).
+enum { NANO_AMP_GAIN, NANO_AMP_LEVEL, NANO_AMP_BASS, NANO_AMP_MID, NANO_AMP_TREBLE, NANO_AMP_KNOBS };
+
 typedef struct {
     int current_preset;                 // 1-64
     bool dirty;                         // unsaved changes in the current preset
@@ -61,6 +64,7 @@ typedef struct {
     int capture_slot;                   // 1-25, 0 = capture bypassed
     int cab_slot;                       // 1-5, 0 = cab bypassed
     int capture_volume;                 // 0-255, NANO_CAPTURE_VOLUME_0DB = 0 dB
+    int amp[NANO_AMP_KNOBS];            // capture gain, level, bass, mid, treble, 0-255
     char capture_names[NANO_CAPTURE_SLOTS][48];
     char cab_names[NANO_CAB_SLOTS][48];
     float tuner_base_hz;                // reference pitch (default 440)
@@ -112,6 +116,8 @@ bool nano_settings_usb_gain(const uint8_t *payload, size_t len, float *db);
 float nano_capture_volume_db(int raw);
 int nano_capture_volume_raw(float db);
 size_t nano_capture_volume(int raw, uint8_t *out);
+// One amp knob of the capture (NANO_AMP_GAIN ...), 0-255.
+size_t nano_amp_knob(int knob, int value, uint8_t *out);
 
 // Cab settings of the current preset (Level, High Pass and Low Pass in the editor), 0-1 on the Nano.
 enum { NANO_CAB_OUTPUT, NANO_CAB_HIGH_PASS, NANO_CAB_LOW_PASS, NANO_CAB_SETTINGS };

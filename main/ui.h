@@ -3,8 +3,8 @@
 //   preset mode: the six presets of the bank (bank with the arrow buttons)
 //   FX mode:     FX slots 1-5 on/off, reverb mix Pos 1 / Pos 2 (long press: set Pos 1 / Pos 2); Pre FX 1 can have
 //                a second effect (2ND in its FX editor), swapped by holding footswitch 3
-// VOL (top left) or a long press on the capture card: capture volume; long press on the cab card: cab output,
-// high pass and low pass.
+// VOL (top left): capture volume; long press on the capture card: its gain, bass, mid and treble; long press on the
+// cab card: cab output, high pass and low pass.
 #pragma once
 
 #include <stdbool.h>
@@ -27,7 +27,8 @@
 //   'r', 0         refresh: read presets, names and the library again
 //   'V', 0         USB volume opened: read the Nano's settings (answer with ui_set_usb_gain)
 //   'U', tenths    USB playback volume in tenths of a dB (-400 = off .. 0)
-//   'v', w<<16|v   capture volume (w 0: v = 0-255) or cab setting (w 1-3 = output, high pass, low pass: v = 0-1000)
+//   'v', w<<16|v   capture volume (w 0: v = 0-255), cab setting (w 1-3 = output, high pass, low pass: v = 0-1000)
+//                  or capture amp knob (w 4-7 = gain, bass, mid, treble: v = 0-255)
 //   'y', 1 / 0     cab settings opened (read them, answer with ui_set_cab_settings) / closed
 //   'z', n         FX editor: load FX preset n into the slot (0 = the original values, 1-UI_FX_PRESETS)
 //   'Q', w<<8|v    reverb mix editor: Pos w+1 (0/1) moved to v (0-255), play that mix
@@ -61,6 +62,7 @@ typedef struct {
     int rev_active;      // 0 = reverb A (the preset's), 1 = reverb B
     uint32_t pre1_b_type; // second effect of Pre FX 1 (footswitch 3 held swaps A/B), 0 = none
     int pre1_active;     // 0 = A (the preset's), 1 = B
+    uint32_t pre1_a_type; // the preset's effect in Pre FX 1 (known once read), shown while B runs
     uint8_t bank_presets[6];   // own bank: preset per switch 3-8, 0 = empty
     uint8_t bank_colors[6];    // colour index (UI_BANK_COLOR_COUNT)
     uint8_t bank_icons[6];     // symbol: 0 = none, n = PRESET_ICONS[n - 1]
@@ -112,6 +114,10 @@ typedef struct {
     } devices[8];
 } ui_midi_t;
 void ui_set_midi(const ui_midi_t *midi);
+
+// Start screen (from ui_init until ui_splash_done or a tap): status line and version; NULL keeps the old text.
+void ui_splash_status(const char *status, const char *version);
+void ui_splash_done(void);
 
 // Short message at the top of the screen.
 void ui_show_message(const char *text);

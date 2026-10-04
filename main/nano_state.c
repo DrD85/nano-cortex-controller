@@ -107,7 +107,8 @@ uint64_t nano_field_varint(const uint8_t *payload, size_t len, uint32_t field)
 // 17 captures[] { 2 name }, 19 cabinets[] { 1 short name } (full state only),
 // 13 currentPresetIndex, 14/15/38/39 presets on slots A1/B1/A2/B2, 18 presets[] { 1 name },
 // 31 fxBypass (5 bytes, 0 = on), 32 current capture { 2 name }, 33 current cab { 2 short name },
-// 41 currentPresetDirty, 44 capture volume (0-255), 46 tunerBaseFrequency (float32), 48-52 FX model type per slot.
+// 41 currentPresetDirty, 44 capture volume (0-255), 46 tunerBaseFrequency (float32), 48-52 FX model type per slot,
+// 3-7 amp knobs of the capture (gain, level, bass, mid, treble, 0-255).
 // The Nano omits fields whose value is 0.
 bool nano_payload_complete(const uint8_t *payload, size_t len)
 {
@@ -121,6 +122,7 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
 {
     int preset_index = 0, slots[4] = { 0 }, names = 0, captures = 0, cabs = 0;
     int bank = 1, capture_position = 0, cab_selector = 0, capture_volume = 0;
+    int amp[NANO_AMP_KNOBS] = { 0 };
     bool dirty = false, fx_seen = false, names_seen = false, capture_seen = false, cab_seen = false;
     bool capture_names_seen = false, cab_names_seen = false;
     uint32_t types[NANO_FX_SLOTS] = { 0 };
@@ -156,6 +158,7 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
         case 39: slots[3] = (int)field_number(&f); break;
         case 41: dirty = field_number(&f) != 0; break;
         case 44: capture_volume = (int)field_number(&f); break;
+        case 3: case 4: case 5: case 6: case 7: amp[f.field - 3] = (int)field_number(&f); break;
         case 46:
             if (f.wire == 5) {
                 float hz;
@@ -204,6 +207,7 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
     st->capture_slot = capture_position > 0 ? (bank - 1) * 5 + capture_position : 0;
     st->cab_slot = cab_selector >= 0 && cab_selector <= NANO_CAB_SLOTS ? cab_selector : 0;
     st->capture_volume = capture_volume <= 255 ? capture_volume : 255;
+    for (int i = 0; i < NANO_AMP_KNOBS; i++) st->amp[i] = amp[i] <= 255 ? amp[i] : 255;
     if (capture_names_seen) {
         for (int i = captures; i < NANO_CAPTURE_SLOTS; i++) st->capture_names[i][0] = 0;
     }
@@ -528,16 +532,26 @@ int nano_capture_volume_raw(float db)
     return (int)lroundf(128 + db / 12 * 127);
 }
 
-// ValueMessage { 3: 10 = capture volume, 4: value 0-255, 5: 0 }.
-size_t nano_capture_volume(int raw, uint8_t *out)
+// ValueMessage { 3: value id, 4: value 0-255, 5: 0 }: ids 0-4 amp gain, level, bass, mid, treble; 10 capture volume.
+static size_t value_message(int id, int value, uint8_t *out)
 {
-    if (raw < 0) raw = 0;
-    if (raw > 255) raw = 255;
+    if (value < 0) value = 0;
+    if (value > 255) value = 255;
     size_t n = 0;
-    out[n++] = 0x18; out[n++] = 0x0A;
-    out[n++] = 0x20; n += put_varint(out + n, (uint64_t)raw);
+    out[n++] = 0x18; out[n++] = (uint8_t)id;
+    out[n++] = 0x20; n += put_varint(out + n, (uint64_t)value);
     out[n++] = 0x28; out[n++] = 0x00;
     return n;
+}
+
+size_t nano_capture_volume(int raw, uint8_t *out)
+{
+    return value_message(10, raw, out);
+}
+
+size_t nano_amp_knob(int knob, int value, uint8_t *out)
+{
+    return value_message(knob, value, out);
 }
 
 // Output: 0 dB sits at 0.66212219, -96 dB .. 0 below it, 0 .. +12 dB above (as in the editor).

@@ -21,8 +21,8 @@ static const char *TAG = "footswitch";
 #define REG_RESET 0x7D
 
 #define PINS 16
-#define POLL_MS 10
-#define STABLE_POLLS 3   // 30 ms debounce
+#define POLL_MS 5
+#define STABLE_POLLS 2   // 10 ms debounce
 #define LEARN_TIMEOUT_MS 15000
 #define STORE_NAMESPACE "nano"
 #define STORE_KEY "fsw_pins"

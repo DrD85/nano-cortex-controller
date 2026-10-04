@@ -35,8 +35,9 @@ void ble_store_config_init(void);
 typedef struct {
     char label[40];
     uint16_t len;
-    uint8_t *data;
+    uint8_t *data;                      // NULL: send the newest value of s_values[value]
     uint8_t owner;                      // NANO_OWNER_BOARD / NANO_OWNER_APP
+    int8_t value;                       // index in s_values, -1 = none
 } write_job_t;
 
 // Replies carry no request id. The Nano answers in order, so every request with a known reply type is noted
@@ -54,16 +55,32 @@ static int s_pending_count;
 static SemaphoreHandle_t s_pending_lock;
 static nano_forward_cb s_forward;
 
-// App parameter values (FxValue 99) arrive faster than the Nano takes them: only the newest per slot/parameter
-// is kept until the writer is free.
-#define COALESCE_MAX 8
+// Values of a control (FX parameter 99, value message 26, cab setting 94) arrive faster than the Nano takes them
+// (every write waits for its response). A value still waiting in the queue is replaced by a newer one for the same
+// control, so a slider never builds up a backlog; the write keeps its place among the other messages.
+#define VALUE_SLOTS 12
 static struct {
-    bool pending;
-    uint8_t slot, param;
-    uint8_t len;
+    bool queued;                        // its job waits in the queue
+    uint32_t key;                       // message type << 16 | control
+    uint8_t owner, len;
     uint8_t data[32];
-} s_coalesce[COALESCE_MAX];
-static SemaphoreHandle_t s_coalesce_lock;
+    char label[40];
+} s_values[VALUE_SLOTS];
+static SemaphoreHandle_t s_values_lock;
+
+// Connection interval 15 ms (NimBLE's default is 30-50 ms; with a range the Nano takes the slow end). Every write
+// waits for the Nano's response (C304 takes no writes without response), so the interval sets how fast values
+// follow a slider and how fast a preset changes.
+static const struct ble_gap_conn_params NANO_CONN_PARAMS = {
+    .scan_itvl = 0x0010,
+    .scan_window = 0x0010,
+    .itvl_min = 0x000C,               // units of 1.25 ms
+    .itvl_max = 0x000C,
+    .latency = 0,
+    .supervision_timeout = 0x0100,    // units of 10 ms
+    .min_ce_len = 0,
+    .max_ce_len = 0,
+};
 
 static nano_message_cb s_on_message;
 static nano_link_cb s_on_link;
@@ -73,6 +90,7 @@ static uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
 static uint16_t s_svc_start[2], s_svc_end[2];   // [0] = A002, [1] = A003
 static int s_svc_index;
 static uint16_t s_c304, s_c305, s_c305_cccd;
+static bool s_c304_no_rsp;   // C304 takes writes without response: values are sent that way (no round trip)
 static volatile bool s_ready;
 static bool s_security_tried;
 
@@ -275,7 +293,11 @@ static int on_descriptor(uint16_t conn, const struct ble_gatt_error *err, uint16
 static int on_characteristic(uint16_t conn, const struct ble_gatt_error *err, const struct ble_gatt_chr *chr, void *arg)
 {
     if (err->status == 0) {
-        if (uuid_is(&chr->uuid.u, CHR_C304)) s_c304 = chr->val_handle;
+        if (uuid_is(&chr->uuid.u, CHR_C304)) {
+            s_c304 = chr->val_handle;
+            s_c304_no_rsp = (chr->properties & BLE_GATT_CHR_PROP_WRITE_NO_RSP) != 0;
+            ESP_LOGI(TAG, "C304 properties 0x%02X (write without response %s)", chr->properties, s_c304_no_rsp ? "yes" : "no");
+        }
         if (uuid_is(&chr->uuid.u, CHR_C305)) s_c305 = chr->val_handle;
         return 0;
     }
@@ -454,29 +476,82 @@ static void write_frame(const char *label, const uint8_t *data, size_t len, uint
     else if (s_write_status != 0) ESP_LOGW(TAG, "Write failed (%d): %s", s_write_status, label);
 }
 
-// The newest coalesced app parameter value, if any (one per call).
-static bool take_coalesced(uint8_t *data, uint8_t *len)
+// A value without waiting for the Nano's response (if C304 allows it): the next one can follow at once.
+// The host may be out of buffers for a moment; then it is tried again shortly.
+static void write_value(const char *label, const uint8_t *data, size_t len)
 {
-    bool found = false;
-    xSemaphoreTake(s_coalesce_lock, portMAX_DELAY);
-    for (int i = 0; i < COALESCE_MAX && !found; i++) {
-        if (!s_coalesce[i].pending) continue;
-        memcpy(data, s_coalesce[i].data, s_coalesce[i].len);
-        *len = s_coalesce[i].len;
-        s_coalesce[i].pending = false;
-        found = true;
+    if (!s_ready) return;
+    if (!s_c304_no_rsp) {
+        write_frame(label, data, len, NANO_OWNER_BOARD, false);
+        return;
     }
-    xSemaphoreGive(s_coalesce_lock);
-    return found;
+    int rc, tries = 0;
+    while ((rc = ble_gattc_write_no_rsp_flat(s_conn, s_c304, data, len)) == BLE_HS_ENOMEM && ++tries < 50) vTaskDelay(pdMS_TO_TICKS(4));
+    if (rc != 0) ESP_LOGW(TAG, "Value not sent (%d): %s", rc, label);
+}
+
+// The control a value frame sets (type << 16 | control), or -1 for frames that are not values.
+static int32_t value_key(const uint8_t *frame, size_t len)
+{
+    uint32_t type = frame_type(frame, len);
+    if (type == 99 && len >= 10 && frame[2] == 0x08 && frame[4] == 0x18 && frame[6] == 0x20) {   // 08 01 18 slot 20 param
+        return (int32_t)(type << 16 | frame[5] << 8 | frame[7]);
+    }
+    if (type == 26 && len >= 8 && frame[2] == 0x18) return (int32_t)(type << 16 | frame[3]);       // 18 id 20 value
+    if (type == 94 && len >= 11) return (int32_t)(type << 16 | frame[2]);                           // field tag, float
+    return -1;
+}
+
+// Queues a value frame, or replaces the value of the same control that still waits.
+// 1 = queued or replaced, 0 = not a value (queue it as a message), -1 = the queue is full.
+static int queue_value(const uint8_t *frame, size_t len, const char *label, uint8_t owner)
+{
+    int32_t key = value_key(frame, len);
+    if (key < 0 || len > sizeof(s_values[0].data)) return 0;
+    int index = -1, free_index = -1;
+    xSemaphoreTake(s_values_lock, portMAX_DELAY);
+    for (int i = 0; i < VALUE_SLOTS; i++) {
+        if (s_values[i].queued && s_values[i].key == (uint32_t)key) index = i;
+        else if (!s_values[i].queued && free_index < 0) free_index = i;
+    }
+    bool replace = index >= 0;
+    if (!replace) index = free_index;
+    if (index >= 0) {
+        s_values[index].queued = true;
+        s_values[index].key = (uint32_t)key;
+        s_values[index].owner = owner;
+        s_values[index].len = (uint8_t)len;
+        memcpy(s_values[index].data, frame, len);
+        strlcpy(s_values[index].label, label, sizeof(s_values[index].label));
+    }
+    xSemaphoreGive(s_values_lock);
+    if (index < 0) return 0;   // all slots busy: an ordinary message
+    if (replace) return 1;
+    write_job_t job = { .data = NULL, .owner = owner, .value = (int8_t)index };
+    if (xQueueSend(s_write_queue, &job, 0) == pdTRUE) return 1;
+    xSemaphoreTake(s_values_lock, portMAX_DELAY);
+    s_values[index].queued = false;
+    xSemaphoreGive(s_values_lock);
+    return -1;
 }
 
 static void writer_task(void *arg)
 {
     write_job_t job;
     uint8_t value[32], value_len;
+    char label[40];
     for (;;) {
-        while (take_coalesced(value, &value_len)) write_frame("App parameter", value, value_len, NANO_OWNER_APP, false);
-        if (xQueueReceive(s_write_queue, &job, pdMS_TO_TICKS(10)) != pdTRUE) continue;
+        if (xQueueReceive(s_write_queue, &job, portMAX_DELAY) != pdTRUE) continue;
+        if (job.value >= 0) {   // the newest value of this control
+            xSemaphoreTake(s_values_lock, portMAX_DELAY);
+            value_len = s_values[job.value].len;
+            memcpy(value, s_values[job.value].data, value_len);
+            strlcpy(label, s_values[job.value].label, sizeof(label));
+            s_values[job.value].queued = false;
+            xSemaphoreGive(s_values_lock);
+            write_value(label, value, value_len);   // values are not logged (there are many of them)
+            continue;
+        }
         write_frame(job.label, job.data, job.len, job.owner, job.owner == NANO_OWNER_BOARD);
         free(job.data);
     }
@@ -485,7 +560,7 @@ static void writer_task(void *arg)
 bool nano_link_send(const char *label, uint32_t type, const uint8_t *payload, size_t len)
 {
     if (len + 6 > 257) return false;   // the length byte covers everything after the first two bytes
-    write_job_t job = { .len = (uint16_t)(len + 6) };
+    write_job_t job = { .len = (uint16_t)(len + 6), .value = -1 };
     job.data = malloc(job.len);
     if (!job.data) return false;
     job.data[0] = (uint8_t)(job.len - 2);
@@ -494,6 +569,11 @@ bool nano_link_send(const char *label, uint32_t type, const uint8_t *payload, si
     for (int i = 0; i < 4; i++) job.data[2 + len + i] = (uint8_t)(type >> (8 * i));
     strlcpy(job.label, label, sizeof(job.label));
     job.owner = NANO_OWNER_BOARD;
+    int queued = queue_value(job.data, job.len, label, NANO_OWNER_BOARD);
+    if (queued) {
+        free(job.data);
+        return queued > 0;
+    }
     if (xQueueSend(s_write_queue, &job, 0) != pdTRUE) {
         free(job.data);
         return false;
@@ -505,27 +585,11 @@ bool nano_link_send_frame(const uint8_t *frame, size_t len)
 {
     if (len < 6 || len > 300) return false;
     uint32_t type = frame_type(frame, len);
-    // FxValue { 1: 1, 3: slot, 4: parameter, 5: float } = 08 01 18 ss 20 pp 2D ...: keep only the newest per slot/parameter
-    if (type == 99 && len <= 32 && frame[2] == 0x08 && frame[4] == 0x18 && frame[6] == 0x20) {
-        uint8_t slot = frame[5], param = frame[7];
-        int free_index = -1, index = -1;
-        xSemaphoreTake(s_coalesce_lock, portMAX_DELAY);
-        for (int i = 0; i < COALESCE_MAX; i++) {
-            if (s_coalesce[i].pending && s_coalesce[i].slot == slot && s_coalesce[i].param == param) index = i;
-            else if (!s_coalesce[i].pending && free_index < 0) free_index = i;
-        }
-        if (index < 0) index = free_index;
-        if (index >= 0) {
-            s_coalesce[index].pending = true;
-            s_coalesce[index].slot = slot;
-            s_coalesce[index].param = param;
-            s_coalesce[index].len = (uint8_t)len;
-            memcpy(s_coalesce[index].data, frame, len);
-        }
-        xSemaphoreGive(s_coalesce_lock);
-        if (index >= 0) return true;
-    }
-    write_job_t job = { .len = (uint16_t)len, .owner = NANO_OWNER_APP };
+    char label[40];
+    snprintf(label, sizeof(label), "App message %lu", (unsigned long)type);
+    int queued = queue_value(frame, len, label, NANO_OWNER_APP);   // values: only the newest per control
+    if (queued) return queued > 0;
+    write_job_t job = { .len = (uint16_t)len, .owner = NANO_OWNER_APP, .value = -1 };
     job.data = malloc(len);
     if (!job.data) return false;
     memcpy(job.data, frame, len);
@@ -560,6 +624,7 @@ static void reset_link(void)
     s_conn = BLE_HS_CONN_HANDLE_NONE;
     s_svc_start[0] = s_svc_start[1] = s_svc_end[0] = s_svc_end[1] = 0;
     s_c304 = s_c305 = s_c305_cccd = 0;
+    s_c304_no_rsp = false;
     s_ready = false;
     s_security_tried = false;
     s_rx_active = false;
@@ -577,7 +642,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
             ble_gap_disc_cancel();
             s_scan_mode = 0;
             s_connecting = true;
-            int rc = ble_gap_connect(s_own_addr_type, &event->disc.addr, 30000, NULL, gap_event, NULL);
+            int rc = ble_gap_connect(s_own_addr_type, &event->disc.addr, 30000, &NANO_CONN_PARAMS, gap_event, NULL);
             if (rc != 0) {
                 ESP_LOGE(TAG, "Connect not started: %d", rc);
                 s_connecting = false;
@@ -601,6 +666,8 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         }
         reset_link();
         s_conn = event->connect.conn_handle;
+        struct ble_gap_conn_desc desc;
+        if (ble_gap_conn_find(s_conn, &desc) == 0) ESP_LOGI(TAG, "Connection interval %.2f ms", desc.conn_itvl * 1.25f);
         ESP_LOGI(TAG, "Connected - exchanging MTU");
         ble_gattc_exchange_mtu(s_conn, on_mtu, NULL);
         start_scan();   // continues only if another client needs it
@@ -630,6 +697,13 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_MTU:
         ESP_LOGI(TAG, "MTU now %u", event->mtu.value);
         return 0;
+    case BLE_GAP_EVENT_CONN_UPDATE: {
+        struct ble_gap_conn_desc desc;
+        if (event->conn_update.status == 0 && ble_gap_conn_find(event->conn_update.conn_handle, &desc) == 0) {
+            ESP_LOGI(TAG, "Connection interval now %.2f ms", desc.conn_itvl * 1.25f);
+        }
+        return 0;
+    }
     case BLE_GAP_EVENT_NOTIFY_RX: {
         if (event->notify_rx.attr_handle != s_c305) return 0;
         static uint8_t packet[MAX_PACKET];
@@ -654,7 +728,15 @@ static void on_sync(void)
     ble_hs_util_ensure_addr(0);
     ble_hs_id_infer_auto(0, &s_own_addr_type);
     s_synced = true;
+    ESP_LOGI(TAG, "Bluetooth ready");
     start_scan();
+}
+
+void nano_link_log_status(void)
+{
+    ESP_LOGI(TAG, "Status: Bluetooth %s, scan %d (%s), Nano %s%s", s_synced ? "ready" : "NOT READY", s_scan_mode,
+             ble_gap_disc_active() ? "running" : "off", s_conn == BLE_HS_CONN_HANDLE_NONE ? "not connected" : "connected",
+             s_connecting ? ", connecting" : "");
 }
 
 static void on_reset(int reason)
@@ -676,8 +758,8 @@ void nano_link_start(nano_message_cb on_message, nano_link_cb on_link)
     s_write_queue = xQueueCreate(32, sizeof(write_job_t));
     s_write_done = xSemaphoreCreateBinary();
     s_pending_lock = xSemaphoreCreateMutex();
-    s_coalesce_lock = xSemaphoreCreateMutex();
-    configASSERT(s_rx && s_write_queue && s_write_done && s_pending_lock && s_coalesce_lock);
+    s_values_lock = xSemaphoreCreateMutex();
+    configASSERT(s_rx && s_write_queue && s_write_done && s_pending_lock && s_values_lock);
 
     ESP_ERROR_CHECK(nimble_port_init());
     ble_hs_cfg.reset_cb = on_reset;

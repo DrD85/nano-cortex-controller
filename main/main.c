@@ -8,7 +8,7 @@
 //   preset mode    3-8 = the six presets of the bank; the arrow buttons on the screen change the bank
 //                  (own banks: long press on a preset tile picks preset, colour and symbol; stored on the board)
 //   FX mode        3-7 = FX slots 1-5 on/off, 8 = reverb mix Pos 1 <-> Pos 2, or reverb A <-> B;
-//                  with a second effect for Pre FX 1, holding 3 swaps it A <-> B
+//                  with a second effect for Pre FX 1, holding 3 swaps it A <-> B (it stays on or off)
 // A long press on an FX tile opens the FX editor (model and parameters of that slot), on tile 8 the reverb
 // dialog, on tiles 1-2 the footswitch learn.
 
@@ -25,6 +25,7 @@
 #include "driver/usb_serial_jtag_vfs.h"
 #include "sdkconfig.h"
 #include "esp_app_desc.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
@@ -124,7 +125,7 @@ static struct {
 
 // FX editor (long press on an FX tile). Parameter values are only read for FX that are on;
 // moving a control sends at most one value per PARAM_SEND_MS, plus the last one.
-#define PARAM_SEND_MS 40
+#define PARAM_SEND_MS 25
 static struct {
     int slot;                        // -1 = closed
     bool known;
@@ -170,14 +171,17 @@ static struct {
 } s_usb;
 static esp_timer_handle_t s_usb_timer, s_exp_timer, s_ab_timer;
 
-// Capture volume (VOL button) and cab settings (long press on the cab card): each slider sends at most one
-// value per PARAM_SEND_MS, the last one when the timer fires. The cab settings are read while the dialog is open.
-enum { SRC_CAPTURE_VOLUME, SRC_CAB_OUTPUT, SRC_CAB_HIGH_PASS, SRC_CAB_LOW_PASS, SRC_COUNT };
+// Capture volume (VOL button), capture amp knobs (long press on the capture card) and cab settings (long press on
+// the cab card): each slider sends at most one value per PARAM_SEND_MS, the last one when the timer fires. The cab
+// settings are read while their dialog is open; the others come with the preset state.
+enum { SRC_CAPTURE_VOLUME, SRC_CAB_OUTPUT, SRC_CAB_HIGH_PASS, SRC_CAB_LOW_PASS,
+       SRC_AMP_GAIN, SRC_AMP_BASS, SRC_AMP_MID, SRC_AMP_TREBLE, SRC_COUNT };
+static const int SRC_AMP_KNOB[] = { NANO_AMP_GAIN, NANO_AMP_BASS, NANO_AMP_MID, NANO_AMP_TREBLE };
 #define CAB_SLIDER_MAX 1000              // cab values from the UI: 0-1000 = 0-1
 static struct {
     bool throttling;
     bool pending[SRC_COUNT];
-    int value[SRC_COUNT];                // capture volume 0-255, cab settings 0-1000
+    int value[SRC_COUNT];                // capture volume and amp knobs 0-255, cab settings 0-1000
     bool cab_open;                       // cab settings dialog open
     int cab_preset, cab_slot;            // preset and cab slot the shown settings belong to
 } s_src;
@@ -186,8 +190,9 @@ static esp_timer_handle_t s_src_timer;
 // Second effect (A/B) of a slot: the Nano holds one model per slot, so the controller swaps the model in the slot
 // between the preset's effect (A) and a second one (B) and sends the stored values of the other one. B (model and
 // values) is stored per preset on the controller and edited in the FX editor while it runs. The values of the
-// running effect are read before a swap (only possible while it is on), so edits are kept; with values read earlier
-// a switched-off effect need not be switched on for that. After a swap the new effect is on.
+// running effect are read before a swap (only possible while it is on), so edits are kept. The values of A are
+// stored too (read whenever A is on), so a switched-off A need not be switched on for that: the swap keeps the
+// effect on or off. Values may be written to an effect that is off (the desktop editor does that too).
 //   reverb:   the reverb dialog (long press on tile 8) chooses B; footswitch 8 swaps A <-> B
 //   Pre FX 1: the 2ND button in its FX editor chooses B; footswitch 3 short = on/off, held = A <-> B
 typedef struct {
@@ -195,6 +200,11 @@ typedef struct {
     uint8_t count;                    // stored values, 0 = model defaults
     float values[NANO_MAX_PARAMS];
 } fx_b_t;                             // stored in NVS as it is
+typedef struct {
+    uint32_t type;                    // model of A the values belong to
+    uint8_t count, reserved;
+    uint16_t values[NANO_MAX_PARAMS]; // 0-65535 = 0-1
+} fx_a_t;                             // A as last read, stored in NVS
 enum { AB_REVERB, AB_PRE1, AB_COUNT };
 enum { AB_IDLE, AB_TURNING_ON, AB_READING, AB_LOADING };
 #define AB_SEND_CHUNK 4               // parameter values per step (the BLE write queue holds 16)
@@ -207,12 +217,13 @@ typedef struct {
     int active;                       // 0 = A, 1 = B
     int slot, target, phase, sent;    // slot -1 = not known yet (reverb)
     bool cache_only;                  // reading the values for later, no swap
-    bool turn_on;                     // the effect was off: switch it on before sending the values
+    bool restore_off;                 // A was switched on only to read it: off again before the swap
     bool open_editor;                 // open the FX editor once B is loaded
 } ab_t;
 static ab_t s_ab[AB_COUNT];
 static const char *const AB_NAMES[AB_COUNT] = { "Reverb", "Pre FX 1" };
 static const char *const AB_KEYS[AB_COUNT] = { "rvb%02d", "pf1%02d" };
+static const char *const AB_A_KEYS[AB_COUNT] = { "rva%02d", "pfa%02d" };
 // Switches whose short press acts on release because they have a held function (bit n = footswitch n).
 static volatile uint32_t s_hold_switches;
 
@@ -504,6 +515,7 @@ static void show(void)
         .rev_active = s_ab[AB_REVERB].active,
         .pre1_b_type = s_ab[AB_PRE1].b.type,
         .pre1_active = s_ab[AB_PRE1].active,
+        .pre1_a_type = s_ab[AB_PRE1].a_type,
     };
     s_hold_switches = s_fx_mode && s_ab[AB_PRE1].b.type ? 1u << 3 : 0;
     for (int i = 0; i < BANK_SLOTS; i++) {
@@ -710,6 +722,14 @@ static void send_source_value(int what, int value)
         s_state.capture_volume = value;
         return;
     }
+    if (what >= SRC_AMP_GAIN) {
+        static const char *const knobs[] = { "gain", "bass", "mid", "treble" };
+        int knob = SRC_AMP_KNOB[what - SRC_AMP_GAIN];
+        snprintf(label, sizeof(label), "Capture %s %.1f", knobs[what - SRC_AMP_GAIN], value / 25.5f);
+        send(label, NANO_MSG_VALUE, buf, nano_amp_knob(knob, value, buf));
+        s_state.amp[knob] = value;
+        return;
+    }
     static const char *const names[NANO_CAB_SETTINGS] = { "output", "high pass", "low pass" };
     int which = what - SRC_CAB_OUTPUT;
     float normalized = value / (float)CAB_SLIDER_MAX;
@@ -722,7 +742,7 @@ static void source_value(int arg)
 {
     int what = arg >> 16, value = arg & 0xFFFF;
     if (what < 0 || what >= SRC_COUNT) return;
-    if (what != SRC_CAPTURE_VOLUME && !s_state.cab_slot) return;   // cab bypassed
+    if (what >= SRC_CAB_OUTPUT && what <= SRC_CAB_LOW_PASS && !s_state.cab_slot) return;   // cab bypassed
     if (s_src.throttling) {
         s_src.pending[what] = true;
         s_src.value[what] = value;
@@ -1053,7 +1073,26 @@ static void ab_store(ab_t *ab)
     nvs_close(nvs);
 }
 
-// New preset: its second effects, A not known yet.
+// Keeps the values of A for this preset (read while A was on), so a later swap needs no reading.
+static void ab_store_a(ab_t *ab)
+{
+    char key[16];
+    nvs_handle_t nvs;
+    if (!ab->preset || nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
+    snprintf(key, sizeof(key), AB_A_KEYS[ab - s_ab], ab->preset);
+    fx_a_t a = { .type = ab->a_type, .count = ab->a_count };
+    for (int i = 0; i < ab->a_count && i < NANO_MAX_PARAMS; i++) {
+        float v = ab->a_values[i] < 0 ? 0 : ab->a_values[i] > 1 ? 1 : ab->a_values[i];
+        a.values[i] = (uint16_t)lroundf(v * 65535);
+    }
+    esp_err_t err = ab->a_count && ab->b.type ? nvs_set_blob(nvs, key, &a, sizeof(a)) : nvs_erase_key(nvs, key);
+    if ((err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) || nvs_commit(nvs) != ESP_OK) {
+        ESP_LOGW(TAG, "Could not store the A values of %s", AB_NAMES[ab - s_ab]);
+    }
+    nvs_close(nvs);
+}
+
+// New preset: its second effects, and the stored values of A if they belong to the model now in the slot.
 static void ab_load(int preset)
 {
     esp_timer_stop(s_ab_timer);
@@ -1071,6 +1110,16 @@ static void ab_load(int preset)
             memset(&ab->b, 0, sizeof(ab->b));
         }
         if (ab->b.type) ESP_LOGI(TAG, "%s B of preset %d: %s", AB_NAMES[i], preset, nano_fx_name(ab->b.type));
+        fx_a_t a;
+        size = sizeof(a);
+        int slot = i == AB_PRE1 ? 0 : s_mix.slot;
+        snprintf(key, sizeof(key), AB_A_KEYS[i], preset);
+        if (open && ab->b.type && slot >= 0 && nvs_get_blob(nvs, key, &a, &size) == ESP_OK && size == sizeof(a) &&
+            a.type == s_state.fx_type[slot] && a.count <= NANO_MAX_PARAMS) {
+            ab->a_type = a.type;
+            ab->a_count = a.count;
+            for (int n = 0; n < a.count; n++) ab->a_values[n] = a.values[n] / 65535.0f;
+        }
     }
     if (open) nvs_close(nvs);
 }
@@ -1096,6 +1145,7 @@ static void ab_capture_editor(void)
             if (!ab->a_type) ab->a_type = s_state.fx_type[ab->slot];
             ab->a_count = (uint8_t)s_edit.count;
             memcpy(ab->a_values, s_edit.values, sizeof(ab->a_values));
+            ab_store_a(ab);
         }
     }
 }
@@ -1115,6 +1165,7 @@ static void ab_model_chosen(int slot, uint32_t type)
         } else if (ab->a_type) {
             ab->a_type = type;
             ab->a_count = 0;
+            ab_store_a(ab);
         }
     }
 }
@@ -1164,7 +1215,7 @@ static void ab_cache(int slot, int delay_ms)
     }
 }
 
-// Footswitch (8 for the reverb, 3 held for Pre FX 1): swap A <-> B; the new effect is on afterwards.
+// Footswitch (8 for the reverb, 3 held for Pre FX 1): swap A <-> B; the effect stays on or off.
 static void ab_swap(int which)
 {
     ab_t *ab = &s_ab[which];
@@ -1189,12 +1240,13 @@ static void ab_swap(int which)
     ab->cache_only = false;
     ab_capture_editor();
     if (!s_state.fx_on[slot]) {
-        if (ab->active == 1 || ab->a_count) {   // values known: load the other effect, switch it on, send its values
-            ab->turn_on = true;
+        if (ab->active == 1 || ab->a_count) {   // values known: swap while the effect stays off
             ab_load_target(ab);
             return;
         }
-        ab->phase = AB_TURNING_ON;   // values can only be read from an effect that is on
+        // A was never on since B was set up: switch it on once to read its values (they are kept), then off again.
+        ab->restore_off = true;
+        ab->phase = AB_TURNING_ON;
         toggle_fx(slot);
         ab_step_later(400);
         return;
@@ -1214,12 +1266,19 @@ static bool ab_values_read(const uint8_t *payload, size_t len)
         ab->phase = AB_IDLE;
         if (!ab->cache_only) ui_show_message("Not switched: the Nano sent no values.");
         ab->cache_only = false;
+        if (ab->restore_off) {
+            ab->restore_off = false;
+            if (s_state.fx_on[ab->slot]) toggle_fx(ab->slot);
+        }
         return true;
     }
     if (ab->active == 0) {
         if (!ab->a_type) ab->a_type = s_state.fx_type[ab->slot];   // the preset's effect, kept from now on
+        bool same = ab->a_count == count;   // stored only when changed (spares the flash)
+        for (int i = 0; same && i < count; i++) same = lroundf(ab->a_values[i] * 65535) == lroundf(values[i] * 65535);
         ab->a_count = (uint8_t)count;
         memcpy(ab->a_values, values, sizeof(values));
+        if (!same) ab_store_a(ab);
     } else {   // values only: a state reply can still name the previous model
         ab->b.count = (uint8_t)count;
         memcpy(ab->b.values, values, sizeof(values));
@@ -1230,6 +1289,10 @@ static bool ab_values_read(const uint8_t *payload, size_t len)
         ab->phase = AB_IDLE;
         ESP_LOGI(TAG, "%s A: %d values kept", AB_NAMES[ab - s_ab], count);
         return true;
+    }
+    if (ab->restore_off) {   // switched on only for reading
+        ab->restore_off = false;
+        if (s_state.fx_on[ab->slot]) toggle_fx(ab->slot);
     }
     ab_load_target(ab);
     return true;
@@ -1247,14 +1310,12 @@ static void ab_step(void)
         ab->phase = AB_IDLE;
         if (!ab->cache_only) ui_show_message("Not switched: the Nano did not send the effect's values.");
         ab->cache_only = false;
+        if (ab->restore_off) {
+            ab->restore_off = false;
+            if (s_state.fx_on[ab->slot]) toggle_fx(ab->slot);
+        }
         break;
     case AB_LOADING: {
-        if (ab->turn_on) {
-            ab->turn_on = false;
-            if (!s_state.fx_on[ab->slot]) toggle_fx(ab->slot);
-            ab_step_later(100);
-            break;
-        }
         int count = ab->target ? ab->b.count : ab->a_count;
         const float *values = ab->target ? ab->b.values : ab->a_values;
         for (int n = 0; n < AB_SEND_CHUNK && ab->sent < count; n++, ab->sent++) send_param(ab->slot, ab->sent, values[ab->sent]);
@@ -1297,6 +1358,7 @@ static void ab_set_b(int arg)
     ab->b.type = type;
     ab->b.count = 0;
     ab_store(ab);
+    if (!type) ab_store_a(ab);   // no B: the kept A values are not needed any more
     ESP_LOGI(TAG, "%s B: %s", AB_NAMES[which], type ? nano_fx_name(type) : "none");
     if (ab->active == 1) {   // B is running: show the new choice, or go back to A
         ab->target = type ? 1 : 0;
@@ -1574,7 +1636,12 @@ static void handle_command(char c, int arg)
     if (c == 'l') { print_presets(); return; }
     if (c == 'D' || c == 'Z') { footswitch_learn(c, arg); return; }   // works without the Nano
     if (c == 'X' || c == 'P' || c == 'N') { midi_command(c, arg); return; }
-    if (c == 'q') { midi_ble_allow(true); return; }   // MIDI gate timer: the Nano did not come
+    if (c == 'q') {                                    // MIDI gate timer: the Nano did not come
+        nano_link_log_status();
+        ui_splash_status("No Nano Cortex yet - switch it on (tap to continue)", NULL);
+        midi_ble_allow(true);
+        return;
+    }
     if (c == 'o') {                                    // app connected / left through the controller
         ESP_LOGI(TAG, "App %s", arg ? "connected through the controller" : "disconnected");
         ui_set_app(arg != 0);
@@ -1686,6 +1753,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             int reply_preset = (int)nano_field_varint(payload, len, 13) + 1;
             if (reply_preset != s_expect_preset && esp_timer_get_time() - s_expect_us < 2000000) {
                 ESP_LOGI(TAG, "State of preset %d ignored (waiting for preset %d)", reply_preset, s_expect_preset);
+                schedule_refresh(150);   // ask again for the new one
                 break;
             }
             s_expect_preset = 0;
@@ -1712,6 +1780,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             esp_timer_stop(s_midi_gate_timer);
             midi_ble_allow(true);
             app_link_enable(true);
+            ui_splash_done();
             if (s_refresh_library) {
                 s_refresh_library = false;
                 esp_timer_start_once(s_library_timer, 1500 * 1000);
@@ -1854,11 +1923,12 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         ESP_LOGI(TAG, "Preset changed on the Nano: %d", s_state.current_preset);
         uint8_t buf[4];
         send("Preset change ack", NANO_MSG_SET_PRESET_SLOTS_RESPONSE, buf, nano_preset_change_ack(buf));
-        schedule_refresh(450);
+        schedule_refresh(150);
         break;
     }
     case NANO_MSG_SET_PRESET_SLOTS_RESPONSE:
         ESP_LOGI(TAG, "Preset change %s", nano_field_varint(payload, len, 4) == 1 ? "confirmed" : "FAILED");
+        if (s_expect_preset) schedule_refresh(40);   // the new preset is ready: read it now (not after a fixed wait)
         break;
     case NANO_MSG_SETTINGS_RESPONSE: {
         // 0 dB is the protobuf default and is then left out of the reply.
@@ -1911,6 +1981,7 @@ static void app_task(void *arg)
         switch (ev.kind) {
         case EV_LINK_UP:
             ESP_LOGI(TAG, "Connected to the Nano Cortex - reading presets");
+            ui_splash_status("Connected - loading presets ...", NULL);
             ui_set_link(true);
             s_incomplete_retries = 0;
             request_full_state();
@@ -2044,11 +2115,6 @@ void app_main(void)
     banks_load();
 
     board_display_init();
-    ui_init(command, on_param, on_text);
-    s_footswitches = footswitches_start(board_i2c_bus(), on_footswitch, on_footswitch_learned);
-
-    xTaskCreate(app_task, "app", 6144, NULL, 4, NULL);
-    xTaskCreate(console_task, "console", 3072, NULL, 3, NULL);
 
     static const char *const reasons[] = { "unknown", "power-on", "external pin", "software", "panic (crash)",
                                            "interrupt watchdog", "task watchdog", "other watchdog", "deep sleep",
@@ -2057,9 +2123,24 @@ void app_main(void)
     esp_reset_reason_t reason = esp_reset_reason();
     printf("\nNano Cortex Controller %s - started after: %s\n", esp_app_get_description()->version,
            reason < sizeof(reasons) / sizeof(reasons[0]) ? reasons[reason] : "?");
+    // Bluetooth first: its host task and buffers need internal RAM, which the screen's many small objects would
+    // otherwise take (they move to PSRAM when internal RAM runs short). Its events wait in the queue until the
+    // app task runs, after the screen is built.
     app_link_start(on_app_write, on_app_state);
     nano_link_start(on_message, on_link);
     midi_ble_start(on_midi, on_midi_change);
     midi_ble_allow(false);   // first the Nano and its presets
     esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
+
+    ui_init(command, on_param, on_text);
+    char version[40];
+    snprintf(version, sizeof(version), "v%s", esp_app_get_description()->version);
+    ui_splash_status("Searching for the Nano Cortex ...", version);
+    s_footswitches = footswitches_start(board_i2c_bus(), on_footswitch, on_footswitch_learned);
+    xTaskCreate(app_task, "app", 6144, NULL, 4, NULL);
+    xTaskCreate(console_task, "console", 3072, NULL, 3, NULL);
+    ESP_LOGI(TAG, "Free internal RAM %u KB (largest block %u KB), PSRAM %u KB",
+             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+             (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024),
+             (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
 }

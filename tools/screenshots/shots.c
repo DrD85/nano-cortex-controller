@@ -142,7 +142,7 @@ static nano_library_t *example_library(void)
 static void close_all(void)
 {
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
-                                   s_volume, s_cab_settings, s_toast };
+                                   s_volume, s_cab_settings, s_amp, s_toast };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) lv_obj_set_hidden(overlays[i], true);
 }
 
@@ -155,6 +155,9 @@ int main(void)
     lv_display_set_flush_cb(d, flush);
 
     ui_init(on_command, on_param_cb, on_text_cb);
+    ui_splash_status("Connected - loading presets ...", "v1.4.1");
+    shot("15-start-screen");
+    ui_splash_done();
     ui_set_link(true);
     example_state();
     ui_set_library(example_library());
@@ -233,6 +236,12 @@ int main(void)
 
     open_volume(NULL);
     shot("11-capture-volume");
+    close_all();
+
+    st.amp[NANO_AMP_GAIN] = 140; st.amp[NANO_AMP_BASS] = 115; st.amp[NANO_AMP_MID] = 150; st.amp[NANO_AMP_TREBLE] = 128;
+    ui_show_state(&st, &view);
+    open_amp(NULL);
+    shot("14-capture-amp");
     close_all();
 
     open_cab_settings(NULL);

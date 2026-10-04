@@ -23,6 +23,9 @@ CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+# Small allocations (most screen objects) up to 4 KB prefer internal RAM; larger ones go to PSRAM. Internal RAM
+# must stay free for Bluetooth (its host task and buffers need it).
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
 CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_LCD_RGB_ISR_IRAM_SAFE=y

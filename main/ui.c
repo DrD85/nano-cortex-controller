@@ -46,6 +46,7 @@ static lv_obj_t *s_status_dot, *s_status, *s_edited, *s_app;
 static lv_obj_t *s_preset_number, *s_preset_name, *s_capture, *s_cab;
 static lv_obj_t *s_tile[TILES], *s_tile_caption[TILES], *s_tile_name[TILES], *s_tile_number[TILES];
 static lv_obj_t *s_tile_square[TILES], *s_tile_pedal[TILES];
+static lv_obj_t *s_tile_other[TILES];   // second line under the caption: the other effect of an A/B slot
 static uint32_t s_tile_ink[TILES];
 static lv_obj_t *s_capture_square, *s_capture_slot_label, *s_cab_square, *s_cab_slot_label;
 static lv_obj_t *s_picker, *s_picker_title, *s_picker_list, *s_picker_tab[2], *s_picker_chips, *s_picker_chip[LIB_CATEGORY_COUNT];
@@ -54,9 +55,10 @@ static lv_obj_t *s_bank_editor, *s_bank_title, *s_bank_swatch[UI_BANK_COLOR_COUN
 static lv_obj_t *s_toast;
 static lv_obj_t *s_usb, *s_usb_slider, *s_usb_value, *s_usb_info, *s_usb_minus, *s_usb_plus, *s_usb_reset;
 static float s_usb_db;
-static lv_obj_t *s_volume, *s_volume_info, *s_cab_settings, *s_cab_info;
+static lv_obj_t *s_volume, *s_volume_info, *s_cab_settings, *s_cab_info, *s_amp, *s_amp_info;
 static int s_capture_volume = NANO_CAPTURE_VOLUME_0DB;
-static uint32_t s_volume_tick;
+static int s_amp_values[NANO_AMP_KNOBS];
+static uint32_t s_volume_tick, s_amp_tick;
 static lv_obj_t *s_mix_editor, *s_mix_model_label, *s_mix_info, *s_mix_slider[2], *s_mix_value[2];
 static lv_obj_t *s_mix_tab[2], *s_mix_panel[2], *s_rev_dropdown, *s_rev_edit;
 static char s_mix_model[48];
@@ -94,6 +96,7 @@ static lv_obj_t *s_tuner, *s_tuner_note, *s_tuner_needle, *s_tuner_cents;
 
 // FX editor
 static lv_obj_t *s_editor, *s_editor_icon, *s_editor_slot, *s_editor_model, *s_editor_onoff, *s_editor_onoff_label;
+static lv_obj_t *s_editor_switch;
 static lv_obj_t *s_editor_body, *s_editor_info, *s_model_list, *s_editor_pedal;
 static lv_obj_t *s_editor_model_button, *s_editor_second, *s_editor_second_label;
 static bool s_model_list_second;   // the model list chooses the second effect (Pre FX 1)
@@ -143,12 +146,15 @@ static void on_tile_long(lv_event_t *e)
     else if (!s_fx_mode && tile >= 2) open_bank_editor(tile - 2);
 }
 
+static lv_obj_t *s_splash, *s_splash_status, *s_splash_version;
+
 static void on_gesture(lv_event_t *e)
 {
     s_gesture_tick = lv_tick_get();
+    if (s_splash) return;   // start screen
     // Swipes work only on the main screen, not in an open dialog.
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
-                                   s_volume, s_cab_settings };
+                                   s_volume, s_cab_settings, s_amp };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
         if (overlays[i] && !lv_obj_is_hidden(overlays[i])) return;
     }
@@ -325,6 +331,12 @@ static void build_tile(lv_obj_t *parent, int i)
     lv_label_set_long_mode(s_tile_caption[i], LV_LABEL_LONG_CLIP);
     lv_obj_set_pos(s_tile_caption[i], 64, 12);
 
+    s_tile_other[i] = label(tile, &lv_font_montserrat_14, TEXT);
+    lv_obj_set_size(s_tile_other[i], TILE_W - 74, lv_font_get_line_height(&lv_font_montserrat_14));   // one line
+    lv_label_set_long_mode(s_tile_other[i], LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(s_tile_other[i], 64, 32);
+    lv_obj_set_hidden(s_tile_other[i], true);
+
     s_tile_number[i] = label(tile, &lv_font_montserrat_28, TEXT);
     lv_label_set_text_fmt(s_tile_number[i], "%d", i + 1);
     lv_obj_align(s_tile_number[i], LV_ALIGN_TOP_RIGHT, -12, 6);
@@ -371,6 +383,17 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     lv_label_set_text(s_tile_name[i], name);
     lv_obj_set_style_text_color(s_tile_name[i], lv_color_hex(ink), 0);
     fit_name(i);
+    lv_obj_set_hidden(s_tile_other[i], true);   // shown again by set_tile_other
+}
+
+// The other effect of an A/B slot, under the caption (after set_tile): "⇄ name".
+static void set_tile_other(int i, uint32_t type)
+{
+    lv_obj_set_hidden(s_tile_other[i], !type);
+    if (!type) return;
+    lv_label_set_text_fmt(s_tile_other[i], LV_SYMBOL_SHUFFLE " %s", nano_fx_name(type));
+    lv_obj_set_style_text_color(s_tile_other[i], lv_color_hex(s_tile_ink[i]), 0);
+    lv_obj_set_style_text_opa(s_tile_other[i], 200, 0);
 }
 
 // ---- capture / cab picker: slots of the Nano or its library ----
@@ -1117,10 +1140,14 @@ static void build_usb(lv_obj_t *screen)
     lv_obj_set_hidden(s_usb, true);
 }
 
-// ---- capture volume (VOL button, long press on the capture card) and cab settings (long press on the cab card) ----
+// ---- capture volume (VOL button), capture amp knobs (long press on the capture card) and cab settings ----
 
-// Slider rows: 0 = capture volume (the Nano's 0-255), 1-3 = cab output, high pass, low pass (0-1000 = 0-1).
-#define LEVEL_ROWS (1 + NANO_CAB_SETTINGS)
+// Slider rows: 0 = capture volume (the Nano's 0-255), 1-3 = cab output, high pass, low pass (0-1000 = 0-1),
+// 4-7 = capture gain, bass, mid, treble (0-255, shown 0-10). The row number is the 'v' command's "what".
+#define AMP_ROW 4
+#define AMP_ROWS 4
+#define LEVEL_ROWS (AMP_ROW + AMP_ROWS)
+static const int AMP_ROW_KNOB[AMP_ROWS] = { NANO_AMP_GAIN, NANO_AMP_BASS, NANO_AMP_MID, NANO_AMP_TREBLE };
 #define CAB_SLIDER_MAX 1000
 #define VOLUME_HOLD_MS 1500   // after a change on the board, state replies still on their way do not move the slider back
 
@@ -1138,6 +1165,8 @@ static void show_level_value(int row)
     char text[24];
     if (row == 0) {
         format_db(text, sizeof(text), nano_capture_volume_db(position));
+    } else if (row >= AMP_ROW) {
+        snprintf(text, sizeof(text), "%.1f", position / 25.5f);
     } else {
         float value = nano_cab_setting_value(row - 1, position / (float)CAB_SLIDER_MAX);
         if (row - 1 == NANO_CAB_OUTPUT) format_db(text, sizeof(text), value);
@@ -1150,7 +1179,7 @@ static void show_level_value(int row)
 // New position from a slider or a button: show it and send it.
 static void level_changed(int row, int32_t position, bool move_slider)
 {
-    int32_t max = row == 0 ? 255 : CAB_SLIDER_MAX;
+    int32_t max = row == 0 || row >= AMP_ROW ? 255 : CAB_SLIDER_MAX;
     if (position < 0) position = 0;
     if (position > max) position = max;
     if (move_slider) lv_slider_set_value(s_level_slider[row], position, LV_ANIM_OFF);
@@ -1158,6 +1187,9 @@ static void level_changed(int row, int32_t position, bool move_slider)
     if (row == 0) {
         s_capture_volume = (int)position;
         s_volume_tick = lv_tick_get();
+    } else if (row >= AMP_ROW) {
+        s_amp_values[AMP_ROW_KNOB[row - AMP_ROW]] = (int)position;
+        s_amp_tick = lv_tick_get();
     }
     send('v', row << 16 | (int)position);
 }
@@ -1168,13 +1200,16 @@ static void on_level_slider(lv_event_t *e)
     level_changed(row, lv_slider_get_value(s_level_slider[row]), false);
 }
 
-// Minus / plus (data = row << 1 | plus): to the next whole 1 dB, 10 Hz (high pass) or 100 Hz (low pass).
+// Minus / plus (data = row << 1 | plus): to the next whole 1 dB, 10 Hz (high pass), 100 Hz (low pass) or 0.5 (amp).
 static void on_level_step(lv_event_t *e)
 {
-    static const float STEPS[LEVEL_ROWS] = { 1, 1, 10, 100 };
+    static const float STEPS[LEVEL_ROWS] = { 1, 1, 10, 100, 0.5f, 0.5f, 0.5f, 0.5f };
     int data = (int)(intptr_t)lv_event_get_user_data(e), row = data >> 1, dir = (data & 1) ? 1 : -1;
     int32_t position = lv_slider_get_value(s_level_slider[row]), next;
-    if (row == 0) {
+    if (row >= AMP_ROW) {
+        float value = roundf(position / 25.5f / STEPS[row]) * STEPS[row];
+        next = lroundf((value + dir * STEPS[row]) * 25.5f);
+    } else if (row == 0) {
         float db = roundf(nano_capture_volume_db(position) / STEPS[row]) * STEPS[row];
         next = nano_capture_volume_raw(db + dir * STEPS[row]);
     } else {
@@ -1203,7 +1238,7 @@ static void build_level_row(lv_obj_t *parent, int row, int x, int y, int w)
     lv_label_set_text(minus, LV_SYMBOL_MINUS);
     lv_obj_t *slider = lv_slider_create(parent);
     s_level_slider[row] = slider;
-    lv_slider_set_range(slider, 0, row == 0 ? 255 : CAB_SLIDER_MAX);
+    lv_slider_set_range(slider, 0, row == 0 || row >= AMP_ROW ? 255 : CAB_SLIDER_MAX);
     lv_obj_set_size(slider, w - 164, 16);
     lv_obj_set_pos(slider, x + 82, y + 18);
     lv_obj_set_ext_click_area(slider, 22);
@@ -1320,6 +1355,57 @@ static void build_cab_settings(lv_obj_t *screen)
         build_level_row(s_cab_settings, row, 20, y + 24, 560);
     }
     lv_obj_set_hidden(s_cab_settings, true);
+}
+
+// Capture dialog (long press on the capture card): gain, bass, mid, treble of the capture.
+static void show_amp_values(void)
+{
+    for (int i = 0; i < AMP_ROWS; i++) {
+        lv_slider_set_value(s_level_slider[AMP_ROW + i], s_amp_values[AMP_ROW_KNOB[i]], LV_ANIM_OFF);
+        show_level_value(AMP_ROW + i);
+    }
+    lv_label_set_text(s_amp_info, s_capture_slot ? lv_label_get_text(s_capture) : "The capture is bypassed.");
+}
+
+static void on_amp_close(lv_event_t *e)
+{
+    lv_obj_set_hidden(s_amp, true);
+}
+
+static void open_amp(lv_event_t *e)
+{
+    show_amp_values();
+    lv_obj_set_hidden(s_amp, false);
+    lv_obj_move_foreground(s_amp);
+}
+
+static void build_amp(lv_obj_t *screen)
+{
+    static const char *const NAMES[AMP_ROWS] = { "GAIN", "BASS", "MID", "TREBLE" };
+    s_amp = card(screen, 100, 20, 600, 440);
+    lv_obj_set_style_border_color(s_amp, lv_color_hex(0x4A4D50), 0);
+    lv_obj_t *title = label(s_amp, &lv_font_montserrat_14, MUTED);
+    lv_obj_set_style_text_letter_space(title, 2, 0);
+    lv_label_set_text(title, "CAPTURE");
+    lv_obj_set_pos(title, 20, 16);
+    s_amp_info = label(s_amp, &lv_font_montserrat_14, TEXT);
+    lv_obj_set_width(s_amp_info, 420);
+    lv_label_set_long_mode(s_amp_info, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(s_amp_info, 20, 40);
+    small_button(s_amp, 470, 12, 110, 44, "CLOSE", on_amp_close, 0);
+    for (int i = 0; i < AMP_ROWS; i++) {
+        int row = AMP_ROW + i, y = 72 + i * 90;
+        lv_obj_t *name = label(s_amp, &lv_font_montserrat_14, MUTED);
+        lv_obj_set_style_text_letter_space(name, 2, 0);
+        lv_label_set_text(name, NAMES[i]);
+        lv_obj_set_pos(name, 20, y);
+        s_level_value[row] = label(s_amp, &lv_font_montserrat_20, 0xFFFFFF);
+        lv_obj_set_width(s_level_value[row], 200);
+        lv_obj_set_style_text_align(s_level_value[row], LV_TEXT_ALIGN_RIGHT, 0);
+        lv_obj_align(s_level_value[row], LV_ALIGN_TOP_RIGHT, -20, y - 3);
+        build_level_row(s_amp, row, 20, y + 22, 560);
+    }
+    lv_obj_set_hidden(s_amp, true);
 }
 
 // ---- reverb mix Pos 1 / Pos 2 (long press on the mix tile) ----
@@ -1663,6 +1749,99 @@ static void build_tuner(lv_obj_t *screen)
 
 static void build_editor(lv_obj_t *screen);
 
+// ---- start screen: shown until the Nano's presets are loaded (or a tap) ----
+
+static void splash_glow(void *obj, int32_t v)
+{
+    lv_obj_set_style_shadow_opa(obj, (lv_opa_t)v, 0);
+}
+
+static void splash_hide(void)
+{
+    if (!s_splash) return;
+    lv_obj_fade_out(s_splash, 400, 0);
+    lv_obj_delete_delayed(s_splash, 450);
+    s_splash = s_splash_status = s_splash_version = NULL;
+}
+
+static void on_splash_tap(lv_event_t *e)
+{
+    splash_hide();
+}
+
+static void build_splash(lv_obj_t *screen)
+{
+    // The effect categories in their colours, glowing one after another.
+    static const struct { int icon; uint32_t color; } GLOW[] = {
+        { NANO_ICON_OVERDRIVE, 0xFF7000 }, { NANO_ICON_COMPRESSOR, 0x45F862 }, { NANO_ICON_EQUALIZER, 0x0A74E0 },
+        { NANO_ICON_MODULATION, 0x8A5CFF }, { NANO_ICON_PITCH, 0xFFD236 }, { NANO_ICON_FILTER, 0x87DAFF },
+        { NANO_ICON_REVERB, 0x00FFDD },
+    };
+    const int count = sizeof(GLOW) / sizeof(GLOW[0]), size = 62, gap = 26;
+    s_splash = lv_obj_create(screen);
+    lv_obj_remove_style_all(s_splash);
+    lv_obj_set_size(s_splash, 800, 480);
+    lv_obj_set_style_bg_color(s_splash, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_splash, LV_OPA_COVER, 0);
+    lv_obj_set_clickable(s_splash, true);
+    lv_obj_add_event_cb(s_splash, on_splash_tap, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *title = label(s_splash, &lv_font_montserrat_48, 0xFFFFFF);
+    lv_obj_set_style_text_letter_space(title, 8, 0);
+    lv_label_set_text(title, "NANO CORTEX");
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 4, 104);
+    lv_obj_t *sub = label(s_splash, &lv_font_montserrat_20, MUTED);
+    lv_obj_set_style_text_letter_space(sub, 14, 0);
+    lv_label_set_text(sub, "CONTROLLER");
+    lv_obj_align(sub, LV_ALIGN_TOP_MID, 7, 168);
+
+    int x = (800 - count * size - (count - 1) * gap) / 2;
+    for (int i = 0; i < count; i++) {
+        lv_obj_t *sq = icon_square(s_splash, size);
+        lv_obj_set_pos(sq, x + i * (size + gap), 246);
+        set_icon_square(sq, GLOW[i].color, NANO_ICONS[GLOW[i].icon], true);
+        lv_obj_set_style_shadow_color(sq, lv_color_hex(GLOW[i].color), 0);
+        lv_obj_set_style_shadow_width(sq, 34, 0);
+        lv_obj_set_style_shadow_spread(sq, 3, 0);
+        lv_obj_set_style_shadow_opa(sq, 30, 0);
+        lv_anim_t a;
+        lv_anim_init(&a);
+        lv_anim_set_var(&a, sq);
+        lv_anim_set_exec_cb(&a, splash_glow);
+        lv_anim_set_values(&a, 30, 230);
+        lv_anim_set_duration(&a, 1100);
+        lv_anim_set_reverse_duration(&a, 1100);
+        lv_anim_set_delay(&a, i * 220);
+        lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+        lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+        lv_anim_start(&a);
+    }
+
+    s_splash_status = label(s_splash, &lv_font_montserrat_14, MUTED);
+    lv_obj_set_style_text_letter_space(s_splash_status, 2, 0);
+    lv_obj_align(s_splash_status, LV_ALIGN_TOP_MID, 0, 360);
+    s_splash_version = label(s_splash, &lv_font_montserrat_14, 0x5A5A5A);
+    lv_obj_align(s_splash_version, LV_ALIGN_BOTTOM_RIGHT, -16, -12);
+}
+
+void ui_splash_status(const char *status, const char *version)
+{
+    lvgl_port_lock(0);
+    if (s_splash && status) {
+        lv_label_set_text(s_splash_status, status);
+        lv_obj_align(s_splash_status, LV_ALIGN_TOP_MID, 0, 360);
+    }
+    if (s_splash && version) lv_label_set_text(s_splash_version, version);
+    lvgl_port_unlock();
+}
+
+void ui_splash_done(void)
+{
+    lvgl_port_lock(0);
+    splash_hide();
+    lvgl_port_unlock();
+}
+
 void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
 {
     s_on_command = on_command;
@@ -1750,7 +1929,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_add_event_cb(s_preset_name, open_rename, LV_EVENT_LONG_PRESSED, NULL);
 
     // Capture and cab cards
-    s_source_card[0] = source_card(screen, 10, "CAPTURE", NANO_ICON_CAPTURE, open_capture_picker, open_volume,
+    s_source_card[0] = source_card(screen, 10, "CAPTURE", NANO_ICON_CAPTURE, open_capture_picker, open_amp,
                                    &s_capture_square, &s_capture, &s_capture_slot_label);
     s_source_card[1] = source_card(screen, 405, "CAB / IR", NANO_ICON_CAB, open_cab_picker, open_cab_settings,
                                    &s_cab_square, &s_cab, &s_cab_slot_label);
@@ -1765,10 +1944,12 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     build_usb(screen);
     build_volume(screen);
     build_cab_settings(screen);
+    build_amp(screen);
     build_mix_editor(screen);
     build_learn(screen);
     build_midi(screen);
     build_toast(screen);
+    build_splash(screen);
 
     lvgl_port_unlock();
     ui_set_link(false);
@@ -1807,6 +1988,7 @@ void ui_set_link(bool connected)
         lv_obj_set_hidden(s_usb, true);
         lv_obj_set_hidden(s_volume, true);
         lv_obj_set_hidden(s_cab_settings, true);
+        lv_obj_set_hidden(s_amp, true);
         lv_obj_set_hidden(s_mix_editor, true);
         lv_obj_set_hidden(s_tuner, true);
         lv_obj_set_hidden(s_editor, true);
@@ -1857,6 +2039,7 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
         set_tile(2 + slot, slot_caption, empty ? "Empty" : nano_fx_name(st->fx_type[slot]),
                  model ? model->color : 0x6A6A6A, on, empty, model ? NANO_ICONS[model->icon] : NULL, NULL);
         if (!empty) set_tile_pedal(2 + slot, st->fx_type[slot]);
+        if (slot == 0 && view->pre1_b_type) set_tile_other(2, view->pre1_active ? view->pre1_a_type : view->pre1_b_type);
     }
 
     // Footswitch 8: reverb A/B, or the reverb mix between Pos 1 and Pos 2 of the expression assignment.
@@ -1940,6 +2123,12 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
         (lv_tick_elaps(s_volume_tick) > VOLUME_HOLD_MS && !lv_obj_has_state(s_level_slider[0], LV_STATE_PRESSED))) {
         s_capture_volume = st->capture_volume;
         if (!lv_obj_is_hidden(s_volume)) show_capture_volume();
+    }
+    bool amp_held = false;
+    for (int i = 0; i < AMP_ROWS; i++) amp_held |= lv_obj_has_state(s_level_slider[AMP_ROW + i], LV_STATE_PRESSED);
+    if (lv_obj_is_hidden(s_amp) || (lv_tick_elaps(s_amp_tick) > VOLUME_HOLD_MS && !amp_held)) {
+        memcpy(s_amp_values, st->amp, sizeof(s_amp_values));
+        if (!lv_obj_is_hidden(s_amp)) show_amp_values();
     }
 
     if (view->fx_mode) show_fx_tiles(st, view);
@@ -2105,9 +2294,24 @@ static void build_editor(lv_obj_t *screen)
     lv_obj_center(s_editor_second_label);
     lv_obj_set_hidden(s_editor_second, true);
 
-    s_editor_onoff = button(s_editor, 612, 8, 180, 48, on_editor_onoff);
-    s_editor_onoff_label = label(s_editor_onoff, &lv_font_montserrat_20, 0xF2F2F2);
-    lv_obj_center(s_editor_onoff_label);
+    // On/off: ON / OFF and a switch like the sliders (effect colour, white knob); the whole area is the button.
+    s_editor_onoff = lv_obj_create(s_editor);
+    lv_obj_remove_style_all(s_editor_onoff);
+    lv_obj_set_pos(s_editor_onoff, 612, 8);
+    lv_obj_set_size(s_editor_onoff, 180, 48);
+    lv_obj_set_style_opa(s_editor_onoff, 180, LV_STATE_PRESSED);
+    lv_obj_set_clickable(s_editor_onoff, true);
+    lv_obj_add_event_cb(s_editor_onoff, on_editor_onoff, LV_EVENT_CLICKED, NULL);
+    s_editor_onoff_label = label(s_editor_onoff, &lv_font_montserrat_20, TEXT);
+    lv_obj_set_style_text_letter_space(s_editor_onoff_label, 2, 0);
+    lv_obj_align(s_editor_onoff_label, LV_ALIGN_LEFT_MID, 14, 0);
+    s_editor_switch = lv_switch_create(s_editor_onoff);
+    lv_obj_set_clickable(s_editor_switch, false);   // the state comes from the Nano (ui_fx_editor_show)
+    lv_obj_set_size(s_editor_switch, 86, 42);
+    lv_obj_align(s_editor_switch, LV_ALIGN_RIGHT_MID, -6, 0);
+    lv_obj_set_style_bg_color(s_editor_switch, lv_color_hex(0x2A2D30), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_editor_switch, lv_color_hex(0xF2F2F2), LV_PART_KNOB);
+    lv_obj_set_style_pad_all(s_editor_switch, -3, LV_PART_KNOB);
 
     // Pedal silhouette behind the parameters (fixed while the parameter list scrolls)
     s_editor_pedal = lv_image_create(s_editor);
@@ -2360,8 +2564,10 @@ void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, i
     }
 
     lv_label_set_text(s_editor_onoff_label, on ? "ON" : "OFF");
-    lv_obj_set_style_bg_color(s_editor_onoff, lv_color_hex(on ? color : 0x1C1C1C), 0);
-    lv_obj_set_style_text_color(s_editor_onoff_label, lv_color_hex(on ? ink_for(color) : 0xF2F2F2), 0);
+    lv_obj_set_style_text_color(s_editor_onoff_label, lv_color_hex(on ? TEXT : MUTED), 0);
+    lv_obj_set_style_bg_color(s_editor_switch, lv_color_hex(color), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    if (on) lv_obj_add_state(s_editor_switch, LV_STATE_CHECKED);
+    else lv_obj_remove_state(s_editor_switch, LV_STATE_CHECKED);
 
     bool known = values != NULL;
     const char *info = !m ? "This slot is empty. Choose a model above."

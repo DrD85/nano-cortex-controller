@@ -28,7 +28,8 @@ IR-Library, ein Stimmgerät und eigene Preset-Bänke. Er ist das Hardware-Gegens
   benannten **FX-Presets** pro Effektmodell
 - **Capture und Cab/IR**: einen der 25 Capture-Slots oder 5 Cab-Slots wählen oder jedes Capture bzw. IR aus der
   Library des Nano (Werk und eigene) in den aktiven Slot laden
-- **Capture-Lautstärke** (VOL) und **Cab-Einstellungen** (lange auf das Cab-Feld drücken: Output, High Pass, Low Pass)
+- **Capture-Lautstärke** (VOL), **Capture-Klang** (lange auf das Capture-Feld drücken: Gain, Bass, Mid, Treble) und
+  **Cab-Einstellungen** (lange auf das Cab-Feld drücken: Output, High Pass, Low Pass)
 - **Reverb-Schalter** (Fußschalter 8): schaltet den Reverb-Mix zwischen Pos 1 und Pos 2 der Expression-Einstellung
   des Presets um – oder zwischen dem Reverb des Presets und einem **zweiten Reverb** mit eigenen Einstellungen
 - **Stimmgerät** mit großer Notenanzeige und Nadel (Fußschalter 2)
@@ -57,6 +58,8 @@ IR-Library, ein Stimmgerät und eigene Preset-Bänke. Er ist das Hardware-Gegens
 | Bluetooth-MIDI | Capture-Lautstärke |
 | ![Cab-Einstellungen](docs/images/12-cab-settings.png) | ![Zweiter Effekt auf Pre FX 1](docs/images/13-second-effect.png) |
 | Cab-Einstellungen (lange auf das Cab-Feld drücken) | Zweiter Effekt auf Pre FX 1 (2ND im FX-Editor) |
+| ![Capture-Klang](docs/images/14-capture-amp.png) | ![Startbildschirm](docs/images/15-start-screen.png) |
+| Capture-Klang (lange auf das Capture-Feld drücken) | Startbildschirm beim Verbinden |
 
 Die Bilder zeigen Beispiel-Presets. Sie werden aus dem UI-Code der Firmware gezeichnet
 (`tools/screenshots/make_screenshots.sh`).
@@ -108,7 +111,7 @@ Die Prüfsummen beider Dateien stehen in `nano-controller-<version>-sha256.txt`.
 │              Revv NF53 Clean                              │  lange auf den Namen: umbenennen
 ├────────────────────────────┬─────────────────────────────┤
 │ CAPTURE  Revv D20 clean    │ CAB / IR  810 Amped VT      │  antippen: Slot oder Library wählen
-│                            │                             │  lange drücken: Capture-Lautstärke / Cab-Einstellungen
+│                            │                             │  lange drücken: Gain, Bass, Mid, Treble / Cab-Einstellungen
 ├──────────┬──────────┬──────┴───┬──────────────────────────┤
 │ 1 MODE   │ 2 TUNER  │ 3        │ 4                        │  acht Kacheln = acht Fußschalter
 ├──────────┼──────────┼──────────┼──────────────────────────┤
@@ -159,10 +162,10 @@ Auf das Feld CAPTURE oder CAB / IR tippen. **SLOTS** zeigt die 25 Capture-Slots 
 **LIBRARY** alle auf dem Nano gespeicherten Captures bzw. IRs mit Kategorie-Filtern (AMP = Topteil oder Combo, AMP+CAB, CAB, PEDAL, OTHER).
 Ein Library-Eintrag wird nach einer Rückfrage in den aktiven Slot geladen.
 
-**Capture-Lautstärke**: **VOL** im Preset-Feld oder lange auf das CAPTURE-Feld drücken, −24 dB bis +12 dB
-(**0 dB** setzt zurück). **Cab-Einstellungen**: lange auf das CAB / IR-Feld drücken – **OUTPUT** (−96 dB bis +12 dB),
+**Capture-Lautstärke**: **VOL** im Preset-Feld, −24 dB bis +12 dB (**0 dB** setzt zurück). **Capture-Klang**: lange
+auf das CAPTURE-Feld drücken – **GAIN**, **BASS**, **MID** und **TREBLE** des Captures, 0–10. **Cab-Einstellungen**: lange auf das CAB / IR-Feld drücken – **OUTPUT** (−96 dB bis +12 dB),
 **HIGH PASS** (20–800 Hz) und **LOW PASS** (1–20 kHz) des aktiven Cabs, beim Öffnen vom Nano gelesen.
-Beides gehört zum Preset: Änderungen sind sofort zu hören, **SAVE** behält sie.
+Alles gehört zum Preset: Änderungen sind sofort zu hören, **SAVE** behält sie.
 
 ### FX-Editor
 
@@ -200,13 +203,14 @@ Lange auf die Pre-FX-1-Kachel drücken, dann **2ND** im FX-Editor: einen zweiten
 zum Beispiel das Envelope Filter als Auto-Wah neben einem Drive. Dann Fußschalter 3 im FX-Modus:
 
 - **kurz drücken**: den Effekt im Slot an / aus (schaltet beim Loslassen)
-- **halten** (0,6 s): A ↔ B wechseln – der andere Effekt kommt, eingeschaltet
+- **halten** (0,6 s): A ↔ B wechseln – der Effekt bleibt an oder aus, wie er war
 
-Die Kachel zeigt *Pre FX 1 A* oder *Pre FX 1 B*. Der Nano hat pro Slot ein Modell, deshalb tauscht der Controller
+Die Kachel zeigt *Pre FX 1 A* oder *Pre FX 1 B* und darunter den anderen Effekt (⇄ Name). Der Nano hat pro Slot ein Modell, deshalb tauscht der Controller
 das Modell und schickt die gespeicherten Werte des anderen Effekts: das dauert etwa eine halbe Sekunde mit einem
 kurzen Aussetzer. Ohne Aussetzer geht es, wenn der zweite Effekt in einem freien Slot liegt und nur an- und
 ausgeschaltet wird. B wird im FX-Editor eingestellt, während es läuft, und auf dem Controller pro Preset gespeichert
-(MIDI: CC 58).
+(MIDI: CC 58). Die Einstellungen von A merkt sich der Controller ebenfalls, gelesen immer wenn A an ist. Nur wenn A
+seit dem Einrichten von B nie an war, schaltet der erste Wechsel A kurz an, um sie zu lesen.
 
 ### Stimmgerät
 
@@ -339,7 +343,7 @@ Benachrichtigungs-Characteristic `C305`. Jede Nachricht ist ein Protobuf-Payload
 Der Controller ist Bluetooth-Central: Er verbindet sich ohne Pairing, fordert eine MTU von 517 an, liest einmal
 den vollständigen Zustand (alle Preset-Namen) und danach nach jedem Wechsel das aktuelle Preset.
 
-Verwendete Nachrichtentypen (Anfrage → Antwort): 1 → 2 Zustand, 3 Speichern, 26 Capture-Lautstärke, 28 Capture-/Cab-Slot,
+Verwendete Nachrichtentypen (Anfrage → Antwort): 1 → 2 Zustand, 3 Speichern, 26 Capture-Lautstärke und Amp-Regler, 28 Capture-/Cab-Slot,
 29 → 30 Preset-Wechsel, 31 FX an/aus, 60 → 61 und 62 Expression-Einstellungen, 65 → 66 und 67 → 68 Einstellungen,
 76 → 77 Library, 78 → 79 / 80 → 81 IR / Capture laden, 94 Cab-Einstellung, 95 → 96 Cab-Einstellungen, 99 FX-Parameter, 111 → 112 Umbenennen,
 115 ungespeicherte Änderungen, 127 / 128 Stimmgerät, 136 FX-Modell, 137 → 138 FX-Parameterwerte.
