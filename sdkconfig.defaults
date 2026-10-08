@@ -50,6 +50,10 @@ CONFIG_COMPILER_OPTIMIZATION_PERF=y
 CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y
 CONFIG_ESP32S3_DATA_CACHE_64KB=y
 CONFIG_LV_DEF_REFR_PERIOD=16
+# Corner masks of every radius in use stay cached (the default 4 is fewer than the UI uses, so they were computed
+# again on every frame), and the glow of the lit tiles is blurred once instead of on every redraw.
+CONFIG_LV_DRAW_SW_CIRCLE_CACHE_SIZE=16
+CONFIG_LV_DRAW_SW_SHADOW_CACHE_SIZE=48
 
 # LVGL objects from the normal heap (internal RAM, then PSRAM) for long lists
 CONFIG_LV_USE_CLIB_MALLOC=y

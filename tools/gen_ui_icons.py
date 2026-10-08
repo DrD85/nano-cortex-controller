@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """UI symbols of the board in the desktop editor's drawings (nano-cortex-editor/tools/icons.py, own drawings):
-top bar (refresh, volume, MIDI, USB, save), dialog close, and the capture types (amp head, combo, amp + cab, cab,
-pedal, overdrive). Writes main/ui_icons.c (published). With the private icon set (nano-cortex-editor/img/icons.css)
-the capture types also go into main/private/ui_icons_private.c with the original symbols (own build only).
+top bar (refresh, volume, MIDI, USB, save), dialog close, the capture types (amp head, combo, amp + cab, cab,
+pedal, overdrive) and the FX editor's back, chevron and plus. Writes main/ui_icons.c (published). With the
+private icon set (nano-cortex-editor/img/icons.css) the capture types also go into main/private/ui_icons_private.c
+with the original symbols (own build only).
 Run from the project folder:  python3 tools/gen_ui_icons.py
 """
 import base64
@@ -33,10 +34,14 @@ OWN = {   # not in the editor's set
     'volume': '<path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9.5a3.5 3.5 0 0 1 0 5"/><path d="M18 7a7 7 0 0 1 0 10"/>',
     'usb': '<path d="M12 3v14"/><path d="M9.5 5.5L12 3l2.5 2.5"/><path d="M12 14l-4.5-2.5V9"/><path d="M12 12l4.5-2.5V7.5"/>'
            '<circle cx="7.5" cy="8" r="1"/><rect x="15.5" y="6" width="2" height="2"/><circle cx="12" cy="19" r="2"/>',
+    'back': '<path d="M15 5l-7 7 7 7"/>',
+    'chevron-down': '<path d="M6 9l6 6 6-6"/>',
+    'plus': '<path d="M12 5v14M5 12h14"/>',
 }
 KEYS = ['refresh', 'volume', 'midi', 'usb', 'save', 'close',
-        'cap-amp-head', 'cap-amp-combo', 'cap-amp-cab', 'cap-cab', 'cap-pedal', 'cap-overdrive']
-CAPTURE_KEYS = KEYS[6:]
+        'cap-amp-head', 'cap-amp-combo', 'cap-amp-cab', 'cap-cab', 'cap-pedal', 'cap-overdrive',
+        'back', 'chevron-down', 'plus']   # FX editor
+CAPTURE_KEYS = KEYS[6:12]
 
 
 def c_ident(key):

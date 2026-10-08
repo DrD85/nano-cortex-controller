@@ -1,6 +1,7 @@
 #include "ui.h"
 #include "ui_fonts.h"
 
+#include <ctype.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -29,8 +30,6 @@
 #define TUNER_TRACK_W 640
 #define TUNER_NOTE_SIZE 160   // px
 
-#define EDITOR_ROW_H 68
-
 // Look of the desktop editor (1.5): dark gradient cards with a thin border, dialogs as sheets with a title and a
 // round close button, filled = on / outlined = off, one set of corner radii (controls 9, panels 12, cards 16,
 // dialogs 18), IBM Plex Sans (ui_fonts.c).
@@ -55,6 +54,7 @@ static char s_ask_command;
 static int s_current_preset;
 static bool s_fx_mode;
 
+static lv_obj_t *s_main;   // everything of the main screen (hidden under the full-screen editor and tuner)
 static lv_obj_t *s_status_dot, *s_status, *s_edited, *s_app, *s_midi_icon;
 static lv_obj_t *s_gig_bar, *s_gig_dot, *s_gig_number, *s_gig_bank, *s_gig_name, *s_gig_dirty, *s_gig_mode;
 static lv_obj_t *s_capture_title;
@@ -64,6 +64,7 @@ static lv_obj_t *s_tile[TILES], *s_tile_caption[TILES], *s_tile_name[TILES], *s_
 static lv_obj_t *s_tile_square[TILES], *s_tile_pedal[TILES];
 static lv_obj_t *s_tile_other[TILES];   // second line under the caption: the other effect of an A/B slot
 static uint32_t s_tile_ink[TILES];
+static uint32_t s_tile_pedal_type[TILES], s_tile_other_type[TILES];   // shown by show_tile_extras
 static lv_obj_t *s_capture_square, *s_capture_slot_label, *s_cab_square, *s_cab_slot_label;
 static lv_obj_t *s_picker, *s_picker_title, *s_picker_list, *s_picker_tab[2], *s_picker_chips, *s_picker_chip[LIB_CATEGORY_COUNT];
 static lv_obj_t *s_picker_pager, *s_picker_page_label, *s_picker_info, *s_confirm, *s_confirm_text;
@@ -111,18 +112,28 @@ static int s_capture_slot, s_cab_slot;
 static lv_obj_t *s_tuner, *s_tuner_note, *s_tuner_needle, *s_tuner_cents, *s_tuner_hz, *s_tuner_mute;
 
 // FX editor
-static lv_obj_t *s_editor, *s_editor_icon, *s_editor_slot, *s_editor_model, *s_editor_onoff, *s_editor_onoff_label;
-static lv_obj_t *s_editor_switch;
-static lv_obj_t *s_editor_body, *s_editor_info, *s_model_list, *s_editor_pedal;
-static lv_obj_t *s_editor_model_button, *s_editor_second, *s_editor_second_label;
-static bool s_model_list_second;   // the model list chooses the second effect (Pre FX 1)
-static lv_obj_t *s_fxp_chip[UI_FX_PRESETS + 1];   // FX presets above the parameters: 0 = ORIGINAL
+static lv_obj_t *s_editor, *s_editor_card, *s_editor_chip, *s_editor_icon, *s_editor_slot, *s_editor_model, *s_editor_pedal;
+static lv_obj_t *s_editor_onoff, *s_editor_switch, *s_editor_ab, *s_editor_ab_seg[2];
+static lv_obj_t *s_editor_body, *s_editor_info, *s_editor_info_text;
+static lv_obj_t *s_panel_scrim, *s_panel, *s_panel_title, *s_panel_sub, *s_panel_list;   // model / option choice
+static int s_panel_mode, s_panel_param;
+static int s_panel_built_mode = -1, s_panel_built_slot;   // the entries in s_panel_list (-1 = none)
+static intptr_t s_panel_current;                          // model or option drawn as the current one
+static lv_obj_t *s_fxp_bar, *s_fxp_chip[UI_FX_PRESETS + 1];   // FX presets above the parameters: 0 = ORIGINAL
 static char s_fxp_names[UI_FX_PRESETS][16];
 static int s_fxp_active = -1;
 static bool s_fxp_usable;
-static lv_obj_t *s_param_control[NANO_MAX_PARAMS], *s_param_value[NANO_MAX_PARAMS];
+static lv_obj_t *s_param_bar[NANO_MAX_PARAMS];
+static float s_param_norm[NANO_MAX_PARAMS];   // value of each parameter (0-1), < 0 = not known
+static char s_param_text[NANO_MAX_PARAMS][16]; // its text as drawn (number or option)
+static int16_t s_param_unit_w[NANO_MAX_PARAMS];
+static int32_t s_drag_x;                       // a bar follows the finger sideways (relative, from s_drag_from)
+static float s_drag_from;
+static lv_obj_t *s_drag_bar;
+static int s_drag_param;
+static bool s_dragging;
 static int s_editor_slot_index = -1;
-static uint32_t s_editor_model_type;
+static uint32_t s_editor_model_type, s_editor_color = 0x5A5A5A;
 static const nano_fx_model_t *s_editor_model_def;
 
 // Black text on light tiles, white text on dark ones.
@@ -238,7 +249,7 @@ static lv_obj_t *ui_icon(lv_obj_t *parent, int icon, int size, uint32_t color)
 // Round close button of a dialog (top right).
 static lv_obj_t *close_button(lv_obj_t *parent, int x, int y, lv_event_cb_t cb, int data)
 {
-    lv_obj_t *btn = button(parent, x, y, 44, 44, cb);
+    lv_obj_t *btn = button(parent, x - 8, y - 4, 52, 52, cb);   // x, y: where a 44 px button would sit
     lv_obj_remove_event_cb(btn, cb);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, (void *)(intptr_t)data);
     lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
@@ -333,16 +344,70 @@ static uint32_t blend(uint32_t a, uint32_t b, float k)
     return out;
 }
 
+// ---- Changing only what differs ----
+// Every style or text change draws an object again, and the Nano's state arrives several times a second (mostly
+// unchanged): the main screen and the FX editor set only what differs.
+
+static void set_color_prop(lv_obj_t *obj, lv_style_prop_t prop, uint32_t rgb)
+{
+    lv_style_value_t old, v = { .color = lv_color_hex(rgb) };
+    if (lv_obj_get_local_style_prop(obj, prop, &old, 0) == LV_STYLE_RES_FOUND && lv_color_eq(old.color, v.color)) return;
+    lv_obj_set_local_style_prop(obj, prop, v, 0);
+}
+
+static void set_num_prop(lv_obj_t *obj, lv_style_prop_t prop, int32_t num)
+{
+    lv_style_value_t old, v = { .num = num };
+    if (lv_obj_get_local_style_prop(obj, prop, &old, 0) == LV_STYLE_RES_FOUND && old.num == num) return;
+    lv_obj_set_local_style_prop(obj, prop, v, 0);
+}
+
+static void set_ptr_prop(lv_obj_t *obj, lv_style_prop_t prop, const void *ptr)
+{
+    lv_style_value_t old, v = { .ptr = ptr };
+    if (lv_obj_get_local_style_prop(obj, prop, &old, 0) == LV_STYLE_RES_FOUND && old.ptr == ptr) return;
+    lv_obj_set_local_style_prop(obj, prop, v, 0);
+}
+
+static void set_align_if(lv_obj_t *obj, lv_align_t align, int32_t x, int32_t y)
+{
+    set_num_prop(obj, LV_STYLE_ALIGN, align);
+    set_num_prop(obj, LV_STYLE_X, x);
+    set_num_prop(obj, LV_STYLE_Y, y);
+}
+
+static void set_hidden(lv_obj_t *obj, bool hidden)
+{
+    if (lv_obj_is_hidden(obj) != hidden) lv_obj_set_hidden(obj, hidden);
+}
+
+static void set_text(lv_obj_t *l, const char *text)
+{
+    if (strcmp(lv_label_get_text(l), text)) lv_label_set_text(l, text);
+}
+
+static void set_image(lv_obj_t *img, const void *src)
+{
+    if (lv_image_get_src(img) != src) lv_image_set_src(img, src);
+}
+
+// The main screen is hidden while the full-screen editor or tuner covers it: hidden objects are not drawn again
+// when the state changes (covered ones would be, under the editor).
+static void update_main_hidden(void)
+{
+    set_hidden(s_main, !lv_obj_is_hidden(s_editor) || !lv_obj_is_hidden(s_tuner));
+}
+
 static void set_icon_square(lv_obj_t *sq, uint32_t color, const lv_image_dsc_t *icon, bool active)
 {
     lv_obj_t *img = lv_obj_get_child(sq, 0);
-    lv_obj_set_style_bg_color(sq, lv_color_hex(color), 0);
-    lv_obj_set_style_opa(sq, active ? LV_OPA_COVER : 115, 0);
-    lv_obj_set_hidden(img, icon == NULL);
-    lv_label_set_text(lv_obj_get_child(sq, 1), "");
+    set_color_prop(sq, LV_STYLE_BG_COLOR, color);
+    set_num_prop(sq, LV_STYLE_OPA, active ? LV_OPA_COVER : 115);
+    set_hidden(img, icon == NULL);
+    set_text(lv_obj_get_child(sq, 1), "");
     if (icon) {
-        lv_image_set_src(img, icon);
-        lv_obj_set_style_image_recolor(img, lv_color_hex(ink_for(color)), 0);
+        set_image(img, icon);
+        set_color_prop(img, LV_STYLE_IMAGE_RECOLOR, ink_for(color));
     }
 }
 
@@ -381,6 +446,14 @@ static void fit_names(void)
 {
     static const lv_font_t *const gig[] = { &ui_font_title_40, &ui_font_title_34, &ui_font_title_30, &ui_font_title_26 };
     static const lv_font_t *const normal[] = { &ui_font_title_26, &ui_font_24, &ui_font_20, &ui_font_16 };
+    // Measuring takes a while and the names rarely change: only when a name or the view (gig / normal) changed.
+    static char measured[TILES][65];
+    static int measured_view = -1;
+    bool same = measured_view == s_fullscreen;
+    for (int i = 0; i < TILES && same; i++) same = !strcmp(measured[i], lv_label_get_text(s_tile_name[i]));
+    if (same) return;
+    measured_view = s_fullscreen;
+    for (int i = 0; i < TILES; i++) strlcpy(measured[i], lv_label_get_text(s_tile_name[i]), sizeof(measured[i]));
     const lv_font_t *const *fonts = s_fullscreen ? gig : normal;
     int room = tile_height() - (s_fullscreen ? 66 : 56);
     const lv_font_t *font = fonts[3];
@@ -400,9 +473,9 @@ static void fit_names(void)
         }
     }
     for (int i = 0; i < TILES; i++) {
-        lv_obj_set_style_text_font(s_tile_name[i], font, 0);
-        lv_obj_set_style_text_line_space(s_tile_name[i], -lv_font_get_line_height(font) / 6, 0);
-        lv_obj_align(s_tile_name[i], LV_ALIGN_BOTTOM_LEFT, 12, -10);
+        set_ptr_prop(s_tile_name[i], LV_STYLE_TEXT_FONT, font);
+        set_num_prop(s_tile_name[i], LV_STYLE_TEXT_LINE_SPACE, -lv_font_get_line_height(font) / 6);
+        set_align_if(s_tile_name[i], LV_ALIGN_BOTTOM_LEFT, 12, -10);
     }
 }
 
@@ -491,50 +564,70 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     uint32_t mark = empty ? 0x3A3F45 : active ? ink : color;   // symbol colour
     s_tile_ink[i] = ink;
     s_tile_accent[i] = mark;
-    lv_obj_set_hidden(s_tile_pedal[i], true);   // shown again by set_tile_pedal
-    lv_obj_set_style_bg_color(s_tile[i], lv_color_hex(bg), 0);
-    lv_obj_set_style_bg_grad_dir(s_tile[i], LV_GRAD_DIR_NONE, 0);
-    lv_obj_set_style_border_color(s_tile[i], lv_color_hex(border), 0);
-    lv_obj_set_style_shadow_width(s_tile[i], active ? 24 : 0, 0);
-    lv_obj_set_style_shadow_color(s_tile[i], lv_color_hex(color), 0);
-    lv_obj_set_style_shadow_opa(s_tile[i], LV_OPA_40, 0);
+    s_tile_pedal_type[i] = 0;   // set again by set_tile_pedal / set_tile_other, shown by show_tile_extras
+    s_tile_other_type[i] = 0;
+    lv_obj_t *t = s_tile[i];
+    set_color_prop(t, LV_STYLE_BG_COLOR, bg);
+    set_num_prop(t, LV_STYLE_BG_GRAD_DIR, LV_GRAD_DIR_NONE);
+    set_color_prop(t, LV_STYLE_BORDER_COLOR, border);
+    set_num_prop(t, LV_STYLE_SHADOW_WIDTH, active ? 24 : 0);
+    set_color_prop(t, LV_STYLE_SHADOW_COLOR, color);
+    set_num_prop(t, LV_STYLE_SHADOW_OPA, LV_OPA_40);
 
     lv_obj_t *sq = s_tile_square[i];
-    lv_obj_set_hidden(sq, !icon && !symbol);
+    set_hidden(sq, !icon && !symbol);
     lv_obj_t *img = lv_obj_get_child(sq, 0), *sym = lv_obj_get_child(sq, 1);
-    lv_obj_set_hidden(img, icon == NULL);
+    set_hidden(img, icon == NULL);
     if (icon) {
-        lv_image_set_src(img, icon);
-        lv_obj_set_style_image_recolor(img, lv_color_hex(mark), 0);
+        set_image(img, icon);
+        set_color_prop(img, LV_STYLE_IMAGE_RECOLOR, mark);
     }
-    lv_label_set_text(sym, symbol ? symbol : "");
-    lv_obj_set_style_text_color(sym, lv_color_hex(mark), 0);
-    lv_obj_set_pos(s_tile_caption[i], (icon || symbol) ? 56 : 14, 14);
-    lv_obj_set_width(s_tile_caption[i], (icon || symbol) ? TILE_W - 96 : TILE_W - 54);
+    set_text(sym, symbol ? symbol : "");
+    set_color_prop(sym, LV_STYLE_TEXT_COLOR, mark);
+    set_num_prop(s_tile_caption[i], LV_STYLE_X, (icon || symbol) ? 56 : 14);
+    set_num_prop(s_tile_caption[i], LV_STYLE_Y, 14);
+    set_num_prop(s_tile_caption[i], LV_STYLE_WIDTH, (icon || symbol) ? TILE_W - 96 : TILE_W - 54);
 
     char upper[40];   // captions in small capitals, as the editor's labels
     size_t n = 0;
     for (; caption[n] && n < sizeof(upper) - 1; n++) upper[n] = (char)((caption[n] >= 'a' && caption[n] <= 'z') ? caption[n] - 32 : caption[n]);
     upper[n] = 0;
-    lv_label_set_text(s_tile_caption[i], upper);
-    lv_obj_set_style_text_color(s_tile_caption[i], lv_color_hex(active ? ink : MUTED), 0);
-    lv_obj_set_style_text_opa(s_tile_caption[i], active ? 210 : LV_OPA_COVER, 0);
-    lv_obj_set_style_text_color(s_tile_number[i], lv_color_hex(active ? ink : 0x5D6267), 0);
-    lv_obj_set_style_text_opa(s_tile_number[i], active ? 170 : LV_OPA_COVER, 0);
+    set_text(s_tile_caption[i], upper);
+    set_color_prop(s_tile_caption[i], LV_STYLE_TEXT_COLOR, active ? ink : MUTED);
+    set_num_prop(s_tile_caption[i], LV_STYLE_TEXT_OPA, active ? 210 : LV_OPA_COVER);
+    set_color_prop(s_tile_number[i], LV_STYLE_TEXT_COLOR, active ? ink : 0x5D6267);
+    set_num_prop(s_tile_number[i], LV_STYLE_TEXT_OPA, active ? 170 : LV_OPA_COVER);
 
-    lv_label_set_text(s_tile_name[i], name);
-    lv_obj_set_style_text_color(s_tile_name[i], lv_color_hex(ink), 0);
-    lv_obj_set_hidden(s_tile_other[i], true);   // shown again by set_tile_other
+    set_text(s_tile_name[i], name);
+    set_color_prop(s_tile_name[i], LV_STYLE_TEXT_COLOR, ink);
 }
 
 // The other effect of an A/B slot, under the caption (after set_tile): "⇄ name".
 static void set_tile_other(int i, uint32_t type)
 {
-    lv_obj_set_hidden(s_tile_other[i], !type);
-    if (!type) return;
-    lv_label_set_text_fmt(s_tile_other[i], LV_SYMBOL_SHUFFLE " %s", nano_fx_name(type));
-    lv_obj_set_style_text_color(s_tile_other[i], lv_color_hex(s_tile_ink[i] == TEXT ? MUTED : s_tile_ink[i]), 0);
-    lv_obj_set_style_text_opa(s_tile_other[i], 210, 0);
+    s_tile_other_type[i] = type;
+}
+
+// After the tiles are set: the pedal drawings (FX tiles) and the A/B lines.
+static void show_tile_extras(void)
+{
+    char text[48];
+    for (int i = 0; i < TILES; i++) {
+        const lv_image_dsc_t *pedal = s_tile_pedal_type[i] ? nano_fx_pedal_tile(s_tile_pedal_type[i]) : NULL;
+        set_hidden(s_tile_pedal[i], pedal == NULL);
+        if (pedal) {
+            set_image(s_tile_pedal[i], pedal);
+            set_color_prop(s_tile_pedal[i], LV_STYLE_IMAGE_RECOLOR, s_tile_accent[i]);
+        }
+        uint32_t other = s_tile_other_type[i];
+        set_hidden(s_tile_other[i], !other);
+        if (other) {
+            snprintf(text, sizeof(text), LV_SYMBOL_SHUFFLE " %s", nano_fx_name(other));
+            set_text(s_tile_other[i], text);
+            set_color_prop(s_tile_other[i], LV_STYLE_TEXT_COLOR, s_tile_ink[i] == TEXT ? MUTED : s_tile_ink[i]);
+            set_num_prop(s_tile_other[i], LV_STYLE_TEXT_OPA, 210);
+        }
+    }
 }
 
 // ---- capture / cab picker: slots of the Nano or its library ----
@@ -2068,11 +2161,16 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_style_bg_color(screen, lv_color_black(), 0);
     lv_obj_set_scrollable(screen, false);
     lv_obj_add_event_cb(screen, on_gesture, LV_EVENT_GESTURE, NULL);
+    s_main = lv_obj_create(screen);
+    lv_obj_remove_style_all(s_main);
+    lv_obj_set_size(s_main, 800, 480);
+    lv_obj_set_scrollable(s_main, false);
+    lv_obj_set_clickable(s_main, false);
 
     // Top bar as in the editor: symbol buttons (refresh, capture volume, MIDI, USB) on the left, connection and
     // preset / bank in the middle, Save on the right (green when there is something to save). Below: the arrows and
     // the preset name, an orange dot next to it for unsaved changes. No card, no picture behind it.
-    lv_obj_t *preset = lv_obj_create(screen);
+    lv_obj_t *preset = lv_obj_create(s_main);
     lv_obj_remove_style_all(preset);
     lv_obj_set_pos(preset, 0, 0);
     lv_obj_set_size(preset, 800, 122);
@@ -2082,7 +2180,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
         { UI_ICON_REFRESH, on_refresh }, { UI_ICON_VOLUME, open_volume }, { UI_ICON_MIDI, open_midi }, { UI_ICON_USB, open_usb },
     };
     for (int i = 0; i < 4; i++) {
-        lv_obj_t *b = button(preset, 10 + i * 52, 6, 44, 40, TOP[i].cb);
+        lv_obj_t *b = button(preset, 10 + i * 62, 4, 56, 44, TOP[i].cb);
         lv_obj_t *img = ui_icon(b, TOP[i].icon, 24, 0xC8CCD1);
         lv_obj_center(img);
         if (TOP[i].icon == UI_ICON_MIDI) s_midi_icon = img;
@@ -2096,7 +2194,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_flex_align(status_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(status_row, 10, 0);
     lv_obj_set_clickable(status_row, false);
-    lv_obj_align(status_row, LV_ALIGN_TOP_MID, 0, 17);
+    lv_obj_align(status_row, LV_ALIGN_TOP_MID, 0, 18);
     s_status_dot = lv_obj_create(status_row);
     lv_obj_set_size(s_status_dot, 9, 9);
     lv_obj_set_style_radius(s_status_dot, LV_RADIUS_CIRCLE, 0);
@@ -2110,7 +2208,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_label_set_text(s_app, "APP");
     lv_obj_set_hidden(s_app, true);
 
-    s_save_button = button(preset, 676, 6, 114, 40, on_save_button);
+    s_save_button = button(preset, 664, 4, 126, 44, on_save_button);
     lv_obj_t *save_icon = ui_icon(s_save_button, UI_ICON_SAVE, 22, TEXT);
     lv_obj_align(save_icon, LV_ALIGN_LEFT_MID, 6, 0);
     s_save_label = label(s_save_button, &ui_font_16, TEXT);
@@ -2142,7 +2240,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_hidden(s_edited, true);
 
     // Gig view (swipe up): slim status bar over the tiles - connection, preset and bank, name, unsaved dot, mode.
-    s_gig_bar = lv_obj_create(screen);
+    s_gig_bar = lv_obj_create(s_main);
     lv_obj_remove_style_all(s_gig_bar);
     lv_obj_set_pos(s_gig_bar, 0, 0);
     lv_obj_set_size(s_gig_bar, 800, GIG_BAR_H);
@@ -2193,12 +2291,12 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_hidden(s_gig_bar, true);
 
     // Capture and cab cards
-    s_source_card[0] = source_card(screen, 10, "CAPTURE", NANO_ICON_CAPTURE, open_capture_picker, open_amp,
+    s_source_card[0] = source_card(s_main, 10, "CAPTURE", NANO_ICON_CAPTURE, open_capture_picker, open_amp,
                                    &s_capture_square, &s_capture, &s_capture_slot_label, &s_capture_title);
-    s_source_card[1] = source_card(screen, 405, "CAB / IR", NANO_ICON_CAB, open_cab_picker, open_cab_settings,
+    s_source_card[1] = source_card(s_main, 405, "CAB / IR", NANO_ICON_CAB, open_cab_picker, open_cab_settings,
                                    &s_cab_square, &s_cab, &s_cab_slot_label, NULL);
 
-    for (int i = 0; i < TILES; i++) build_tile(screen, i);
+    for (int i = 0; i < TILES; i++) build_tile(s_main, i);
     build_picker(screen);
     build_bank_editor(screen);
     build_editor(screen);
@@ -2271,19 +2369,17 @@ void ui_set_link(bool connected)
         lv_label_set_text(s_capture, "");
         lv_label_set_text(s_cab, "");
         for (int i = 0; i < TILES; i++) set_tile(i, "", "", 0x2A2A2A, false, true, NULL, NULL);
+        show_tile_extras();
         fit_names();
+        update_main_hidden();
     }
     lvgl_port_unlock();
 }
 
-// Pedal drawing on an FX tile (after set_tile), in the tile's text colour.
+// Pedal drawing on an FX tile (after set_tile), in the tile's symbol colour.
 static void set_tile_pedal(int i, uint32_t type)
 {
-    const lv_image_dsc_t *pedal = nano_fx_pedal_tile(type);
-    lv_obj_set_hidden(s_tile_pedal[i], pedal == NULL);
-    if (!pedal) return;
-    lv_image_set_src(s_tile_pedal[i], pedal);
-    lv_obj_set_style_image_recolor(s_tile_pedal[i], lv_color_hex(s_tile_accent[i]), 0);
+    s_tile_pedal_type[i] = type;
 }
 
 // Footswitch 1 (mode) and 2 (tuner) tiles.
@@ -2360,45 +2456,48 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     }
 
     snprintf(text, sizeof(text), "PRESET %d  \xC2\xB7  BANK %d", st->current_preset, view->bank + 1);
-    lv_label_set_text(s_preset_number, text);
-    lv_obj_set_hidden(s_preset_number, false);
-    lv_obj_set_hidden(s_status, true);    // the green dot says "connected"
+    set_text(s_preset_number, text);
+    set_hidden(s_preset_number, false);
+    set_hidden(s_status, true);    // the green dot says "connected"
     s_current_preset = st->current_preset;
     // Save: neutral, green when there is something to save (as in the editor), plus the orange dot by the name.
-    lv_obj_set_style_bg_color(s_save_button, lv_color_hex(st->dirty ? GREEN : 0x191B1D), 0);
-    lv_obj_set_style_bg_grad_dir(s_save_button, st->dirty ? LV_GRAD_DIR_NONE : LV_GRAD_DIR_VER, 0);
-    lv_obj_set_style_border_color(s_save_button, lv_color_hex(st->dirty ? GREEN : 0x3A3D40), 0);
-    lv_obj_set_style_text_color(s_save_label, lv_color_hex(st->dirty ? INK : TEXT), 0);
-    lv_obj_set_style_image_recolor(lv_obj_get_child(s_save_button, 0), lv_color_hex(st->dirty ? INK : TEXT), 0);
+    set_color_prop(s_save_button, LV_STYLE_BG_COLOR, st->dirty ? GREEN : 0x191B1D);
+    set_num_prop(s_save_button, LV_STYLE_BG_GRAD_DIR, st->dirty ? LV_GRAD_DIR_NONE : LV_GRAD_DIR_VER);
+    set_color_prop(s_save_button, LV_STYLE_BORDER_COLOR, st->dirty ? GREEN : 0x3A3D40);
+    set_color_prop(s_save_label, LV_STYLE_TEXT_COLOR, st->dirty ? INK : TEXT);
+    set_color_prop(lv_obj_get_child(s_save_button, 0), LV_STYLE_IMAGE_RECOLOR, st->dirty ? INK : TEXT);
     const char *name = st->preset_names[st->current_preset - 1];
     const char *shown = st->names_loaded && name[0] ? name : "-";
-    lv_label_set_text(s_preset_name, shown);
+    set_text(s_preset_name, shown);
     lv_point_t name_size;
     lv_text_get_size(&name_size, shown, &ui_font_title_46, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
     int half = (name_size.x < 600 ? name_size.x : 600) / 2;
-    lv_obj_set_pos(s_edited, 400 + half + 10, 82);
-    lv_obj_set_hidden(s_edited, !st->dirty);
+    set_num_prop(s_edited, LV_STYLE_X, 400 + half + 10);
+    set_num_prop(s_edited, LV_STYLE_Y, 82);
+    set_hidden(s_edited, !st->dirty);
 
     // Gig view bar
-    lv_label_set_text_fmt(s_gig_number, "%d", st->current_preset);
-    lv_label_set_text_fmt(s_gig_bank, "BANK %d", view->bank + 1);
-    lv_label_set_text(s_gig_name, shown);
+    snprintf(text, sizeof(text), "%d", st->current_preset);
+    set_text(s_gig_number, text);
+    snprintf(text, sizeof(text), "BANK %d", view->bank + 1);
+    set_text(s_gig_bank, text);
+    set_text(s_gig_name, shown);
     lv_text_get_size(&name_size, shown, &ui_font_title_22, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
     half = (name_size.x < 440 ? name_size.x : 440) / 2;
-    lv_obj_align(s_gig_dirty, LV_ALIGN_CENTER, half + 12, 0);
-    lv_obj_set_hidden(s_gig_dirty, !st->dirty);
-    lv_label_set_text(s_gig_mode, view->fx_mode ? "FX" : "PRESETS");
-    lv_obj_set_style_bg_color(s_gig_mode, lv_color_hex(TEXT), 0);
-    lv_obj_set_style_bg_opa(s_gig_mode, view->fx_mode ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
-    lv_obj_set_style_text_color(s_gig_mode, lv_color_hex(view->fx_mode ? INK : TEXT), 0);
+    set_align_if(s_gig_dirty, LV_ALIGN_CENTER, half + 12, 0);
+    set_hidden(s_gig_dirty, !st->dirty);
+    set_text(s_gig_mode, view->fx_mode ? "FX" : "PRESETS");
+    set_color_prop(s_gig_mode, LV_STYLE_BG_COLOR, TEXT);
+    set_num_prop(s_gig_mode, LV_STYLE_BG_OPA, view->fx_mode ? LV_OPA_COVER : LV_OPA_TRANSP);
+    set_color_prop(s_gig_mode, LV_STYLE_TEXT_COLOR, view->fx_mode ? INK : TEXT);
     memcpy(s_capture_names, st->capture_names, sizeof(s_capture_names));
     memcpy(s_cab_names, st->cab_names, sizeof(s_cab_names));
     s_capture_slot = st->capture_slot;
     memcpy(s_preset_names, st->preset_names, sizeof(s_preset_names));
     s_view = *view;
     s_cab_slot = st->cab_slot;
-    lv_label_set_text(s_capture, st->capture_slot ? (st->capture[0] ? st->capture : "-") : "Bypassed");
-    lv_obj_set_style_text_color(s_capture, lv_color_hex(st->capture_slot ? TEXT : MUTED), 0);
+    set_text(s_capture, st->capture_slot ? (st->capture[0] ? st->capture : "-") : "Bypassed");
+    set_color_prop(s_capture, LV_STYLE_TEXT_COLOR, st->capture_slot ? TEXT : MUTED);
     // The capture's type (amp head, combo, pedal, ...) from the library, as in the editor.
     static const char *const KIND_NAMES[LIB_KIND_COUNT] = { "AMP HEAD", "COMBO", "AMP + CAB", "CAB", "PEDAL", "OVERDRIVE",
                                                             "FUZZ", "COMPRESSOR", "" };
@@ -2415,17 +2514,18 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
                                     : kind == LIB_KIND_FUZZ ? NANO_ICONS[NANO_ICON_FUZZ]
                                     : kind == LIB_KIND_COMPRESSOR ? NANO_ICONS[NANO_ICON_COMPRESSOR] : NANO_ICONS[NANO_ICON_CAPTURE];
     set_icon_square(s_capture_square, TEXT, kind_icon ? kind_icon : NANO_ICONS[NANO_ICON_CAPTURE], st->capture_slot != 0);
-    if (KIND_NAMES[kind][0]) lv_label_set_text_fmt(s_capture_title, "CAPTURE  \xC2\xB7  %s", KIND_NAMES[kind]);
-    else lv_label_set_text(s_capture_title, "CAPTURE");
+    if (KIND_NAMES[kind][0]) snprintf(text, sizeof(text), "CAPTURE  \xC2\xB7  %s", KIND_NAMES[kind]);
+    else snprintf(text, sizeof(text), "CAPTURE");
+    set_text(s_capture_title, text);
     if (st->capture_slot) snprintf(text, sizeof(text), "%d-%d", (st->capture_slot - 1) / 5 + 1, (st->capture_slot - 1) % 5 + 1);
     else snprintf(text, sizeof(text), "BYPASS");
-    lv_label_set_text(s_capture_slot_label, text);
-    lv_label_set_text(s_cab, st->cab_slot ? (st->cab[0] ? st->cab : "-") : "Bypassed");
-    lv_obj_set_style_text_color(s_cab, lv_color_hex(st->cab_slot ? TEXT : MUTED), 0);
+    set_text(s_capture_slot_label, text);
+    set_text(s_cab, st->cab_slot ? (st->cab[0] ? st->cab : "-") : "Bypassed");
+    set_color_prop(s_cab, LV_STYLE_TEXT_COLOR, st->cab_slot ? TEXT : MUTED);
     set_icon_square(s_cab_square, TEXT, NANO_ICONS[NANO_ICON_CAB], st->cab_slot != 0);
     if (st->cab_slot) snprintf(text, sizeof(text), "%d", st->cab_slot);
     else snprintf(text, sizeof(text), "BYPASS");
-    lv_label_set_text(s_cab_slot_label, text);
+    set_text(s_cab_slot_label, text);
     // Capture volume: not while the slider is held or right after a change on the board (older replies).
     if (lv_obj_is_hidden(s_volume) ||
         (lv_tick_elaps(s_volume_tick) > VOLUME_HOLD_MS && !lv_obj_has_state(s_level_slider[0], LV_STATE_PRESSED))) {
@@ -2441,6 +2541,7 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
 
     if (view->fx_mode) show_fx_tiles(st, view);
     else show_preset_tiles(st, view);
+    show_tile_extras();
     fit_names();
 
     lvgl_port_unlock();
@@ -2459,6 +2560,7 @@ void ui_show_tuner(bool open)
 {
     lvgl_port_lock(0);
     lv_obj_set_hidden(s_tuner, !open);
+    update_main_hidden();
     if (open) tuner_idle();
     lvgl_port_unlock();
 }
@@ -2492,6 +2594,32 @@ void ui_show_tuner_reading(const nano_tuner_reading_t *reading)
 }
 
 // ---- FX editor: model and parameters of one FX slot (long press on an FX tile) ----
+// As the desktop editor: a header card (symbol chip filled = on / outlined = off, slot, model, pedal picture), the
+// FX presets, and the parameters as fill bars in two columns. A bar follows the finger once it moves sideways (a tap
+// or a scroll never jumps a value); enum parameters with up to three options show them as a segmented switch,
+// longer lists open a panel. Fields that are not active have a frame in the dimmed effect colour (as the switch
+// labels of a Morningstar MC8 Pro), the active ones are filled.
+// Speed: bars and panel entries are single objects drawn in one go (LV_EVENT_DRAW_MAIN_END), the model list is
+// built once per slot, and ui_fx_editor_show only touches what changed (the Nano's state arrives every few hundred
+// ms while editing).
+
+#define ED_BAR_W 384
+#define ED_BAR_H 64
+#define ED_BAR_PITCH 72
+#define ED_BODY_Y 140
+#define ED_DRAG_START 8       // px sideways before a bar follows the finger
+#define ED_PANEL_W 716
+#define ED_PANEL_H 398
+#define ED_ENTRY_H 64         // panel entries: large enough to hit on stage
+#define ED_ENTRY_W 342        // model entry: two columns in the panel
+#define ED_OPTION_W 168       // option entry: four columns
+#define ED_DIM 0.42f          // frame of a field that is not active: effect colour mixed with the background
+#define ED_NEUTRAL 0x2E3237   // frame of an empty field or an unknown value
+
+enum { PANEL_MODEL, PANEL_SECOND, PANEL_OPTION };
+
+static void on_fxp_chip(lv_event_t *e);
+static void on_fxp_chip_long(lv_event_t *e);
 
 static float param_from_normalized(const nano_param_t *p, float n)
 {
@@ -2500,15 +2628,80 @@ static float param_from_normalized(const nano_param_t *p, float n)
     return v < p->min ? p->min : v > p->max ? p->max : v;
 }
 
-static void format_param(char *buf, size_t size, const nano_param_t *p, float n)
+// Option i of an enum parameter (the options are separated by "\n").
+static void option_text(const nano_param_t *p, int i, char *buf, size_t size)
 {
-    snprintf(buf, size, "%.*f %s", p->decimals < 0 ? 1 : p->decimals, (double)param_from_normalized(p, n), p->unit);
+    const char *o = p->options ? p->options : "";
+    for (; i > 0 && o; i--) {
+        o = strchr(o, '\n');
+        if (o) o++;
+    }
+    size_t len = o ? strcspn(o, "\n") : 0;
+    if (len >= size) len = size - 1;
+    if (o) memcpy(buf, o, len);
+    buf[len] = 0;
+}
+
+static int option_index(const nano_param_t *p, float n)
+{
+    return n < 0 ? -1 : (int)lroundf(n * (p->option_count > 1 ? p->option_count - 1 : 0));
+}
+
+// One line of text; y1 is the top of the line box. Text that does not live on (a local buffer) is copied.
+static void draw_text(lv_layer_t *layer, const char *text, bool copy, const lv_font_t *font, uint32_t color, int32_t x1,
+                      int32_t y1, int32_t x2, lv_text_align_t align)
+{
+    lv_draw_label_dsc_t d;
+    lv_draw_label_dsc_init(&d);
+    d.text = text;
+    d.text_local = copy;
+    d.font = font;
+    d.color = lv_color_hex(color);
+    d.align = align;
+    lv_area_t area = { x1, y1, x2, y1 + lv_font_get_line_height(font) - 1 };
+    lv_draw_label(layer, &d, &area);
+}
+
+static void draw_frame(lv_layer_t *layer, const lv_area_t *a, uint32_t bg, uint32_t border, int radius)
+{
+    lv_draw_rect_dsc_t r;
+    lv_draw_rect_dsc_init(&r);
+    r.bg_color = lv_color_hex(bg);
+    r.radius = radius;
+    r.border_width = 2;
+    r.border_color = lv_color_hex(border);
+    lv_draw_rect(layer, &r, a);
+}
+
+// ---- Panel (model / second effect / option) ----
+
+static void panel_clean_later(void *unused)
+{
+    if (lv_obj_is_hidden(s_panel)) {
+        lv_obj_clean(s_panel_list);
+        s_panel_built_mode = -1;
+    }
+}
+
+static void close_panel(void)
+{
+    set_hidden(s_panel_scrim, true);
+    set_hidden(s_panel, true);
+}
+
+// The editor closes or shows another slot: the panel's entries go (after the click that may have caused it).
+static void drop_panel(void)
+{
+    close_panel();
+    s_panel_built_mode = -1;
+    lv_async_call(panel_clean_later, NULL);
 }
 
 static void on_editor_back(lv_event_t *e)
 {
-    lv_obj_set_hidden(s_model_list, true);
+    drop_panel();
     lv_obj_set_hidden(s_editor, true);
+    update_main_hidden();
     s_editor_slot_index = -1;
     send('E', 0);
 }
@@ -2518,65 +2711,433 @@ static void on_editor_onoff(lv_event_t *e)
     if (s_editor_slot_index >= 0) send('a' + s_editor_slot_index, 0);
 }
 
-static void build_model_list(int slot);
+static void open_panel(int mode, int param);
 
 static void on_model_button(lv_event_t *e)
 {
-    if (s_model_list_second) {
-        s_model_list_second = false;
-        build_model_list(s_editor_slot_index);
-        lv_obj_set_hidden(s_model_list, false);
+    if (s_editor_slot_index >= 0) open_panel(PANEL_MODEL, 0);
+}
+
+// Pre FX 1, A | B: the other one swaps (as holding footswitch 3); the running one - or B while there is no second
+// effect - chooses the second effect.
+static void on_ab(lv_event_t *e)
+{
+    int seg = (int)(intptr_t)lv_event_get_user_data(e);
+    int running = s_view.pre1_b_type && s_view.pre1_active ? 1 : 0;
+    if (s_view.pre1_b_type && seg != running) send('w', UI_SWITCH_HOLD | 3);
+    else open_panel(PANEL_SECOND, 0);
+}
+
+static void on_panel_close(lv_event_t *e) { close_panel(); }
+
+static void set_param_norm(int idx, float n);
+
+static void set_enum(int idx, int choice)
+{
+    const nano_param_t *p = &s_editor_model_def->params[idx];
+    if (choice == option_index(p, s_param_norm[idx])) return;
+    float n = p->option_count > 1 ? (float)choice / (p->option_count - 1) : 0;
+    set_param_norm(idx, n);
+    if (s_on_param) s_on_param(s_editor_slot_index, idx, n);
+}
+
+// A tap on an entry: data is the model (0 = none) or the option.
+static void panel_choice(intptr_t data)
+{
+    close_panel();
+    if (s_panel_mode == PANEL_MODEL) {
+        if ((uint32_t)data != s_editor_model_type) send('M', (int)data);
+    } else if (s_panel_mode == PANEL_SECOND) {
+        if ((uint32_t)data != s_view.pre1_b_type) send('A', 1 << 24 | (int)data);
+    } else if (s_editor_model_def && s_panel_param < s_editor_model_def->param_count) {
+        set_enum(s_panel_param, (int)data);
+    }
+}
+
+static void draw_entry(lv_obj_t *obj, lv_layer_t *layer, intptr_t data)
+{
+    lv_area_t a;
+    lv_obj_get_coords(obj, &a);
+    int32_t cy = (a.y1 + a.y2) / 2;
+    bool option = s_panel_mode == PANEL_OPTION;
+    const nano_fx_model_t *m = option || !data ? NULL : nano_fx_model((uint32_t)data);
+    uint32_t color = option ? s_editor_color : m ? m->color : 0x9AA0A6;
+    bool current = data == s_panel_current;
+    bool pressed = lv_obj_has_state(obj, LV_STATE_PRESSED);
+    // The current one filled in its colour, the others framed in the dimmed colour.
+    if (current) draw_frame(layer, &a, color, color, 10);
+    else draw_frame(layer, &a, pressed ? 0x23272B : PANEL_BG, blend(color, PANEL_BG, ED_DIM), 10);
+    uint32_t ink = current ? ink_for(color) : TEXT;
+    if (option) {
+        char text[24];
+        option_text(&s_editor_model_def->params[s_panel_param], (int)data, text, sizeof(text));
+        draw_text(layer, text, true, &ui_font_20, ink, a.x1 + 4, cy - 13, a.x2 - 4, LV_TEXT_ALIGN_CENTER);
         return;
     }
-    lv_obj_set_hidden(s_model_list, !lv_obj_is_hidden(s_model_list));
+    int32_t x = a.x1 + 16;
+    if (m && NANO_ICONS[m->icon]) {   // the symbol at its own size (no scaling while the list scrolls)
+        lv_draw_image_dsc_t d;
+        lv_draw_image_dsc_init(&d);
+        d.src = NANO_ICONS[m->icon];
+        d.recolor = lv_color_hex(current ? ink : color);
+        d.recolor_opa = LV_OPA_COVER;
+        lv_area_t ia = { a.x1 + 6, cy - 18, a.x1 + 41, cy + 17 };
+        lv_draw_image(layer, &d, &ia);
+        x = a.x1 + 48;
+    }
+    draw_text(layer, m ? m->name : "None", false, &ui_font_16, ink, x, cy - 11, a.x2 - 10, LV_TEXT_ALIGN_LEFT);
 }
 
-// 2ND (Pre FX 1): the model list chooses the second effect, which footswitch 3 swaps in when held.
-static void on_second_button(lv_event_t *e)
+static void on_entry_event(lv_event_t *e)
 {
-    bool open = !lv_obj_is_hidden(s_model_list) && s_model_list_second;
-    s_model_list_second = !open;
-    build_model_list(s_editor_slot_index);
-    lv_obj_set_hidden(s_model_list, open);
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t *obj = lv_event_get_current_target_obj(e);
+    intptr_t data = (intptr_t)lv_event_get_user_data(e);
+    if (code == LV_EVENT_DRAW_MAIN_END) draw_entry(obj, lv_event_get_layer(e), data);
+    else if (code == LV_EVENT_PRESSED || code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) lv_obj_invalidate(obj);
+    else if (code == LV_EVENT_CLICKED) panel_choice(data);
 }
 
-static void on_second_choice(lv_event_t *e)
+static void panel_entry(int w, intptr_t data)
 {
-    int choice = (int)(intptr_t)lv_event_get_user_data(e);   // model, 0 = none, -1 = swap now
-    lv_obj_set_hidden(s_model_list, true);
-    s_model_list_second = false;
-    if (choice < 0) send('w', UI_SWITCH_HOLD | 3);
-    else if ((uint32_t)choice != s_view.pre1_b_type) send('A', 1 << 24 | choice);
+    lv_obj_t *obj = lv_obj_create(s_panel_list);
+    lv_obj_remove_style_all(obj);
+    lv_obj_set_size(obj, w, ED_ENTRY_H);
+    lv_obj_set_clickable(obj, true);
+    lv_obj_set_scrollable(obj, false);
+    lv_obj_set_user_data(obj, (void *)data);
+    lv_obj_add_event_cb(obj, on_entry_event, LV_EVENT_ALL, (void *)data);
 }
 
-static void on_model_choice(lv_event_t *e)
+static void panel_heading(const char *text)
 {
-    uint32_t type = (uint32_t)(uintptr_t)lv_event_get_user_data(e);
-    lv_obj_set_hidden(s_model_list, true);
-    if (type != s_editor_model_type) send('M', (int)type);
+    lv_obj_t *l = label(s_panel_list, &ui_font_12, MUTED);
+    lv_label_set_text(l, text);
+    lv_obj_set_width(l, LV_PCT(100));
+    lv_obj_set_style_text_letter_space(l, 2, 0);
+    lv_obj_set_style_pad_top(l, 8, 0);
+    lv_obj_set_style_pad_left(l, 4, 0);
 }
 
-static void on_slider(lv_event_t *e)
+static const char *model_group(int icon)
 {
-    int param = (int)(intptr_t)lv_event_get_user_data(e);
-    if (!s_editor_model_def || param >= s_editor_model_def->param_count) return;
-    const nano_param_t *p = &s_editor_model_def->params[param];
-    float n = lv_slider_get_value(lv_event_get_target_obj(e)) / 1000.0f;
-    float v = param_from_normalized(p, n);   // snap to the parameter's step
+    switch (icon) {
+    case NANO_ICON_OVERDRIVE: case NANO_ICON_BASS_OVERDRIVE: case NANO_ICON_FUZZ: return "DRIVE";
+    case NANO_ICON_GATE: case NANO_ICON_EQUALIZER: case NANO_ICON_UTILITY: return "EQ & UTILITY";
+    case NANO_ICON_WAH: case NANO_ICON_FILTER: return "WAH & FILTER";
+    case NANO_ICON_COMPRESSOR: return "COMPRESSOR";
+    case NANO_ICON_PITCH: return "PITCH";
+    case NANO_ICON_DOUBLER: return "DOUBLER";
+    case NANO_ICON_MODULATION: return "MODULATION";
+    case NANO_ICON_DELAY: return "DELAY";
+    case NANO_ICON_REVERB: return "REVERB";
+    default: return "OTHER";
+    }
+}
+
+static void open_panel(int mode, int param)
+{
+    const nano_fx_model_t *cur = s_editor_model_def;
+    if (mode == PANEL_OPTION && (!cur || param >= cur->param_count)) return;
+    int slot = mode == PANEL_SECOND ? 0 : s_editor_slot_index;
+    char sub[80];
+    // The model lists stay built while the editor shows this slot; an option list is built each time (it is short).
+    if (mode == PANEL_OPTION || mode != s_panel_built_mode || slot != s_panel_built_slot) {
+        lv_async_call_cancel(panel_clean_later, NULL);
+        lv_obj_clean(s_panel_list);
+        s_panel_built_mode = mode;
+        s_panel_built_slot = slot;
+        s_panel_mode = mode;
+        s_panel_param = param;
+        if (mode == PANEL_OPTION) {
+            for (int i = 0; i < cur->params[param].option_count; i++) panel_entry(ED_OPTION_W, i);
+        } else {
+            if (mode == PANEL_SECOND) panel_entry(ED_ENTRY_W, 0);   // None
+            const char *group = NULL;
+            for (int i = 0; i < NANO_SLOT_MODEL_COUNT[slot]; i++) {
+                const nano_fx_model_t *m = nano_fx_model(NANO_SLOT_MODELS[slot][i]);
+                if (!m) continue;
+                const char *g = model_group(m->icon);
+                if (!group || strcmp(g, group)) panel_heading(group = g);
+                panel_entry(ED_ENTRY_W, (intptr_t)m->type);
+            }
+        }
+    }
+    s_panel_mode = mode;
+    s_panel_param = param;
+    if (mode == PANEL_OPTION) {
+        const nano_param_t *p = &cur->params[param];
+        lv_label_set_text(s_panel_title, p->name);
+        snprintf(sub, sizeof(sub), "%s  \xC2\xB7  %s", cur->name, NANO_FX_SLOT_NAMES[s_editor_slot_index]);
+        s_panel_current = option_index(p, s_param_norm[param]);
+    } else if (mode == PANEL_SECOND) {
+        lv_label_set_text(s_panel_title, "Second effect (B)");
+        snprintf(sub, sizeof(sub), "%s  \xC2\xB7  hold footswitch 3 to swap A and B", NANO_FX_SLOT_NAMES[0]);
+        s_panel_current = (intptr_t)s_view.pre1_b_type;
+    } else {
+        lv_label_set_text(s_panel_title, "Choose a model");
+        snprintf(sub, sizeof(sub), "%s", NANO_FX_SLOT_NAMES[slot]);
+        s_panel_current = (intptr_t)s_editor_model_type;
+    }
+    lv_label_set_text(s_panel_sub, sub);
+    lv_obj_invalidate(s_panel_list);
+    set_hidden(s_panel_scrim, false);
+    set_hidden(s_panel, false);
+    lv_obj_update_layout(s_panel_list);
+    lv_obj_scroll_to_y(s_panel_list, 0, LV_ANIM_OFF);
+    for (uint32_t i = 0; i < lv_obj_get_child_count(s_panel_list); i++) {
+        lv_obj_t *c = lv_obj_get_child(s_panel_list, (int32_t)i);
+        if (lv_obj_get_user_data(c) == (void *)s_panel_current && lv_obj_is_clickable(c)) {
+            lv_obj_scroll_to_view(c, LV_ANIM_OFF);
+            break;
+        }
+    }
+}
+
+// ---- Parameter bars ----
+
+// Value and its text (the number of a range, the option of a long enum) for drawing.
+static void set_param_norm(int idx, float n)
+{
+    const nano_param_t *p = &s_editor_model_def->params[idx];
+    s_param_norm[idx] = n;
+    if (n < 0) strlcpy(s_param_text[idx], "\xE2\x80\x93", sizeof(s_param_text[idx]));   // en dash: not known
+    else if (p->kind == NANO_PARAM_RANGE)
+        snprintf(s_param_text[idx], sizeof(s_param_text[idx]), "%.*f", p->decimals < 0 ? 1 : p->decimals, (double)param_from_normalized(p, n));
+    else option_text(p, option_index(p, n), s_param_text[idx], sizeof(s_param_text[idx]));
+    if (s_param_bar[idx]) lv_obj_invalidate(s_param_bar[idx]);
+}
+
+// Segmented switch of an enum with up to three options, at the right end of its bar.
+static void enum_switch_area(const lv_area_t *bar, int count, lv_area_t *out)
+{
+    int32_t cy = (bar->y1 + bar->y2) / 2;
+    out->x2 = bar->x2 - 7;
+    out->x1 = out->x2 - (count == 2 ? 180 : 246) + 1;
+    out->y1 = cy - 25;
+    out->y2 = cy + 24;
+}
+
+static void draw_bar(lv_obj_t *bar, int idx, lv_layer_t *layer)
+{
+    const nano_param_t *p = &s_editor_model_def->params[idx];
+    lv_area_t a;
+    lv_obj_get_coords(bar, &a);
+    int32_t cy = (a.y1 + a.y2) / 2;
+    float n = s_param_norm[idx];
+    bool known = n >= 0;
+    bool touched = lv_obj_has_state(bar, LV_STATE_PRESSED);
+    uint32_t color = s_editor_color;
+    lv_draw_rect_dsc_t r;
+
+    // Frame in the dimmed effect colour (brighter while touched), grey while the value is not known.
+    draw_frame(layer, &a, TILE_OFF_BG, known ? blend(color, TILE_OFF_BG, touched ? 0.8f : ED_DIM) : ED_NEUTRAL, 12);
+
+    if (p->kind == NANO_PARAM_RANGE && known) {
+        // Fill inside the frame up to the value, cut straight there; a bright line marks the value.
+        lv_area_t in = { a.x1 + 2, a.y1 + 2, a.x2 - 2, a.y2 - 2 };
+        int32_t x = in.x1 + (int32_t)lroundf(n * (lv_area_get_width(&in) - 1));
+        lv_area_t old = layer->_clip_area;
+        lv_area_t clip = { LV_MAX(in.x1, old.x1), LV_MAX(in.y1, old.y1), LV_MIN(x, old.x2), LV_MIN(in.y2, old.y2) };
+        if (clip.x1 <= clip.x2 && clip.y1 <= clip.y2) {
+            layer->_clip_area = clip;
+            lv_draw_rect_dsc_init(&r);
+            r.bg_color = lv_color_hex(blend(color, TILE_OFF_BG, 0.30f));
+            r.radius = 10;
+            lv_draw_rect(layer, &r, &in);
+            layer->_clip_area = old;
+        }
+        lv_area_t glow = { x - 5, a.y1 + 7, x + 4, a.y2 - 7 }, edge = { x - 2, a.y1 + 9, x + 1, a.y2 - 9 };
+        int32_t shift = edge.x1 < a.x1 + 4 ? a.x1 + 4 - edge.x1 : edge.x2 > a.x2 - 4 ? a.x2 - 4 - edge.x2 : 0;
+        lv_area_move(&glow, shift, 0);
+        lv_area_move(&edge, shift, 0);
+        lv_draw_rect_dsc_init(&r);   // a soft glow without a shadow (shadows are slow to draw)
+        r.bg_color = lv_color_hex(color);
+        r.bg_opa = LV_OPA_30;
+        r.radius = 5;
+        lv_draw_rect(layer, &r, &glow);
+        r.bg_opa = LV_OPA_COVER;
+        r.radius = 2;
+        lv_draw_rect(layer, &r, &edge);
+    }
+
+    int32_t name_end = a.x1 + 220;
+    lv_area_t sw;
+    bool segmented = p->kind == NANO_PARAM_ENUM && p->option_count <= 3;
+    if (segmented) {
+        enum_switch_area(&a, p->option_count, &sw);
+        name_end = sw.x1 - 8;
+    }
+    draw_text(layer, p->name, false, &ui_font_16, known ? 0xE6E8EA : 0x6B7076, a.x1 + 16, cy - 11, name_end, LV_TEXT_ALIGN_LEFT);
+
+    if (p->kind == NANO_PARAM_RANGE) {
+        // Value with the unit small next to it (both on one baseline)
+        int32_t right = a.x2 - 16;
+        if (known && s_param_unit_w[idx]) {
+            draw_text(layer, p->unit, false, &ui_font_14, MUTED, right - s_param_unit_w[idx] - 2, cy - 7, right, LV_TEXT_ALIGN_RIGHT);
+            right -= s_param_unit_w[idx] + 3;
+        }
+        draw_text(layer, s_param_text[idx], false, &ui_font_title_22, known ? TEXT : 0x5D6267, right - 150, cy - 15, right,
+                  LV_TEXT_ALIGN_RIGHT);
+        return;
+    }
+    if (p->option_count > 3) {   // the option and a chevron: a tap opens the list
+        draw_text(layer, s_param_text[idx], false, &ui_font_20, known ? TEXT : 0x5D6267, a.x2 - 200, cy - 13, a.x2 - 40,
+                  LV_TEXT_ALIGN_RIGHT);
+        draw_text(layer, LV_SYMBOL_DOWN, false, &ui_font_16, MUTED, a.x2 - 36, cy - 11, a.x2 - 16, LV_TEXT_ALIGN_RIGHT);
+        return;
+    }
+    // Up to three options: the chosen one filled in the effect colour.
+    int current = option_index(p, n);
+    lv_draw_rect_dsc_init(&r);
+    r.bg_color = lv_color_hex(0x0B0C0E);
+    r.border_width = 1;
+    r.border_color = lv_color_hex(0x2A2E33);
+    r.radius = 10;
+    lv_draw_rect(layer, &r, &sw);
+    int32_t seg_w = (lv_area_get_width(&sw) - 6) / p->option_count;
+    char text[24];
+    for (int i = 0; i < p->option_count; i++) {
+        lv_area_t s = { sw.x1 + 3 + i * seg_w, sw.y1 + 3, sw.x1 + 3 + (i + 1) * seg_w - 1, sw.y2 - 3 };
+        if (i == current) {
+            lv_draw_rect_dsc_init(&r);
+            r.bg_color = lv_color_hex(color);
+            r.radius = 8;
+            lv_draw_rect(layer, &r, &s);
+        }
+        option_text(p, i, text, sizeof(text));
+        draw_text(layer, text, true, &ui_font_16, i == current ? ink_for(color) : known ? 0xC8CCD1 : 0x5D6267, s.x1, cy - 11,
+                  s.x2, LV_TEXT_ALIGN_CENTER);
+    }
+}
+
+static void set_bar_value(int idx, float n)
+{
+    const nano_param_t *p = &s_editor_model_def->params[idx];
+    float v = param_from_normalized(p, n < 0 ? 0 : n > 1 ? 1 : n);   // snap to the parameter's step
     n = p->max > p->min ? (v - p->min) / (p->max - p->min) : 0;
-    char text[32];
-    format_param(text, sizeof(text), p, n);
-    lv_label_set_text(s_param_value[param], text);
-    if (s_on_param) s_on_param(s_editor_slot_index, param, n);
+    if (fabsf(n - s_param_norm[idx]) < 0.0001f) return;
+    set_param_norm(idx, n);
+    if (s_on_param) s_on_param(s_editor_slot_index, idx, n);
 }
 
-static void on_dropdown(lv_event_t *e)
+static void stop_drag(void)
 {
-    int param = (int)(intptr_t)lv_event_get_user_data(e);
-    if (!s_editor_model_def || param >= s_editor_model_def->param_count) return;
-    int count = s_editor_model_def->params[param].option_count;
-    float n = count > 1 ? (float)lv_dropdown_get_selected(lv_event_get_target_obj(e)) / (count - 1) : 0;
-    if (s_on_param) s_on_param(s_editor_slot_index, param, n);
+    if (s_dragging && s_drag_bar) lv_obj_set_scroll_chain_ver(s_drag_bar, true);
+    s_dragging = false;
+    s_drag_bar = NULL;
+}
+
+static void on_bar_event(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    int idx = (int)(intptr_t)lv_event_get_user_data(e);
+    lv_obj_t *bar = lv_event_get_current_target_obj(e);
+    if (!s_editor_model_def || idx >= s_editor_model_def->param_count) return;
+    if (code == LV_EVENT_DRAW_MAIN_END) {
+        draw_bar(bar, idx, lv_event_get_layer(e));
+        return;
+    }
+    if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING && code != LV_EVENT_RELEASED && code != LV_EVENT_PRESS_LOST
+        && code != LV_EVENT_CLICKED) return;
+    const nano_param_t *p = &s_editor_model_def->params[idx];
+    lv_indev_t *indev = lv_indev_active();
+    lv_point_t point = { 0, 0 };
+    if (indev) lv_indev_get_point(indev, &point);
+
+    if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+        stop_drag();
+        lv_obj_invalidate(bar);   // frame back to dimmed
+        return;
+    }
+    if (s_param_norm[idx] < 0) return;   // not known (effect off, still reading)
+    if (p->kind == NANO_PARAM_ENUM) {
+        if (code != LV_EVENT_CLICKED) return;
+        if (p->option_count > 3) {
+            open_panel(PANEL_OPTION, idx);
+            return;
+        }
+        // On the switch: that option; elsewhere on the bar: the next one.
+        lv_area_t a, sw;
+        lv_obj_get_coords(bar, &a);
+        enum_switch_area(&a, p->option_count, &sw);
+        int choice = (option_index(p, s_param_norm[idx]) + 1) % p->option_count;
+        if (point.x >= sw.x1 && point.x <= sw.x2) choice = (point.x - sw.x1) * p->option_count / lv_area_get_width(&sw);
+        set_enum(idx, choice < 0 ? 0 : choice >= p->option_count ? p->option_count - 1 : choice);
+        return;
+    }
+    if (code == LV_EVENT_PRESSED) {
+        s_drag_x = point.x;
+        s_dragging = false;
+        lv_obj_invalidate(bar);   // brighter frame
+    } else if (code == LV_EVENT_PRESSING) {
+        if (!s_dragging) {
+            if (LV_ABS(point.x - s_drag_x) < ED_DRAG_START) return;
+            s_dragging = true;
+            s_drag_bar = bar;
+            s_drag_param = idx;
+            s_drag_x = point.x;
+            s_drag_from = s_param_norm[idx];
+            lv_obj_set_scroll_chain_ver(bar, false);   // the list stays put while a value moves
+            return;
+        }
+        set_bar_value(idx, s_drag_from + (float)(point.x - s_drag_x) / ED_BAR_W);
+    }
+}
+
+// One bar per parameter, two columns, in the model's display order.
+static void build_param_rows(void)
+{
+    stop_drag();
+    lv_obj_clean(s_editor_body);
+    memset(s_param_bar, 0, sizeof(s_param_bar));
+    const nano_fx_model_t *m = s_editor_model_def;
+    for (int i = 0; m && i < m->param_count && i < NANO_MAX_PARAMS; i++) {
+        lv_point_t size = { 0, 0 };
+        const char *unit = m->params[i].unit;
+        if (m->params[i].kind == NANO_PARAM_RANGE && unit && unit[0])
+            lv_text_get_size(&size, unit, &ui_font_14, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        s_param_unit_w[i] = (int16_t)size.x;
+        set_param_norm(i, -1);
+    }
+    if (!m) return;
+    int pos = 0;
+    for (int row = 0; row < m->param_count; row++) {
+        int idx = m->order ? m->order[row] : row;
+        if (idx >= m->param_count || idx >= NANO_MAX_PARAMS) continue;
+        lv_obj_t *bar = lv_obj_create(s_editor_body);
+        lv_obj_remove_style_all(bar);   // drawn in on_bar_event
+        lv_obj_set_size(bar, ED_BAR_W, ED_BAR_H);
+        lv_obj_set_pos(bar, 8 + (pos % 2) * (ED_BAR_W + 8), (pos / 2) * ED_BAR_PITCH);
+        lv_obj_set_scrollable(bar, false);
+        lv_obj_set_scroll_on_focus(bar, false);
+        lv_obj_set_scroll_chain_hor(bar, false);   // sideways is the bar's own (else the screen would scroll)
+        lv_obj_set_clickable(bar, true);
+        lv_obj_add_event_cb(bar, on_bar_event, LV_EVENT_ALL, (void *)(intptr_t)idx);
+        s_param_bar[idx] = bar;
+        pos++;
+    }
+}
+
+// ---- Building the editor ----
+
+// A field that is framed in the dimmed colour when not active and filled when active (FX presets, A | B).
+static lv_obj_t *frame_button(lv_obj_t *parent)
+{
+    lv_obj_t *btn = lv_button_create(parent);
+    lv_obj_remove_style_all(btn);
+    lv_obj_set_style_radius(btn, 10, 0);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(TILE_OFF_BG), 0);
+    lv_obj_set_style_border_width(btn, 2, 0);
+    lv_obj_set_style_opa(btn, 170, LV_STATE_PRESSED);
+    return btn;
+}
+
+static void style_frame_button(lv_obj_t *btn, uint32_t color, bool active, bool empty)
+{
+    lv_obj_set_style_bg_color(btn, lv_color_hex(active ? color : TILE_OFF_BG), 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(active ? color : empty ? ED_NEUTRAL : blend(color, TILE_OFF_BG, ED_DIM)), 0);
 }
 
 static void build_editor(lv_obj_t *screen)
@@ -2590,104 +3151,194 @@ static void build_editor(lv_obj_t *screen)
     lv_obj_set_style_pad_all(s_editor, 0, 0);
     lv_obj_set_scrollable(s_editor, false);
 
-    lv_obj_t *back = button(s_editor, 8, 8, 120, 48, on_editor_back);
-    lv_obj_t *back_label = label(back, &ui_font_20, 0xF2F2F2);
-    lv_label_set_text(back_label, LV_SYMBOL_LEFT " Back");
-    lv_obj_center(back_label);
+    lv_obj_t *back = button(s_editor, 8, 8, 60, 60, on_editor_back);
+    lv_obj_set_style_radius(back, 12, 0);
+    lv_obj_center(ui_icon(back, UI_ICON_BACK, 30, TEXT));
 
-    s_editor_icon = lv_image_create(s_editor);
-    lv_obj_set_pos(s_editor_icon, 142, 14);
+    // Header card (tap: choose a model)
+    s_editor_card = button(s_editor, 76, 8, 596, 60, on_model_button);
+    lv_obj_set_style_radius(s_editor_card, 12, 0);
+    lv_obj_set_style_bg_color(s_editor_card, lv_color_hex(CARD_TOP), 0);
+    lv_obj_set_style_bg_grad_color(s_editor_card, lv_color_hex(0x0E0F11), 0);
+    lv_obj_set_style_border_color(s_editor_card, lv_color_hex(CARD_BORDER), 0);
+    lv_obj_set_style_pad_all(s_editor_card, 0, 0);
+    s_editor_chip = lv_obj_create(s_editor_card);
+    lv_obj_remove_style_all(s_editor_chip);
+    lv_obj_set_size(s_editor_chip, 44, 44);
+    lv_obj_set_style_radius(s_editor_chip, 11, 0);
+    lv_obj_align(s_editor_chip, LV_ALIGN_LEFT_MID, 7, 0);
+    lv_obj_set_clickable(s_editor_chip, false);
+    s_editor_icon = lv_image_create(s_editor_chip);   // at its own size (36 px)
     lv_obj_set_style_image_recolor_opa(s_editor_icon, LV_OPA_COVER, 0);
-    s_editor_slot = label(s_editor, &ui_font_20, 0x9A9A9A);
-    lv_obj_set_pos(s_editor_slot, 188, 20);
-
-    s_editor_model_button = button(s_editor, 300, 8, 300, 48, on_model_button);
-    s_editor_model = label(s_editor_model_button, &ui_font_20, 0xF2F2F2);
+    lv_obj_center(s_editor_icon);
+    s_editor_slot = label(s_editor_card, &ui_font_12, MUTED);
+    lv_obj_set_style_text_letter_space(s_editor_slot, 2, 0);
+    lv_obj_set_pos(s_editor_slot, 64, 7);
+    s_editor_model = label(s_editor_card, &ui_font_title_22, TEXT);
     lv_label_set_long_mode(s_editor_model, LV_LABEL_LONG_DOT);
-    lv_obj_set_style_text_align(s_editor_model, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_center(s_editor_model);
-    s_editor_second = button(s_editor, 530, 8, 70, 48, on_second_button);   // Pre FX 1 only
-    s_editor_second_label = label(s_editor_second, &ui_font_20, TEXT);
-    lv_label_set_text(s_editor_second_label, "A/B");
-    lv_obj_center(s_editor_second_label);
-    lv_obj_set_hidden(s_editor_second, true);
+    lv_obj_set_pos(s_editor_model, 64, 22);
+    s_editor_pedal = lv_image_create(s_editor_card);
+    lv_obj_set_style_image_recolor_opa(s_editor_pedal, LV_OPA_COVER, 0);
+    lv_obj_align(s_editor_pedal, LV_ALIGN_RIGHT_MID, -42, 0);
+    lv_obj_set_hidden(s_editor_pedal, true);
+    lv_obj_align(ui_icon(s_editor_card, UI_ICON_CHEVRON_DOWN, 22, MUTED), LV_ALIGN_RIGHT_MID, -12, 0);
 
-    // On/off: ON / OFF and a switch like the sliders (effect colour, white knob); the whole area is the button.
+    // Pre FX 1: A | B
+    s_editor_ab = lv_obj_create(s_editor);
+    lv_obj_remove_style_all(s_editor_ab);
+    lv_obj_set_pos(s_editor_ab, 556, 8);
+    lv_obj_set_size(s_editor_ab, 118, 60);
+    lv_obj_set_scrollable(s_editor_ab, false);
+    for (int i = 0; i < 2; i++) {
+        lv_obj_t *seg = frame_button(s_editor_ab);
+        lv_obj_set_pos(seg, i * 62, 0);
+        lv_obj_set_size(seg, 56, 60);
+        lv_obj_add_event_cb(seg, on_ab, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        lv_obj_center(label(seg, &ui_font_20, TEXT));
+        s_editor_ab_seg[i] = seg;
+    }
+    lv_obj_set_hidden(s_editor_ab, true);
+
+    // On / off: a large switch in the effect colour; the area around it is the button.
     s_editor_onoff = lv_obj_create(s_editor);
     lv_obj_remove_style_all(s_editor_onoff);
-    lv_obj_set_pos(s_editor_onoff, 612, 8);
-    lv_obj_set_size(s_editor_onoff, 180, 48);
+    lv_obj_set_pos(s_editor_onoff, 680, 0);
+    lv_obj_set_size(s_editor_onoff, 120, 76);
     lv_obj_set_style_opa(s_editor_onoff, 180, LV_STATE_PRESSED);
     lv_obj_set_clickable(s_editor_onoff, true);
     lv_obj_add_event_cb(s_editor_onoff, on_editor_onoff, LV_EVENT_CLICKED, NULL);
-    s_editor_onoff_label = label(s_editor_onoff, &ui_font_20, TEXT);
-    lv_obj_set_style_text_letter_space(s_editor_onoff_label, 2, 0);
-    lv_obj_align(s_editor_onoff_label, LV_ALIGN_LEFT_MID, 14, 0);
     s_editor_switch = lv_switch_create(s_editor_onoff);
     lv_obj_set_clickable(s_editor_switch, false);   // the state comes from the Nano (ui_fx_editor_show)
-    lv_obj_set_size(s_editor_switch, 86, 42);
-    lv_obj_align(s_editor_switch, LV_ALIGN_RIGHT_MID, -6, 0);
+    lv_obj_set_size(s_editor_switch, 96, 52);
+    lv_obj_align(s_editor_switch, LV_ALIGN_LEFT_MID, 8, 0);
     lv_obj_set_style_bg_color(s_editor_switch, lv_color_hex(0x2A2D30), LV_PART_MAIN);
     lv_obj_set_style_bg_color(s_editor_switch, lv_color_hex(0xF2F2F2), LV_PART_KNOB);
     lv_obj_set_style_bg_color(s_editor_switch, lv_color_hex(INK), LV_PART_KNOB | LV_STATE_CHECKED);   // as in the editor
-    lv_obj_set_style_pad_all(s_editor_switch, -3, LV_PART_KNOB);
+    lv_obj_set_style_pad_all(s_editor_switch, -5, LV_PART_KNOB);
 
-    // Pedal silhouette behind the parameters (fixed while the parameter list scrolls)
-    s_editor_pedal = lv_image_create(s_editor);
-    lv_obj_set_style_image_recolor_opa(s_editor_pedal, LV_OPA_COVER, 0);
-    lv_obj_set_style_image_opa(s_editor_pedal, 70, 0);
-    lv_obj_align(s_editor_pedal, LV_ALIGN_CENTER, 31, 32);   // centre of the slider column
-    lv_obj_set_hidden(s_editor_pedal, true);
+    // FX presets: Original and the stored places of this model (tap = load, hold = save under a name).
+    s_fxp_bar = lv_obj_create(s_editor);
+    lv_obj_remove_style_all(s_fxp_bar);
+    lv_obj_set_pos(s_fxp_bar, 8, 76);
+    lv_obj_set_size(s_fxp_bar, 784, 56);
+    lv_obj_set_style_pad_column(s_fxp_bar, 8, 0);
+    lv_obj_set_flex_flow(s_fxp_bar, LV_FLEX_FLOW_ROW);
+    lv_obj_set_scrollable(s_fxp_bar, false);
+    for (int i = 0; i <= UI_FX_PRESETS; i++) {
+        lv_obj_t *chip = frame_button(s_fxp_bar);
+        lv_obj_set_height(chip, LV_PCT(100));
+        lv_obj_set_flex_grow(chip, 1);
+        lv_obj_add_event_cb(chip, on_fxp_chip, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)i);
+        if (i) lv_obj_add_event_cb(chip, on_fxp_chip_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)i);
+        lv_obj_t *l = label(chip, &ui_font_16, TEXT);
+        lv_obj_set_width(l, 136);
+        lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_center(l);
+        if (i) lv_obj_center(ui_icon(chip, UI_ICON_PLUS, 20, 0x5D6267));   // empty place
+        s_fxp_chip[i] = chip;
+    }
+
+    // Instead of the presets: why there is nothing to edit (effect off, reading, empty slot).
+    s_editor_info = lv_obj_create(s_editor);
+    lv_obj_remove_style_all(s_editor_info);
+    lv_obj_set_pos(s_editor_info, 8, 76);
+    lv_obj_set_size(s_editor_info, 784, 56);
+    lv_obj_set_style_border_width(s_editor_info, 1, 0);
+    lv_obj_set_style_border_color(s_editor_info, lv_color_hex(0x3A3F45), 0);
+    lv_obj_set_style_radius(s_editor_info, 12, 0);
+    lv_obj_set_clickable(s_editor_info, false);
+    lv_obj_set_scrollable(s_editor_info, false);
+    lv_obj_t *dot = lv_obj_create(s_editor_info);
+    lv_obj_remove_style_all(dot);
+    lv_obj_set_size(dot, 9, 9);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(dot, lv_color_hex(MUTED), 0);
+    lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+    lv_obj_align(dot, LV_ALIGN_LEFT_MID, 16, 0);
+    s_editor_info_text = label(s_editor_info, &ui_font_16, 0xC8CCD1);
+    lv_obj_align(s_editor_info_text, LV_ALIGN_LEFT_MID, 36, 0);
+    lv_obj_set_hidden(s_editor_info, true);
 
     s_editor_body = lv_obj_create(s_editor);
-    lv_obj_set_pos(s_editor_body, 0, 64);
-    lv_obj_set_size(s_editor_body, 800, 416);
-    lv_obj_set_style_bg_opa(s_editor_body, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(s_editor_body, 0, 0);
-    lv_obj_set_style_radius(s_editor_body, 0, 0);
-    lv_obj_set_style_pad_all(s_editor_body, 0, 0);
-    lv_obj_set_style_pad_bottom(s_editor_body, 24, 0);
+    lv_obj_remove_style_all(s_editor_body);
+    lv_obj_set_pos(s_editor_body, 0, ED_BODY_Y);
+    lv_obj_set_size(s_editor_body, 800, 480 - ED_BODY_Y);
+    lv_obj_set_style_pad_bottom(s_editor_body, 8, 0);
     lv_obj_set_scroll_dir(s_editor_body, LV_DIR_VER);
+    lv_obj_set_style_bg_color(s_editor_body, lv_color_hex(0x3A3F45), LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_opa(s_editor_body, LV_OPA_COVER, LV_PART_SCROLLBAR);
+    lv_obj_set_style_width(s_editor_body, 3, LV_PART_SCROLLBAR);
+    lv_obj_set_style_radius(s_editor_body, 2, LV_PART_SCROLLBAR);
 
-    // Model list: a scrollable column of buttons.
-    s_model_list = lv_obj_create(s_editor);
-    lv_obj_set_pos(s_model_list, 300, 60);
-    lv_obj_set_size(s_model_list, 320, 414);
-    lv_obj_set_style_bg_color(s_model_list, lv_color_hex(0x1C1C1C), 0);
-    lv_obj_set_style_border_color(s_model_list, lv_color_hex(0x4A4A4A), 0);
-    lv_obj_set_style_pad_all(s_model_list, 6, 0);
-    lv_obj_set_style_pad_row(s_model_list, 4, 0);
-    lv_obj_set_flex_flow(s_model_list, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_scroll_dir(s_model_list, LV_DIR_VER);
-    lv_obj_set_hidden(s_model_list, true);
+    // Model / option panel. Below the header the editor is covered in plain black (no see-through layer to blend);
+    // a tap there closes the panel.
+    s_panel_scrim = lv_obj_create(s_editor);
+    lv_obj_remove_style_all(s_panel_scrim);
+    lv_obj_set_pos(s_panel_scrim, 0, 74);
+    lv_obj_set_size(s_panel_scrim, 800, 480 - 74);
+    lv_obj_set_style_bg_color(s_panel_scrim, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_panel_scrim, LV_OPA_COVER, 0);
+    lv_obj_set_clickable(s_panel_scrim, true);
+    lv_obj_add_event_cb(s_panel_scrim, on_panel_close, LV_EVENT_CLICKED, NULL);
+    lv_obj_set_hidden(s_panel_scrim, true);
+    s_panel = panel(s_editor, 76, 76, ED_PANEL_W, ED_PANEL_H);
+    lv_obj_set_style_shadow_width(s_panel, 0, 0);   // nothing behind it to lift it from, and shadows are slow
+    s_panel_title = dialog_title(s_panel, "");
+    s_panel_sub = label(s_panel, &ui_font_14, 0x9AA0A6);
+    lv_obj_set_pos(s_panel_sub, 20, 46);
+    close_button(s_panel, ED_PANEL_W - 60, 12, on_panel_close, 0);
+    s_panel_list = lv_obj_create(s_panel);
+    lv_obj_remove_style_all(s_panel_list);
+    lv_obj_set_pos(s_panel_list, 0, 74);
+    lv_obj_set_size(s_panel_list, ED_PANEL_W - 2, ED_PANEL_H - 2 - 74);
+    lv_obj_set_style_pad_hor(s_panel_list, 12, 0);
+    lv_obj_set_style_pad_bottom(s_panel_list, 12, 0);
+    lv_obj_set_style_pad_row(s_panel_list, 6, 0);
+    lv_obj_set_style_pad_column(s_panel_list, 6, 0);
+    lv_obj_set_flex_flow(s_panel_list, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_scroll_dir(s_panel_list, LV_DIR_VER);
+    lv_obj_set_style_bg_color(s_panel_list, lv_color_hex(0x3A3F45), LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_opa(s_panel_list, LV_OPA_COVER, LV_PART_SCROLLBAR);
+    lv_obj_set_style_width(s_panel_list, 3, LV_PART_SCROLLBAR);
+    lv_obj_set_hidden(s_panel, true);
 
     lv_obj_set_hidden(s_editor, true);
 }
 
-// ---- FX presets (row above the parameters) ----
+// ---- FX presets (bar above the parameters) ----
 
 static void style_fxp_chips(void)
 {
-    uint32_t color = s_editor_model_def ? s_editor_model_def->color : 0x5A5A5A;
+    // Only when something changed (this runs with every state update of the Nano).
+    static uint32_t shown_color;
+    static char shown_names[UI_FX_PRESETS][16];
+    static int shown_active = -2;
+    static bool shown_hidden;
+    bool hidden = !s_fxp_usable || !lv_obj_is_hidden(s_editor_info);   // the info line is there then
+    set_hidden(s_fxp_bar, hidden);
+    if (hidden == shown_hidden && shown_active == s_fxp_active && shown_color == s_editor_color
+        && !memcmp(shown_names, s_fxp_names, sizeof(shown_names))) return;
+    shown_hidden = hidden;
+    shown_active = s_fxp_active;
+    shown_color = s_editor_color;
+    memcpy(shown_names, s_fxp_names, sizeof(shown_names));
+
+    uint32_t color = s_editor_color;
     for (int i = 0; i <= UI_FX_PRESETS; i++) {
         lv_obj_t *chip = s_fxp_chip[i];
-        if (!chip) continue;
         bool filled = i == 0 || s_fxp_names[i - 1][0];
         bool active = i == s_fxp_active && filled;
         lv_obj_t *l = lv_obj_get_child(chip, 0);
-        const char *text = i == 0 ? "Orig" : filled ? s_fxp_names[i - 1] : "+";
-        lv_label_set_text(l, text);
-        // One line: the large font if the name fits, otherwise the small one (and dots if it is still too long).
-        const lv_font_t *font = &ui_font_14;
+        const char *text = i == 0 ? "Original" : filled ? s_fxp_names[i - 1] : "";
+        set_text(l, text);
+        // The large font if the name fits, otherwise the small one (and dots if it is still too long).
         lv_point_t size;
-        lv_text_get_size(&size, text, &ui_font_20, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-        if (filled && size.x <= 130) font = &ui_font_20;
-        lv_obj_set_style_text_font(l, font, 0);
-        lv_obj_set_height(l, lv_font_get_line_height(font));
-        lv_obj_set_style_text_color(l, lv_color_hex(active ? ink_for(color) : filled ? TEXT : 0x5D6267), 0);
-        lv_obj_set_style_bg_color(chip, lv_color_hex(active ? color : 0x191B1D), 0);
-        lv_obj_set_style_bg_grad_dir(chip, active ? LV_GRAD_DIR_NONE : LV_GRAD_DIR_VER, 0);
-        lv_obj_set_hidden(chip, !s_fxp_usable);   // the info line ("effect is off", "reading values") is there then
+        lv_text_get_size(&size, text, &ui_font_16, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        lv_obj_set_style_text_font(l, size.x <= 132 ? &ui_font_16 : &ui_font_14, 0);
+        lv_obj_set_style_text_color(l, lv_color_hex(active ? ink_for(color) : i == 0 ? 0xC8CCD1 : 0xE6E8EA), 0);
+        style_frame_button(chip, color, active, !filled);
+        if (i) set_hidden(lv_obj_get_child(chip, 1), filled);
     }
 }
 
@@ -2722,208 +3373,105 @@ static void on_fxp_chip_long(lv_event_t *e)
     show_rename((char)('0' + i), title, "Save", name, 15);
 }
 
-// One row per parameter, in the model's display order.
-static void build_param_rows(void)
+// Header: symbol chip, slot, model, pedal picture, A | B, switch.
+static void show_editor_header(int slot, const nano_fx_model_t *m, bool on)
 {
-    lv_obj_clean(s_editor_body);
-    memset(s_param_control, 0, sizeof(s_param_control));
-    memset(s_param_value, 0, sizeof(s_param_value));
-    s_editor_info = label(s_editor_body, &ui_font_20, 0xFF7000);
-    lv_obj_set_pos(s_editor_info, 16, 10);
-    memset(s_fxp_chip, 0, sizeof(s_fxp_chip));
-
-    const nano_fx_model_t *m = s_editor_model_def;
-    if (!m) return;
-    uint32_t color = m->color;
-    // FX presets: ORIGINAL and the stored places of this model (tap = load, hold = save under a name).
-    for (int i = 0; i <= UI_FX_PRESETS; i++) {
-        lv_obj_t *chip = small_button(s_editor_body, 16 + i * 154, 8, 146, 46, "", on_fxp_chip, i);   // where the info line is
-        lv_obj_remove_event_cb(chip, on_fxp_chip);
-        lv_obj_add_event_cb(chip, on_fxp_chip, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)i);
-        if (i) lv_obj_add_event_cb(chip, on_fxp_chip_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)i);
-        lv_obj_t *l = lv_obj_get_child(chip, 0);
-        lv_obj_set_width(l, 132);
-        lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
-        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_center(l);
-        s_fxp_chip[i] = chip;
+    uint32_t color = s_editor_color;
+    bool lit = on && m;   // the chip: filled in the effect colour when on, outlined when off (as the tiles)
+    lv_obj_set_style_bg_color(s_editor_chip, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_opa(s_editor_chip, lit ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_editor_chip, lit ? 0 : 2, 0);
+    lv_obj_set_style_border_color(s_editor_chip, lv_color_hex(blend(color, TILE_OFF_BG, 0.62f)), 0);
+    set_hidden(s_editor_icon, !m || !NANO_ICONS[m->icon]);
+    if (m && NANO_ICONS[m->icon]) {
+        lv_image_set_src(s_editor_icon, NANO_ICONS[m->icon]);
+        lv_obj_set_style_image_recolor(s_editor_icon, lv_color_hex(lit ? ink_for(color) : color), 0);
     }
-    style_fxp_chips();
-    for (int row = 0; row < m->param_count; row++) {
-        int idx = m->order ? m->order[row] : row;
-        if (idx >= m->param_count || idx >= NANO_MAX_PARAMS) continue;
-        const nano_param_t *p = &m->params[idx];
-        int y = 64 + row * EDITOR_ROW_H;
-
-        lv_obj_t *name = label(s_editor_body, &ui_font_20, 0xD8D8D8);
-        lv_label_set_text(name, p->name);
-        lv_obj_set_width(name, 196);
-        lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
-        lv_obj_set_pos(name, 16, y + 20);
-
-        if (p->kind == NANO_PARAM_ENUM) {
-            lv_obj_t *dd = lv_dropdown_create(s_editor_body);
-            lv_dropdown_set_options_static(dd, p->options);
-            lv_obj_set_size(dd, 300, 52);
-            lv_obj_set_pos(dd, 220, y + 6);
-            lv_obj_set_style_text_font(dd, &ui_font_20, 0);
-            lv_obj_set_style_text_font(lv_dropdown_get_list(dd), &ui_font_20, 0);
-            lv_obj_add_event_cb(dd, on_dropdown, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)idx);
-            s_param_control[idx] = dd;
-        } else {
-            lv_obj_t *slider = lv_slider_create(s_editor_body);
-            lv_slider_set_range(slider, 0, 1000);
-            lv_obj_set_size(slider, 410, 16);
-            lv_obj_set_pos(slider, 226, y + 26);
-            lv_obj_set_ext_click_area(slider, 22);
-            lv_obj_set_style_bg_color(slider, lv_color_hex(color), LV_PART_INDICATOR);
-            lv_obj_set_style_bg_color(slider, lv_color_hex(0xF2F2F2), LV_PART_KNOB);
-            lv_obj_set_style_pad_all(slider, 9, LV_PART_KNOB);
-            lv_obj_add_event_cb(slider, on_slider, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)idx);
-            s_param_control[idx] = slider;
-            s_param_value[idx] = label(s_editor_body, &ui_font_20, 0xFFFFFF);
-            lv_obj_set_width(s_param_value[idx], 130);
-            lv_obj_set_style_text_align(s_param_value[idx], LV_TEXT_ALIGN_RIGHT, 0);
-            lv_obj_set_pos(s_param_value[idx], 656, y + 20);
+    char caption[32];
+    size_t n = 0;
+    for (const char *c = NANO_FX_SLOT_NAMES[slot]; *c && n + 1 < sizeof(caption); c++) caption[n++] = (char)toupper((unsigned char)*c);
+    caption[n] = 0;
+    set_text(s_editor_slot, caption);
+    set_text(s_editor_model, m ? m->name : "Choose a model");
+    const lv_image_dsc_t *pedal = m ? nano_fx_pedal(m->type) : NULL;
+    set_hidden(s_editor_pedal, pedal == NULL);
+    if (pedal) {
+        lv_image_set_src(s_editor_pedal, pedal);
+        lv_obj_set_style_image_recolor(s_editor_pedal, lv_color_hex(color), 0);
+        lv_obj_set_style_image_opa(s_editor_pedal, on ? LV_OPA_90 : LV_OPA_40, 0);
+    }
+    // Pre FX 1: A | B takes the right end of the header card.
+    bool ab = slot == 0;
+    int card_w = ab ? 472 : 596;
+    lv_obj_set_width(s_editor_card, card_w);
+    lv_obj_set_width(s_editor_model, card_w - 64 - (pedal ? 116 : 50));
+    set_hidden(s_editor_ab, !ab);
+    if (ab) {
+        int running = s_view.pre1_b_type && s_view.pre1_active ? 1 : 0;
+        for (int i = 0; i < 2; i++) {
+            lv_obj_t *seg = s_editor_ab_seg[i];
+            bool none = i == 1 && !s_view.pre1_b_type;
+            set_text(lv_obj_get_child(seg, 0), i == 0 ? "A" : none ? "+B" : "B");
+            style_frame_button(seg, color, i == running, none);
+            lv_obj_set_style_text_color(lv_obj_get_child(seg, 0), lv_color_hex(i == running ? ink_for(color) : none ? 0x8E9297 : TEXT), 0);
         }
     }
-}
-
-// The models that the Nano allows in this slot.
-static lv_obj_t *model_list_entry(const char *text, uint32_t color, bool selected, lv_event_cb_t cb, intptr_t data)
-{
-    lv_obj_t *btn = lv_button_create(s_model_list);
-    lv_obj_set_size(btn, LV_PCT(100), 52);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(selected ? 0x3A3A3A : 0x262626), 0);
-    lv_obj_set_style_shadow_width(btn, 0, 0);
-    lv_obj_set_style_radius(btn, 8, 0);
-    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, (void *)data);
-    if (text) {
-        lv_obj_t *l = label(btn, &ui_font_20, color);
-        lv_label_set_text(l, text);
-        lv_obj_align(l, LV_ALIGN_LEFT_MID, 44, 0);
-    }
-    return btn;
-}
-
-// The models allowed in the slot; for the second effect of Pre FX 1 also "swap now" and "none".
-static void build_model_list(int slot)
-{
-    lv_obj_clean(s_model_list);
-    bool second = s_model_list_second && slot == 0;
-    uint32_t current = second ? s_view.pre1_b_type : s_editor_model_type;
-    if (second) {
-        lv_obj_t *title = label(s_model_list, &ui_font_14, MUTED);
-        lv_obj_set_width(title, LV_PCT(100));
-        lv_label_set_long_mode(title, LV_LABEL_LONG_WRAP);
-        lv_label_set_text(title, "2ND EFFECT - hold switch 3 for A / B");
-        if (s_view.pre1_b_type) model_list_entry(s_view.pre1_active ? LV_SYMBOL_SHUFFLE "  Back to A now" : LV_SYMBOL_SHUFFLE "  Swap to B now",
-                                                 0xFF7000, false, on_second_choice, -1);
-        model_list_entry("None", TEXT, current == 0, on_second_choice, 0);
-    }
-    for (int i = 0; i < NANO_SLOT_MODEL_COUNT[slot]; i++) {
-        uint32_t type = NANO_SLOT_MODELS[slot][i];
-        const nano_fx_model_t *m = nano_fx_model(type);
-        if (!m) continue;
-        lv_obj_t *btn = model_list_entry(NULL, 0, type == current, second ? on_second_choice : on_model_choice, (intptr_t)type);
-        if (NANO_ICONS[m->icon]) {
-            lv_obj_t *icon = lv_image_create(btn);
-            lv_image_set_src(icon, NANO_ICONS[m->icon]);
-            lv_obj_set_style_image_recolor(icon, lv_color_hex(m->color), 0);
-            lv_obj_set_style_image_recolor_opa(icon, LV_OPA_COVER, 0);
-            lv_obj_align(icon, LV_ALIGN_LEFT_MID, -4, 0);
-        }
-        lv_obj_t *name = label(btn, &ui_font_20, m->color);
-        lv_label_set_text(name, m->name);
-        lv_obj_align(name, LV_ALIGN_LEFT_MID, 44, 0);
-    }
+    lv_obj_set_style_bg_color(s_editor_switch, lv_color_hex(color), LV_PART_INDICATOR | LV_STATE_CHECKED);
 }
 
 void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, int count)
 {
+    static struct { int slot; uint32_t model, b_type; bool on; int b_active; } shown = { .slot = -1 };
     lvgl_port_lock(0);
     bool rebuild = lv_obj_is_hidden(s_editor) || slot != s_editor_slot_index || model != s_editor_model_type;
+    if (slot != s_editor_slot_index || lv_obj_is_hidden(s_editor)) drop_panel();   // the model list is per slot
+    else if (rebuild) close_panel();
     s_editor_slot_index = slot;
     s_editor_model_type = model;
     s_editor_model_def = nano_fx_model(model);
     const nano_fx_model_t *m = s_editor_model_def;
-    if (rebuild) {
-        s_model_list_second = false;
-        build_param_rows();
-        build_model_list(slot);
-    }
+    s_editor_color = m ? m->color : 0x5A5A5A;
+    if (rebuild) build_param_rows();
 
-    uint32_t color = m ? m->color : 0x5A5A5A;
-    char text[64];
-    lv_obj_set_hidden(s_editor_icon, !m || !NANO_ICONS[m->icon]);
-    if (m && NANO_ICONS[m->icon]) {
-        lv_image_set_src(s_editor_icon, NANO_ICONS[m->icon]);
-        lv_obj_set_style_image_recolor(s_editor_icon, lv_color_hex(color), 0);
+    if (rebuild || shown.slot != slot || shown.model != model || shown.on != on || shown.b_type != s_view.pre1_b_type
+        || shown.b_active != s_view.pre1_active) {
+        show_editor_header(slot, m, on);
+        shown.slot = slot;
+        shown.model = model;
+        shown.on = on;
+        shown.b_type = s_view.pre1_b_type;
+        shown.b_active = s_view.pre1_active;
     }
-    const lv_image_dsc_t *pedal = m ? nano_fx_pedal(m->type) : NULL;
-    lv_obj_set_hidden(s_editor_pedal, pedal == NULL);
-    if (pedal) {
-        lv_image_set_src(s_editor_pedal, pedal);
-        lv_obj_set_style_image_recolor(s_editor_pedal, lv_color_hex(color), 0);
-    }
-    lv_label_set_text(s_editor_slot, NANO_FX_SLOT_NAMES[slot]);
-    snprintf(text, sizeof(text), "%s  " LV_SYMBOL_DOWN, m ? m->name : "Choose a model");
-    lv_label_set_text(s_editor_model, text);
-    // Pre FX 1: the 2ND button (second effect) takes the right end of the model button.
-    bool second = slot == 0;
-    lv_obj_set_width(s_editor_model_button, second ? 224 : 300);
-    lv_obj_set_width(s_editor_model, second ? 204 : 280);
-    lv_obj_set_hidden(s_editor_second, !second);
-    if (second) {
-        bool b_active = s_view.pre1_b_type && s_view.pre1_active;
-        lv_label_set_text(s_editor_second_label, s_view.pre1_b_type ? (b_active ? "B" : "A/B") : "2ND");
-        lv_obj_set_style_bg_color(s_editor_second, lv_color_hex(b_active ? 0xFF7000 : 0x191B1D), 0);
-        lv_obj_set_style_bg_grad_dir(s_editor_second, b_active ? LV_GRAD_DIR_NONE : LV_GRAD_DIR_VER, 0);
-        lv_obj_set_style_text_color(s_editor_second_label, lv_color_hex(b_active ? 0x000000 : TEXT), 0);
-    }
-
-    lv_label_set_text(s_editor_onoff_label, on ? "ON" : "OFF");
-    lv_obj_set_style_text_color(s_editor_onoff_label, lv_color_hex(on ? TEXT : MUTED), 0);
-    lv_obj_set_style_bg_color(s_editor_switch, lv_color_hex(color), LV_PART_INDICATOR | LV_STATE_CHECKED);
     if (on) lv_obj_add_state(s_editor_switch, LV_STATE_CHECKED);
     else lv_obj_remove_state(s_editor_switch, LV_STATE_CHECKED);
 
     bool known = values != NULL;
     const char *info = !m ? "This slot is empty. Choose a model above."
-                     : !on ? "Effect is off: switch it on to read and edit its values."
+                     : !on ? "Effect is off \xE2\x80\x93 switch it on to read and edit its values"
                      : !known ? "Reading values..." : "";
-    lv_label_set_text(s_editor_info, info);
-    lv_obj_set_hidden(s_editor_info, info[0] == 0);
+    set_text(s_editor_info_text, info);
+    set_hidden(s_editor_info, info[0] == 0);
+    style_fxp_chips();
 
     for (int idx = 0; m && idx < m->param_count && idx < NANO_MAX_PARAMS; idx++) {
-        lv_obj_t *control = s_param_control[idx];
-        if (!control) continue;
-        const nano_param_t *p = &m->params[idx];
-        if (known && idx < count) {
-            lv_obj_remove_state(control, LV_STATE_DISABLED);
-            if (p->kind == NANO_PARAM_ENUM) {
-                int max = p->option_count > 1 ? p->option_count - 1 : 0;
-                lv_dropdown_set_selected(control, (uint32_t)lroundf(values[idx] * max));
-            } else {
-                lv_slider_set_value(control, (int32_t)lroundf(values[idx] * 1000), LV_ANIM_OFF);
-                format_param(text, sizeof(text), p, values[idx]);
-                lv_label_set_text(s_param_value[idx], text);
-            }
-        } else {
-            lv_obj_add_state(control, LV_STATE_DISABLED);
-            if (s_param_value[idx]) lv_label_set_text(s_param_value[idx], "?");
-        }
+        if (s_dragging && idx == s_drag_param) continue;   // the finger has it
+        float v = known && idx < count ? values[idx] : -1;
+        v = v < 0 ? -1 : v > 1 ? 1 : v;
+        if (v != s_param_norm[idx]) set_param_norm(idx, v);   // only what changed is drawn again
     }
 
-    lv_obj_set_hidden(s_editor, false);
+    set_hidden(s_editor, false);
+    update_main_hidden();
     lvgl_port_unlock();
 }
 
 void ui_fx_editor_close(void)
 {
     lvgl_port_lock(0);
-    lv_obj_set_hidden(s_model_list, true);
+    drop_panel();
+    stop_drag();
     lv_obj_set_hidden(s_editor, true);
+    update_main_hidden();
     s_editor_slot_index = -1;
     lvgl_port_unlock();
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates main/fx_pedals.c: pedal silhouettes for the background of the FX editor and line drawings
+"""Generates main/fx_pedals.c: small pedal pictures for the header of the FX editor and line drawings
 of the pedals for the FX tiles.
 
 The pictures are the private ones of the Nano Cortex Editor (../nano-cortex-editor/img, matched to the models
@@ -17,7 +17,8 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 EDITOR = None   # set below
 MODELS = json.loads((ROOT / 'tools' / 'editor_models.json').read_text())
-BOX = (320, 330)   # largest size on the screen (px)
+BOX = (320, 330)   # working size (px)
+THUMB = (64, 46)   # picture in the FX editor's header
 TILE_H, TILE_VISIBLE, TILE_RADIUS = 124, 0.58, 12   # tile drawing: height, visible part, corner of the tile
 
 
@@ -39,12 +40,14 @@ def model_images():
 
 
 def silhouette(path):
-    """Grey levels of the picture inside its outline (never fully transparent there), as an A8 mask."""
+    """Grey levels of the picture inside its outline (never fully transparent there), as a small A8 mask."""
     im = Image.open(path).convert('RGBA')
     im.thumbnail(BOX, Image.LANCZOS)
     lum = ImageOps.autocontrast(ImageOps.grayscale(im.convert('RGB')), cutoff=1)
     shade = Image.eval(lum, lambda v: int(70 + 185 * (v / 255) ** 0.9))
-    return Image.composite(shade, Image.new('L', im.size, 0), im.getchannel('A'))
+    mask = Image.composite(shade, Image.new('L', im.size, 0), im.getchannel('A'))
+    mask.thumbnail(THUMB, Image.LANCZOS)
+    return mask
 
 
 def line_drawing(path):

@@ -144,6 +144,7 @@ static void close_all(void)
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
                                    s_volume, s_cab_settings, s_amp, s_toast };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) lv_obj_set_hidden(overlays[i], true);
+    update_main_hidden();
 }
 
 int main(void)
@@ -177,8 +178,8 @@ int main(void)
 
     view.fx_mode = true;
     ui_show_state(&st, &view);
-    static const float values[] = { 0.42f, 0.55f, 0.30f, 0.65f, 0.25f, 0.70f, 0.50f, 0.35f };
-    ui_fx_editor_show(3, st.fx_type[3], true, values, 8);
+    static const float values[] = { 0.42f, 0.55f, 0.30f, 0.65f, 0.25f, 0.38f, 0.18f, 0.12f, 0.0f, 0.0f, 0.4f };
+    ui_fx_editor_show(3, st.fx_type[3], true, values, 11);
     static const char fx_presets[UI_FX_PRESETS][16] = { "Slapback", "Ambient Wash", "", "" };
     ui_fx_presets_show(fx_presets, 1, true);
     shot("04-fx-editor");
@@ -186,9 +187,16 @@ int main(void)
     close_all();
 
     ui_fx_editor_show(0, st.fx_type[0], true, values, 3);
-    on_second_button(NULL);
+    open_panel(PANEL_SECOND, 0);
     shot("13-second-effect");
-    lv_obj_set_hidden(s_model_list, true);
+    close_panel();
+    open_panel(PANEL_MODEL, 0);
+    shot("16-fx-model");
+    ui_fx_editor_close();
+    close_all();
+
+    ui_fx_editor_show(3, st.fx_type[3], false, NULL, 0);
+    shot("17-fx-off");
     ui_fx_editor_close();
     close_all();
 

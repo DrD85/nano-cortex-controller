@@ -62,9 +62,11 @@ Fußschalter-Tasten, per Web Bluetooth mit deinem Nano Cortex verbunden:
 | ![Bluetooth-MIDI](docs/images/10-bluetooth-midi.png) | ![Capture-Lautstärke](docs/images/11-capture-volume.png) |
 | Bluetooth-MIDI | Capture-Lautstärke |
 | ![Cab-Einstellungen](docs/images/12-cab-settings.png) | ![Zweiter Effekt auf Pre FX 1](docs/images/13-second-effect.png) |
-| Cab-Einstellungen (lange auf das Cab-Feld drücken) | Zweiter Effekt auf Pre FX 1 (2ND im FX-Editor) |
+| Cab-Einstellungen (lange auf das Cab-Feld drücken) | Zweiter Effekt auf Pre FX 1 (A \| B im FX-Editor) |
 | ![Capture-Klang](docs/images/14-capture-amp.png) | ![Startbildschirm](docs/images/15-start-screen.png) |
 | Capture-Klang (lange auf das Capture-Feld drücken) | Startbildschirm beim Verbinden |
+| ![Modell wählen](docs/images/16-fx-model.png) | ![FX-Editor, Effekt aus](docs/images/17-fx-off.png) |
+| Modell wählen (auf den Kopf des FX-Editors tippen) | FX-Editor bei ausgeschaltetem Effekt |
 
 Die Bilder zeigen Beispiel-Presets. Sie werden aus dem UI-Code der Firmware gezeichnet
 (`tools/screenshots/make_screenshots.sh`).
@@ -155,7 +157,7 @@ Aktive Kacheln leuchten in voller Farbe, inaktive sind gedimmt. FX-Kacheln trage
 |---|---|
 | Kachel 1 oder 2 | **Learn** für diesen Fußschalter (siehe unten) |
 | Preset-Kachel (3–8, Preset-Modus) | **Bank-Fenster**: Farbe, Symbol und Preset dieses Schalters; `DEFAULT` stellt das Standard-Preset her; `LEARN SWITCH` |
-| FX-Kachel (3–7, FX-Modus) | **FX-Editor**: Modell (auf den Modellnamen tippen), an/aus und alle Parameter |
+| FX-Kachel (3–7, FX-Modus) | **FX-Editor**: Modell (auf den Kopf tippen), an/aus und alle Parameter |
 | Kachel 8 (FX-Modus) | **Reverb-Fenster** mit den Reitern *MIX POS 1 / 2* und *2ND REVERB* |
 | Preset-Name | **Umbenennen** mit Bildschirmtastatur (mindestens 4 Zeichen, eindeutig) |
 
@@ -180,17 +182,26 @@ Alles gehört zum Preset: Änderungen sind sofort zu hören, **SAVE** behält si
 
 ### FX-Editor
 
+Der Kopf zeigt das Symbol des Effekts – in seiner Farbe gefüllt, wenn er an ist, nur umrandet, wenn er aus ist –
+dazu Slot und Modell. Antippen öffnet die Modellauswahl, nach Art gruppiert (Drive, EQ & Utility, Wah & Filter …);
+der große Schalter rechts schaltet den Effekt an oder aus.
+
+Die Parameter sind Balken in zwei Spalten, bis zum Wert in der Effektfarbe gefüllt. **Seitlich wischen** auf einem
+Balken ändert ihn: Er folgt dem Finger ab seinem aktuellen Wert, Antippen oder Scrollen lässt also keinen Wert
+springen. Hoch und runter scrollt die Liste. Einstellungen mit zwei oder drei Möglichkeiten (*Off | On*, *Sync* …)
+werden angetippt, längere Listen (*Sync Note* …) öffnen eine Auswahl.
+
 Änderungen gehen schon beim Bewegen eines Reglers an den Nano. Der Nano meldet Parameterwerte nur von
 eingeschalteten Effekten – einen Effekt also einschalten, um seine Werte zu sehen und zu ändern. **SAVE** im
 Preset-Feld speichert das Preset auf dem Nano.
 
-**FX-Presets** (die Reihe über den Reglern): vier benannte Einstellungen pro Effektmodell, gespeichert auf dem
-Controller und in jedem Preset und Slot mit diesem Modell nutzbar.
+**FX-Presets** (die Leiste über den Reglern): *Original* und vier benannte Einstellungen pro Effektmodell,
+gespeichert auf dem Controller und in jedem Preset und Slot mit diesem Modell nutzbar; leere Plätze zeigen **+**.
 
 - **Halten** auf einem Platz: Die Tastatur öffnet sich, und die aktuellen Einstellungen werden unter dem
   eingegebenen Namen gespeichert. Ein leerer Name löscht den Platz.
 - **Antippen** lädt die Einstellungen sofort.
-- **ORIGINAL** holt die Einstellungen zurück, die der Effekt beim Öffnen des Editors hatte. Direkt nach der Wahl
+- **Original** holt die Einstellungen zurück, die der Effekt beim Öffnen des Editors hatte. Direkt nach der Wahl
   eines neuen Modells sind das seine Grundeinstellungen.
 
 Geladene Einstellungen zählen als Änderung am Nano-Preset: **SAVE** behält sie dort.
@@ -210,8 +221,10 @@ Geladene Einstellungen zählen als Änderung am Nano-Preset: **SAVE** behält si
 
 ### Zweiter Effekt auf Pre FX 1 (Fußschalter 3)
 
-Lange auf die Pre-FX-1-Kachel drücken, dann **2ND** im FX-Editor: einen zweiten Effekt (B) für dieses Preset wählen,
-zum Beispiel das Envelope Filter als Auto-Wah neben einem Drive. Dann Fußschalter 3 im FX-Modus:
+Lange auf die Pre-FX-1-Kachel drücken, dann **+B** (neben dem Modell im FX-Editor): einen zweiten Effekt (B) für
+dieses Preset wählen, zum Beispiel das Envelope Filter als Auto-Wah neben einem Drive. **A | B** zeigt dann, welcher
+läuft: den anderen antippen tauscht sofort, den laufenden antippen wählt einen anderen zweiten Effekt oder *None*.
+Dann Fußschalter 3 im FX-Modus:
 
 - **kurz drücken**: den Effekt im Slot an / aus (schaltet beim Loslassen)
 - **halten** (0,6 s): A ↔ B wechseln – der Effekt bleibt an oder aus, wie er war

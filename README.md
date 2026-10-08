@@ -63,9 +63,11 @@ eight footswitch buttons, connected to your Nano Cortex over Web Bluetooth:
 | ![Bluetooth MIDI](docs/images/10-bluetooth-midi.png) | ![Capture volume](docs/images/11-capture-volume.png) |
 | Bluetooth MIDI | Capture volume |
 | ![Cab settings](docs/images/12-cab-settings.png) | ![Second effect on Pre FX 1](docs/images/13-second-effect.png) |
-| Cab settings (long press on the cab card) | Second effect on Pre FX 1 (2ND in its FX editor) |
+| Cab settings (long press on the cab card) | Second effect on Pre FX 1 (A \| B in its FX editor) |
 | ![Capture tone](docs/images/14-capture-amp.png) | ![Start screen](docs/images/15-start-screen.png) |
 | Capture tone (long press on the capture card) | Start screen while connecting |
+| ![Choose a model](docs/images/16-fx-model.png) | ![FX editor, effect off](docs/images/17-fx-off.png) |
+| Choose a model (tap the FX editor's header) | FX editor with the effect off |
 
 The screenshots show example presets. They are rendered from the firmware's own UI code
 (`tools/screenshots/make_screenshots.sh`).
@@ -154,7 +156,7 @@ Active tiles light up in full colour, inactive ones are dimmed. FX tiles use the
 |---|---|
 | Tile 1 or 2 | **Learn** for this footswitch (see below) |
 | Preset tile (3–8, preset mode) | **Bank editor**: colour, symbol and preset of this switch; `DEFAULT` restores the standard preset; `LEARN SWITCH` |
-| FX tile (3–7, FX mode) | **FX editor**: model (tap the model name), on/off and all parameters |
+| FX tile (3–7, FX mode) | **FX editor**: model (tap the header), on/off and all parameters |
 | Tile 8 (FX mode) | **Reverb dialog** with the tabs *MIX POS 1 / 2* and *2ND REVERB* |
 | Preset name | **Rename** with on-screen keyboard (at least 4 characters, unique) |
 
@@ -179,17 +181,26 @@ All of them are part of the preset: changes are heard at once, **SAVE** keeps th
 
 ### FX editor
 
+The header shows the effect's symbol – filled in its colour when the effect is on, outlined when it is off – with
+the slot and the model. Tap it to choose another model from a list grouped by type (Drive, EQ & utility, Wah &
+filter …); the large switch on the right turns the effect on or off.
+
+The parameters are bars in two columns, filled in the effect colour up to the value. **Slide sideways** on a bar to
+change it: it follows your finger from its current value, so a touch or a scroll never makes a value jump. Up and
+down scrolls the list. Settings with two or three options (*Off | On*, *Sync* …) are switched with a tap, longer
+lists (*Sync Note* …) open a list.
+
 Changes are sent to the Nano while you move a control. The Nano only reports parameter values of effects that
 are switched on – switch an effect on to see and edit its values. **SAVE** in the preset card stores the preset
 on the Nano.
 
-**FX presets** (the row above the parameters): four named settings per effect model, stored on the controller and
-usable in every preset and slot with that model.
+**FX presets** (the bar above the parameters): *Original* and four named settings per effect model, stored on the
+controller and usable in every preset and slot with that model; empty places show **+**.
 
 - **Hold** a place: the keyboard opens and the current settings are saved under the name you type. An empty name
   deletes the place.
 - **Tap** a place: its settings are loaded at once.
-- **ORIGINAL** goes back to the settings the effect had when you opened the editor. Right after choosing a new
+- **Original** goes back to the settings the effect had when you opened the editor. Right after choosing a new
   model, these are the model's defaults.
 
 Loaded settings count as changes to the Nano preset: **SAVE** keeps them there.
@@ -206,8 +217,10 @@ Loaded settings count as changes to the Nano preset: **SAVE** keeps them there.
 
 ### Second effect on Pre FX 1 (footswitch 3)
 
-Long press on the Pre FX 1 tile, then **2ND** in the FX editor: choose a second effect (B) for this preset, for
-example the Envelope Filter as an auto-wah next to a drive. Then footswitch 3 in FX mode:
+Long press on the Pre FX 1 tile, then **+B** (next to the model in the FX editor): choose a second effect (B) for
+this preset, for example the Envelope Filter as an auto-wah next to a drive. **A | B** then shows which one runs:
+tap the other one to swap at once, tap the running one to choose another second effect or *None*. Then footswitch 3
+in FX mode:
 
 - **short press**: the effect in the slot on / off (it acts when you lift your foot)
 - **hold** (0.6 s): swap A ↔ B – the effect stays on or off, as it was
