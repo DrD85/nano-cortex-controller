@@ -101,7 +101,10 @@ static volatile bool s_scan_other, s_scan_other_fast;
 static int s_scan_mode;                            // running scan: 0 none, 1 fast, 2 slow
 static nano_link_adv_cb s_adv_hook;
 
-static QueueHandle_t s_write_queue;
+// The controller's writes go first: the app's (mostly reads after a change) wait while the controller has something
+// to send, so footswitches stay as quick as without the app.
+static QueueHandle_t s_write_queue, s_app_queue;
+static SemaphoreHandle_t s_write_ready;   // one count per queued job
 static SemaphoreHandle_t s_write_done;
 static volatile int s_write_status;
 
@@ -502,6 +505,13 @@ static int32_t value_key(const uint8_t *frame, size_t len)
     return -1;
 }
 
+static bool enqueue(const write_job_t *job)
+{
+    if (xQueueSend(job->owner == NANO_OWNER_APP ? s_app_queue : s_write_queue, job, 0) != pdTRUE) return false;
+    xSemaphoreGive(s_write_ready);
+    return true;
+}
+
 // Queues a value frame, or replaces the value of the same control that still waits.
 // 1 = queued or replaced, 0 = not a value (queue it as a message), -1 = the queue is full.
 static int queue_value(const uint8_t *frame, size_t len, const char *label, uint8_t owner)
@@ -528,7 +538,7 @@ static int queue_value(const uint8_t *frame, size_t len, const char *label, uint
     if (index < 0) return 0;   // all slots busy: an ordinary message
     if (replace) return 1;
     write_job_t job = { .data = NULL, .owner = owner, .value = (int8_t)index };
-    if (xQueueSend(s_write_queue, &job, 0) == pdTRUE) return 1;
+    if (enqueue(&job)) return 1;
     xSemaphoreTake(s_values_lock, portMAX_DELAY);
     s_values[index].queued = false;
     xSemaphoreGive(s_values_lock);
@@ -541,7 +551,8 @@ static void writer_task(void *arg)
     uint8_t value[32], value_len;
     char label[40];
     for (;;) {
-        if (xQueueReceive(s_write_queue, &job, portMAX_DELAY) != pdTRUE) continue;
+        xSemaphoreTake(s_write_ready, portMAX_DELAY);
+        if (xQueueReceive(s_write_queue, &job, 0) != pdTRUE && xQueueReceive(s_app_queue, &job, 0) != pdTRUE) continue;
         if (job.value >= 0) {   // the newest value of this control
             xSemaphoreTake(s_values_lock, portMAX_DELAY);
             value_len = s_values[job.value].len;
@@ -574,7 +585,7 @@ bool nano_link_send(const char *label, uint32_t type, const uint8_t *payload, si
         free(job.data);
         return queued > 0;
     }
-    if (xQueueSend(s_write_queue, &job, 0) != pdTRUE) {
+    if (!enqueue(&job)) {
         free(job.data);
         return false;
     }
@@ -594,7 +605,7 @@ bool nano_link_send_frame(const uint8_t *frame, size_t len)
     if (!job.data) return false;
     memcpy(job.data, frame, len);
     snprintf(job.label, sizeof(job.label), "App message %lu", (unsigned long)type);
-    if (xQueueSend(s_write_queue, &job, 0) != pdTRUE) {
+    if (!enqueue(&job)) {
         free(job.data);
         ESP_LOGW(TAG, "Write queue full - app message %lu dropped", (unsigned long)type);
         return false;
@@ -756,10 +767,12 @@ void nano_link_start(nano_message_cb on_message, nano_link_cb on_link)
     s_on_link = on_link;
     s_rx = heap_caps_malloc(MAX_MESSAGE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     s_write_queue = xQueueCreate(32, sizeof(write_job_t));
+    s_app_queue = xQueueCreate(32, sizeof(write_job_t));
+    s_write_ready = xSemaphoreCreateCounting(64, 0);
     s_write_done = xSemaphoreCreateBinary();
     s_pending_lock = xSemaphoreCreateMutex();
     s_values_lock = xSemaphoreCreateMutex();
-    configASSERT(s_rx && s_write_queue && s_write_done && s_pending_lock && s_values_lock);
+    configASSERT(s_rx && s_write_queue && s_app_queue && s_write_ready && s_write_done && s_pending_lock && s_values_lock);
 
     ESP_ERROR_CHECK(nimble_port_init());
     ble_hs_cfg.reset_cb = on_reset;

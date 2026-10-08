@@ -16,6 +16,8 @@
 //   'p' / 'n'      previous / next preset (swipe)
 //   'k', -1 / +1   previous / next bank (arrow buttons)
 //   'w', 1..8      same as footswitch 1-8 (1 = mode, 2 = tuner, 3-8 = tiles); UI_SWITCH_HOLD | n = footswitch n held
+//   '^', +-1       tuner reference pitch one Hz up / down (all letters are taken)
+//   '~', 0         tuner: mute the output on / off
 //   'O', slot      long press on an FX tile: open the FX editor for that slot
 //   'E', 0         FX editor closed
 //   'M', type      FX editor: choose this model for the edited slot
@@ -75,6 +77,8 @@ void ui_set_link(bool connected);
 void ui_show_state(const nano_state_t *state, const ui_view_t *view);
 void ui_show_tuner(bool open);
 void ui_show_tuner_reading(const nano_tuner_reading_t *reading);
+// Reference pitch (Hz) and output mute shown on the tuner screen.
+void ui_tuner_settings(float base_hz, bool muted);
 
 // FX editor. values = current parameter values (0-1, index order) or NULL while they are unknown
 // (the Nano only reports them for FX that are on).
@@ -121,3 +125,5 @@ void ui_splash_done(void);
 
 // Short message at the top of the screen.
 void ui_show_message(const char *text);
+// Footswitch tile 0-7 lights up for a moment (the press arrived).
+void ui_flash_tile(int tile);

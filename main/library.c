@@ -6,7 +6,7 @@
 
 #include "esp_heap_caps.h"
 
-const char *const LIB_CATEGORY_NAMES[LIB_CATEGORY_COUNT] = { "ALL", "AMP", "AMP+CAB", "CAB", "PEDAL", "OTHER" };
+const char *const LIB_CATEGORY_NAMES[LIB_CATEGORY_COUNT] = { "All", "Amp", "Amp + Cab", "Cab", "Pedal", "Other" };
 
 // Minimal protobuf walk over a buffer: calls back for every length-delimited field.
 static bool next_field(const uint8_t **p, const uint8_t *end, uint32_t *field, uint32_t *wire,
@@ -59,6 +59,13 @@ static lib_category_t category_of(const char *type)
     return LIB_OTHER;
 }
 
+static lib_kind_t kind_of(const char *type)
+{
+    static const char *const kinds[] = { "amp_head", "amp_combo", "amp_and_cab", "cab", "pedal", "overdrive", "fuzz", "compressor" };
+    for (int i = 0; i < (int)(sizeof(kinds) / sizeof(kinds[0])); i++) if (!strcmp(type, kinds[i])) return (lib_kind_t)i;
+    return LIB_KIND_OTHER;
+}
+
 // NeuralCaptureSummaryRecord { 2: name, 6: captureType, 13: isCorrupted }. Returns false for corrupted ones.
 static bool parse_capture(const uint8_t *data, size_t len, lib_item_t *item)
 {
@@ -75,6 +82,7 @@ static bool parse_capture(const uint8_t *data, size_t len, lib_item_t *item)
         else if (field == 13 && wire == 0) corrupted = value != 0;
     }
     item->category = category_of(type);
+    item->kind = kind_of(type);
     return !corrupted && item->name[0];
 }
 
@@ -125,6 +133,7 @@ nano_library_t *nano_library_parse(const uint8_t *payload, size_t len)
             item->index = position;
             item->user = field == 6;
             item->category = LIB_CAB;
+            item->kind = LIB_KIND_CAB;
             lib->cabs.count++;
         }
     }

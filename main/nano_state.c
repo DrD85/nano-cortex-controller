@@ -108,6 +108,7 @@ uint64_t nano_field_varint(const uint8_t *payload, size_t len, uint32_t field)
 // 13 currentPresetIndex, 14/15/38/39 presets on slots A1/B1/A2/B2, 18 presets[] { 1 name },
 // 31 fxBypass (5 bytes, 0 = on), 32 current capture { 2 name }, 33 current cab { 2 short name },
 // 41 currentPresetDirty, 44 capture volume (0-255), 46 tunerBaseFrequency (float32), 48-52 FX model type per slot,
+// 63 tunerModeMuted,
 // 3-7 amp knobs of the capture (gain, level, bass, mid, treble, 0-255).
 // The Nano omits fields whose value is 0.
 bool nano_payload_complete(const uint8_t *payload, size_t len)
@@ -123,7 +124,7 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
     int preset_index = 0, slots[4] = { 0 }, names = 0, captures = 0, cabs = 0;
     int bank = 1, capture_position = 0, cab_selector = 0, capture_volume = 0;
     int amp[NANO_AMP_KNOBS] = { 0 };
-    bool dirty = false, fx_seen = false, names_seen = false, capture_seen = false, cab_seen = false;
+    bool dirty = false, fx_seen = false, names_seen = false, capture_seen = false, cab_seen = false, tuner_muted = false;
     bool capture_names_seen = false, cab_names_seen = false;
     uint32_t types[NANO_FX_SLOTS] = { 0 };
     char capture[sizeof(st->capture)] = "", cab[sizeof(st->cab)] = "";
@@ -157,6 +158,7 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
         case 38: slots[2] = (int)field_number(&f); break;
         case 39: slots[3] = (int)field_number(&f); break;
         case 41: dirty = field_number(&f) != 0; break;
+        case 63: tuner_muted = field_number(&f) != 0; break;
         case 44: capture_volume = (int)field_number(&f); break;
         case 3: case 4: case 5: case 6: case 7: amp[f.field - 3] = (int)field_number(&f); break;
         case 46:
@@ -203,6 +205,7 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
     st->current_preset = preset_index + 1;
     memcpy(st->slot_preset, slots, sizeof(slots));
     st->dirty = dirty;
+    st->tuner_muted = tuner_muted;   // omitted by the Nano when off
     if (bank < 1 || bank > 5) bank = 1;
     st->capture_slot = capture_position > 0 ? (bank - 1) * 5 + capture_position : 0;
     st->cab_slot = cab_selector >= 0 && cab_selector <= NANO_CAB_SLOTS ? cab_selector : 0;
@@ -322,7 +325,7 @@ size_t nano_preset_change_ack(uint8_t *out)
 
 // TunerMode { 4: tunerMode, 5: baseFrequency (float32), 6: liveTuner, 7: muted }. liveTuner = true is what
 // switches the Nano into tuner mode when the tuner is opened from outside.
-size_t nano_tuner_mode(bool on, float base_hz, uint8_t *out)
+size_t nano_tuner_mode(bool on, float base_hz, bool muted, uint8_t *out)
 {
     size_t n = 0;
     out[n++] = 0x20; out[n++] = on ? 1 : 0;
@@ -331,7 +334,7 @@ size_t nano_tuner_mode(bool on, float base_hz, uint8_t *out)
     memcpy(out + n, &base_hz, sizeof(base_hz));   // little-endian float32
     n += sizeof(base_hz);
     out[n++] = 0x30; out[n++] = 1;
-    out[n++] = 0x38; out[n++] = 0;
+    out[n++] = 0x38; out[n++] = muted ? 1 : 0;
     return n;
 }
 

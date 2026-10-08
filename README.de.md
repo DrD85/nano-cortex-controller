@@ -15,6 +15,10 @@ IR-Library, ein Stimmgerät und eigene Preset-Bänke. Er ist das Hardware-Gegens
 
 **English:** [README](README.md)
 
+**Ohne Board ausprobieren:** Dieselbe Firmware läuft auch im Browser (Chrome oder Edge) – mit Bildschirm und acht
+Fußschalter-Tasten, per Web Bluetooth mit deinem Nano Cortex verbunden:
+[Nano Cortex Controller Web](https://github.com/DrD85/nano-cortex-controller-web) (wie sie gebaut wird: [web/](web/README.md)).
+
 ![Preset-Modus](docs/images/01-preset-mode.png)
 
 ## Funktionen
@@ -39,15 +43,16 @@ IR-Library, ein Stimmgerät und eigene Preset-Bänke. Er ist das Hardware-Gegens
 - **Bluetooth-MIDI**: einen MIDI-Controller kabellos verbinden – zum Beispiel ein Morningstar MC6 mit einem
   WIDI-Adapter – mit den MIDI-Befehlen des Nano selbst (Program Change, CC 37–41, CC 1)
 - **Fußschalter-Learn**: jeden Fußschalter jeder Funktion zuordnen
-- **Vollbild-Kacheln** (nach oben wischen), gut lesbar aus der Entfernung
+- **Gig-Ansicht** (nach oben wischen): große Kacheln und eine schmale Statusleiste (Preset, Bank, Modus,
+  ungespeicherte Änderungen), gut lesbar aus der Entfernung; gefüllt = an, umrandet = aus, wie im Desktop-Editor
 - Bis zu 8 Fußschalter an einem SX1509-I/O-Expander (optional – der Touchscreen funktioniert auch allein)
 
 ## Bildschirmfotos
 
 | | |
 |---|---|
-| ![FX-Modus](docs/images/02-fx-mode.png) | ![Vollbild-Kacheln (nach oben wischen)](docs/images/03-fullscreen.png) |
-| FX-Modus | Vollbild-Kacheln (nach oben wischen) |
+| ![FX-Modus](docs/images/02-fx-mode.png) | ![Gig-Ansicht (nach oben wischen)](docs/images/03-fullscreen.png) |
+| FX-Modus | Gig-Ansicht (nach oben wischen) |
 | ![FX-Editor](docs/images/04-fx-editor.png) | ![Eigene Bänke: Farbe, Symbol und Preset](docs/images/05-bank-editor.png) |
 | FX-Editor | Eigene Bänke: Farbe, Symbol und Preset |
 | ![Capture-Library](docs/images/06-capture-library.png) | ![Reverb-Schalter: zweites Reverb](docs/images/07-reverb.png) |
@@ -107,8 +112,8 @@ Die Prüfsummen beider Dateien stehen in `nano-controller-<version>-sha256.txt`.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  ◀  ↻  VOL   ● PRESET 7   BANK 2   MIDI   USB   SAVE   ▶  │  Preset-Feld: Pfeile = Bank −/+
-│              Revv NF53 Clean                              │  lange auf den Namen: umbenennen
+│ ↻  VOL  MIDI  USB     ● PRESET 7 · BANK 2          Save  │  obere Leiste: Symbole, Status, Save
+│  ◀               Revv NF53 Clean •                    ▶  │  Pfeile = Bank −/+, lange auf den Namen: umbenennen
 ├────────────────────────────┬─────────────────────────────┤
 │ CAPTURE  Revv D20 clean    │ CAB / IR  810 Amped VT      │  antippen: Slot oder Library wählen
 │                            │                             │  lange drücken: Gain, Bass, Mid, Treble / Cab-Einstellungen
@@ -119,13 +124,19 @@ Die Prüfsummen beider Dateien stehen in `nano-controller-<version>-sha256.txt`.
 └──────────┴──────────┴──────────┴──────────────────────────┘
 ```
 
-- **Kachel antippen** = ihren Fußschalter drücken.
+- **Kachel antippen** = ihren Fußschalter drücken. Eine Kachel leuchtet kurz auf, wenn ihr Fußschalter gedrückt wird.
+- **Kacheln wie in der Signal Chain des Desktop-Editors**: das aktive Preset oder ein eingeschalteter Effekt ist in
+  seiner Farbe **gefüllt**, alles andere dunkel mit **farbigem Rand** – auch von weiter weg gut zu unterscheiden.
+  Alle Namen haben dieselbe Größe.
 - **↻** (oben links) liest alles neu vom Nano: Preset-Namen, aktuelles Preset und die Library.
-- **VOL** daneben stellt die Capture-Lautstärke des aktuellen Presets ein.
+- Das **Lautsprecher**-Symbol daneben stellt die Capture-Lautstärke des aktuellen Presets ein, danach **MIDI** und **USB**.
 - **Nach links / rechts wischen**: nächstes / vorheriges Preset.
-- **Nach oben wischen**: Kacheln im Vollbild (größere Namen). **Nach unten wischen**: zurück.
-- Der grüne Punkt zeigt die Bluetooth-Verbindung zum Nano; **SAVE** wird orange, wenn das Preset ungespeicherte
-  Änderungen hat. **MIDI** wird grün, solange ein Bluetooth-MIDI-Controller verbunden ist.
+- **Nach oben wischen – Gig-Ansicht**: die Kacheln füllen den Bildschirm mit größeren Namen, eine schmale Leiste
+  oben zeigt Verbindung, Preset-Nummer, Bank, Preset-Name, ungespeicherte Änderungen und den Modus (PRESETS / FX).
+  **Nach unten wischen**: zurück.
+- Der grüne Punkt zeigt die Bluetooth-Verbindung zum Nano; **Save** wird grün und neben dem Namen erscheint ein
+  oranger Punkt, wenn das Preset ungespeicherte Änderungen hat. **MIDI** wird grün, solange ein Bluetooth-MIDI-Controller verbunden ist.
+- Die **Capture-Karte** zeigt wie im Editor den Typ des Captures (Amp-Head, Combo, Amp + Cab, Cab, Pedal …).
 
 ### Fußschalter und Kacheln
 
@@ -214,8 +225,10 @@ seit dem Einrichten von B nie an war, schaltet der erste Wechsel A kurz an, um s
 
 ### Stimmgerät
 
-Fußschalter 2 oder die Kachel TUNER. Zeigt Note, Abweichung in Cent und eine Nadel (grün = gestimmt).
-Bildschirm antippen oder Fußschalter 2 erneut drücken zum Schließen.
+Fußschalter 2 oder die Kachel TUNER. Sieht aus wie der Tuner im Desktop-Editor: große Note in der Stimmfarbe (grün =
+gestimmt, orange = daneben), eine Skala mit einem Strich alle 10 Cent und eine leuchtende Nadel, dazu die Abweichung
+in Cent. Unten stellt **Reference A4** den Kammerton ein (400–480 Hz, − / + gedrückt halten läuft durch), und
+**Mute output** schaltet den Nano beim Stimmen stumm. Bildschirm antippen oder Fußschalter 2 erneut drücken zum Schließen.
 
 ### USB-Audio-Lautstärke
 
@@ -382,8 +395,12 @@ Dieses Projekt baut auf:
   [esp_lcd_touch](https://components.espressif.com/components/espressif/esp_lcd_touch) und
   [esp_lcd_touch_gt911](https://components.espressif.com/components/espressif/esp_lcd_touch_gt911)
   (Apache-2.0) von Espressif
+- Schrift [IBM Plex Sans](https://github.com/IBM/plex) (SIL Open Font License 1.1, `main/fonts/OFL.txt`) von IBM –
+  die Schrift des Bildschirms, wie im Desktop-Editor. `tools/gen_fonts.py` wandelt sie in die Bitmap-Schriften in
+  `main/ui_fonts.c` um (Namen `ui_font_*`, da umgewandelte Schriften den reservierten Namen nicht tragen dürfen);
+  die Note im Stimmgerät kommt aus der unveränderten TTF
 - Schrift [Montserrat](https://github.com/JulietaUla/Montserrat) (SIL Open Font License 1.1) von
-  The Montserrat Project Authors – die eingebauten LVGL-Schriften und die große Note im Stimmgerät
+  The Montserrat Project Authors – die eingebauten LVGL-Schriften, hier für die Symbole
 - [ESPWebTool](https://github.com/SpacehuhnTech/espwebtool) (MIT) von Spacehuhn – Flashen im Browser
 - [esptool](https://github.com/espressif/esptool) (GPL-2.0) von Espressif – Flashen und Release-Images
 - [Pillow](https://github.com/python-pillow/Pillow) (MIT-CMU) – Zeichnen der Symbole in `tools/`

@@ -17,6 +17,10 @@ your own preset banks. It is the hardware companion of the
 
 **Deutsch:** [Anleitung auf Deutsch](README.de.md)
 
+**Try it without the board:** the same firmware also runs in the browser (Chrome or Edge) with the screen and
+eight footswitch buttons, connected to your Nano Cortex over Web Bluetooth:
+[Nano Cortex Controller Web](https://github.com/DrD85/nano-cortex-controller-web) (how it is built: [web/](web/README.md)).
+
 ![Preset mode](docs/images/01-preset-mode.png)
 
 ## Features
@@ -33,22 +37,23 @@ your own preset banks. It is the hardware companion of the
   **cab settings** (long press on the cab card: output, high pass, low pass)
 - **Reverb switch** (footswitch 8): toggles the reverb mix between Pos 1 and Pos 2 of the preset's expression
   setting – or switches between the preset's reverb and a **second reverb** with its own settings
-- **Tuner** with large note display and needle (footswitch 2)
+- **Tuner** as in the desktop editor: large note, scale and needle, reference pitch A4 and output mute (footswitch 2)
 - **USB audio volume** of the Nano (playback from the computer), as in the official app
 - **App bridge**: the Nano Cortex Editor (Mac app or browser) can connect through the controller while the controller
   is connected to the Nano – app and controller work at the same time
 - **Bluetooth MIDI**: connect a MIDI controller wirelessly – for example a Morningstar MC6 with a WIDI adapter –
   using the Nano's own MIDI messages (program change, CC 37–41, CC 1)
 - **Footswitch learn**: assign any footswitch to any function
-- **Full-screen tiles** (swipe up) for reading from a distance
+- **Gig view** (swipe up): large tiles plus a slim status bar (preset, bank, mode, unsaved changes), readable from
+  a distance; filled = on, outlined = off, as in the desktop editor
 - Up to 8 footswitches on an SX1509 I/O expander (optional – the touch screen works on its own)
 
 ## Screenshots
 
 | | |
 |---|---|
-| ![FX mode](docs/images/02-fx-mode.png) | ![Full-screen tiles (swipe up)](docs/images/03-fullscreen.png) |
-| FX mode | Full-screen tiles (swipe up) |
+| ![FX mode](docs/images/02-fx-mode.png) | ![Gig view (swipe up)](docs/images/03-fullscreen.png) |
+| FX mode | Gig view (swipe up) |
 | ![FX editor](docs/images/04-fx-editor.png) | ![Own banks: colour, symbol and preset](docs/images/05-bank-editor.png) |
 | FX editor | Own banks: colour, symbol and preset |
 | ![Capture library](docs/images/06-capture-library.png) | ![Reverb switch: second reverb](docs/images/07-reverb.png) |
@@ -107,8 +112,8 @@ The checksums of both files are in `nano-controller-<version>-sha256.txt`.
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  ◀  ↻  VOL   ● PRESET 7   BANK 2   MIDI   USB   SAVE   ▶  │  preset card: arrows = bank −/+
-│              Revv NF53 Clean                              │  long press on the name: rename
+│ ↻  VOL  MIDI  USB     ● PRESET 7 · BANK 2          Save  │  top bar: symbols, status, Save
+│  ◀               Revv NF53 Clean •                    ▶  │  arrows = bank −/+, long press on the name: rename
 ├────────────────────────────┬─────────────────────────────┤
 │ CAPTURE  Revv D20 clean    │ CAB / IR  810 Amped VT      │  tap: choose slot or library item
 │                            │                             │  long press: gain, bass, mid, treble / cab settings
@@ -119,13 +124,18 @@ The checksums of both files are in `nano-controller-<version>-sha256.txt`.
 └──────────┴──────────┴──────────┴──────────────────────────┘
 ```
 
-- **Tap a tile** = press its footswitch.
+- **Tap a tile** = press its footswitch. A tile lights up briefly when its footswitch is pressed.
+- **Tiles as in the desktop editor's signal chain**: an active preset or an effect that is on is **filled** in its
+  colour; everything else is dark with a **coloured border** – the difference shows from across the stage. All
+  names use one size.
 - **↻** (top left) reads everything from the Nano again: preset names, the current preset and the library.
-- **VOL** next to it sets the capture volume of the current preset.
+- The **speaker** symbol next to it sets the capture volume of the current preset; **MIDI** and **USB** follow.
 - **Swipe left / right**: next / previous preset.
-- **Swipe up**: tiles in full screen (larger names). **Swipe down**: back.
-- The green dot shows the Bluetooth connection to the Nano; **SAVE** turns orange when the preset has unsaved
-  changes. **MIDI** turns green while a Bluetooth MIDI controller is connected.
+- **Swipe up – gig view**: the tiles fill the screen with larger names, and a slim bar on top shows the
+  connection, preset number, bank, preset name, unsaved changes and the mode (PRESETS / FX). **Swipe down**: back.
+- The green dot shows the Bluetooth connection to the Nano; **Save** turns green and an orange dot appears next to
+  the name when the preset has unsaved changes. **MIDI** turns green while a Bluetooth MIDI controller is connected.
+- The **capture card** shows the capture's type (amp head, combo, amp + cab, cab, pedal …) as in the editor.
 
 ### Footswitches and tiles
 
@@ -211,8 +221,10 @@ switches A on for a moment to read them.
 
 ### Tuner
 
-Footswitch 2 or the TUNER tile. Shows the note, the deviation in cents and a needle (green = in tune).
-Tap the screen or press footswitch 2 again to close it.
+Footswitch 2 or the TUNER tile. Looks like the desktop editor's tuner: a large note in the tuning colour (green = in
+tune, orange = off), a scale with a tick every 10 cents and a glowing needle, the deviation in cents. At the bottom,
+**Reference A4** sets the reference pitch (400-480 Hz, hold − / + to run) and **Mute output** silences the Nano while
+tuning. Tap the screen or press footswitch 2 again to close it.
 
 ### USB audio volume
 
@@ -377,8 +389,12 @@ This project stands on the shoulders of:
   [esp_lcd_touch](https://components.espressif.com/components/espressif/esp_lcd_touch) and
   [esp_lcd_touch_gt911](https://components.espressif.com/components/espressif/esp_lcd_touch_gt911)
   (Apache-2.0) by Espressif
+- [IBM Plex Sans](https://github.com/IBM/plex) (SIL Open Font License 1.1, `main/fonts/OFL.txt`) by IBM – the
+  typeface of the screen, as in the desktop editor. `tools/gen_fonts.py` converts it into the bitmap fonts in
+  `main/ui_fonts.c` (named `ui_font_*`, as converted fonts must not carry the reserved name); the tuner note is
+  drawn from the unchanged TTF
 - [Montserrat](https://github.com/JulietaUla/Montserrat) font (SIL Open Font License 1.1) by
-  The Montserrat Project Authors – the built-in LVGL fonts and the large tuner note
+  The Montserrat Project Authors – LVGL's built-in fonts, used here for the symbols
 - [ESPWebTool](https://github.com/SpacehuhnTech/espwebtool) (MIT) by Spacehuhn – flashing in the browser
 - [esptool](https://github.com/espressif/esptool) (GPL-2.0) by Espressif – flashing and release images
 - [Pillow](https://github.com/python-pillow/Pillow) (MIT-CMU) – rendering the icons in `tools/`

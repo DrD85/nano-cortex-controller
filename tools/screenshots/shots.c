@@ -6,13 +6,13 @@
 
 #include "ui.c"
 
-const char *const LIB_CATEGORY_NAMES[LIB_CATEGORY_COUNT] = { "ALL", "AMP", "AMP+CAB", "CAB", "PEDAL", "OTHER" };   // as in main/library.c
+const char *const LIB_CATEGORY_NAMES[LIB_CATEGORY_COUNT] = { "All", "Amp", "Amp + Cab", "Cab", "Pedal", "Other" };   // as in main/library.c
 
-// Montserrat TTF for the tuner note, as on the board (target_add_binary_data).
+// IBM Plex Sans TTF for the tuner note, as on the board (target_add_binary_data).
 __asm__(".section __DATA,__const\n"
-        ".globl _binary_Montserrat_Medium_ttf_start\n_binary_Montserrat_Medium_ttf_start:\n"
+        ".globl _binary_IBMPlexSans_SemiBold_ttf_start\n_binary_IBMPlexSans_SemiBold_ttf_start:\n"
         ".incbin \"" TTF_PATH "\"\n"
-        ".globl _binary_Montserrat_Medium_ttf_end\n_binary_Montserrat_Medium_ttf_end:\n"
+        ".globl _binary_IBMPlexSans_SemiBold_ttf_end\n_binary_IBMPlexSans_SemiBold_ttf_end:\n"
         ".byte 0\n.text\n");
 
 #define W 800
@@ -211,6 +211,7 @@ int main(void)
     close_all();
 
     ui_show_tuner(true);
+    ui_tuner_settings(440, false);
     nano_tuner_reading_t reading = { .note = "E", .cents = -6.5f, .valid = true };
     ui_show_tuner_reading(&reading);
     shot("08-tuner");

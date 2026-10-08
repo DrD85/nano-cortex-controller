@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nano Cortex Controller</title>
+<meta name="description" content="The Nano Cortex Controller board in the browser: the same screen and functions, connected to the Nano Cortex over Web Bluetooth.">
+<style>
+  :root {
+    --bg: #060708;
+    --panel-top: #1a1c1f;
+    --panel-bottom: #0c0d0f;
+    --border: #2e2e2e;
+    --text: #f2f2f2;
+    --muted: #9a9a9a;
+    --green: #45e35f;
+    --orange: #ff9f1a;
+    --red: #ff5a5a;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh;
+    background: radial-gradient(ellipse at 50% -10%, #1b1e22 0%, var(--bg) 60%);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    padding: 20px 16px 32px;
+  }
+  .wrap { width: min(100%, 1000px); margin: 0 auto; }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px;
+    margin-bottom: 16px;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .brand h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: .02em; }
+  .brand span { color: var(--muted); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; }
+  .actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-width: 0; }
+  #status { color: var(--muted); font-size: 13px; letter-spacing: .04em; min-width: 0; overflow-wrap: anywhere; }
+  #status::before {
+    content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+    background: #555; margin-right: 8px; vertical-align: 1px;
+  }
+  #status[data-kind="ok"] { color: var(--text); }
+  #status[data-kind="ok"]::before { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  #status[data-kind="busy"]::before { background: var(--orange); }
+  #status[data-kind="error"] { color: #ffb4b4; }
+  #status[data-kind="error"]::before { background: var(--red); }
+  #midi-line { flex-basis: 100%; color: var(--muted); font-size: 13px; letter-spacing: .04em; }
+  #midi-line b { color: var(--text); font-weight: 600; }
+  #midi-line .hit { color: var(--green); }
+  #connect {
+    font: inherit; font-weight: 700; font-size: 14px; letter-spacing: .14em; color: #06150a;
+    background: linear-gradient(#5cf074, #33c24b); border: 0; border-radius: 10px; padding: 10px 22px;
+    cursor: pointer; box-shadow: 0 0 0 1px #1d6a2a inset, 0 6px 18px rgba(69, 227, 95, .18);
+  }
+  #connect:hover { filter: brightness(1.08); }
+  #connect:active { transform: translateY(1px); }
+  #screen-button {
+    font: inherit; font-weight: 700; font-size: 13px; letter-spacing: .14em; color: var(--text);
+    background: #1c1e21; border: 1px solid #34373b; border-radius: 10px; padding: 10px 16px; cursor: pointer;
+  }
+  #screen-button:hover { background: #24272b; }
+
+  .device {
+    background: linear-gradient(var(--panel-top), var(--panel-bottom));
+    border: 1px solid var(--border); border-radius: 22px; padding: clamp(10px, 2.2vw, 22px);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, .55), 0 1px 0 rgba(255, 255, 255, .05) inset;
+  }
+  .bezel {
+    background: #000; border-radius: 12px; padding: clamp(6px, 1.2vw, 12px);
+    box-shadow: 0 0 0 1px #000, 0 0 0 2px #26282b;
+  }
+  canvas {
+    display: block; width: 100%; height: auto; aspect-ratio: 800 / 480; background: #000;
+    border-radius: 3px; touch-action: none; cursor: pointer;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;   /* no magnifier on long presses */
+  }
+
+  .switches {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(10px, 2.4vw, 26px) 0;
+    margin-top: clamp(14px, 3vw, 30px); padding: 0 clamp(6px, 1.2vw, 12px);
+  }
+  .fs {
+    all: unset; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; touch-action: none; user-select: none; -webkit-user-select: none;
+  }
+  .fs .knob {
+    width: clamp(46px, 8vw, 74px); aspect-ratio: 1; border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%, #2a2c30 58%, #0b0c0d 60%, #3a3d42 66%, #121315 72%);
+    display: grid; place-items: center; box-shadow: 0 8px 14px rgba(0, 0, 0, .6);
+  }
+  .fs .knob::after {
+    content: ""; width: 56%; aspect-ratio: 1; border-radius: 50%;
+    background: radial-gradient(circle at 36% 30%, #ffffff 0%, #d4d7db 22%, #8e9298 58%, #4a4d52 100%);
+    box-shadow: 0 3px 5px rgba(0, 0, 0, .6), 0 0 0 1px rgba(0, 0, 0, .5);
+    transition: transform .05s;
+  }
+  .fs.down .knob::after { transform: scale(.9); filter: brightness(.82); }
+  .fs:focus-visible .knob { outline: 2px solid var(--green); outline-offset: 3px; }
+  .fs .cap { font-size: 12px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+  .fs .cap b { color: var(--text); font-weight: 700; margin-right: 6px; }
+
+  .help {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 22px;
+  }
+  .help div {
+    background: linear-gradient(#141619, #0b0c0e); border: 1px solid #232528; border-radius: 12px;
+    padding: 14px 16px; color: #c9c9c9; font-size: 14px;
+  }
+  .help h2 { margin: 0 0 6px; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+  .help p { margin: 0; }
+  kbd {
+    font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 2px 6px; border-radius: 5px;
+    border: 1px solid #3a3d42; background: #1b1d20; color: var(--text);
+  }
+  footer { margin-top: 22px; color: #6f6f6f; font-size: 13px; text-align: center; }
+  footer a { color: #9a9a9a; }
+
+  /* ---- screen only: the board's screen as large as possible (phones in landscape by themselves) ----
+     --W/--H and the insets describe the landscape area the view uses. A phone held upright (or with rotation lock)
+     gets the view turned by 90 degrees ("rotated"): hold it sideways. */
+  .mini-bar, #toast { display: none; }
+  html.screen-only {
+    --W: 100vw; --H: 100vh;
+    --il: env(safe-area-inset-left); --ir: env(safe-area-inset-right);
+    --it: env(safe-area-inset-top); --ib: env(safe-area-inset-bottom);
+  }
+  @supports (height: 100dvh) { html.screen-only { --H: 100dvh; } }
+  html.screen-only.rotated {
+    --W: 100vh; --H: 100vw;
+    --il: env(safe-area-inset-top); --ir: env(safe-area-inset-bottom);
+    --it: env(safe-area-inset-right); --ib: env(safe-area-inset-left);
+  }
+  @supports (height: 100dvh) { html.screen-only.rotated { --W: 100dvh; } }
+  html.screen-only.rotated body {
+    position: fixed; top: 0; left: 0; width: var(--W); height: var(--H); min-height: 0;
+    transform-origin: top left; transform: rotate(90deg) translateY(-100%);
+  }
+  html.screen-only, html.screen-only body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+  html.screen-only body {
+    padding: 0; background: #000; touch-action: none;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
+  html.screen-only header, html.screen-only .switches, html.screen-only .help, html.screen-only footer { display: none; }
+  html.screen-only .device {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: var(--it) var(--ir) var(--ib) var(--il);
+    background: #000; border: 0; border-radius: 0; box-shadow: none;
+  }
+  html.screen-only .device.sized { display: block; padding: 0; }   /* app.js places the screen (layoutScreen) */
+  html.screen-only .device.sized canvas { position: absolute; }
+  #safe-probe {
+    position: fixed; visibility: hidden; pointer-events: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  html.screen-only .bezel { padding: 0; background: none; box-shadow: none; border-radius: 0; }
+  html.screen-only canvas {
+    --bar: 54px;   /* room for the control bar on the right (and the same on the left, so it stays centred) */
+    width: min(calc(var(--W) - var(--il) - var(--ir) - 2 * var(--bar)), calc((var(--H) - var(--it) - var(--ib)) * 5 / 3));
+    border-radius: 0;
+  }
+  html.screen-only .mini-bar {
+    display: flex; flex-direction: column; gap: 12px; position: fixed; z-index: 2;
+    right: calc(var(--ir) + 5px); top: 50%; transform: translateY(-50%);
+  }
+  .mini-bar button {
+    all: unset; box-sizing: border-box; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+    background: rgba(36, 38, 42, .9); border: 1px solid #34373b; color: #d8d8d8; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mini-bar button[hidden] { display: none; }
+  .mini-bar button:active { background: #2e3136; }
+  .mini-bar svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #mini-connect { color: #8a8a8a; }
+  #mini-connect[data-kind="ok"] { color: var(--green); border-color: #1d6a2a; }
+  #mini-connect[data-kind="busy"] { color: var(--orange); }
+  #mini-connect[data-kind="error"] { color: var(--red); }
+  #mini-connect:not([data-kind="ok"]):not([data-kind="busy"]) { animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(69, 227, 95, .18); border-color: #2c7a3a; } }
+  html.screen-only #toast:not([hidden]) {
+    display: block; position: fixed; z-index: 3; left: 50%; top: calc(var(--it) + 8px);
+    transform: translateX(-50%); max-width: min(90%, 560px); padding: 8px 14px; border-radius: 10px;
+    background: rgba(20, 22, 25, .94); border: 1px solid #34373b; font-size: 13px; text-align: center; pointer-events: none;
+  }
+  #toast[data-kind="error"] { color: #ffb4b4; }
+
+  @media (max-width: 560px) {
+    .brand h1 { font-size: 19px; }
+    #status { flex-basis: 100%; }
+    .fs .cap { font-size: 10px; letter-spacing: .08em; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <h1>Nano Cortex Controller</h1>
+      <span>in the browser</span>
+    </div>
+    <div class="actions">
+      <span id="status">Not connected</span>
+      <button id="screen-button" type="button" title="Only the screen, as large as possible">SCREEN</button>
+      <button id="connect" type="button">CONNECT</button>
+    </div>
+    <div id="midi-line" hidden></div>
+  </header>
+
+  <div class="device">
+    <div class="bezel"><canvas id="screen" width="800" height="480" aria-label="Controller screen"></canvas></div>
+    <div class="switches" aria-label="Footswitches">
+      <button class="fs" type="button" data-n="1"><span class="knob"></span><span class="cap"><b>1</b>Mode</span></button>
+      <button class="fs" type="button" data-n="2"><span class="knob"></span><span class="cap"><b>2</b>Tuner</span></button>
+      <button class="fs" type="button" data-n="3"><span class="knob"></span><span class="cap"><b>3</b></span></button>
+      <button class="fs" type="button" data-n="4"><span class="knob"></span><span class="cap"><b>4</b></span></button>
+      <button class="fs" type="button" data-n="5"><span class="knob"></span><span class="cap"><b>5</b></span></button>
+      <button class="fs" type="button" data-n="6"><span class="knob"></span><span class="cap"><b>6</b></span></button>
+      <button class="fs" type="button" data-n="7"><span class="knob"></span><span class="cap"><b>7</b></span></button>
+      <button class="fs" type="button" data-n="8"><span class="knob"></span><span class="cap"><b>8</b></span></button>
+    </div>
+  </div>
+
+  <section class="help">
+    <div>
+      <h2>Connect</h2>
+      <p>Chrome or Edge on a computer or Android phone. Click <b>CONNECT</b> and choose your Nano Cortex.
+        The Nano takes one connection at a time: close the editor and switch off a controller board first.</p>
+    </div>
+    <div>
+      <h2>Use it</h2>
+      <p>The screen works like the touch screen: tap, hold, swipe. The eight footswitches below work like the real
+        ones: click, or hold for 0.6 s for their held function. Keys <kbd>1</kbd>–<kbd>8</kbd> press them too.
+        On a phone, turn it sideways for the screen alone (<b>SCREEN</b> does the same on a computer).</p>
+    </div>
+    <div>
+      <h2>MIDI</h2>
+      <p>The MIDI button on the screen lists the MIDI inputs of this computer (for example an MC6 over USB) and
+        <b>Bluetooth MIDI device</b> for a Bluetooth controller such as an MC6 / MC8 Pro or a WIDI – also on the iPhone.
+        Banks, symbols and FX presets are stored in this browser.</p>
+    </div>
+  </section>
+
+  <footer>
+    Unofficial community project – not affiliated with Neural DSP.
+    <a href="https://github.com/DrD85/nano-cortex-controller">Source on GitHub</a> ·
+    <a href="THIRD-PARTY.txt">Licences</a>
+  </footer>
+</div>
+<div class="mini-bar" aria-label="Controls">
+  <button id="mini-connect" type="button" title="Connect">
+    <svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg>
+  </button>
+  <button id="mini-full" type="button" title="Full screen" hidden>
+    <svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>
+  </button>
+  <button id="mini-exit" type="button" title="Back to the page">
+    <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </button>
+</div>
+<div id="toast" hidden></div>
+<div id="safe-probe"></div>
+<script src="nano-controller.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

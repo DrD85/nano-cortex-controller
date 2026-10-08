@@ -5,6 +5,7 @@
 build/
 build-public/
 build-screens/
+build-web/
 sdkconfig
 sdkconfig.old
 managed_components/

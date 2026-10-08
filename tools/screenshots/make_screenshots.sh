@@ -18,8 +18,8 @@ find "$LVGL/src" -name '*.c' -print0 | xargs -0 -n 1 -P 8 sh -c '
     [ -f "$o" ] || clang -c -O1 -w "-DLV_CONF_KCONFIG_EXTERNAL_INCLUDE=\"sdkconfig.h\"" -I"$OUT" -I"$LVGL" -I"$LVGL/src" "$1" -o "$o"' _
 
 clang -O1 -w "-DLV_CONF_KCONFIG_EXTERNAL_INCLUDE=\"sdkconfig.h\"" \
-    "-DTTF_PATH=\"$PWD/$LVGL/scripts/generators/built_in_font/Montserrat-Medium.ttf\"" \
-    -I"$OUT" -Imain -I"$LVGL" -I"$LVGL/src" tools/screenshots/shots.c main/nano_state.c main/fx_models.c \
+    "-DTTF_PATH=\"$PWD/main/fonts/IBMPlexSans-SemiBold.ttf\"" \
+    -I"$OUT" -Imain -I"$LVGL" -I"$LVGL/src" tools/screenshots/shots.c main/ui_fonts.c main/ui_icons.c main/nano_state.c main/fx_models.c \
     main/fx_icons.c main/preset_icons.c main/fx_pedals.c "$OUT"/obj/*.o -lm -o "$OUT/uishots"
 (cd "$OUT" && ./uishots)
 mkdir -p docs/images

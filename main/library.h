@@ -14,7 +14,12 @@ typedef struct {
     uint16_t index;      // position in the Nano's factory or user list
     uint8_t user;        // 0 = factory, 1 = user
     uint8_t category;    // lib_category_t (captures only)
+    uint8_t kind;        // lib_kind_t: the capture type as in the editor (captures only)
 } lib_item_t;
+
+// Capture types as the Nano names them (field 6 of a library record), in the editor's order.
+typedef enum { LIB_KIND_AMP_HEAD, LIB_KIND_AMP_COMBO, LIB_KIND_AMP_CAB, LIB_KIND_CAB, LIB_KIND_PEDAL, LIB_KIND_OVERDRIVE,
+               LIB_KIND_FUZZ, LIB_KIND_COMPRESSOR, LIB_KIND_OTHER, LIB_KIND_COUNT } lib_kind_t;
 
 typedef struct {
     lib_item_t *items;   // alphabetical

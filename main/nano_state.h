@@ -68,6 +68,7 @@ typedef struct {
     char capture_names[NANO_CAPTURE_SLOTS][48];
     char cab_names[NANO_CAB_SLOTS][48];
     float tuner_base_hz;                // reference pitch (default 440)
+    bool tuner_muted;                   // output muted while the tuner is open (state field 63)
     bool names_loaded;
     char preset_names[NANO_PRESETS][65];
 } nano_state_t;
@@ -92,7 +93,7 @@ size_t nano_fx_bypass(int slot, bool on, uint8_t *out); // slot 0-4
 size_t nano_preset_change_ack(uint8_t *out);            // answer to a preset change made on the device
 // SetPresetSlots as the Nano sends it after a change on the pedal (current preset and footswitch slots) - for the app.
 size_t nano_preset_changed_notice(const nano_state_t *st, uint8_t *out);
-size_t nano_tuner_mode(bool on, float base_hz, uint8_t *out);
+size_t nano_tuner_mode(bool on, float base_hz, bool muted, uint8_t *out);
 size_t nano_fx_param(int slot, int param, float normalized, uint8_t *out);
 size_t nano_exp_request(int preset, uint8_t *out);
 size_t nano_capture_select(int slot, uint8_t *out);     // 1-25, 0 = bypass

@@ -19,10 +19,12 @@
 #include <string.h>
 #include <strings.h>
 
+#ifndef NANO_WEB   // the browser build (web/) has no serial console
 #include "driver/uart.h"
 #include "driver/uart_vfs.h"
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
+#endif
 #include "sdkconfig.h"
 #include "esp_app_desc.h"
 #include "esp_heap_caps.h"
@@ -368,12 +370,13 @@ static void on_app_state(bool connected)
     command('o', connected);
 }
 
-// The controller changed something on the Nano: tell the app shortly after (several changes, one notice).
+// The controller changed something on the Nano: tell the app once things are quiet (the app then reads the whole
+// preset again, which keeps the link busy for a moment - after a run of footswitch presses only once).
 static void app_sync_later(void)
 {
     if (!app_link_connected()) return;
     esp_timer_stop(s_app_notify_timer);
-    esp_timer_start_once(s_app_notify_timer, 500 * 1000);
+    esp_timer_start_once(s_app_notify_timer, 1200 * 1000);
 }
 
 static void ab_timer_cb(void *arg)
@@ -555,8 +558,19 @@ static void editor_read_later(int ms)
 
 // ---- actions ----
 
+static int64_t s_last_change_us;   // the controller's own last change (the Nano answers it with change notices too)
+
 static void send(const char *label, uint32_t type, const uint8_t *payload, size_t len)
 {
+    switch (type) {
+    case NANO_MSG_STATE_REQUEST: case NANO_MSG_EXP_REQUEST: case NANO_MSG_SETTINGS_REQUEST:
+    case NANO_MSG_LIBRARY_REQUEST: case NANO_MSG_CAB_SETTINGS_REQUEST: case NANO_MSG_FX_PARAMS_REQUEST:
+    case NANO_MSG_SET_PRESET_SLOTS_RESPONSE:
+        break;   // reads change nothing
+    default:
+        s_last_change_us = esp_timer_get_time();
+        break;
+    }
     if (!nano_link_send(label, type, payload, len)) ESP_LOGW(TAG, "Could not queue: %s", label);
 }
 
@@ -1387,9 +1401,23 @@ static void ab_edit_b(int which)
 static void set_tuner(bool on)
 {
     uint8_t buf[16];
-    send(on ? "Tuner on" : "Tuner off", NANO_MSG_TUNER_MODE, buf, nano_tuner_mode(on, s_state.tuner_base_hz, buf));
+    send(on ? "Tuner on" : "Tuner off", NANO_MSG_TUNER_MODE, buf,
+         nano_tuner_mode(on, s_state.tuner_base_hz, s_state.tuner_muted, buf));
     s_tuner_on = on;
     ui_show_tuner(on);
+    if (on) ui_tuner_settings(s_state.tuner_base_hz, s_state.tuner_muted);
+}
+
+// Reference pitch or mute changed on the tuner screen: the Nano takes both with the tuner mode (as the editor does).
+static void tuner_settings_changed(void)
+{
+    uint8_t buf[16];
+    if (s_tuner_on) {
+        char what[40];
+        snprintf(what, sizeof(what), "Tuner %.0f Hz%s", (double)s_state.tuner_base_hz, s_state.tuner_muted ? ", muted" : "");
+        send(what, NANO_MSG_TUNER_MODE, buf, nano_tuner_mode(true, s_state.tuner_base_hz, s_state.tuner_muted, buf));
+    }
+    ui_tuner_settings(s_state.tuner_base_hz, s_state.tuner_muted);
 }
 
 static void select_capture(int slot)
@@ -1526,6 +1554,7 @@ static void load_library_item(int arg)
 
 static void handle_switch(int number)
 {
+    ui_flash_tile(number - 1);
     if (number == 1) {
         s_fx_mode = !s_fx_mode;
         if (!s_fx_mode) follow_preset_with_bank(s_state.current_preset);
@@ -1641,7 +1670,9 @@ static void handle_command(char c, int arg)
     if (c == 'X' || c == 'P' || c == 'N') { midi_command(c, arg); return; }
     if (c == 'q') {                                    // MIDI gate timer: the Nano did not come
         nano_link_log_status();
+#ifndef NANO_WEB   // in the browser the start screen keeps asking to click CONNECT
         ui_splash_status("No Nano Cortex yet - switch it on (tap to continue)", NULL);
+#endif
         midi_ble_allow(true);
         return;
     }
@@ -1684,10 +1715,23 @@ static void handle_command(char c, int arg)
     case 'w': {
         int number = arg & 0xFF;
         if (number < 1 || number > FOOTSWITCH_COUNT) break;
-        if ((arg & UI_SWITCH_HOLD) && number == 3 && s_ab[AB_PRE1].b.type) ab_swap(AB_PRE1);   // held: Pre FX 1 A <-> B
+        if ((arg & UI_SWITCH_HOLD) && number == 3 && s_ab[AB_PRE1].b.type) {   // held: Pre FX 1 A <-> B
+            ui_flash_tile(2);
+            ab_swap(AB_PRE1);
+        }
         else handle_switch(number);
         break;
     }
+    case '^': {   // tuner reference pitch +/- arg Hz (400-480)
+        float hz = s_state.tuner_base_hz + (float)arg;
+        s_state.tuner_base_hz = hz < 400 ? 400 : hz > 480 ? 480 : hz;
+        tuner_settings_changed();
+        break;
+    }
+    case '~':   // tuner: mute the output on / off
+        s_state.tuner_muted = !s_state.tuner_muted;
+        tuner_settings_changed();
+        break;
     case 'O': editor_open(arg); break;
     case 'E':
         ab_capture_editor();
@@ -1743,6 +1787,7 @@ static void handle_command(char c, int arg)
 // MC6): read the preset again shortly after (once for a burst), and the values of the open FX editor.
 static void external_change(uint32_t type)
 {
+    if (esp_timer_get_time() - s_last_change_us < 700 * 1000) return;   // the echo of our own change: nothing new
     esp_timer_stop(s_app_read_timer);
     esp_timer_start_once(s_app_read_timer, 400 * 1000);
     if (type == NANO_MSG_FX_VALUE && s_edit.slot >= 0 && s_edit.request_slot < 0) editor_read_later(500);
@@ -1876,7 +1921,9 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         bool on = nano_field_varint(payload, len, 4) != 0;
         ESP_LOGI(TAG, "Tuner %s on the Nano", on ? "opened" : "closed");
         s_tuner_on = on;
+        if (on) s_state.tuner_muted = nano_field_varint(payload, len, 7) != 0;
         ui_show_tuner(on);
+        if (on) ui_tuner_settings(s_state.tuner_base_hz, s_state.tuner_muted);
         break;
     }
     case NANO_MSG_LIBRARY_RESPONSE: {
@@ -2018,54 +2065,67 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
 
 // ---- tasks ----
 
+static void app_event(app_event_t ev)
+{
+    switch (ev.kind) {
+    case EV_LINK_UP:
+        ESP_LOGI(TAG, "Connected to the Nano Cortex - reading presets");
+        ui_splash_status("Connected - loading presets ...", NULL);
+        ui_set_link(true);
+        s_incomplete_retries = 0;
+        request_full_state();
+        break;
+    case EV_LINK_DOWN:
+        ESP_LOGW(TAG, "Connection lost - searching again");
+        s_waiting_full_state = false;
+        midi_ble_allow(false);   // until the Nano is back (or the gate timer opens it)
+        app_link_enable(false);  // the app can only use the Nano through the controller while it is connected
+        esp_timer_stop(s_midi_gate_timer);
+        esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
+        s_tuner_on = false;
+        s_last_preset = 0;
+        s_mix.pending = 0;
+        s_usb.known = false;
+        memset(&s_src, 0, sizeof(s_src));   // also a throttle whose timer command came while disconnected
+        s_edit.slot = -1;
+        s_edit.request_slot = -1;
+        ui_set_link(false);
+        break;
+    case EV_MESSAGE:
+        handle_message(ev.type, ev.data, ev.len);
+        free(ev.data);
+        break;
+    case EV_COMMAND:
+        handle_command(ev.command, ev.arg);
+        break;
+    case EV_PARAM:
+        editor_param(ev.arg, ev.param, ev.value);
+        break;
+    case EV_TEXT:
+        if (ev.command == 'N' && nano_link_ready()) rename_preset((const char *)ev.data);
+        else if (ev.command >= '1' && ev.command < '1' + FXP_COUNT) fxp_save(ev.command - '0', (const char *)ev.data);
+        free(ev.data);
+        break;
+    case EV_MIDI:
+        handle_midi(ev.arg);
+        break;
+    }
+}
+
+#ifdef NANO_WEB
+// Browser build: the page's main loop handles the queued events (there are no tasks).
+void web_app_pump(void)
+{
+    app_event_t ev;
+    while (xQueueReceive(s_events, &ev, 0) == pdTRUE) app_event(ev);
+}
+#else
 static void app_task(void *arg)
 {
     app_event_t ev;
     for (;;) {
         xQueueReceive(s_events, &ev, portMAX_DELAY);
-        switch (ev.kind) {
-        case EV_LINK_UP:
-            ESP_LOGI(TAG, "Connected to the Nano Cortex - reading presets");
-            ui_splash_status("Connected - loading presets ...", NULL);
-            ui_set_link(true);
-            s_incomplete_retries = 0;
-            request_full_state();
-            break;
-        case EV_LINK_DOWN:
-            ESP_LOGW(TAG, "Connection lost - searching again");
-            s_waiting_full_state = false;
-            midi_ble_allow(false);   // until the Nano is back (or the gate timer opens it)
-            app_link_enable(false);  // the app can only use the Nano through the controller while it is connected
-            esp_timer_stop(s_midi_gate_timer);
-            esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
-            s_tuner_on = false;
-            s_last_preset = 0;
-            s_mix.pending = 0;
-            s_usb.known = false;
-            memset(&s_src, 0, sizeof(s_src));   // also a throttle whose timer command came while disconnected
-            s_edit.slot = -1;
-            s_edit.request_slot = -1;
-            ui_set_link(false);
-            break;
-        case EV_MESSAGE:
-            handle_message(ev.type, ev.data, ev.len);
-            free(ev.data);
-            break;
-        case EV_COMMAND:
-            handle_command(ev.command, ev.arg);
-            break;
-        case EV_PARAM:
-            editor_param(ev.arg, ev.param, ev.value);
-            break;
-        case EV_TEXT:
-            if (ev.command == 'N' && nano_link_ready()) rename_preset((const char *)ev.data);
-            else if (ev.command >= '1' && ev.command < '1' + FXP_COUNT) fxp_save(ev.command - '0', (const char *)ev.data);
-            free(ev.data);
-            break;
-        case EV_MIDI:
-            handle_midi(ev.arg);
-            break;
-        }
+        app_event(ev);
     }
 }
 
@@ -2121,6 +2181,7 @@ static void console_task(void *arg)
         if (c && strchr(CONSOLE_COMMANDS, c)) command((char)c, 0);   // other letters are used by the screen
     }
 }
+#endif
 
 void app_main(void)
 {
@@ -2180,10 +2241,16 @@ void app_main(void)
     ui_init(command, on_param, on_text);
     char version[40];
     snprintf(version, sizeof(version), "v%s", esp_app_get_description()->version);
+#ifdef NANO_WEB
+    ui_splash_status("Click CONNECT and choose your Nano Cortex", version);
+#else
     ui_splash_status("Searching for the Nano Cortex ...", version);
+#endif
     s_footswitches = footswitches_start(board_i2c_bus(), on_footswitch, on_footswitch_learned);
+#ifndef NANO_WEB
     xTaskCreate(app_task, "app", 6144, NULL, 4, NULL);
     xTaskCreate(console_task, "console", 3072, NULL, 3, NULL);
+#endif
     ESP_LOGI(TAG, "Free internal RAM %u KB (largest block %u KB), PSRAM %u KB",
              (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
              (unsigned)(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) / 1024),
