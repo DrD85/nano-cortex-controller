@@ -74,7 +74,7 @@ The screenshots show example presets. They are rendered from the firmware's own 
 
 | Part | Notes |
 |---|---|
-| [Waveshare ESP32-S3-Touch-LCD-4.3](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-4.3) | 800 × 480 touch screen, version with two USB-C ports (**USB** and **UART**) |
+| [Waveshare ESP32-S3-Touch-LCD-4.3](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-4.3) | 800 × 480 touch screen, version with ONE USB-C port (**USB**)
 | Neural DSP Nano Cortex | Bluetooth on; no pairing needed |
 | Optional: SX1509 breakout + up to 8 momentary footswitches | see [Footswitches](#footswitches) |
 
