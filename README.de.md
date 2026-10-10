@@ -128,7 +128,8 @@ Die Prüfsummen beider Dateien stehen in `nano-controller-<version>-sha256.txt`.
 
 - **Kachel antippen** = ihren Fußschalter drücken. Eine Kachel leuchtet kurz auf, wenn ihr Fußschalter gedrückt wird.
 - **Kacheln wie in der Signal Chain des Desktop-Editors**: das aktive Preset oder ein eingeschalteter Effekt ist in
-  seiner Farbe **gefüllt**, alles andere dunkel mit **farbigem Rand** – auch von weiter weg gut zu unterscheiden.
+  seiner Farbe **gefüllt**, alles andere dunkel mit **farbigem Rand** und der gedimmten Farbe hinter der oberen Zeile –
+  auch von weiter weg gut zu unterscheiden.
   Alle Namen haben dieselbe Größe.
 - **↻** (oben links) liest alles neu vom Nano: Preset-Namen, aktuelles Preset und die Library.
 - Das **Lautsprecher**-Symbol daneben stellt die Capture-Lautstärke des aktuellen Presets ein, danach **MIDI** und **USB**.

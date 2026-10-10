@@ -18,3 +18,8 @@ idf_component_register(SRCS ${srcs}
 # IBM Plex Sans SemiBold (SIL Open Font License 1.1, main/fonts/OFL.txt) for the large tuner note, drawn with LVGL's
 # TinyTTF. All other text uses the bitmap fonts in ui_fonts.c (tools/gen_fonts.py).
 target_add_binary_data(${COMPONENT_LIB} "fonts/IBMPlexSans-SemiBold.ttf" BINARY)
+
+# Development: -DNANO_BENCH=1 adds the console command '%' that times the FX editor's lists on the board (ui_bench).
+if(NANO_BENCH)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_BENCH=1)
+endif()

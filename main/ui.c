@@ -65,6 +65,7 @@ static lv_obj_t *s_tile_square[TILES], *s_tile_pedal[TILES];
 static lv_obj_t *s_tile_other[TILES];   // second line under the caption: the other effect of an A/B slot
 static uint32_t s_tile_ink[TILES];
 static uint32_t s_tile_pedal_type[TILES], s_tile_other_type[TILES];   // shown by show_tile_extras
+static uint32_t s_tile_head[TILES];   // colour of a tile that is not active, dimmed behind its top row (0 = none)
 static lv_obj_t *s_capture_square, *s_capture_slot_label, *s_cab_square, *s_cab_slot_label;
 static lv_obj_t *s_picker, *s_picker_title, *s_picker_list, *s_picker_tab[2], *s_picker_chips, *s_picker_chip[LIB_CATEGORY_COUNT];
 static lv_obj_t *s_picker_pager, *s_picker_page_label, *s_picker_info, *s_confirm, *s_confirm_text;
@@ -398,6 +399,22 @@ static void update_main_hidden(void)
     set_hidden(s_main, !lv_obj_is_hidden(s_editor) || !lv_obj_is_hidden(s_tuner));
 }
 
+// Fills the top h rows of a rounded rectangle (its top corners stay round): the colour of a field that is not
+// active, shown along its top - as the colour bars over the switch labels of a Morningstar MC8 Pro.
+static void draw_top(lv_layer_t *layer, const lv_area_t *a, int radius, int h, uint32_t color)
+{
+    lv_area_t old = layer->_clip_area;
+    lv_area_t clip = { LV_MAX(a->x1, old.x1), LV_MAX(a->y1, old.y1), LV_MIN(a->x2, old.x2), LV_MIN(a->y1 + h - 1, old.y2) };
+    if (clip.x1 > clip.x2 || clip.y1 > clip.y2) return;
+    layer->_clip_area = clip;
+    lv_draw_rect_dsc_t r;
+    lv_draw_rect_dsc_init(&r);
+    r.bg_color = lv_color_hex(color);
+    r.radius = radius;
+    lv_draw_rect(layer, &r, a);
+    layer->_clip_area = old;
+}
+
 static void set_icon_square(lv_obj_t *sq, uint32_t color, const lv_image_dsc_t *icon, bool active)
 {
     lv_obj_t *img = lv_obj_get_child(sq, 0);
@@ -479,6 +496,17 @@ static void fit_names(void)
     }
 }
 
+// A tile that is not active: its top row (symbol, caption, number) lies on the dimmed colour.
+static void on_tile_draw(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    if (!s_tile_head[i]) return;
+    lv_area_t a;
+    lv_obj_get_coords(lv_event_get_current_target_obj(e), &a);
+    lv_area_t in = { a.x1 + 2, a.y1 + 2, a.x2 - 2, a.y2 - 2 };   // inside the border
+    draw_top(lv_event_get_layer(e), &in, 14, 46, blend(s_tile_head[i], TILE_OFF_BG, 0.24f));
+}
+
 static void build_tile(lv_obj_t *parent, int i)
 {
     lv_obj_t *tile = lv_obj_create(parent);
@@ -492,6 +520,7 @@ static void build_tile(lv_obj_t *parent, int i)
     lv_obj_set_style_opa(tile, 190, LV_STATE_PRESSED);
     lv_obj_add_event_cb(tile, on_tile, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)i);
     lv_obj_add_event_cb(tile, on_tile_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)i);
+    lv_obj_add_event_cb(tile, on_tile_draw, LV_EVENT_DRAW_MAIN_END, (void *)(intptr_t)i);
 
     // Line drawing of the pedal at the right edge, behind everything else (FX tiles only)
     s_tile_pedal[i] = lv_image_create(tile);
@@ -567,6 +596,11 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     s_tile_pedal_type[i] = 0;   // set again by set_tile_pedal / set_tile_other, shown by show_tile_extras
     s_tile_other_type[i] = 0;
     lv_obj_t *t = s_tile[i];
+    uint32_t head = empty || active ? 0 : color;
+    if (head != s_tile_head[i]) {
+        s_tile_head[i] = head;
+        lv_obj_invalidate(t);
+    }
     set_color_prop(t, LV_STYLE_BG_COLOR, bg);
     set_num_prop(t, LV_STYLE_BG_GRAD_DIR, LV_GRAD_DIR_NONE);
     set_color_prop(t, LV_STYLE_BORDER_COLOR, border);
@@ -2662,11 +2696,14 @@ static void draw_text(lv_layer_t *layer, const char *text, bool copy, const lv_f
     lv_draw_label(layer, &d, &area);
 }
 
+#define NO_FILL 0xFF000000u   // draw_frame: only the frame (the background is there already)
+
 static void draw_frame(lv_layer_t *layer, const lv_area_t *a, uint32_t bg, uint32_t border, int radius)
 {
     lv_draw_rect_dsc_t r;
     lv_draw_rect_dsc_init(&r);
     r.bg_color = lv_color_hex(bg);
+    if (bg == NO_FILL) r.bg_opa = LV_OPA_TRANSP;
     r.radius = radius;
     r.border_width = 2;
     r.border_color = lv_color_hex(border);
@@ -2766,7 +2803,12 @@ static void draw_entry(lv_obj_t *obj, lv_layer_t *layer, intptr_t data)
     bool pressed = lv_obj_has_state(obj, LV_STATE_PRESSED);
     // The current one filled in its colour, the others framed in the dimmed colour.
     if (current) draw_frame(layer, &a, color, color, 10);
-    else draw_frame(layer, &a, pressed ? 0x23272B : PANEL_BG, blend(color, PANEL_BG, ED_DIM), 10);
+    else {
+        // Only the frame: the panel is behind it (a fill of every entry costs as much as the panel's own).
+        uint32_t dim = blend(color, PANEL_BG, ED_DIM);
+        draw_frame(layer, &a, pressed ? 0x23272B : NO_FILL, dim, 10);
+        draw_top(layer, &a, 10, 7, dim);   // its colour along the top
+    }
     uint32_t ink = current ? ink_for(color) : TEXT;
     if (option) {
         char text[24];
@@ -2931,7 +2973,8 @@ static void draw_bar(lv_obj_t *bar, int idx, lv_layer_t *layer)
     lv_draw_rect_dsc_t r;
 
     // Frame in the dimmed effect colour (brighter while touched), grey while the value is not known.
-    draw_frame(layer, &a, TILE_OFF_BG, known ? blend(color, TILE_OFF_BG, touched ? 0.8f : ED_DIM) : ED_NEUTRAL, 12);
+    // No fill of its own: the editor's black is behind it (a second fill of every bar costs as much as the first).
+    draw_frame(layer, &a, NO_FILL, known ? blend(color, TILE_OFF_BG, touched ? 0.8f : ED_DIM) : ED_NEUTRAL, 12);
 
     if (p->kind == NANO_PARAM_RANGE && known) {
         // Fill inside the frame up to the value, cut straight there; a bright line marks the value.
@@ -3122,9 +3165,22 @@ static void build_param_rows(void)
 // ---- Building the editor ----
 
 // A field that is framed in the dimmed colour when not active and filled when active (FX presets, A | B).
+// Not active: the frame's colour as a strip along the top (the filled and the empty ones have none).
+static void on_frame_button_draw(lv_event_t *e)
+{
+    lv_obj_t *btn = lv_event_get_current_target_obj(e);
+    uint32_t border = lv_color_to_u32(lv_obj_get_style_border_color(btn, 0)) & 0xFFFFFF;
+    uint32_t bg = lv_color_to_u32(lv_obj_get_style_bg_color(btn, 0)) & 0xFFFFFF;
+    if (border == bg || border == ED_NEUTRAL) return;
+    lv_area_t a;
+    lv_obj_get_coords(btn, &a);
+    draw_top(lv_event_get_layer(e), &a, 10, 7, border);
+}
+
 static lv_obj_t *frame_button(lv_obj_t *parent)
 {
     lv_obj_t *btn = lv_button_create(parent);
+    lv_obj_add_event_cb(btn, on_frame_button_draw, LV_EVENT_DRAW_MAIN_END, NULL);
     lv_obj_remove_style_all(btn);
     lv_obj_set_style_radius(btn, 10, 0);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
@@ -3290,10 +3346,13 @@ static void build_editor(lv_obj_t *screen)
     close_button(s_panel, ED_PANEL_W - 60, 12, on_panel_close, 0);
     s_panel_list = lv_obj_create(s_panel);
     lv_obj_remove_style_all(s_panel_list);
-    lv_obj_set_pos(s_panel_list, 0, 74);
-    lv_obj_set_size(s_panel_list, ED_PANEL_W - 2, ED_PANEL_H - 2 - 74);
-    lv_obj_set_style_pad_hor(s_panel_list, 12, 0);
-    lv_obj_set_style_pad_bottom(s_panel_list, 12, 0);
+    // 6 px inside the panel, clear of its round corners: the panel then covers the list's whole area, so a scroll
+    // step fills that area once (panel) instead of twice (black underneath, then the panel) - filling is what
+    // takes the time on this display.
+    lv_obj_set_pos(s_panel_list, 6, 74);
+    lv_obj_set_size(s_panel_list, ED_PANEL_W - 2 - 12, ED_PANEL_H - 2 - 74 - 6);
+    lv_obj_set_style_pad_hor(s_panel_list, 6, 0);
+    lv_obj_set_style_pad_bottom(s_panel_list, 6, 0);
     lv_obj_set_style_pad_row(s_panel_list, 6, 0);
     lv_obj_set_style_pad_column(s_panel_list, 6, 0);
     lv_obj_set_flex_flow(s_panel_list, LV_FLEX_FLOW_ROW_WRAP);
@@ -3475,3 +3534,119 @@ void ui_fx_editor_close(void)
     s_editor_slot_index = -1;
     lvgl_port_unlock();
 }
+
+#ifdef NANO_BENCH
+// ---- Development: timing on the board ----
+// Console command '%' (firmware built with "idf.py -DNANO_BENCH=1 build"): opens and scrolls the FX editor's lists
+// by itself and prints how long a frame takes - the drawing and the wait for the display. The display shows a new
+// frame every 26.5 ms; a list that draws longer than that gets every second one (18.7 fps), and filling the list's
+// area once already takes about 16 ms (the frame buffers are in PSRAM).
+#include "esp_timer.h"
+
+static struct { int64_t refr_t0, render_t0, flush_t0, refr_us, render_us, flush_us, max_us; int frames; bool drawn; } s_bench;
+static int s_bench_step;
+
+static void bench_display_event(lv_event_t *e)
+{
+    int64_t now = esp_timer_get_time();
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_REFR_START) {
+        s_bench.refr_t0 = now;
+        s_bench.drawn = false;
+    } else if (code == LV_EVENT_RENDER_START) {
+        s_bench.render_t0 = now;
+        s_bench.drawn = true;
+    } else if (code == LV_EVENT_FLUSH_START) {
+        s_bench.flush_t0 = now;
+    } else if (code == LV_EVENT_FLUSH_FINISH) {
+        s_bench.flush_us += now - s_bench.flush_t0;
+    } else if (code == LV_EVENT_RENDER_READY) {
+        s_bench.render_us += now - s_bench.render_t0;
+    } else if (code == LV_EVENT_REFR_READY && s_bench.drawn) {
+        int64_t dt = now - s_bench.refr_t0;
+        s_bench.refr_us += dt;
+        if (dt > s_bench.max_us) s_bench.max_us = dt;
+        s_bench.frames++;
+    }
+}
+
+static void bench_scroll(void *obj, int32_t v)
+{
+    lv_obj_scroll_to_y(obj, v, LV_ANIM_OFF);
+}
+
+static void bench_step(lv_timer_t *timer);
+
+static void bench_report(lv_anim_t *a)
+{
+    int f = s_bench.frames ? s_bench.frames : 1;
+    printf("BENCH %-11s %3d frames in 3 s = %4.1f fps | frame %5.1f ms (max %5.1f) = draw %5.1f + wait %4.1f\n",
+           s_bench_step ? "parameters" : "model list", s_bench.frames, (double)(s_bench.frames / 3.0f),
+           (double)((float)s_bench.refr_us / f / 1000), (double)((float)s_bench.max_us / 1000),
+           (double)((float)(s_bench.render_us - s_bench.flush_us) / f / 1000), (double)((float)s_bench.flush_us / f / 1000));
+    s_bench_step++;
+    lv_timer_set_repeat_count(lv_timer_create(bench_step, 300, NULL), 1);
+}
+
+// Scrolls a list to its end and back in 3 s and counts the frames.
+static void bench_run(lv_obj_t *list)
+{
+    lv_obj_update_layout(list);
+    lv_obj_scroll_to_y(list, 0, LV_ANIM_OFF);
+    int32_t max = lv_obj_get_scroll_bottom(list);
+    lv_refr_now(NULL);
+    memset(&s_bench, 0, sizeof(s_bench));
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, list);
+    lv_anim_set_values(&a, 0, max);
+    lv_anim_set_duration(&a, 1500);
+    lv_anim_set_reverse_duration(&a, 1500);
+    lv_anim_set_exec_cb(&a, bench_scroll);
+    lv_anim_set_completed_cb(&a, bench_report);
+    lv_anim_start(&a);
+}
+
+static void bench_step(lv_timer_t *timer)
+{
+    static float values[NANO_MAX_PARAMS];
+    for (int i = 0; i < NANO_MAX_PARAMS; i++) values[i] = 0.1f + 0.035f * i;
+    if (s_bench_step == 0) {   // the model list of Pre FX 1: opening it (building, first frame), then scrolling
+        ui_fx_editor_show(0, NANO_SLOT_MODELS[0][6], true, values, 3);
+        lv_refr_now(NULL);
+        int64_t t = esp_timer_get_time();
+        open_panel(PANEL_MODEL, 0);
+        int64_t build = esp_timer_get_time() - t;
+        t = esp_timer_get_time();
+        lv_refr_now(NULL);
+        printf("BENCH open model list: build %.1f ms + first frame %.1f ms\n", (double)(build / 1000.0f),
+               (double)((esp_timer_get_time() - t) / 1000.0f));
+        bench_run(s_panel_list);
+    } else if (s_bench_step == 1) {   // the parameters of the model with the most of them
+        close_panel();
+        uint32_t type = NANO_SLOT_MODELS[3][0];
+        for (int i = 0; i < NANO_SLOT_MODEL_COUNT[3]; i++) {
+            const nano_fx_model_t *m = nano_fx_model(NANO_SLOT_MODELS[3][i]), *best = nano_fx_model(type);
+            if (m && best && m->param_count > best->param_count) type = m->type;
+        }
+        ui_fx_editor_show(3, type, true, values, NANO_MAX_PARAMS);
+        bench_run(s_editor_body);
+    } else {
+        ui_fx_editor_close();
+        printf("BENCH done\n");
+    }
+}
+
+void ui_bench(void)
+{
+    static bool hooked;
+    lvgl_port_lock(0);
+    if (!hooked) {
+        lv_display_add_event_cb(lv_display_get_default(), bench_display_event, LV_EVENT_ALL, NULL);
+        hooked = true;
+    }
+    s_bench_step = 0;
+    lv_timer_set_repeat_count(lv_timer_create(bench_step, 100, NULL), 1);
+    lvgl_port_unlock();
+}
+#endif

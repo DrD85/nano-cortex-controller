@@ -127,3 +127,8 @@ void ui_splash_done(void);
 void ui_show_message(const char *text);
 // Footswitch tile 0-7 lights up for a moment (the press arrived).
 void ui_flash_tile(int tile);
+
+#ifdef NANO_BENCH
+// Development (-DNANO_BENCH=1): times the FX editor's lists on the board and prints the result (console '%').
+void ui_bench(void);
+#endif

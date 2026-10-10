@@ -128,7 +128,8 @@ The checksums of both files are in `nano-controller-<version>-sha256.txt`.
 
 - **Tap a tile** = press its footswitch. A tile lights up briefly when its footswitch is pressed.
 - **Tiles as in the desktop editor's signal chain**: an active preset or an effect that is on is **filled** in its
-  colour; everything else is dark with a **coloured border** – the difference shows from across the stage. All
+  colour; everything else is dark with a **coloured border** and its top row on the dimmed colour – the difference
+  shows from across the stage. All
   names use one size.
 - **↻** (top left) reads everything from the Nano again: preset names, the current preset and the library.
 - The **speaker** symbol next to it sets the capture volume of the current preset; **MIDI** and **USB** follow.

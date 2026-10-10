@@ -2177,6 +2177,12 @@ static void console_task(void *arg)
             continue;
         }
         count = 0;
+#ifdef NANO_BENCH
+        if (c == '%') {
+            ui_bench();
+            continue;
+        }
+#endif
         c = (uint8_t)tolower(c);
         if (c && strchr(CONSOLE_COMMANDS, c)) command((char)c, 0);   // other letters are used by the screen
     }
