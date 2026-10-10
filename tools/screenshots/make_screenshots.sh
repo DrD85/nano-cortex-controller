@@ -42,3 +42,5 @@ for i, name in enumerate(["01-preset-mode", "02-fx-mode", "03-fullscreen", "04-f
 grid.save("docs/images/00-overview.png")
 print("docs/images/00-overview.png")
 '
+# Numbered pictures for the guide in the README
+"$PYTHON" tools/screenshots/annotate.py

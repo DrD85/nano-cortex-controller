@@ -1,465 +1,213 @@
 # Nano Cortex Controller (unofficial)
-<img width="1610" height="970" alt="image" src="https://github.com/user-attachments/assets/44baf147-e5b6-49bc-af0a-1e5dea99fed6" />
 
+A touch screen and footswitch controller for the **Neural DSP Nano Cortex**. It runs on a
+**Waveshare ESP32-S3-Touch-LCD-4.3**, connects over Bluetooth and works like a small Quad Cortex floor unit:
+eight tiles for eight footswitches, your own preset banks, an FX editor, the capture and IR library, a tuner and
+a looper mode. It is the hardware companion of the [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).
 
 ![Nano Cortex Controller](docs/images/00-overview.png)
 
-A touch screen and footswitch controller for the **Neural DSP Nano Cortex**, connected over Bluetooth.
-It runs on a **Waveshare ESP32-S3-Touch-LCD-4.3** and turns it into a Quad-Cortex-style floor controller:
-eight coloured tiles for eight footswitches, a full FX editor, the capture and IR library, a tuner and
-your own preset banks. It is the hardware companion of the
-[Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).
+**Deutsch:** [Anleitung auf Deutsch](README.de.md) · **No board yet?** The same firmware runs in the browser:
+[Nano Cortex Controller Web](https://github.com/DrD85/nano-cortex-controller-web)
 
 > **Unofficial community project.** Not affiliated with, endorsed by or supported by Neural DSP.
 > "Nano Cortex", "Quad Cortex" and "Neural DSP" are trademarks of Neural DSP Technologies.
 > The controller writes to your device. Use it at your own risk and keep backups of your presets
 > (for example with the official Cortex Cloud app).
 
-**Deutsch:** [Anleitung auf Deutsch](README.de.md)
+## What it can do
 
-**Try it without the board:** the same firmware also runs in the browser (Chrome or Edge) with the screen and
-eight footswitch buttons, connected to your Nano Cortex over Web Bluetooth:
-[Nano Cortex Controller Web](https://github.com/DrD85/nano-cortex-controller-web) (how it is built: [web/](web/README.md)).
+- **Presets and banks** – six presets per bank on footswitches 3–8, 16 banks with your own colours and symbols
+- **FX mode** – switch the five FX slots with your feet, plus a reverb switch and a second effect on Pre FX 1
+- **FX editor** – choose models and set every parameter on the touch screen, with named FX presets
+- **Capture and Cab/IR** – pick slots or load anything from the Nano's library; capture tone, volume, cab settings
+- **Tuner**, **gig view** with large tiles, **Bluetooth MIDI** for an extra controller
+- **Looper mode** – the footswitches control a looper app on a phone (for example Loopy Pro)
+- The [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) can connect **through** the controller
 
-![Preset mode](docs/images/01-preset-mode.png)
+## Get started
 
-## Features
-
-- **Presets**: six presets per bank on footswitches 3–8, 16 own banks with colour and symbol per switch,
-  previous/next preset by swiping, rename and save on the Nano, follows preset changes made on the pedal
-- **FX mode**: footswitches 3–7 switch Pre FX 1–2 and Post FX 1–3, tiles in the effect category colours
-- **Second effect on Pre FX 1**: footswitch 3 short = on/off, held = swap to a second effect (e.g. an auto-wah)
-- **FX editor** (long press on an FX tile): choose the model and edit every parameter live, with four named
-  **FX presets** per effect model
-- **Capture and Cab/IR**: pick one of the 25 capture slots or 5 cab slots, or load any capture or IR from the
-  Nano's library (factory and user) into the active slot
-- **Capture volume** (VOL), **capture tone** (long press on the capture card: gain, bass, mid, treble) and
-  **cab settings** (long press on the cab card: output, high pass, low pass)
-- **Reverb switch** (footswitch 8): toggles the reverb mix between Pos 1 and Pos 2 of the preset's expression
-  setting – or switches between the preset's reverb and a **second reverb** with its own settings
-- **Tuner** as in the desktop editor: large note, scale and needle, reference pitch A4 and output mute (footswitch 2)
-- **USB audio volume** of the Nano (playback from the computer), as in the official app
-- **App bridge**: the Nano Cortex Editor (Mac app or browser) can connect through the controller while the controller
-  is connected to the Nano – app and controller work at the same time
-- **Bluetooth MIDI**: connect a MIDI controller wirelessly – for example a Morningstar MC6 with a WIDI adapter –
-  using the Nano's own MIDI messages (program change, CC 37–41, CC 1)
-- **Looper mode** (hold footswitch 1): the footswitches control a looper app on a phone – for example Loopy Pro on
-  an iPhone that uses the Nano as its audio interface – over Bluetooth MIDI
-- **Footswitch learn**: assign any footswitch to any function
-- **Gig view** (swipe up): large tiles plus a slim status bar (preset, bank, mode, unsaved changes), readable from
-  a distance; filled = on, outlined = off, as in the desktop editor
-- Up to 8 footswitches on an SX1509 I/O expander (optional – the touch screen works on its own)
-
-## Screenshots
-
-| | |
-|---|---|
-| ![FX mode](docs/images/02-fx-mode.png) | ![Gig view (swipe up)](docs/images/03-fullscreen.png) |
-| FX mode | Gig view (swipe up) |
-| ![FX editor](docs/images/04-fx-editor.png) | ![Own banks: colour, symbol and preset](docs/images/05-bank-editor.png) |
-| FX editor | Own banks: colour, symbol and preset |
-| ![Capture library](docs/images/06-capture-library.png) | ![Reverb switch: second reverb](docs/images/07-reverb.png) |
-| Capture library | Reverb switch: second reverb |
-| ![Tuner](docs/images/08-tuner.png) | ![USB audio volume](docs/images/09-usb-volume.png) |
-| Tuner | USB audio volume |
-| ![Bluetooth MIDI](docs/images/10-bluetooth-midi.png) | ![Capture volume](docs/images/11-capture-volume.png) |
-| Bluetooth MIDI | Capture volume |
-| ![Cab settings](docs/images/12-cab-settings.png) | ![Second effect on Pre FX 1](docs/images/13-second-effect.png) |
-| Cab settings (long press on the cab card) | Second effect on Pre FX 1 (A \| B in its FX editor) |
-| ![Capture tone](docs/images/14-capture-amp.png) | ![Start screen](docs/images/15-start-screen.png) |
-| Capture tone (long press on the capture card) | Start screen while connecting |
-| ![Choose a model](docs/images/16-fx-model.png) | ![FX editor, effect off](docs/images/17-fx-off.png) |
-| Choose a model (tap the FX editor's header) | FX editor with the effect off |
-| ![Looper mode](docs/images/18-looper-mode.png) | ![Looper tile](docs/images/19-looper-tile.png) |
-| Looper mode (hold footswitch 1): the switches of a looper app on a phone | Name, colour and symbol of a looper tile (long press) |
-
-The screenshots show example presets. They are rendered from the firmware's own UI code
-(`tools/screenshots/make_screenshots.sh`).
-
-## What you need
+**1. What you need**
 
 | Part | Notes |
 |---|---|
-| [Waveshare ESP32-S3-Touch-LCD-4.3](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-4.3) | 800 × 480 touch screen, version with ONE USB-C port (**USB**)
+| [Waveshare ESP32-S3-Touch-LCD-4.3](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-4.3) | 800 × 480 touch screen, version with ONE USB-C port (**USB**) |
 | Neural DSP Nano Cortex | Bluetooth on; no pairing needed |
-| Optional: SX1509 breakout + up to 8 momentary footswitches | see [Footswitches](#footswitches) |
+| Optional: SX1509 breakout + up to 8 momentary footswitches | [wiring](docs/manual.md#footswitches) – the touch screen works on its own |
 
-## Install the firmware (in the browser, no tools needed)
+**2. Install the firmware** – in the browser, no tools needed. The files are on the [Releases](../../releases) page.
 
-The firmware is on the [Releases](../../releases) page. Each release has two files:
+1. Open **[esptool.spacehuhn.com](https://esptool.spacehuhn.com)** in **Chrome** or **Edge** and connect the board
+   with the USB-C port labelled **USB**.
+2. Click **Connect** and choose the board (usually "USB JTAG/serial debug unit"). No port? Hold **BOOT**, press and
+   release **RESET**, release **BOOT**, try again.
+3. Add the file and its address, then click **Program**:
 
-| File | Flash at | Use it for |
-|---|---|---|
-| `nano-controller-<version>-full.bin` | `0x0` | the **first installation** (bootloader, partition table and app). Erases stored banks and settings. |
-| `nano-controller-<version>-update.bin` | `0x10000` | **updates**: only the app – your banks, symbols, footswitch order and second reverbs stay |
+   | File | Address | Use it for |
+   |---|---|---|
+   | `nano-controller-<version>-full.bin` | `0x0` | the **first installation** (erases stored banks and settings) |
+   | `nano-controller-<version>-update.bin` | `0x10000` | **updates** – your banks and settings stay |
 
-1. Open **[esptool.spacehuhn.com](https://esptool.spacehuhn.com)** in **Chrome** or **Edge** on a computer
-   (Safari and Firefox have no Web Serial).
-2. Connect the board with the USB-C port labelled **USB** (not UART).
-3. Click **Connect** and choose the port of the board (usually "USB JTAG/serial debug unit").
-   If no port shows up: hold the **BOOT** button, press and release **RESET**, then release **BOOT** and try again.
-4. Add the `.bin` file and set the address: `0x0` for the `-full.bin`, `0x10000` for the `-update.bin`.
-5. Click **Program** and wait until it says it is done.
-6. Press **RESET** on the board (or unplug and plug it in again).
+4. Press **RESET** on the board.
 
-The checksums of both files are in `nano-controller-<version>-sha256.txt`.
+**3. First start** – switch the Nano on, close the Cortex Cloud app and the Nano Cortex Editor (the Nano accepts
+only one Bluetooth connection) and power the board. It finds the Nano, reads the presets and shows the current one.
+If it does not find the Nano within a minute, switch the Nano off and on again.
 
-## First start
+## How to use it
 
-1. Switch the Nano Cortex on.
-2. Close the **Cortex Cloud** app and the **Nano Cortex Editor** – the Nano accepts only one Bluetooth
-   connection at a time.
-3. Power the board. It searches for the Nano ("SEARCHING FOR THE NANO…"), connects, reads all preset names and
-   shows the current preset. If it does not find the Nano within a minute, switch the Nano off and on again.
+### The main screen
 
-## Using it
+![Main screen with numbers](docs/images/guide-main.png)
 
-### The screen
+1. **↻** read everything again · **speaker** capture volume · **MIDI** devices · **USB** audio volume
+2. Green dot = connected to the Nano; preset and bank
+3. **Save** the preset on the Nano – green when there are unsaved changes
+4. Previous / next **bank**
+5. Preset name – **hold** to rename
+6. Capture and cab – **tap** to choose, **hold** for tone / cab settings
+7. Eight tiles = eight footswitches. **Tap** a tile = press its switch
 
-```
-┌──────────────────────────────────────────────────────────┐
-│ ↻  VOL  MIDI  USB     ● PRESET 7 · BANK 2          Save  │  top bar: symbols, status, Save
-│  ◀               Revv NF53 Clean •                    ▶  │  arrows = bank −/+, long press on the name: rename
-├────────────────────────────┬─────────────────────────────┤
-│ CAPTURE  Revv D20 clean    │ CAB / IR  810 Amped VT      │  tap: choose slot or library item
-│                            │                             │  long press: gain, bass, mid, treble / cab settings
-├──────────┬──────────┬──────┴───┬──────────────────────────┤
-│ 1 MODE   │ 2 TUNER  │ 3        │ 4                        │  eight tiles = eight footswitches
-├──────────┼──────────┼──────────┼──────────────────────────┤
-│ 5        │ 6        │ 7        │ 8                        │
-└──────────┴──────────┴──────────┴──────────────────────────┘
-```
+A tile is **filled** when it is active (the loaded preset, an effect that is on) and dark with its colour along the
+top when it is not. **Swipe left / right** for the next / previous preset.
 
-- **Tap a tile** = press its footswitch. A tile lights up briefly when its footswitch is pressed.
-- **Tiles as in the desktop editor's signal chain**: an active preset or an effect that is on is **filled** in its
-  colour; everything else is dark with a **coloured border** and its top row on the dimmed colour – the difference
-  shows from across the stage. All
-  names use one size.
-- **↻** (top left) reads everything from the Nano again: preset names, the current preset and the library.
-- The **speaker** symbol next to it sets the capture volume of the current preset; **MIDI** and **USB** follow.
-- **Swipe left / right**: next / previous preset.
-- **Swipe up – gig view**: the tiles fill the screen with larger names, and a slim bar on top shows the
-  connection, preset number, bank, preset name, unsaved changes and the mode (PRESETS / FX). **Swipe down**: back.
-- The green dot shows the Bluetooth connection to the Nano; **Save** turns green and an orange dot appears next to
-  the name when the preset has unsaved changes. **MIDI** turns green while a Bluetooth MIDI controller is connected.
-- The **capture card** shows the capture's type (amp head, combo, amp + cab, cab, pedal …) as in the editor.
+### Presets and FX
 
-### Footswitches and tiles
+<table>
+<tr>
+<td width="50%"><img src="docs/images/01-preset-mode.png" alt="Preset mode"></td>
+<td width="50%"><img src="docs/images/02-fx-mode.png" alt="FX mode"></td>
+</tr>
+<tr>
+<td>
 
-| Switch | Preset mode | FX mode |
-|---|---|---|
-| 1 | switch to FX mode; **held: looper mode** | switch to preset mode; **held: looper mode** |
-| 2 | tuner on/off | tuner on/off |
-| 3–8 | the six presets of the current bank | 3–7: Pre FX 1, Pre FX 2, Post FX 1–3 on/off |
-| 8 | (sixth preset) | reverb: mix Pos 1 ↔ Pos 2, or reverb A ↔ B |
+**Preset mode** – tiles 3–8 are the six presets of the bank. **Hold** a tile to give that switch another preset,
+a colour and a symbol.
 
-Active tiles light up in full colour, inactive ones are dimmed. FX tiles use the effect category colours.
-Footswitch 1 acts when you lift your foot (it has a held function); holding it for 0.6 s opens the
-[looper mode](#looper-mode-a-looper-app-on-a-phone).
+</td>
+<td>
 
-### Long presses
+**FX mode** – tiles 3–7 switch Pre FX 1–2 and Post FX 1–3, tile 8 is the reverb switch. **Hold** a tile to open
+its editor.
 
-| Where | What opens |
-|---|---|
-| Tile 1 | **Looper mode** on / off (as holding footswitch 1) |
-| Tile 2–8 in looper mode | **Looper tile**: name, colour and symbol of this switch |
-| Tile 2 | **Learn** for footswitch 2 – and, with *Switch 1* in that dialog, for footswitch 1 |
-| Preset tile (3–8, preset mode) | **Bank editor**: colour, symbol and preset of this switch; `DEFAULT` restores the standard preset; `LEARN SWITCH` |
-| FX tile (3–7, FX mode) | **FX editor**: model (tap the header), on/off and all parameters |
-| Tile 8 (FX mode) | **Reverb dialog** with the tabs *MIX POS 1 / 2* and *2ND REVERB* |
-| Preset name | **Rename** with on-screen keyboard (at least 4 characters, unique) |
+</td>
+</tr>
+</table>
 
-### Own banks
+**Footswitch 1** changes between the two modes, **footswitch 2** is the tuner.
 
-16 banks with six switches each. By default bank 1 holds presets 1–6, bank 2 presets 7–12 and so on.
-A long press on a preset tile lets you choose any preset, one of ten colours and one of 19 symbols
-(Clean, Edge, Drive, Solo, Fuzz, Atmospheric, Metal, Boost, Rhythm, Bass, Acoustic, Blues, Live, Favorite,
-Fuzz Wave, Guitarist, Rocket, Space, Swell).
-The banks are stored on the controller, the presets themselves stay on the Nano.
+### Gig view
 
-### Capture and Cab/IR
+<table>
+<tr>
+<td width="50%"><img src="docs/images/03-fullscreen.png" alt="Gig view"></td>
+<td>
 
-Tap the CAPTURE or CAB / IR card. **SLOTS** lists the 25 capture slots (5 banks × 5) or 5 cab slots;
-**LIBRARY** shows all captures or IRs stored on the Nano with category filters (AMP = head or combo, AMP+CAB, CAB, PEDAL, OTHER).
-A library item is loaded into the active slot after a confirmation.
+**Swipe up**: the tiles fill the screen with large names, and a slim bar shows connection, preset, bank, unsaved
+changes and the mode. **Swipe down**: back.
 
-**Capture volume**: **VOL** in the preset card, −24 dB to +12 dB (**0 dB** resets). **Capture tone**: a long press
-on the CAPTURE card – **GAIN**, **BASS**, **MID** and **TREBLE** of the capture, 0–10. **Cab settings**: a long press on the CAB / IR card – **OUTPUT** (−96 dB to +12 dB),
-**HIGH PASS** (20–800 Hz) and **LOW PASS** (1–20 kHz) of the active cab, read from the Nano when the dialog opens.
-All of them are part of the preset: changes are heard at once, **SAVE** keeps them.
+</td>
+</tr>
+</table>
 
 ### FX editor
 
-The header shows the effect's symbol – filled in its colour when the effect is on, outlined when it is off – with
-the slot and the model. Tap it to choose another model from a list grouped by type (Drive, EQ & utility, Wah &
-filter …); the large switch on the right turns the effect on or off.
+**Hold an FX tile** to open it.
 
-The parameters are bars in two columns, filled in the effect colour up to the value. **Slide sideways** on a bar to
-change it: it follows your finger from its current value, so a touch or a scroll never makes a value jump. Up and
-down scrolls the list. Settings with two or three options (*Off | On*, *Sync* …) are switched with a tap, longer
-lists (*Sync Note* …) open a list.
+![FX editor with numbers](docs/images/guide-fx-editor.png)
 
-Changes are sent to the Nano while you move a control. The Nano only reports parameter values of effects that
-are switched on – switch an effect on to see and edit its values. **SAVE** in the preset card stores the preset
-on the Nano.
+1. Back
+2. **Tap** to choose another model. The symbol is filled when the effect is on
+3. Effect on / off
+4. **FX presets**: tap = load, **hold** = save the current settings under a name
+5. **Slide sideways** on a bar to change a value; up and down scrolls
 
-**FX presets** (the bar above the parameters): *Original* and four named settings per effect model, stored on the
-controller and usable in every preset and slot with that model; empty places show **+**.
+Values are shown while the effect is on. *Off | On* settings switch with a tap. More: [manual](docs/manual.md#fx-editor).
 
-- **Hold** a place: the keyboard opens and the current settings are saved under the name you type. An empty name
-  deletes the place.
-- **Tap** a place: its settings are loaded at once.
-- **Original** goes back to the settings the effect had when you opened the editor. Right after choosing a new
-  model, these are the model's defaults.
+### Capture, cab and tuner
 
-Loaded settings count as changes to the Nano preset: **SAVE** keeps them there.
+<table>
+<tr>
+<td width="33%"><img src="docs/images/06-capture-library.png" alt="Capture library"></td>
+<td width="33%"><img src="docs/images/14-capture-amp.png" alt="Capture tone"></td>
+<td width="33%"><img src="docs/images/08-tuner.png" alt="Tuner"></td>
+</tr>
+<tr>
+<td>
 
-### Reverb switch (footswitch 8)
+**Tap** the capture or cab card: the Nano's slots, or its whole library with filters.
 
-- **MIX POS 1 / 2**: footswitch 8 sets the reverb's Mix to Pos 1 or Pos 2. These are the heel and toe values of
-  the preset's expression setting for the reverb ("Post FX 3 Amount"). Moving a slider plays that mix;
-  **SAVE** writes both values into the preset (and creates the expression setting if there is none).
-- **2ND REVERB**: choose a second reverb (B) for this preset. Footswitch 8 then switches between the preset's
-  reverb (A) and B; the Nano has one reverb slot, so the controller swaps the model and sends the stored values
-  (takes about half a second). Tile 8 shows reverb B and lights up while it runs; tile 7 shows the reverb in the slot. **EDIT B** loads B and opens the FX editor to set it up. Reverb B is stored on the
-  controller, per preset. If you save the preset while B is active, B becomes the preset's reverb.
+</td>
+<td>
 
-### Second effect on Pre FX 1 (footswitch 3)
+**Hold** the capture card for gain, bass, mid and treble – the cab card for output, high and low pass.
 
-Long press on the Pre FX 1 tile, then **+B** (next to the model in the FX editor): choose a second effect (B) for
-this preset, for example the Envelope Filter as an auto-wah next to a drive. **A | B** then shows which one runs:
-tap the other one to swap at once, tap the running one to choose another second effect or *None*. Then footswitch 3
-in FX mode:
+</td>
+<td>
 
-- **short press**: the effect in the slot on / off (it acts when you lift your foot)
-- **hold** (0.6 s): swap A ↔ B – the effect stays on or off, as it was
+**Footswitch 2** opens the tuner, with reference pitch and output mute. Tap to close.
 
-The tile shows *Pre FX 1 A* or *Pre FX 1 B* and, below it, the other effect (⇄ name). The Nano has one model per slot, so the controller swaps the model and
-sends the stored values of the other effect: this takes about half a second with a short gap in the sound.
-For a gapless change put the second effect into a free slot instead and switch it on and off.
-B is edited in the FX editor while it runs and is stored on the controller, per preset (MIDI: CC 58). The controller
-also keeps the settings of A, read whenever A is on. Only if A was never on since B was set up, the first swap
-switches A on for a moment to read them.
+</td>
+</tr>
+</table>
 
-### Tuner
+### Looper mode
 
-Footswitch 2 or the TUNER tile. Looks like the desktop editor's tuner: a large note in the tuning colour (green = in
-tune, orange = off), a scale with a tick every 10 cents and a glowing needle, the deviation in cents. At the bottom,
-**Reference A4** sets the reference pitch (400-480 Hz, hold − / + to run) and **Mute output** silences the Nano while
-tuning. Tap the screen or press footswitch 2 again to close it.
+<table>
+<tr>
+<td width="50%"><img src="docs/images/18-looper-mode.png" alt="Looper mode"></td>
+<td>
 
-### USB audio volume
+**Hold footswitch 1**: the tiles become the switches of a looper app on a phone, for example Loopy Pro playing
+through the Nano. Any press of footswitch 1 goes back.
 
-**USB** in the preset card: volume of the audio played from the computer over USB, −40 dB (OFF) to 0 dB,
-as in the official app. The value is read from the Nano each time.
+- In the app connect the Bluetooth device *Nano Cortex Controller* and bind the switches with MIDI Learn
+- **Hold** a tile to change its name, colour and symbol
 
-### Bluetooth MIDI
+Setup step by step: [manual](docs/manual.md#looper-mode-a-looper-app-on-a-phone).
 
-**MIDI** in the preset card opens the device list. It shows Bluetooth MIDI devices nearby – for example a
-CME WIDI adapter on the MIDI port of a Morningstar MC6, or a Bluetooth MIDI
-footswitch. Tap one to connect it; the controller remembers it and connects again by itself whenever it is
-switched on. **FORGET DEVICE** disconnects and forgets it. The Nano stays connected at the same time.
+</td>
+</tr>
+</table>
 
-The controller understands the same messages as the Nano's own MIDI over USB, on all MIDI channels, so banks made
-for the Nano (for example with the MC6 export of the Nano Cortex Editor) work over Bluetooth too:
+### Touch and footswitches at a glance
 
-| Message | Action |
-|---|---|
-| Program Change 0–63 | preset 1–64 |
-| CC 37–41 | FX slot 1–5 (Pre FX 1, Pre FX 2, Post FX 1–3): value 64–127 on, 0–63 off |
-| CC 1 | expression: reverb mix from Pos 1 (0) to Pos 2 (127) |
-| CC 50–57, value 64–127 | press footswitch 1–8 (mode, tuner, presets or FX, reverb switch) |
-| CC 58, value 64–127 | hold footswitch 3: Pre FX 1 swaps to its second effect and back |
-| CC 59 | looper mode: value 64–127 on, 0–63 off |
-
-A wired MIDI input is not possible on this board without extra hardware; use a Bluetooth MIDI adapter instead.
-
-### Looper mode (a looper app on a phone)
-
-The controller can be the foot controller of a looper app, for example **Loopy Pro** on an iPhone or iPad. The
-phone plays through the Nano: connected to its USB-C port, the Nano is the phone's audio interface, so the guitar
-goes into the app and the loops (and backing tracks) come out of the Nano. Their level is the *USB audio volume*
-(see above). The footswitches reach the app over **Bluetooth MIDI**: the controller is a Bluetooth MIDI device with
-the name **"Nano Cortex Controller"**.
-
-1. In Loopy Pro open the main menu > **Bluetooth Devices** and choose *Nano Cortex Controller*. The controller
-   shows *Phone connected* and how often MIDI is exchanged (every 11.25 or 15 ms on an iPhone).
-2. **Hold footswitch 1** (0.6 s) or long press tile 1: the tiles become the looper's switches. Any press of
-   footswitch 1 leaves the mode again; FX and presets are as you left them.
-3. In Loopy Pro choose **MIDI Learn**, tap what a switch should do (for a loop: *Play/Stop* with *Record if
-   empty*) and press that footswitch. Bind every switch only once: two bindings on the same loop cancel each other.
-
-| Footswitch | Sends (MIDI channel 16) | Tile (as delivered) |
+| Do this | Where | What happens |
 |---|---|---|
-| 2 | CC 102 | Pause |
-| 3–8 | CC 103–108 | Loop 1–6 |
+| **Tap** | a tile | the same as its footswitch |
+| **Hold** | a preset tile | bank editor: preset, colour and symbol of this switch |
+| | an FX tile | FX editor |
+| | tile 8 in FX mode | reverb switch: mix positions or a second reverb |
+| | tile 1 | looper mode on / off |
+| | a looper tile | its name, colour and symbol |
+| | tile 2 | learn which footswitch is which |
+| | the preset name | rename the preset |
+| | capture / cab card | capture tone / cab settings |
+| **Swipe** left / right | anywhere | next / previous preset |
+| **Swipe** up / down | anywhere | gig view on / off |
+| **Footswitch 1** | | short: presets ↔ FX · held: looper mode |
+| **Footswitch 2** | | tuner |
+| **Footswitch 3** held | FX mode | Pre FX 1 swaps to its second effect |
 
-**Your own names**: a long press on a tile in looper mode opens its dialog – name (keyboard), colour and symbol,
-stored on the controller; *Default* brings back the tile shown above. Tile 1 shows what the last press sent
-(*Sent CC 103*), which helps when you bind a switch in the app.
+## More
 
-By default the tiles show the loops in three colour pairs, as a two-column Loopy Pro project does. What a switch
-does is up to the app.
+- **[Manual](docs/manual.md)** – every function in detail: banks, capture and cab, FX presets, reverb switch, second
+  effect, [Bluetooth MIDI](docs/manual.md#bluetooth-midi) with all messages, looper mode, the editor through the
+  controller, [footswitch wiring](docs/manual.md#footswitches), what is stored where
+- **[Development](docs/development.md)** – build from source, project layout, serial console, how the controller talks
+  to the Nano
+- **[Web version](web/README.md)** – how the browser build is made
 
-A footswitch sends the value 127 when you press it and 0 when you lift your foot, so the app's own *hold* and
-*double tap* triggers work. Tapping a tile on the screen sends a short press. In looper mode a press goes out
-2–4 ms after the contact closes; over Bluetooth it then waits for the next exchange with the phone – at most the
-interval shown when the phone connects. With loops that start and end on the beat (the app's quantisation) this
-does not matter; a freely recorded first loop can be that much longer or shorter.
-
-The phone and the Nano Cortex Editor can be connected at the same time. What the app sends back (feedback meant
-for a controller's lights) is written to the serial log for now.
-
-### Nano Cortex Editor through the controller
-
-The Nano accepts only one Bluetooth connection. When the controller is connected to the Nano, it offers itself as
-**"Nano Cortex Controller"** with the same Bluetooth service as the Nano, so the
-[Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) connects to the controller instead:
-**app ↔ controller ↔ Nano**. The Mac app picks it automatically; in the browser choose "Nano Cortex Controller".
-Without the controller (or before it has connected) the app connects to the Nano directly, as before.
-
-- Everything the app sends goes on to the Nano; replies to the app's requests go back to the app, replies to the
-  controller's own requests stay on the controller, and messages the Nano sends on its own reach both.
-- Changes made in the app appear on the controller a moment later; changes made on the controller (footswitches,
-  touch, MIDI) make the app read the preset again, as after a change on the pedal.
-- While the app is connected, **APP** is shown in the status line.
-
-### Footswitch learn
-
-Long press on tile 2 (footswitch 2; **Switch 1** in the dialog learns footswitch 1 instead), or **LEARN SWITCH** in the
-bank editor. Then press the footswitch that should have
-this function within 15 seconds. If it had another function, the two are swapped. **DEFAULT ORDER** restores
-the standard order.
-
-### What is stored where
-
-| On the Nano | On the controller |
-|---|---|
-| presets, names, captures, cabs, FX and their values, expression settings (Pos 1 / Pos 2), USB volume | own banks (preset, colour, symbol), footswitch order, second reverbs, the Bluetooth MIDI device |
-
-## Footswitches
-
-The footswitches are read by an **SX1509** I/O expander (for example the SparkFun breakout), as in
-[TonexOneController](https://github.com/Builty/TonexOneController).
-
-- Connect the SX1509 to the board's **I2C** bus: SDA = GPIO 8, SCL = GPIO 9, 3.3 V and GND
-  (see Waveshare's wiki for the connector of your board).
-- Set the SX1509 address to **0x71** (or 0x70). 0x3E/0x3F are taken by the board's own I/O expander.
-- Wire each footswitch (momentary, normally open) between an SX1509 I/O pin and **GND**. Internal pull-ups are
-  used, no resistors needed.
-- Default order: switch 1–8 on SX1509 pins **11, 10, 0, 1, 2, 3, 8, 9**. Any other pins work too – use
-  footswitch learn to assign them.
-
-Without an SX1509 the controller works with the touch screen only.
-
-## Serial console
-
-With the board on the **USB** port, any serial monitor at 115200 baud (for example `idf.py monitor --no-reset`)
-shows a log of all messages and accepts commands: `n`/`p` next/previous preset, a number (1–64) selects a preset,
-`a`–`e` switch FX slots 1–5, `m` mode, `o` looper mode, `t` tuner, `x` reverb switch, `s` read the preset again, `r` read everything again,
-`l` list the preset names, `h` help.
-
-## Build from source
-
-Requirements: [ESP-IDF](https://docs.espressif.com/projects/esp-idf/) **v6.0.2**. The components (LVGL, display
-port, touch driver) are downloaded by the component manager on the first build.
-
-```bash
-. ~/esp/esp-idf/export.sh
-idf.py build
-idf.py -p /dev/cu.usbmodem1101 flash
-idf.py -p /dev/cu.usbmodem1101 monitor --no-reset
-```
-
-Open the monitor with `--no-reset`; otherwise the reset over the native USB port can leave the board in
-download mode. Use the port name of your system (`ls /dev/cu.*` on a Mac).
-
-`tools/release.sh` builds the release files (`release/…-full.bin` and `…-update.bin`) as published.
-
-### Project layout
-
-| Path | Contents |
-|---|---|
-| `main/main.c` | app task: events from Bluetooth, touch screen, footswitches and console; modes, banks, FX editor, reverb switch |
-| `main/nano_link.c` | Bluetooth LE central (NimBLE): scan, connect, MTU 517, notifications, reassembly of long messages, write queue |
-| `main/nano_state.c` | protobuf parsing of the Nano's state and all request messages |
-| `main/library.c` | capture / IR library (reading, sorting, loading into a slot) |
-| `main/midi_ble.c` | Bluetooth LE MIDI client: device list, connection, BLE MIDI packets |
-| `main/app_link.c` | app bridge: Nano service (A002 / C304 / C305) for the editor, packets as the Nano sends them |
-| `main/phone_midi.c` | Bluetooth MIDI device for a looper app on a phone (looper mode) |
-| `main/ui.c` | LVGL user interface |
-| `main/board.c` | display (RGB 800 × 480), GT911 touch, CH422G I/O expander, LVGL port |
-| `main/footswitches.c` | SX1509 polling, debouncing, learn |
-| `main/fx_models.c`, `main/fx_icons.c`, `main/preset_icons.c` | generated tables and icons (see `tools/`) |
-| `tools/gen_tables.py` | FX models and parameters (`tools/editor_models.json`, exported from the editor) and effect icons |
-| `tools/preset_icons.py` | the preset symbols (own drawings), rendered by `tools/svg_render.py` |
-| `tools/gen_pedals.py` | optional pedal pictures for an own build (see below) |
-| `tools/screenshots/` | renders the screenshots in `docs/images` on the computer from `main/ui.c` with example data |
-
-### Own artwork (optional, own builds only)
-
-`main/fx_icons.c` contains drawn effect icons and `main/fx_pedals.c` no pedal pictures. If you have your own icon
-set or pedal pictures, `tools/gen_tables.py` and `tools/gen_pedals.py` can turn them into
-`main/private/fx_icons_private.c` and `main/private/fx_pedals_private.c`: the build uses them automatically, they
-are ignored by git and never part of the published firmware (`-DNANO_PUBLIC=1`). Do not publish artwork you have
-no rights to.
-
-## How it works
-
-The Nano Cortex offers a Bluetooth LE service `A002` with a write characteristic `C304` and a notify
-characteristic `C305`. Every message is a protobuf payload framed as
-`[length] C0 [payload] [32-bit little-endian message type]`; long replies are split into several packets.
-The controller is a Bluetooth central: it connects without pairing, requests an MTU of 517 and reads the full
-state (all preset names) once, then the current preset after every change.
-
-Message types used (request → reply): 1 → 2 state, 3 save, 28 capture/cab slot, 29 → 30 preset change,
-26 capture volume and amp knobs, 31 FX on/off, 60 → 61 and 62 expression settings, 65 → 66 and 67 → 68 settings, 76 → 77 library,
-78 → 79 / 80 → 81 load IR / capture, 94 cab setting, 95 → 96 cab settings, 99 FX parameter, 111 → 112 rename, 115 unsaved changes,
-127 / 128 tuner, 136 FX model, 137 → 138 FX parameter values. The message layouts are documented in the
-comments of `main/nano_state.c`, `main/library.c` and in the
-[Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).
-
-For the app bridge the controller is also a Bluetooth peripheral with the Nano's service. Replies carry no request
-id, so every request with a known reply type is noted with its sender (controller or app); the Nano answers in
-order, and each reply goes to the sender of the oldest open request of its type. Long replies are split for the app
-exactly as the Nano does: `[length low] [0x40 first | 0x80 last | length high] data`, up to 510 bytes per packet.
-
-Bluetooth MIDI runs on a second connection next to the Nano: the controller looks for the BLE MIDI service
-(`03B80E5A-EDE8-4B33-A751-6CE34EC4C700`), subscribes to its characteristic and decodes the BLE MIDI packets
-(timestamps, running status) into channel messages.
-
-When the preset is changed on the pedal, the Nano sends message 29 and waits for the acknowledgement 30
-(`06 C0 20 01 1E 00 00 00`); the controller answers it and reads the new preset.
+The screenshots show example presets and are rendered from the firmware's own UI code
+(`tools/screenshots/make_screenshots.sh`).
 
 ## Credits
 
-This project stands on the shoulders of:
-
-- [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) (MIT) – the Bluetooth protocol as tested
-  against the device, the FX model and parameter tables and the effect icon drawings
-- [rixrix/deskop-nano-cortex](https://github.com/rixrix/deskop-nano-cortex) (Apache-2.0) – protocol notes on the
-  state layout and the preset-change acknowledgement (via the editor)
-- [Builty/TonexOneController](https://github.com/Builty/TonexOneController) (Apache-2.0) – the idea of a touch
-  screen controller on this Waveshare board, its display and touch setup (pins, timing, touch reset) and the
-  SX1509 footswitch wiring
-- [ESP-IDF](https://github.com/espressif/esp-idf) (Apache-2.0) by Espressif, including the
-  [NimBLE](https://github.com/apache/mynewt-nimble) Bluetooth stack (Apache-2.0)
-- [LVGL](https://github.com/lvgl/lvgl) (MIT) – the graphics library, including TinyTTF with
-  [stb_truetype](https://github.com/nothings/stb) (MIT / public domain)
-- [esp_lvgl_port](https://components.espressif.com/components/espressif/esp_lvgl_port),
-  [esp_lcd_touch](https://components.espressif.com/components/espressif/esp_lcd_touch) and
-  [esp_lcd_touch_gt911](https://components.espressif.com/components/espressif/esp_lcd_touch_gt911)
-  (Apache-2.0) by Espressif
-- [IBM Plex Sans](https://github.com/IBM/plex) (SIL Open Font License 1.1, `main/fonts/OFL.txt`) by IBM – the
-  typeface of the screen, as in the desktop editor. `tools/gen_fonts.py` converts it into the bitmap fonts in
-  `main/ui_fonts.c` (named `ui_font_*`, as converted fonts must not carry the reserved name); the tuner note is
-  drawn from the unchanged TTF
-- [Montserrat](https://github.com/JulietaUla/Montserrat) font (SIL Open Font License 1.1) by
-  The Montserrat Project Authors – LVGL's built-in fonts, used here for the symbols
-- [ESPWebTool](https://github.com/SpacehuhnTech/espwebtool) (MIT) by Spacehuhn – flashing in the browser
-- [esptool](https://github.com/espressif/esptool) (GPL-2.0) by Espressif – flashing and release images
-- [Pillow](https://github.com/python-pillow/Pillow) (MIT-CMU) – rendering the icons in `tools/`
-- [Waveshare](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-4.3) – board documentation and demos
+Built on the [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) (protocol, FX tables),
+[rixrix/deskop-nano-cortex](https://github.com/rixrix/deskop-nano-cortex) (protocol notes),
+[Builty/TonexOneController](https://github.com/Builty/TonexOneController) (the idea, display and footswitch setup),
+[ESP-IDF](https://github.com/espressif/esp-idf) with NimBLE, [LVGL](https://github.com/lvgl/lvgl) and
+[IBM Plex Sans](https://github.com/IBM/plex). The full list with licenses: [docs/credits.md](docs/credits.md).
 
 ## License
 
