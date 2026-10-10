@@ -24,6 +24,9 @@ typedef struct {
 // Call after nano_link_start().
 void midi_ble_start(midi_message_cb on_message, midi_change_cb on_change);
 
+// The channel messages of one BLE MIDI packet (as received in a notification or a write), each to on_message.
+void midi_ble_parse(const uint8_t *packet, size_t len, midi_message_cb on_message);
+
 // Searching while the MIDI dialog is open (otherwise only the stored device is looked for).
 void midi_ble_search(bool on);
 

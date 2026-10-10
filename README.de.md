@@ -42,6 +42,8 @@ Fußschalter-Tasten, per Web Bluetooth mit deinem Nano Cortex verbunden:
   der Controller mit dem Nano verbunden ist – App und Controller arbeiten gleichzeitig
 - **Bluetooth-MIDI**: einen MIDI-Controller kabellos verbinden – zum Beispiel ein Morningstar MC6 mit einem
   WIDI-Adapter – mit den MIDI-Befehlen des Nano selbst (Program Change, CC 37–41, CC 1)
+- **Looper-Modus** (Fußschalter 1 halten): Die Fußschalter steuern eine Looper-App auf dem Telefon – zum Beispiel
+  Loopy Pro auf einem iPhone, das den Nano als Audio-Interface nutzt – per Bluetooth-MIDI
 - **Fußschalter-Learn**: jeden Fußschalter jeder Funktion zuordnen
 - **Gig-Ansicht** (nach oben wischen): große Kacheln und eine schmale Statusleiste (Preset, Bank, Modus,
   ungespeicherte Änderungen), gut lesbar aus der Entfernung; gefüllt = an, umrandet = aus, wie im Desktop-Editor
@@ -67,6 +69,8 @@ Fußschalter-Tasten, per Web Bluetooth mit deinem Nano Cortex verbunden:
 | Capture-Klang (lange auf das Capture-Feld drücken) | Startbildschirm beim Verbinden |
 | ![Modell wählen](docs/images/16-fx-model.png) | ![FX-Editor, Effekt aus](docs/images/17-fx-off.png) |
 | Modell wählen (auf den Kopf des FX-Editors tippen) | FX-Editor bei ausgeschaltetem Effekt |
+| ![Looper-Modus](docs/images/18-looper-mode.png) | ![Looper-Kachel](docs/images/19-looper-tile.png) |
+| Looper-Modus (Fußschalter 1 halten): die Schalter einer Looper-App auf dem Telefon | Name, Farbe und Symbol einer Looper-Kachel (lange drücken) |
 
 Die Bilder zeigen Beispiel-Presets. Sie werden aus dem UI-Code der Firmware gezeichnet
 (`tools/screenshots/make_screenshots.sh`).
@@ -145,7 +149,7 @@ Die Prüfsummen beider Dateien stehen in `nano-controller-<version>-sha256.txt`.
 
 | Schalter | Preset-Modus | FX-Modus |
 |---|---|---|
-| 1 | in den FX-Modus wechseln | in den Preset-Modus wechseln |
+| 1 | in den FX-Modus wechseln; **gehalten: Looper-Modus** | in den Preset-Modus wechseln; **gehalten: Looper-Modus** |
 | 2 | Stimmgerät an/aus | Stimmgerät an/aus |
 | 3–8 | die sechs Presets der aktuellen Bank | 3–7: Pre FX 1, Pre FX 2, Post FX 1–3 an/aus |
 | 8 | (sechstes Preset) | Reverb: Mix Pos 1 ↔ Pos 2 oder Reverb A ↔ B |
@@ -156,7 +160,9 @@ Aktive Kacheln leuchten in voller Farbe, inaktive sind gedimmt. FX-Kacheln trage
 
 | Wo | Was sich öffnet |
 |---|---|
-| Kachel 1 oder 2 | **Learn** für diesen Fußschalter (siehe unten) |
+| Kachel 1 | **Looper-Modus** an / aus (wie Fußschalter 1 halten) |
+| Kachel 2–8 im Looper-Modus | **Looper-Kachel**: Name, Farbe und Symbol dieses Schalters |
+| Kachel 2 | **Learn** für Fußschalter 2 – und mit *Switch 1* in diesem Fenster für Fußschalter 1 |
 | Preset-Kachel (3–8, Preset-Modus) | **Bank-Fenster**: Farbe, Symbol und Preset dieses Schalters; `DEFAULT` stellt das Standard-Preset her; `LEARN SWITCH` |
 | FX-Kachel (3–7, FX-Modus) | **FX-Editor**: Modell (auf den Kopf tippen), an/aus und alle Parameter |
 | Kachel 8 (FX-Modus) | **Reverb-Fenster** mit den Reitern *MIX POS 1 / 2* und *2ND REVERB* |
@@ -266,9 +272,47 @@ Nano (zum Beispiel aus dem MC6-Export des Nano Cortex Editors) funktionieren als
 | CC 1 | Expression: Reverb-Mix von Pos 1 (0) bis Pos 2 (127) |
 | CC 50–57, Wert 64–127 | Fußschalter 1–8 drücken (Modus, Stimmgerät, Presets oder FX, Reverb-Schalter) |
 | CC 58, Wert 64–127 | Fußschalter 3 halten: Pre FX 1 wechselt zum zweiten Effekt und zurück |
+| CC 59 | Looper-Modus: Wert 64–127 an, 0–63 aus |
 
 Ein MIDI-Kabeleingang ist auf diesem Board ohne zusätzliche Hardware nicht möglich; dafür einen
 Bluetooth-MIDI-Adapter verwenden.
+
+### Looper-Modus (eine Looper-App auf dem Telefon)
+
+Der Controller kann der Fußcontroller einer Looper-App sein, zum Beispiel **Loopy Pro** auf iPhone oder iPad. Das
+Telefon spielt über den Nano: Am USB-C-Anschluss ist der Nano das Audio-Interface des Telefons – die Gitarre geht
+in die App, Loops (und Backing Tracks) kommen aus dem Nano. Ihre Lautstärke ist die *USB-Audio-Lautstärke* (siehe
+oben). Die Fußschalter erreichen die App per **Bluetooth-MIDI**: Der Controller ist ein Bluetooth-MIDI-Gerät mit
+dem Namen **„Nano Cortex Controller“**.
+
+1. In Loopy Pro im Hauptmenü **Bluetooth Devices** öffnen und *Nano Cortex Controller* wählen. Der Controller zeigt
+   *Phone connected* und wie oft MIDI ausgetauscht wird (auf einem iPhone alle 11,25 oder 15 ms).
+2. **Fußschalter 1 halten** (0,6 s) oder lange auf Kachel 1 drücken: Die Kacheln werden zu den Schaltern des
+   Loopers. Jeder Tritt auf Fußschalter 1 verlässt den Modus wieder; FX und Presets bleiben, wie sie waren.
+3. In Loopy Pro **MIDI Learn** wählen, antippen, was ein Schalter tun soll (für einen Loop: *Abspielen/Stoppen*
+   mit *Aufnahme, wenn leer*), und diesen Fußschalter treten. Jeden Schalter nur einmal belegen: Zwei Belegungen auf
+   demselben Loop heben sich gegenseitig auf.
+
+| Fußschalter | Sendet (MIDI-Kanal 16) | Kachel (ab Werk) |
+|---|---|---|
+| 2 | CC 102 | Pause |
+| 3–8 | CC 103–108 | Loop 1–6 |
+
+**Eigene Namen**: Langes Drücken auf eine Kachel im Looper-Modus öffnet ihr Fenster – Name (Tastatur), Farbe und
+Symbol, gespeichert auf dem Controller; *Default* stellt die oben gezeigte Kachel wieder her. Kachel 1 zeigt, was der
+letzte Tritt gesendet hat (*Sent CC 103*) – hilfreich beim Belegen eines Schalters in der App.
+
+Ab Werk zeigen die Kacheln die Loops in drei Farbpaaren, wie ein zweispaltiges Loopy-Pro-Projekt. Was ein Schalter
+tut, bestimmt die App.
+
+Ein Fußschalter sendet beim Treten den Wert 127 und beim Loslassen 0; so funktionieren die Auslöser *Hold*
+und *Double Tap* der App. Antippen einer Kachel sendet einen kurzen Tritt. Im Looper-Modus geht ein Tritt 2–4 ms nach
+dem Schließen des Kontakts hinaus; über Bluetooth wartet er dann auf den nächsten Austausch mit dem Telefon –
+höchstens das beim Verbinden angezeigte Intervall. Bei Loops, die auf dem Takt beginnen und enden (Quantisierung der
+App), spielt das keine Rolle; ein frei aufgenommener erster Loop kann um so viel länger oder kürzer werden.
+
+Telefon und Nano Cortex Editor können gleichzeitig verbunden sein. Was die App zurückschickt (Rückmeldung für die
+Lämpchen eines Controllers), steht vorerst im seriellen Protokoll.
 
 ### Nano Cortex Editor über den Controller
 
@@ -286,7 +330,8 @@ Ohne Controller (oder bevor er verbunden ist) verbindet sich die App wie bisher 
 
 ### Fußschalter-Learn
 
-Lange auf Kachel 1 oder 2 drücken oder **LEARN SWITCH** im Bank-Fenster. Dann innerhalb von 15 Sekunden den
+Lange auf Kachel 2 drücken (Fußschalter 2; **Switch 1** im Fenster lernt stattdessen Fußschalter 1) oder **LEARN SWITCH**
+im Bank-Fenster. Dann innerhalb von 15 Sekunden den
 Fußschalter drücken, der diese Funktion bekommen soll. Hatte er eine andere Funktion, werden die beiden getauscht.
 **DEFAULT ORDER** stellt die Standard-Reihenfolge wieder her.
 
@@ -315,7 +360,7 @@ Ohne SX1509 funktioniert der Controller nur mit dem Touchscreen.
 
 Am **USB**-Anschluss zeigt jeder serielle Monitor mit 115200 Baud (zum Beispiel `idf.py monitor --no-reset`)
 ein Protokoll aller Nachrichten und nimmt Befehle an: `n`/`p` nächstes/vorheriges Preset, eine Zahl (1–64)
-wählt ein Preset, `a`–`e` schalten FX-Slot 1–5, `m` Modus, `t` Stimmgerät, `x` Reverb-Schalter,
+wählt ein Preset, `a`–`e` schalten FX-Slot 1–5, `m` Modus, `o` Looper-Modus, `t` Stimmgerät, `x` Reverb-Schalter,
 `s` Preset neu lesen, `r` alles neu lesen, `l` alle Preset-Namen, `h` Hilfe.
 
 ## Selbst bauen
@@ -345,6 +390,7 @@ lassen. Den Anschlussnamen deines Systems verwenden (`ls /dev/cu.*` auf dem Mac)
 | `main/library.c` | Capture-/IR-Library (lesen, sortieren, in einen Slot laden) |
 | `main/midi_ble.c` | Bluetooth-LE-MIDI-Client: Geräteliste, Verbindung, BLE-MIDI-Pakete |
 | `main/app_link.c` | App-Brücke: Nano-Dienst (A002 / C304 / C305) für den Editor, Pakete wie vom Nano |
+| `main/phone_midi.c` | Bluetooth-MIDI-Gerät für eine Looper-App auf dem Telefon (Looper-Modus) |
 | `main/ui.c` | LVGL-Oberfläche |
 | `main/board.c` | Display (RGB 800 × 480), GT911-Touch, CH422G-I/O-Expander, LVGL-Port |
 | `main/footswitches.c` | SX1509 abfragen, entprellen, Learn |

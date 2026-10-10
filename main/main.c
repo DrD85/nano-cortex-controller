@@ -41,6 +41,7 @@
 #include "footswitches.h"
 #include "library.h"
 #include "midi_ble.h"
+#include "phone_midi.h"
 #include "nano_link.h"
 #include "nano_state.h"
 #include "ui.h"
@@ -82,6 +83,27 @@ static bool s_app_names_changed;
 #define MIDI_GATE_US (20 * 1000 * 1000)
 
 static bool s_fx_mode;          // footswitches 3-8: FX (true) or bank + presets (false)
+// Looper mode (footswitch 1 held): footswitches 2-8 are controllers for a looper app on a phone (phone_midi), sent
+// on press (value 127) and release (0) - the app tells a tap from a hold itself. Footswitch 1 leaves the mode.
+// (Full momentary control changes: what Loopy Pro's guide for footswitches asks for.)
+static bool s_looper;
+static volatile bool s_looper_live;   // the same, for the footswitch task
+static int s_looper_sent;             // the controller of the last press, shown on tile 1 (< 0: it could not be sent)
+// What the tiles of footswitches 2-8 show in looper mode (long press on a tile): the app decides what a switch
+// does, so name, colour and symbol are the user's. Stored on the controller.
+typedef struct {
+    char name[UI_LOOPER_NAME];
+    uint8_t color;   // BANK_COLORS index
+    uint8_t icon;    // UI_LOOPER_SYMBOLS index
+} looper_tile_t;
+static const looper_tile_t LOOPER_DEFAULTS[UI_LOOPER_SWITCHES] = {
+    { "Pause", 9, 3 }, { "Loop 1", 2, 1 }, { "Loop 2", 2, 1 }, { "Loop 3", 3, 1 }, { "Loop 4", 3, 1 },
+    { "Loop 5", 6, 1 }, { "Loop 6", 6, 1 },
+};
+static looper_tile_t s_looper_tiles[UI_LOOPER_SWITCHES];
+#define LOOPER_STORE_KEY "looper"
+#define LOOPER_STATUS 0xBF            // control change on MIDI channel 16
+#define LOOPER_CC(number) ((uint8_t)(100 + (number)))   // footswitch 2-8 = CC 102-108
 static bool s_footswitches;     // SX1509 found
 
 // Own banks: preset (1-64, 0 = empty), colour index (ui palette) and symbol (0 = none, n = PRESET_ICONS[n - 1])
@@ -265,9 +287,25 @@ static void command(char c, int arg)
 }
 
 // A switch with a held function (s_hold_switches) acts on release when it was not held; the others at once.
+// In looper mode the messages of switches 2-8 go out from here, without the way through the app task: every
+// millisecond between the foot and the looper counts.
 static void on_footswitch(int number, footswitch_event_t event)
 {
     static bool waiting[FOOTSWITCH_COUNT + 1];   // footswitch task only
+    static bool sounding[FOOTSWITCH_COUNT + 1];  // its controller is at 127
+    if (sounding[number] && event == FOOTSWITCH_RELEASE) {
+        sounding[number] = false;
+        bool sent = phone_midi_send(LOOPER_STATUS, LOOPER_CC(number), 0);
+        ESP_LOGI(TAG, "Looper switch %d released: CC %d = 0 %s", number, LOOPER_CC(number), sent ? "sent" : "NOT sent");
+        return;
+    }
+    if (s_looper_live && number >= 2) {
+        if (event == FOOTSWITCH_PRESS) {
+            sounding[number] = phone_midi_send(LOOPER_STATUS, LOOPER_CC(number), 127);
+            command('w', (sounding[number] ? UI_SWITCH_SENT : UI_SWITCH_SENT | UI_SWITCH_LOST) | number);   // the screen shows the press
+        }
+        return;
+    }
     if (event == FOOTSWITCH_PRESS) {
         waiting[number] = (s_hold_switches >> number) & 1;
         if (!waiting[number]) command('w', number);
@@ -294,6 +332,17 @@ static void on_midi(uint8_t status, uint8_t data1, uint8_t data2)
 static void on_midi_change(void)
 {
     command('N', 0);
+}
+
+// Looper app on the phone: connected / gone, and what it sends (feedback for a controller's lights).
+static void on_phone_state(bool connected)
+{
+    command('@', connected);
+}
+
+static void on_phone_midi(uint8_t status, uint8_t data1, uint8_t data2)
+{
+    ESP_LOGI(TAG, "Phone MIDI %02X %u %u", status, data1, data2);
 }
 
 static void on_text(char kind, const char *text)
@@ -434,6 +483,7 @@ static void print_help(void)
            "  1-64         go to a preset (Enter or wait a moment)\n"
            "  a-e          FX on/off: a = Pre FX 1 ... e = Post FX 3\n"
            "  m / t / x    mode (footswitch 1) / tuner (2) / reverb switch (8 in FX mode)\n"
+           "  o            looper mode on / off (as holding footswitch 1); then t = its switch 2\n"
            "  s            read the current preset again\n"
            "  r            read everything again (presets, names, library)\n"
            "  l            list all preset names\n"
@@ -472,6 +522,51 @@ static void banks_load(void)
     nvs_close(nvs);
 }
 
+static void show(void);
+
+static void looper_tiles_load(void)
+{
+    memcpy(s_looper_tiles, LOOPER_DEFAULTS, sizeof(s_looper_tiles));
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
+    looper_tile_t stored[UI_LOOPER_SWITCHES];
+    size_t size = sizeof(stored);
+    if (nvs_get_blob(nvs, LOOPER_STORE_KEY, stored, &size) == ESP_OK && size == sizeof(stored)) {
+        for (int i = 0; i < UI_LOOPER_SWITCHES; i++) {
+            stored[i].name[UI_LOOPER_NAME - 1] = 0;
+            if (stored[i].color < UI_BANK_COLOR_COUNT && stored[i].icon < UI_LOOPER_SYMBOLS) s_looper_tiles[i] = stored[i];
+        }
+    }
+    nvs_close(nvs);
+}
+
+// From the looper tile's dialog: "<footswitch 2-8><colour a-j><symbol a-g>name", or "<footswitch>!" for the default.
+static void looper_tile_edit(const char *text)
+{
+    int i = text[0] - '2';
+    if (i < 0 || i >= UI_LOOPER_SWITCHES || !text[1]) return;
+    looper_tile_t tile = LOOPER_DEFAULTS[i];
+    if (text[1] != '!') {
+        int color = text[1] - 'a', icon = text[2] ? text[2] - 'a' : -1;
+        if (color < 0 || color >= UI_BANK_COLOR_COUNT || icon < 0 || icon >= UI_LOOPER_SYMBOLS) return;
+        tile.color = (uint8_t)color;
+        tile.icon = (uint8_t)icon;
+        const char *name = text + 3;
+        while (*name == ' ') name++;
+        if (*name) strlcpy(tile.name, name, sizeof(tile.name));
+    }
+    s_looper_tiles[i] = tile;
+    ESP_LOGI(TAG, "Looper switch %d: \"%s\", colour %d, symbol %d", i + 2, tile.name, tile.color, tile.icon);
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
+        if (nvs_set_blob(nvs, LOOPER_STORE_KEY, s_looper_tiles, sizeof(s_looper_tiles)) != ESP_OK || nvs_commit(nvs) != ESP_OK) {
+            ui_show_message("Could not store the looper tiles.");
+        }
+        nvs_close(nvs);
+    }
+    if (nano_link_ready()) show();
+}
+
 static void banks_save(void)
 {
     nvs_handle_t nvs;
@@ -507,6 +602,14 @@ static int reverb_slot(void)
     return -1;
 }
 
+// Which footswitches wait for their release (they have a held function): 1 always (held = looper mode), 3 in FX
+// mode with a second effect. In looper mode none - there every press goes out at once.
+static void looper_switches(void)
+{
+    s_hold_switches = s_looper ? 0 : 1u << 1 | (s_fx_mode && s_ab[AB_PRE1].b.type ? 1u << 3 : 0);
+    s_looper_live = s_looper;
+}
+
 static void show(void)
 {
     ui_view_t view = {
@@ -521,8 +624,16 @@ static void show(void)
         .pre1_b_type = s_ab[AB_PRE1].b.type,
         .pre1_active = s_ab[AB_PRE1].active,
         .pre1_a_type = s_ab[AB_PRE1].a_type,
+        .looper = s_looper,
+        .phone = phone_midi_connected(),
+        .looper_sent = s_looper_sent,
     };
-    s_hold_switches = s_fx_mode && s_ab[AB_PRE1].b.type ? 1u << 3 : 0;
+    for (int i = 0; i < UI_LOOPER_SWITCHES; i++) {
+        strlcpy(view.looper_names[i], s_looper_tiles[i].name, sizeof(view.looper_names[i]));
+        view.looper_colors[i] = s_looper_tiles[i].color;
+        view.looper_icons[i] = s_looper_tiles[i].icon;
+    }
+    looper_switches();
     for (int i = 0; i < BANK_SLOTS; i++) {
         view.bank_presets[i] = s_banks[s_bank][i].preset;
         view.bank_colors[i] = s_banks[s_bank][i].color;
@@ -1552,8 +1663,47 @@ static void load_library_item(int arg)
     show();
 }
 
+static void looper_set(bool on)
+{
+    if (on == s_looper) return;
+    s_looper = on;
+    s_looper_sent = 0;
+    ESP_LOGI(TAG, "Looper mode %s%s", on ? "on" : "off", on && !phone_midi_connected() ? " (no phone connected)" : "");
+    looper_switches();
+    if (nano_link_ready()) show();
+    if (on && !phone_midi_connected()) ui_show_message("Looper mode - no phone yet: in Loopy Pro open the menu > Bluetooth Devices.");
+}
+
+// Looper mode and footswitch 1 ('w'): held = into the mode, any press of it while in the mode = out. In the mode
+// switches 2-8 from the touch screen or over MIDI send a short press; from the footswitches it went out already
+// (UI_SWITCH_SENT, see on_footswitch). True if the press was handled here.
+static bool looper_switch(int arg)
+{
+    int number = arg & 0xFF;
+    if (number < 1 || number > FOOTSWITCH_COUNT) return false;
+    if (number == 1 && (s_looper || (arg & UI_SWITCH_HOLD))) {
+        if (!s_looper && !nano_link_ready()) return false;
+        ui_flash_tile(0);
+        looper_set(!s_looper);
+        return true;
+    }
+    if (!s_looper) return false;
+    ui_flash_tile(number - 1);
+    bool sent = !(arg & UI_SWITCH_LOST);
+    if (!(arg & UI_SWITCH_SENT)) {
+        sent = phone_midi_send(LOOPER_STATUS, LOOPER_CC(number), 127);
+        phone_midi_send(LOOPER_STATUS, LOOPER_CC(number), 0);
+    }
+    ESP_LOGI(TAG, "Looper switch %d: CC %d %s", number, LOOPER_CC(number), sent ? "sent" : "NOT sent");
+    s_looper_sent = sent ? LOOPER_CC(number) : -LOOPER_CC(number);
+    if (nano_link_ready()) show();   // tile 1 says what went out
+    if (!phone_midi_connected()) ui_show_message("No phone connected - in Loopy Pro open the menu > Bluetooth Devices.");
+    return true;
+}
+
 static void handle_switch(int number)
 {
+    if (looper_switch(number)) return;
     ui_flash_tile(number - 1);
     if (number == 1) {
         s_fx_mode = !s_fx_mode;
@@ -1649,6 +1799,11 @@ static void handle_midi(int arg)
         return;
     }
     ESP_LOGI(TAG, "MIDI %02X %u %u", status, d1, d2);
+    if (type == 0xB0 && d1 == 59) {   // looper mode on (64-127) / off
+        if (d2 >= 64 && !s_looper && !nano_link_ready()) return;
+        looper_set(d2 >= 64);
+        return;
+    }
     if (!nano_link_ready()) return;
     if (type == 0xC0) {
         if (d1 < NANO_PRESETS) select_preset(d1 + 1);
@@ -1668,12 +1823,26 @@ static void handle_command(char c, int arg)
     if (c == 'l') { print_presets(); return; }
     if (c == 'D' || c == 'Z') { footswitch_learn(c, arg); return; }   // works without the Nano
     if (c == 'X' || c == 'P' || c == 'N') { midi_command(c, arg); return; }
+    if (c == '@') {                                    // looper app on the phone connected / gone / other interval
+        static int was = -1;
+        int now = arg ? (int)(phone_midi_interval_ms() * 100) : 0;
+        if (now == was) return;
+        was = now;
+        ESP_LOGI(TAG, "Phone %s", arg ? "connected (Bluetooth MIDI)" : "disconnected");
+        char text[64];
+        snprintf(text, sizeof(text), "Phone connected - MIDI every %.4g ms.", (double)phone_midi_interval_ms());
+        ui_show_message(arg ? text : "Phone disconnected.");
+        if (nano_link_ready()) show();
+        return;
+    }
+    if (c == 'w' && looper_switch(arg)) return;        // looper mode keeps working without the Nano
     if (c == 'q') {                                    // MIDI gate timer: the Nano did not come
         nano_link_log_status();
 #ifndef NANO_WEB   // in the browser the start screen keeps asking to click CONNECT
         ui_splash_status("No Nano Cortex yet - switch it on (tap to continue)", NULL);
 #endif
         midi_ble_allow(true);
+        app_link_allow_phone(true);
         return;
     }
     if (c == 'o') {                                    // app connected / left through the controller
@@ -1719,7 +1888,7 @@ static void handle_command(char c, int arg)
             ui_flash_tile(2);
             ab_swap(AB_PRE1);
         }
-        else handle_switch(number);
+        else if (!(arg & (UI_SWITCH_HOLD | UI_SWITCH_SENT))) handle_switch(number);
         break;
     }
     case '^': {   // tuner reference pitch +/- arg Hz (400-480)
@@ -1851,6 +2020,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             // Presets are in: MIDI may scan and connect now, and the app may connect through the controller.
             esp_timer_stop(s_midi_gate_timer);
             midi_ble_allow(true);
+            app_link_allow_phone(true);
             app_link_enable(true);
             ui_splash_done();
             if (s_refresh_library) {
@@ -2079,6 +2249,7 @@ static void app_event(app_event_t ev)
         ESP_LOGW(TAG, "Connection lost - searching again");
         s_waiting_full_state = false;
         midi_ble_allow(false);   // until the Nano is back (or the gate timer opens it)
+        app_link_allow_phone(false);   // no new phone meanwhile; a connected one stays
         app_link_enable(false);  // the app can only use the Nano through the controller while it is connected
         esp_timer_stop(s_midi_gate_timer);
         esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
@@ -2104,6 +2275,7 @@ static void app_event(app_event_t ev)
     case EV_TEXT:
         if (ev.command == 'N' && nano_link_ready()) rename_preset((const char *)ev.data);
         else if (ev.command >= '1' && ev.command < '1' + FXP_COUNT) fxp_save(ev.command - '0', (const char *)ev.data);
+        else if (ev.command == 'L') looper_tile_edit((const char *)ev.data);
         free(ev.data);
         break;
     case EV_MIDI:
@@ -2177,6 +2349,10 @@ static void console_task(void *arg)
             continue;
         }
         count = 0;
+        if (c == 'o' || c == 'O') {
+            command('w', UI_SWITCH_HOLD | 1);
+            continue;
+        }
 #ifdef NANO_BENCH
         if (c == '%') {
             ui_bench();
@@ -2225,6 +2401,7 @@ void app_main(void)
     const esp_timer_create_args_t library_timer = { .callback = library_timer_cb, .name = "library" };
     ESP_ERROR_CHECK(esp_timer_create(&library_timer, &s_library_timer));
     banks_load();
+    looper_tiles_load();
 
     board_display_init();
 
@@ -2242,6 +2419,7 @@ void app_main(void)
     nano_link_start(on_message, on_link);
     midi_ble_start(on_midi, on_midi_change);
     midi_ble_allow(false);   // first the Nano and its presets
+    phone_midi_start(on_phone_midi, on_phone_state);
     esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
 
     ui_init(command, on_param, on_text);

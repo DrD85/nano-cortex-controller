@@ -16,6 +16,7 @@
 //   'p' / 'n'      previous / next preset (swipe)
 //   'k', -1 / +1   previous / next bank (arrow buttons)
 //   'w', 1..8      same as footswitch 1-8 (1 = mode, 2 = tuner, 3-8 = tiles); UI_SWITCH_HOLD | n = footswitch n held
+//                  (footswitch 1 held = looper mode on / off)
 //   '^', +-1       tuner reference pitch one Hz up / down (all letters are taken)
 //   '~', 0         tuner: mute the output on / off
 //   'O', slot      long press on an FX tile: open the FX editor for that slot
@@ -45,13 +46,21 @@
 //                  -1 = default order (answer with ui_learn_done)
 typedef void (*ui_command_cb)(char command, int arg);
 #define UI_SWITCH_HOLD 0x100
+#define UI_SWITCH_SENT 0x200   // looper mode: the footswitch's message went out already, only show the press
+#define UI_SWITCH_LOST 0x400   // ... but it could not be sent (no phone)
 
 // Text input from the on-screen keyboard: 'N' = new name for the current preset; '1'-'4' = save the FX editor's
-// values as FX preset 1-4 under this name ("" deletes it).
+// values as FX preset 1-4 under this name ("" deletes it). 'L' = a looper tile from its dialog:
+// "<footswitch 2-8><colour a-j><symbol a-g>name", or "<footswitch>!" for the default.
 typedef void (*ui_text_cb)(char kind, const char *text);
 
 // FX editor: a parameter was moved. value = 0-1, as the Nano expects it.
 typedef void (*ui_param_cb)(int slot, int param, float value);
+
+// Looper mode: the tiles of footswitches 2-8, each with a name, a colour (as the banks') and a symbol.
+#define UI_LOOPER_SWITCHES 7
+#define UI_LOOPER_NAME 16      // with the terminating 0
+#define UI_LOOPER_SYMBOLS 7    // none, loop, play, pause, stop, undo, note
 
 typedef struct {
     bool fx_mode;
@@ -68,6 +77,12 @@ typedef struct {
     uint8_t bank_presets[6];   // own bank: preset per switch 3-8, 0 = empty
     uint8_t bank_colors[6];    // colour index (UI_BANK_COLOR_COUNT)
     uint8_t bank_icons[6];     // symbol: 0 = none, n = PRESET_ICONS[n - 1]
+    bool looper;         // looper mode: the tiles are the switches of a looper app on a phone
+    bool phone;          // that phone is connected (Bluetooth MIDI)
+    int looper_sent;     // looper mode: controller number of the last press, < 0 if it could not be sent, 0 = none yet
+    char looper_names[UI_LOOPER_SWITCHES][UI_LOOPER_NAME];   // looper mode: tiles of footswitches 2-8
+    uint8_t looper_colors[UI_LOOPER_SWITCHES];                // colour index (UI_BANK_COLOR_COUNT)
+    uint8_t looper_icons[UI_LOOPER_SWITCHES];                 // symbol index (UI_LOOPER_SYMBOLS)
 } ui_view_t;
 
 #define UI_BANK_COLOR_COUNT 10

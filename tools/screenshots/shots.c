@@ -142,7 +142,7 @@ static nano_library_t *example_library(void)
 static void close_all(void)
 {
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
-                                   s_volume, s_cab_settings, s_amp, s_toast };
+                                   s_volume, s_cab_settings, s_amp, s_toast, s_looper_editor };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) lv_obj_set_hidden(overlays[i], true);
     update_main_hidden();
 }
@@ -169,6 +169,24 @@ int main(void)
     view.fx_mode = true;
     ui_show_state(&st, &view);
     shot("02-fx-mode");
+
+    static const struct { const char *name; uint8_t color, icon; } looper[UI_LOOPER_SWITCHES] = {   // as main.c's defaults
+        { "Pause", 9, 3 }, { "Loop 1", 2, 1 }, { "Loop 2", 2, 1 }, { "Loop 3", 3, 1 }, { "Loop 4", 3, 1 }, { "Loop 5", 6, 1 }, { "Loop 6", 6, 1 },
+    };
+    for (int i = 0; i < UI_LOOPER_SWITCHES; i++) {
+        snprintf(view.looper_names[i], sizeof(view.looper_names[i]), "%s", looper[i].name);
+        view.looper_colors[i] = looper[i].color;
+        view.looper_icons[i] = looper[i].icon;
+    }
+    view.looper = true;
+    view.phone = true;
+    ui_show_state(&st, &view);
+    shot("18-looper-mode");
+    open_looper_editor(1);
+    shot("19-looper-tile");
+    lv_obj_set_hidden(s_looper_editor, true);
+    view.looper = false;
+    ui_show_state(&st, &view);
 
     set_fullscreen(true);
     view.fx_mode = false;

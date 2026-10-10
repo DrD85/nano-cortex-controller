@@ -97,7 +97,7 @@ static int data_bytes(uint8_t status)
 
 // BLE MIDI packet: header (bit 7 set, timestamp high), then messages, each preceded by a timestamp byte
 // (bit 7 set) unless it continues with running status. SysEx and system messages are skipped.
-static void parse_packet(const uint8_t *p, size_t n)
+void midi_ble_parse(const uint8_t *p, size_t n, midi_message_cb on_message)
 {
     if (n < 2 || !(p[0] & 0x80)) return;
     uint8_t running = 0;
@@ -128,7 +128,7 @@ static void parse_packet(const uint8_t *p, size_t n)
         uint8_t d1 = p[i], d2 = count == 2 ? p[i + 1] : 0;
         i += (size_t)count;
         if ((d1 | d2) & 0x80) continue;
-        if (s_on_message) s_on_message(running, d1, d2);
+        if (on_message) on_message(running, d1, d2);
     }
 }
 
@@ -279,7 +279,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         uint16_t n = OS_MBUF_PKTLEN(event->notify_rx.om);
         if (n > sizeof(packet)) n = sizeof(packet);
         os_mbuf_copydata(event->notify_rx.om, 0, n, packet);
-        parse_packet(packet, n);
+        midi_ble_parse(packet, n, s_on_message);
         return 0;
     }
     default:

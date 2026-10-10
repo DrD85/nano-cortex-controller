@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "app_link.h"
+#include "phone_midi.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "footswitches.h"
@@ -219,6 +220,12 @@ EMSCRIPTEN_KEEPALIVE void web_footswitch(int button, int event)
 void app_link_register(void) {}
 void app_link_start(app_write_cb on_write, app_state_cb on_state) { (void)on_write; (void)on_state; }
 void app_link_enable(bool enabled) { (void)enabled; }
+void app_link_allow_phone(bool allowed) { (void)allowed; }
+// Looper control over Bluetooth MIDI: the browser cannot be a Bluetooth device a phone connects to.
+void phone_midi_start(midi_message_cb on_message, phone_state_cb on_state) { (void)on_message; (void)on_state; }
+bool phone_midi_connected(void) { return false; }
+float phone_midi_interval_ms(void) { return 0; }
+bool phone_midi_send(uint8_t status, uint8_t data1, uint8_t data2) { (void)status; (void)data1; (void)data2; return false; }
 bool app_link_connected(void) { return false; }
 void app_link_send_message(const uint8_t *message, size_t len) { (void)message; (void)len; }
 void app_link_send(uint32_t type, const uint8_t *payload, size_t len) { (void)type; (void)payload; (void)len; }

@@ -43,6 +43,8 @@ eight footswitch buttons, connected to your Nano Cortex over Web Bluetooth:
   is connected to the Nano – app and controller work at the same time
 - **Bluetooth MIDI**: connect a MIDI controller wirelessly – for example a Morningstar MC6 with a WIDI adapter –
   using the Nano's own MIDI messages (program change, CC 37–41, CC 1)
+- **Looper mode** (hold footswitch 1): the footswitches control a looper app on a phone – for example Loopy Pro on
+  an iPhone that uses the Nano as its audio interface – over Bluetooth MIDI
 - **Footswitch learn**: assign any footswitch to any function
 - **Gig view** (swipe up): large tiles plus a slim status bar (preset, bank, mode, unsaved changes), readable from
   a distance; filled = on, outlined = off, as in the desktop editor
@@ -68,6 +70,8 @@ eight footswitch buttons, connected to your Nano Cortex over Web Bluetooth:
 | Capture tone (long press on the capture card) | Start screen while connecting |
 | ![Choose a model](docs/images/16-fx-model.png) | ![FX editor, effect off](docs/images/17-fx-off.png) |
 | Choose a model (tap the FX editor's header) | FX editor with the effect off |
+| ![Looper mode](docs/images/18-looper-mode.png) | ![Looper tile](docs/images/19-looper-tile.png) |
+| Looper mode (hold footswitch 1): the switches of a looper app on a phone | Name, colour and symbol of a looper tile (long press) |
 
 The screenshots show example presets. They are rendered from the firmware's own UI code
 (`tools/screenshots/make_screenshots.sh`).
@@ -144,18 +148,22 @@ The checksums of both files are in `nano-controller-<version>-sha256.txt`.
 
 | Switch | Preset mode | FX mode |
 |---|---|---|
-| 1 | switch to FX mode | switch to preset mode |
+| 1 | switch to FX mode; **held: looper mode** | switch to preset mode; **held: looper mode** |
 | 2 | tuner on/off | tuner on/off |
 | 3–8 | the six presets of the current bank | 3–7: Pre FX 1, Pre FX 2, Post FX 1–3 on/off |
 | 8 | (sixth preset) | reverb: mix Pos 1 ↔ Pos 2, or reverb A ↔ B |
 
 Active tiles light up in full colour, inactive ones are dimmed. FX tiles use the effect category colours.
+Footswitch 1 acts when you lift your foot (it has a held function); holding it for 0.6 s opens the
+[looper mode](#looper-mode-a-looper-app-on-a-phone).
 
 ### Long presses
 
 | Where | What opens |
 |---|---|
-| Tile 1 or 2 | **Learn** for this footswitch (see below) |
+| Tile 1 | **Looper mode** on / off (as holding footswitch 1) |
+| Tile 2–8 in looper mode | **Looper tile**: name, colour and symbol of this switch |
+| Tile 2 | **Learn** for footswitch 2 – and, with *Switch 1* in that dialog, for footswitch 1 |
 | Preset tile (3–8, preset mode) | **Bank editor**: colour, symbol and preset of this switch; `DEFAULT` restores the standard preset; `LEARN SWITCH` |
 | FX tile (3–7, FX mode) | **FX editor**: model (tap the header), on/off and all parameters |
 | Tile 8 (FX mode) | **Reverb dialog** with the tabs *MIX POS 1 / 2* and *2ND REVERB* |
@@ -262,8 +270,45 @@ for the Nano (for example with the MC6 export of the Nano Cortex Editor) work ov
 | CC 1 | expression: reverb mix from Pos 1 (0) to Pos 2 (127) |
 | CC 50–57, value 64–127 | press footswitch 1–8 (mode, tuner, presets or FX, reverb switch) |
 | CC 58, value 64–127 | hold footswitch 3: Pre FX 1 swaps to its second effect and back |
+| CC 59 | looper mode: value 64–127 on, 0–63 off |
 
 A wired MIDI input is not possible on this board without extra hardware; use a Bluetooth MIDI adapter instead.
+
+### Looper mode (a looper app on a phone)
+
+The controller can be the foot controller of a looper app, for example **Loopy Pro** on an iPhone or iPad. The
+phone plays through the Nano: connected to its USB-C port, the Nano is the phone's audio interface, so the guitar
+goes into the app and the loops (and backing tracks) come out of the Nano. Their level is the *USB audio volume*
+(see above). The footswitches reach the app over **Bluetooth MIDI**: the controller is a Bluetooth MIDI device with
+the name **"Nano Cortex Controller"**.
+
+1. In Loopy Pro open the main menu > **Bluetooth Devices** and choose *Nano Cortex Controller*. The controller
+   shows *Phone connected* and how often MIDI is exchanged (every 11.25 or 15 ms on an iPhone).
+2. **Hold footswitch 1** (0.6 s) or long press tile 1: the tiles become the looper's switches. Any press of
+   footswitch 1 leaves the mode again; FX and presets are as you left them.
+3. In Loopy Pro choose **MIDI Learn**, tap what a switch should do (for a loop: *Play/Stop* with *Record if
+   empty*) and press that footswitch. Bind every switch only once: two bindings on the same loop cancel each other.
+
+| Footswitch | Sends (MIDI channel 16) | Tile (as delivered) |
+|---|---|---|
+| 2 | CC 102 | Pause |
+| 3–8 | CC 103–108 | Loop 1–6 |
+
+**Your own names**: a long press on a tile in looper mode opens its dialog – name (keyboard), colour and symbol,
+stored on the controller; *Default* brings back the tile shown above. Tile 1 shows what the last press sent
+(*Sent CC 103*), which helps when you bind a switch in the app.
+
+By default the tiles show the loops in three colour pairs, as a two-column Loopy Pro project does. What a switch
+does is up to the app.
+
+A footswitch sends the value 127 when you press it and 0 when you lift your foot, so the app's own *hold* and
+*double tap* triggers work. Tapping a tile on the screen sends a short press. In looper mode a press goes out
+2–4 ms after the contact closes; over Bluetooth it then waits for the next exchange with the phone – at most the
+interval shown when the phone connects. With loops that start and end on the beat (the app's quantisation) this
+does not matter; a freely recorded first loop can be that much longer or shorter.
+
+The phone and the Nano Cortex Editor can be connected at the same time. What the app sends back (feedback meant
+for a controller's lights) is written to the serial log for now.
 
 ### Nano Cortex Editor through the controller
 
@@ -281,7 +326,8 @@ Without the controller (or before it has connected) the app connects to the Nano
 
 ### Footswitch learn
 
-Long press on tile 1 or 2, or **LEARN SWITCH** in the bank editor. Then press the footswitch that should have
+Long press on tile 2 (footswitch 2; **Switch 1** in the dialog learns footswitch 1 instead), or **LEARN SWITCH** in the
+bank editor. Then press the footswitch that should have
 this function within 15 seconds. If it had another function, the two are swapped. **DEFAULT ORDER** restores
 the standard order.
 
@@ -310,7 +356,7 @@ Without an SX1509 the controller works with the touch screen only.
 
 With the board on the **USB** port, any serial monitor at 115200 baud (for example `idf.py monitor --no-reset`)
 shows a log of all messages and accepts commands: `n`/`p` next/previous preset, a number (1–64) selects a preset,
-`a`–`e` switch FX slots 1–5, `m` mode, `t` tuner, `x` reverb switch, `s` read the preset again, `r` read everything again,
+`a`–`e` switch FX slots 1–5, `m` mode, `o` looper mode, `t` tuner, `x` reverb switch, `s` read the preset again, `r` read everything again,
 `l` list the preset names, `h` help.
 
 ## Build from source
@@ -340,6 +386,7 @@ download mode. Use the port name of your system (`ls /dev/cu.*` on a Mac).
 | `main/library.c` | capture / IR library (reading, sorting, loading into a slot) |
 | `main/midi_ble.c` | Bluetooth LE MIDI client: device list, connection, BLE MIDI packets |
 | `main/app_link.c` | app bridge: Nano service (A002 / C304 / C305) for the editor, packets as the Nano sends them |
+| `main/phone_midi.c` | Bluetooth MIDI device for a looper app on a phone (looper mode) |
 | `main/ui.c` | LVGL user interface |
 | `main/board.c` | display (RGB 800 × 480), GT911 touch, CH422G I/O expander, LVGL port |
 | `main/footswitches.c` | SX1509 polling, debouncing, learn |

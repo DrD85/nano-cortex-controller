@@ -53,6 +53,7 @@ static char s_rename_kind = 'N';   // 'N' preset name, '1'-'4' FX preset
 static char s_ask_command;
 static int s_current_preset;
 static bool s_fx_mode;
+static bool s_looper_mode;   // the tiles are the switches of a looper app (footswitch 1 held)
 
 static lv_obj_t *s_main;   // everything of the main screen (hidden under the full-screen editor and tuner)
 static lv_obj_t *s_status_dot, *s_status, *s_edited, *s_app, *s_midi_icon;
@@ -65,6 +66,7 @@ static lv_obj_t *s_tile_square[TILES], *s_tile_pedal[TILES];
 static lv_obj_t *s_tile_other[TILES];   // second line under the caption: the other effect of an A/B slot
 static uint32_t s_tile_ink[TILES];
 static uint32_t s_tile_pedal_type[TILES], s_tile_other_type[TILES];   // shown by show_tile_extras
+static const char *s_tile_note[TILES];   // a line of text under the caption instead (looper mode), NULL = none
 static uint32_t s_tile_head[TILES];   // colour of a tile that is not active, dimmed behind its top row (0 = none)
 static lv_obj_t *s_capture_square, *s_capture_slot_label, *s_cab_square, *s_cab_slot_label;
 static lv_obj_t *s_picker, *s_picker_title, *s_picker_list, *s_picker_tab[2], *s_picker_chips, *s_picker_chip[LIB_CATEGORY_COUNT];
@@ -83,7 +85,15 @@ static char s_mix_model[48];
 static bool s_mix_touched;                 // Pos 1 / Pos 2 moved: SAVE writes them
 static uint32_t s_rev_types[16];           // reverb models for the dropdown (index + 1; 0 = none)
 static int s_rev_type_count;
-static lv_obj_t *s_learn, *s_learn_title, *s_learn_text;
+static lv_obj_t *s_learn, *s_learn_title, *s_learn_text, *s_learn_first;
+// Looper tile dialog (long press on a tile in looper mode): name, colour and symbol of a switch
+static lv_obj_t *s_looper_editor, *s_le_title, *s_le_hint, *s_le_name_label, *s_le_swatch[UI_BANK_COLOR_COUNT];
+static lv_obj_t *s_le_symbol[UI_LOOPER_SYMBOLS];
+static int s_le_tile, s_le_color, s_le_icon;   // tile 0-6 = footswitch 2-8
+static char s_le_name[UI_LOOPER_NAME];
+static const char *const LOOPER_SYMBOLS[UI_LOOPER_SYMBOLS] = {
+    NULL, LV_SYMBOL_LOOP, LV_SYMBOL_PLAY, LV_SYMBOL_PAUSE, LV_SYMBOL_STOP, LV_SYMBOL_REFRESH, LV_SYMBOL_AUDIO,
+};
 static lv_obj_t *s_preset_card, *s_source_card[2];
 static lv_obj_t *s_midi_label, *s_midi, *s_midi_status, *s_midi_list;
 static ui_midi_t s_midi_state;
@@ -165,13 +175,16 @@ static void on_tile(lv_event_t *e)
 static void set_fullscreen(bool on);
 
 static void open_bank_editor(int tile);
+static void open_looper_editor(int tile);
 static void open_mix_editor(void);
 static void open_learn(int number);
 
 static void on_tile_long(lv_event_t *e)
 {
     int tile = (int)(intptr_t)lv_event_get_user_data(e);   // 0-7 = footswitch 1-8
-    if (tile < 2) open_learn(tile + 1);
+    if (tile == 0) send('w', UI_SWITCH_HOLD | 1);   // looper mode on / off, as holding footswitch 1
+    else if (s_looper_mode) open_looper_editor(tile - 1);
+    else if (tile == 1) open_learn(2);              // (footswitch 1 is learned from this dialog too)
     else if (s_fx_mode && tile < 2 + NANO_FX_SLOTS) send('O', tile - 2);
     else if (s_fx_mode && tile == 2 + NANO_FX_SLOTS) open_mix_editor();
     else if (!s_fx_mode && tile >= 2) open_bank_editor(tile - 2);
@@ -185,7 +198,7 @@ static void on_gesture(lv_event_t *e)
     if (s_splash) return;   // start screen
     // Swipes work only on the main screen, not in an open dialog.
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
-                                   s_volume, s_cab_settings, s_amp };
+                                   s_volume, s_cab_settings, s_amp, s_looper_editor };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
         if (overlays[i] && !lv_obj_is_hidden(overlays[i])) return;
     }
@@ -595,6 +608,7 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     s_tile_accent[i] = mark;
     s_tile_pedal_type[i] = 0;   // set again by set_tile_pedal / set_tile_other, shown by show_tile_extras
     s_tile_other_type[i] = 0;
+    s_tile_note[i] = NULL;
     lv_obj_t *t = s_tile[i];
     uint32_t head = empty || active ? 0 : color;
     if (head != s_tile_head[i]) {
@@ -654,9 +668,10 @@ static void show_tile_extras(void)
             set_color_prop(s_tile_pedal[i], LV_STYLE_IMAGE_RECOLOR, s_tile_accent[i]);
         }
         uint32_t other = s_tile_other_type[i];
-        set_hidden(s_tile_other[i], !other);
-        if (other) {
-            snprintf(text, sizeof(text), LV_SYMBOL_SHUFFLE " %s", nano_fx_name(other));
+        set_hidden(s_tile_other[i], !other && !s_tile_note[i]);
+        if (other || s_tile_note[i]) {
+            if (s_tile_note[i]) snprintf(text, sizeof(text), "%s", s_tile_note[i]);
+            else snprintf(text, sizeof(text), LV_SYMBOL_SHUFFLE " %s", nano_fx_name(other));
             set_text(s_tile_other[i], text);
             set_color_prop(s_tile_other[i], LV_STYLE_TEXT_COLOR, s_tile_ink[i] == TEXT ? MUTED : s_tile_ink[i]);
             set_num_prop(s_tile_other[i], LV_STYLE_TEXT_OPA, 210);
@@ -1068,11 +1083,132 @@ static void build_bank_editor(lv_obj_t *screen)
     lv_obj_set_hidden(s_bank_editor, true);
 }
 
+// ---- looper tiles: name, colour and symbol per switch (long press on a tile in looper mode) ----
+// What a looper switch does is set in the app on the phone, so its tile is the user's to label.
+
+static void show_rename(char kind, const char *title, const char *ok, const char *text, int max_length);
+
+static void style_looper_editor(void)
+{
+    for (int i = 0; i < UI_BANK_COLOR_COUNT; i++) {
+        bool selected = i == s_le_color;
+        lv_obj_set_style_border_width(s_le_swatch[i], selected ? 4 : 1, 0);
+        lv_obj_set_style_border_color(s_le_swatch[i], lv_color_hex(selected ? 0xFFFFFF : 0x3A3D40), 0);
+    }
+    for (int i = 0; i < UI_LOOPER_SYMBOLS; i++) {   // the chosen symbol in the chosen colour, the others grey
+        bool selected = i == s_le_icon;
+        uint32_t color = selected ? BANK_COLORS[s_le_color] : 0x2A2D30;
+        lv_obj_t *sq = s_le_symbol[i], *sym = lv_obj_get_child(sq, 1);
+        set_icon_square(sq, color, NULL, true);
+        lv_label_set_text(sym, i ? LOOPER_SYMBOLS[i] : LV_SYMBOL_CLOSE);
+        lv_obj_set_style_text_color(sym, lv_color_hex(selected ? ink_for(color) : 0xBDBDBD), 0);
+        lv_obj_set_style_border_width(sq, selected ? 4 : 1, 0);
+        lv_obj_set_style_border_color(sq, lv_color_hex(selected ? 0xFFFFFF : 0x3A3D40), 0);
+    }
+    lv_label_set_text(s_le_name_label, s_le_name);
+}
+
+static void on_looper_swatch(lv_event_t *e)
+{
+    s_le_color = (int)(intptr_t)lv_event_get_user_data(e);
+    style_looper_editor();
+}
+
+static void on_looper_symbol(lv_event_t *e)
+{
+    s_le_icon = (int)(intptr_t)lv_event_get_user_data(e);
+    style_looper_editor();
+}
+
+static void on_looper_name(lv_event_t *e)
+{
+    char title[40];
+    snprintf(title, sizeof(title), "Name of looper switch %d", s_le_tile + 2);
+    show_rename('L', title, "OK", s_le_name, UI_LOOPER_NAME - 1);
+}
+
+// From the keyboard: the name stays in the dialog until Save.
+static void looper_editor_named(const char *text)
+{
+    if (text[0]) strlcpy(s_le_name, text, sizeof(s_le_name));
+    style_looper_editor();
+}
+
+static void open_looper_editor(int tile)
+{
+    char text[96];
+    if (tile < 0 || tile >= UI_LOOPER_SWITCHES) return;
+    s_le_tile = tile;
+    s_le_color = s_view.looper_colors[tile] < UI_BANK_COLOR_COUNT ? s_view.looper_colors[tile] : 0;
+    s_le_icon = s_view.looper_icons[tile] < UI_LOOPER_SYMBOLS ? s_view.looper_icons[tile] : 0;
+    strlcpy(s_le_name, s_view.looper_names[tile], sizeof(s_le_name));
+    snprintf(text, sizeof(text), "Looper switch %d", tile + 2);
+    lv_label_set_text(s_le_title, text);
+    snprintf(text, sizeof(text), "Sends CC %d on MIDI channel 16 - what it does is set in the app", 102 + tile);
+    lv_label_set_text(s_le_hint, text);
+    style_looper_editor();
+    lv_obj_set_hidden(s_looper_editor, false);
+    lv_obj_move_foreground(s_looper_editor);
+}
+
+static void on_looper_button(lv_event_t *e)
+{
+    int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 cancel, 1 save, 2 default
+    char text[UI_LOOPER_NAME + 4];
+    lv_obj_set_hidden(s_looper_editor, true);
+    if (action == 1) snprintf(text, sizeof(text), "%c%c%c%s", '2' + s_le_tile, 'a' + s_le_color, 'a' + s_le_icon, s_le_name);
+    else if (action == 2) snprintf(text, sizeof(text), "%c!", '2' + s_le_tile);
+    else return;
+    if (s_on_text) s_on_text('L', text);
+}
+
+static void build_looper_editor(lv_obj_t *screen)
+{
+    s_looper_editor = panel(screen, 50, 44, 700, 392);
+    s_le_title = dialog_title(s_looper_editor, "");
+    s_le_hint = label(s_looper_editor, &ui_font_14, MUTED);
+    lv_obj_set_pos(s_le_hint, 20, 46);
+
+    lv_obj_t *name = button(s_looper_editor, 18, 78, 662, 56, on_looper_name);   // tap: the keyboard
+    s_le_name_label = label(name, &ui_font_title_22, TEXT);
+    lv_obj_align(s_le_name_label, LV_ALIGN_LEFT_MID, 4, 0);
+    lv_obj_t *hint = label(name, &ui_font_14, MUTED);
+    lv_label_set_text(hint, "Rename");
+    lv_obj_align(hint, LV_ALIGN_RIGHT_MID, -4, 0);
+
+    for (int i = 0; i < UI_BANK_COLOR_COUNT; i++) {
+        lv_obj_t *sw = lv_obj_create(s_looper_editor);
+        s_le_swatch[i] = sw;
+        lv_obj_set_size(sw, 52, 52);
+        lv_obj_set_pos(sw, 18 + i * 68, 152);
+        lv_obj_set_style_radius(sw, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(sw, lv_color_hex(BANK_COLORS[i]), 0);
+        lv_obj_set_scrollable(sw, false);
+        lv_obj_set_clickable(sw, true);
+        lv_obj_add_event_cb(sw, on_looper_swatch, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+    }
+    for (int i = 0; i < UI_LOOPER_SYMBOLS; i++) {   // "none" and the symbols
+        lv_obj_t *sq = icon_square(s_looper_editor, 56);
+        s_le_symbol[i] = sq;
+        lv_obj_set_pos(sq, 18 + i * 68, 226);
+        lv_obj_set_clickable(sq, true);
+        lv_obj_add_event_cb(sq, on_looper_symbol, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+    }
+    small_button(s_looper_editor, 18, 322, 150, 52, "Default", on_looper_button, 2);
+    small_button(s_looper_editor, 372, 322, 150, 52, "Cancel", on_looper_button, 0);
+    primary(small_button(s_looper_editor, 530, 322, 150, 52, "Save", on_looper_button, 1));
+    lv_obj_set_hidden(s_looper_editor, true);
+}
+
 // ---- footswitch learn: the next pressed footswitch takes this switch's place ----
 
 static void on_learn_button(lv_event_t *e)
 {
-    int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 cancel, -1 default order
+    int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 cancel, -1 default order, 1 learn footswitch 1 instead
+    if (action == 1) {
+        open_learn(1);
+        return;
+    }
     lv_obj_set_hidden(s_learn, true);
     send('D', action);
 }
@@ -1081,6 +1217,7 @@ static void open_learn(int number)
 {
     lv_label_set_text_fmt(s_learn_title, "Learn footswitch %d", number);
     lv_label_set_text_fmt(s_learn_text, "Press the footswitch that should be switch %d now. Waiting 15 seconds.", number);
+    lv_obj_set_hidden(s_learn_first, number != 2);   // tile 1 held is the looper mode: its switch is learned from here
     lv_obj_set_hidden(s_learn, false);
     lv_obj_move_foreground(s_learn);
     send('D', number);
@@ -1102,8 +1239,9 @@ static void build_learn(lv_obj_t *screen)
     lv_obj_set_width(s_learn_text, 380);
     lv_label_set_long_mode(s_learn_text, LV_LABEL_LONG_WRAP);
     lv_obj_set_pos(s_learn_text, 20, 52);
-    small_button(s_learn, 20, 138, 180, 46, "Default order", on_learn_button, -1);
-    small_button(s_learn, 220, 138, 180, 46, "Cancel", on_learn_button, 0);
+    s_learn_first = small_button(s_learn, 20, 138, 124, 46, "Switch 1", on_learn_button, 1);
+    small_button(s_learn, 152, 138, 138, 46, "Default order", on_learn_button, -1);
+    small_button(s_learn, 298, 138, 102, 46, "Cancel", on_learn_button, 0);
     lv_obj_set_hidden(s_learn, true);
 }
 
@@ -1158,7 +1296,8 @@ static void submit_rename(void)
         ui_show_message("Preset names need at least 4 characters.");
         return;
     }
-    if (s_on_text) s_on_text(s_rename_kind, text);
+    if (s_rename_kind == 'L') looper_editor_named(text);   // into the looper tile's dialog, sent with its Save
+    else if (s_on_text) s_on_text(s_rename_kind, text);
     close_rename();
 }
 
@@ -1181,7 +1320,7 @@ static void show_rename(char kind, const char *title, const char *ok, const char
     lv_label_set_text(s_rename_title, title);
     lv_label_set_text(lv_obj_get_child(s_rename_ok, 0), ok);
     lv_textarea_set_max_length(s_rename_area, max_length);
-    lv_textarea_set_placeholder_text(s_rename_area, kind == 'N' ? "" : "Name (empty name = delete)");
+    lv_textarea_set_placeholder_text(s_rename_area, kind == 'N' || kind == 'L' ? "" : "Name (empty name = delete)");
     lv_textarea_set_text(s_rename_area, text);
     lv_obj_set_hidden(s_rename, false);
     lv_obj_move_foreground(s_rename);
@@ -2333,6 +2472,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     for (int i = 0; i < TILES; i++) build_tile(s_main, i);
     build_picker(screen);
     build_bank_editor(screen);
+    build_looper_editor(screen);
     build_editor(screen);
     build_tuner(screen);
     build_ask(screen);
@@ -2460,6 +2600,27 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
     if (view->mix_slot >= 0 && !view->rev_b_type && view->mix_known) set_tile_pedal(7, st->fx_type[view->mix_slot]);
 }
 
+// Looper mode: tile 1 is the mode (filled while the phone is connected), 2-8 the switches of the looper app with
+// the name, colour and symbol the user gave them (long press; by default Pause and six loops in three colour pairs,
+// as a two-column Loopy Pro project shows them). The caption is the controller a switch sends.
+static void show_looper_tiles(const ui_view_t *view)
+{
+    // Under the caption: what the last press sent (to check a binding against), else the phone's state.
+    static char note[24];
+    if (view->looper_sent > 0) snprintf(note, sizeof(note), "Sent CC %d", view->looper_sent);
+    else if (view->looper_sent < 0) snprintf(note, sizeof(note), "CC %d not sent", -view->looper_sent);
+    else snprintf(note, sizeof(note), "%s", view->phone ? "Phone connected" : "No phone");
+    set_tile(0, "MODE", "Looper", 0xFF4D4D, view->phone, false, NULL, LV_SYMBOL_LOOP);
+    s_tile_note[0] = note;
+    for (int i = 0; i < UI_LOOPER_SWITCHES; i++) {
+        char caption[12];
+        snprintf(caption, sizeof(caption), "CC %d", 102 + i);
+        int color = view->looper_colors[i] < UI_BANK_COLOR_COUNT ? view->looper_colors[i] : 0;
+        int icon = view->looper_icons[i] < UI_LOOPER_SYMBOLS ? view->looper_icons[i] : 0;
+        set_tile(1 + i, caption, view->looper_names[i], BANK_COLORS[color], false, false, NULL, LOOPER_SYMBOLS[icon]);
+    }
+}
+
 // Preset tiles carry no caption, so the name gets the whole tile.
 static void show_preset_tiles(const nano_state_t *st, const ui_view_t *view)
 {
@@ -2483,7 +2644,8 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     lvgl_port_lock(0);
 
     s_fx_mode = view->fx_mode;
-    show_fixed_tiles(view);
+    s_looper_mode = view->looper;
+    if (!view->looper) show_fixed_tiles(view);
     if (view->mix_slot >= 0) {
         snprintf(s_mix_model, sizeof(s_mix_model), "%s  -  %s", nano_fx_name(st->fx_type[view->mix_slot]),
                  NANO_FX_SLOT_NAMES[view->mix_slot]);
@@ -2520,10 +2682,11 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     half = (name_size.x < 440 ? name_size.x : 440) / 2;
     set_align_if(s_gig_dirty, LV_ALIGN_CENTER, half + 12, 0);
     set_hidden(s_gig_dirty, !st->dirty);
-    set_text(s_gig_mode, view->fx_mode ? "FX" : "PRESETS");
-    set_color_prop(s_gig_mode, LV_STYLE_BG_COLOR, TEXT);
-    set_num_prop(s_gig_mode, LV_STYLE_BG_OPA, view->fx_mode ? LV_OPA_COVER : LV_OPA_TRANSP);
-    set_color_prop(s_gig_mode, LV_STYLE_TEXT_COLOR, view->fx_mode ? INK : TEXT);
+    set_text(s_gig_mode, view->looper ? "LOOPER" : view->fx_mode ? "FX" : "PRESETS");
+    set_color_prop(s_gig_mode, LV_STYLE_BG_COLOR, view->looper ? 0xFF4D4D : TEXT);
+    set_color_prop(s_gig_mode, LV_STYLE_BORDER_COLOR, view->looper ? 0xFF4D4D : TEXT);
+    set_num_prop(s_gig_mode, LV_STYLE_BG_OPA, view->looper || view->fx_mode ? LV_OPA_COVER : LV_OPA_TRANSP);
+    set_color_prop(s_gig_mode, LV_STYLE_TEXT_COLOR, view->looper || view->fx_mode ? INK : TEXT);
     memcpy(s_capture_names, st->capture_names, sizeof(s_capture_names));
     memcpy(s_cab_names, st->cab_names, sizeof(s_cab_names));
     s_capture_slot = st->capture_slot;
@@ -2573,7 +2736,8 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
         if (!lv_obj_is_hidden(s_amp)) show_amp_values();
     }
 
-    if (view->fx_mode) show_fx_tiles(st, view);
+    if (view->looper) show_looper_tiles(view);
+    else if (view->fx_mode) show_fx_tiles(st, view);
     else show_preset_tiles(st, view);
     show_tile_extras();
     fit_names();

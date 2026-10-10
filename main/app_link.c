@@ -4,12 +4,14 @@
 #include <string.h>
 
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "host/ble_hs.h"
 #include "os/os_mbuf.h"
 #include "nano_link.h"
+#include "phone_midi.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 
@@ -26,10 +28,20 @@ typedef struct {
     size_t len;
 } tx_message_t;
 
+// Incoming connections: the app (it subscribes to C305) and a phone (it subscribes to the MIDI characteristic).
+// Until a connection subscribes it is a guest; one that stays a guest is dropped after a while.
+#define PEERS 2
+#define GUEST_MS 20000
+static volatile uint16_t s_peer[PEERS] = { BLE_HS_CONN_HANDLE_NONE, BLE_HS_CONN_HANDLE_NONE };
+static int64_t s_peer_since[PEERS];
+static esp_timer_handle_t s_guest_timer;
+static volatile bool s_phone_allowed;
+static bool s_adv_app, s_adv_phone;   // what the running advertisement offers
+
 static app_write_cb s_on_write;
 static app_state_cb s_on_state;
 static volatile bool s_enabled;
-static volatile uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
+static volatile uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;   // the app's connection
 static volatile bool s_subscribed;
 static volatile uint16_t s_mtu = 23;
 static uint16_t s_c305_handle;
@@ -76,23 +88,48 @@ void app_link_register(void)
     ble_svc_gap_device_name_set(NAME);
     ESP_ERROR_CHECK(ble_gatts_count_cfg(SERVICES));
     ESP_ERROR_CHECK(ble_gatts_add_svcs(SERVICES));
+    phone_midi_register();   // Bluetooth MIDI for a phone, in the same GATT server
 }
 
 // ---- advertising ----
 
+static int peer_slot(uint16_t conn)
+{
+    for (int i = 0; i < PEERS; i++) if (s_peer[i] == conn) return i;
+    return -1;
+}
+
+// One advertisement for both: the Nano's service for the app (only while the Nano is connected) and Bluetooth MIDI
+// for a phone, each as long as nobody has taken it. The name is in the scan response (it does not fit next to the
+// MIDI service's long UUID).
 static void advertise(void)
 {
-    if (!s_enabled || s_conn != BLE_HS_CONN_HANDLE_NONE || ble_gap_adv_active()) return;
-    struct ble_hs_adv_fields fields = { 0 };
+    bool app = s_enabled && s_conn == BLE_HS_CONN_HANDLE_NONE;
+    bool phone = s_phone_allowed && phone_midi_conn() == BLE_HS_CONN_HANDLE_NONE;
+    if (peer_slot(BLE_HS_CONN_HANDLE_NONE) < 0) app = phone = false;   // no room for another connection
+    if (ble_gap_adv_active()) {
+        if (app == s_adv_app && phone == s_adv_phone) return;
+        ble_gap_adv_stop();
+    }
+    if (!app && !phone) return;
+    struct ble_hs_adv_fields fields = { 0 }, rsp = { 0 };
     fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
-    fields.name = (const uint8_t *)NAME;
-    fields.name_len = strlen(NAME);
-    fields.name_is_complete = 1;
     static const ble_uuid16_t service = BLE_UUID16_INIT(0xA002);
-    fields.uuids16 = &service;
-    fields.num_uuids16 = 1;
-    fields.uuids16_is_complete = 1;
+    if (app) {
+        fields.uuids16 = &service;
+        fields.num_uuids16 = 1;
+        fields.uuids16_is_complete = 1;
+    }
+    if (phone) {
+        fields.uuids128 = &PHONE_MIDI_SERVICE_UUID;
+        fields.num_uuids128 = 1;
+        fields.uuids128_is_complete = 1;
+    }
+    rsp.name = (const uint8_t *)NAME;
+    rsp.name_len = strlen(NAME);
+    rsp.name_is_complete = 1;
     int rc = ble_gap_adv_set_fields(&fields);
+    if (rc == 0) rc = ble_gap_adv_rsp_set_fields(&rsp);
     if (rc != 0) {
         ESP_LOGE(TAG, "Advertising data not set: %d", rc);
         return;
@@ -103,58 +140,103 @@ static void advertise(void)
     params.itvl_min = 0x00A0;   // 100 ms
     params.itvl_max = 0x00F0;   // 150 ms
     rc = ble_gap_adv_start(nano_link_own_addr_type(), NULL, BLE_HS_FOREVER, &params, gap_event, NULL);
-    if (rc != 0) ESP_LOGE(TAG, "Advertising not started: %d", rc);
-    else ESP_LOGI(TAG, "Offered to the app as \"%s\"", NAME);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "Advertising not started: %d", rc);
+        return;
+    }
+    s_adv_app = app;
+    s_adv_phone = phone;
+    ESP_LOGI(TAG, "Offered as \"%s\" to%s%s%s", NAME, app ? " the app" : "", app && phone ? " and" : "", phone ? " a phone (MIDI)" : "");
+}
+
+// A connection that never said what it is (no subscription) gives its place back.
+static void guest_check(void *arg)
+{
+    for (int i = 0; i < PEERS; i++) {
+        uint16_t conn = s_peer[i];
+        if (conn == BLE_HS_CONN_HANDLE_NONE || conn == s_conn || conn == phone_midi_conn()) continue;
+        if (esp_timer_get_time() - s_peer_since[i] < (GUEST_MS - 1000) * 1000LL) continue;
+        ESP_LOGI(TAG, "Connection %u did not subscribe - dropped", conn);
+        ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
+    }
 }
 
 static int gap_event(struct ble_gap_event *event, void *arg)
 {
     switch (event->type) {
-    case BLE_GAP_EVENT_CONNECT:
+    case BLE_GAP_EVENT_CONNECT: {
         if (event->connect.status != 0) {
             advertise();
             return 0;
         }
-        s_conn = event->connect.conn_handle;
-        s_subscribed = false;
-        s_mtu = 23;
-        ESP_LOGI(TAG, "App connected");
-        if (!s_enabled) {
-            ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+        uint16_t conn = event->connect.conn_handle;
+        int slot = peer_slot(BLE_HS_CONN_HANDLE_NONE);
+        if (slot < 0) {
+            ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
             return 0;
         }
-        {
-            // A shorter connection interval (Apple's limits: min >= 15 ms, max >= min + 15 ms, timeout 2-6 s): long
-            // replies such as the preset list reach the app sooner. The app may keep its own choice.
-            struct ble_gap_upd_params params = { .itvl_min = 0x000C, .itvl_max = 0x0018, .latency = 0,
-                                                 .supervision_timeout = 0x01F4, .min_ce_len = 0, .max_ce_len = 0 };
-            int rc = ble_gap_update_params(s_conn, &params);
-            if (rc != 0) ESP_LOGW(TAG, "Connection interval request not sent (%d)", rc);
-        }
+        s_peer[slot] = conn;
+        s_peer_since[slot] = esp_timer_get_time();
+        ESP_LOGI(TAG, "Connection %u came in", conn);
+        // A shorter connection interval (Apple's limits: min >= 15 ms, max >= min + 15 ms, timeout 2-6 s): long
+        // replies such as the preset list reach the app sooner. The other side may keep its own choice; a phone
+        // gets an even shorter one once it listens to MIDI (phone_midi).
+        struct ble_gap_upd_params params = { .itvl_min = 0x000C, .itvl_max = 0x0018, .latency = 0,
+                                             .supervision_timeout = 0x01F4, .min_ce_len = 0, .max_ce_len = 0 };
+        int rc = ble_gap_update_params(conn, &params);
+        if (rc != 0) ESP_LOGW(TAG, "Connection interval request not sent (%d)", rc);
+        esp_timer_stop(s_guest_timer);
+        esp_timer_start_once(s_guest_timer, GUEST_MS * 1000LL);
+        advertise();   // for the other one, if its place is free
         return 0;
-    case BLE_GAP_EVENT_DISCONNECT:
-        ESP_LOGI(TAG, "App disconnected (reason 0x%X)", event->disconnect.reason);
-        s_conn = BLE_HS_CONN_HANDLE_NONE;
-        s_subscribed = false;
-        if (s_on_state) s_on_state(false);
+    }
+    case BLE_GAP_EVENT_DISCONNECT: {
+        uint16_t conn = event->disconnect.conn.conn_handle;
+        int slot = peer_slot(conn);
+        if (slot >= 0) s_peer[slot] = BLE_HS_CONN_HANDLE_NONE;
+        if (conn == s_conn) {
+            ESP_LOGI(TAG, "App disconnected (reason 0x%X)", event->disconnect.reason);
+            s_conn = BLE_HS_CONN_HANDLE_NONE;
+            s_subscribed = false;
+            if (s_on_state) s_on_state(false);
+        }
+        phone_midi_disconnected(conn);
         advertise();
         return 0;
-    case BLE_GAP_EVENT_SUBSCRIBE:
+    }
+    case BLE_GAP_EVENT_SUBSCRIBE: {
+        uint16_t conn = event->subscribe.conn_handle;
         if (event->subscribe.attr_handle == s_c305_handle) {
+            if (event->subscribe.cur_notify && s_conn != conn) {   // this connection is the app
+                if (!s_enabled || s_conn != BLE_HS_CONN_HANDLE_NONE) {
+                    ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
+                    return 0;
+                }
+                s_conn = conn;
+                s_mtu = ble_att_mtu(conn);
+                s_subscribed = false;
+            }
+            if (conn != s_conn) return 0;
             bool was = s_subscribed;
             s_subscribed = event->subscribe.cur_notify;
             ESP_LOGI(TAG, "App notifications %s (MTU %u)", s_subscribed ? "on" : "off", s_mtu);
             if (s_subscribed != was && s_on_state) s_on_state(s_subscribed);
+            advertise();
+        } else if (phone_midi_subscribe(conn, event->subscribe.attr_handle, event->subscribe.cur_notify)) {
+            advertise();
         }
         return 0;
+    }
     case BLE_GAP_EVENT_MTU:
         if (event->mtu.conn_handle == s_conn) s_mtu = event->mtu.value;
         return 0;
     case BLE_GAP_EVENT_CONN_UPDATE: {
         struct ble_gap_conn_desc desc;
-        if (event->conn_update.status == 0 && ble_gap_conn_find(event->conn_update.conn_handle, &desc) == 0) {
+        uint16_t conn = event->conn_update.conn_handle;
+        if (conn == s_conn && event->conn_update.status == 0 && ble_gap_conn_find(conn, &desc) == 0) {
             ESP_LOGI(TAG, "App connection interval %.2f ms", desc.conn_itvl * 1.25f);
         }
+        phone_midi_conn_updated(conn, event->conn_update.status);
         return 0;
     }
     case BLE_GAP_EVENT_ADV_COMPLETE:
@@ -237,17 +319,21 @@ void app_link_start(app_write_cb on_write, app_state_cb on_state)
     configASSERT(s_tx_queue);
     xTaskCreate(tx_task, "app_tx", 3072, NULL, 5, NULL);
     nano_link_set_forward(app_link_send_message);
+    const esp_timer_create_args_t timer = { .callback = guest_check, .name = "guest" };
+    ESP_ERROR_CHECK(esp_timer_create(&timer, &s_guest_timer));
 }
 
 void app_link_enable(bool enabled)
 {
     s_enabled = enabled;
-    if (enabled) {
-        advertise();
-        return;
-    }
-    if (ble_gap_adv_active()) ble_gap_adv_stop();
-    if (s_conn != BLE_HS_CONN_HANDLE_NONE) ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+    if (!enabled && s_conn != BLE_HS_CONN_HANDLE_NONE) ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+    advertise();
+}
+
+void app_link_allow_phone(bool allowed)
+{
+    s_phone_allowed = allowed;
+    advertise();
 }
 
 bool app_link_connected(void)

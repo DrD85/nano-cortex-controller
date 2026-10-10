@@ -1,5 +1,5 @@
 set(srcs "main.c" "nano_link.c" "nano_state.c" "board.c" "ui.c" "ui_fonts.c" "footswitches.c" "fx_models.c" "preset_icons.c"
-         "library.c" "midi_ble.c" "app_link.c")
+         "library.c" "midi_ble.c" "app_link.c" "phone_midi.c")
 
 # Own builds may use private artwork from main/private (ignored by git, see tools/gen_tables.py and
 # tools/gen_pedals.py). The published firmware is built with -DNANO_PUBLIC=1 and never contains it.

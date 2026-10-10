@@ -60,9 +60,10 @@ CONFIG_LV_USE_CLIB_MALLOC=y
 # Two connections (Nano + Bluetooth MIDI) and long replies: more host buffers
 CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=24
 CONFIG_BT_NIMBLE_MSYS_2_BLOCK_COUNT=40
-# App bridge: the controller also acts as a Nano for the Mac app (peripheral + GATT server); connections: Nano, MIDI, app
+# App bridge: the controller also acts as a Nano for the Mac app (peripheral + GATT server), and as a Bluetooth MIDI
+# device for a looper app on a phone; connections: Nano, MIDI controller, app, phone
 CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
 CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
 CONFIG_BT_NIMBLE_GATT_SERVER=y
-CONFIG_BT_NIMBLE_MAX_CONNECTIONS=3
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=4
 CONFIG_BT_NIMBLE_SVC_GAP_DEVICE_NAME="Nano Cortex Controller"

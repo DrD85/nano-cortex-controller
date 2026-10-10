@@ -5,6 +5,9 @@
 //
 // Messages from the app go on to the Nano; replies to them come back to the app (see nano_link). Messages the Nano
 // sends on its own go to both. The controller is offered only while it is connected to the Nano.
+//
+// The same advertisement also offers Bluetooth MIDI to a phone (phone_midi, looper control): a connection that comes
+// in is the app's once it subscribes to C305, the phone's once it subscribes to the MIDI characteristic.
 #pragma once
 
 #include <stdbool.h>
@@ -23,6 +26,9 @@ void app_link_start(app_write_cb on_write, app_state_cb on_state);
 
 // Offer the controller to the app (only while the Nano is connected); false also disconnects the app.
 void app_link_enable(bool enabled);
+
+// Offer Bluetooth MIDI to a phone (phone_midi); false only stops offering it - a connected phone stays.
+void app_link_allow_phone(bool allowed);
 
 bool app_link_connected(void);
 

@@ -21,8 +21,11 @@ static const char *TAG = "footswitch";
 #define REG_RESET 0x7D
 
 #define PINS 16
-#define POLL_MS 5
-#define STABLE_POLLS 2   // 10 ms debounce
+// A press counts as soon as a pin is low in two polls in a row (2-4 ms after the contact closes - a looper needs
+// that); the contact's bouncing afterwards is ignored because a release only counts after RELEASE_POLLS high polls.
+#define POLL_MS 2
+#define PRESS_POLLS 2
+#define RELEASE_POLLS 10   // 20 ms
 #define LEARN_TIMEOUT_MS 15000
 #define STORE_NAMESPACE "nano"
 #define STORE_KEY "fsw_pins"
@@ -109,8 +112,8 @@ static esp_err_t read_pins(uint16_t *pins)
 
 static void footswitch_task(void *arg)
 {
-    uint16_t stable = 0xFFFF, last = 0xFFFF;
-    int same = 0;
+    uint16_t stable = 0xFFFF;          // debounced pins (bit set = released)
+    uint8_t low[PINS] = { 0 }, high[PINS] = { 0 };   // polls in a row with the pin low / high
     int learn = 0;                     // switch waiting for a press, 0 = none
     TickType_t learn_start = 0;
     TickType_t down_since[FOOTSWITCH_COUNT + 1] = { 0 };
@@ -141,13 +144,16 @@ static void footswitch_task(void *arg)
         }
         uint16_t pins;
         if (read_pins(&pins) != ESP_OK) continue;
-        same = pins == last ? same + 1 : 0;
-        last = pins;
-        if (same != STABLE_POLLS || pins == stable) continue;
-
-        uint16_t pressed = stable & ~pins;   // high -> low
-        uint16_t released = ~stable & pins;  // low -> high
-        stable = pins;
+        uint16_t pressed = 0, released = 0;
+        for (int pin = 0; pin < PINS; pin++) {
+            bool is_low = !(pins & (1u << pin));
+            low[pin] = is_low && low[pin] < 255 ? low[pin] + 1 : is_low ? 255 : 0;
+            high[pin] = !is_low && high[pin] < 255 ? high[pin] + 1 : !is_low ? 255 : 0;
+            if ((stable & (1u << pin)) && low[pin] >= PRESS_POLLS) pressed |= 1u << pin;
+            else if (!(stable & (1u << pin)) && high[pin] >= RELEASE_POLLS) released |= 1u << pin;
+        }
+        if (!pressed && !released) continue;
+        stable = (uint16_t)((stable & ~pressed) | released);
         for (int pin = 0; pin < PINS; pin++) {
             if (released & (1u << pin)) {
                 int number = switch_for_pin(pin);
