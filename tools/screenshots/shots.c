@@ -142,7 +142,7 @@ static nano_library_t *example_library(void)
 static void close_all(void)
 {
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
-                                   s_volume, s_cab_settings, s_amp, s_toast, s_looper_editor };
+                                   s_volume, s_cab_settings, s_amp, s_toast, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) lv_obj_set_hidden(overlays[i], true);
     update_main_hidden();
 }
@@ -188,6 +188,50 @@ int main(void)
     view.looper = false;
     ui_show_state(&st, &view);
 
+    // Scenes of the preset: which effects are on and which of them the scene carries settings for (bit n = FX
+    // slot n); the fourth is what is on now.
+    static const struct { const char *name; uint8_t color, fx, set; } scenes[UI_SCENES] = {
+        { "Clean", 4, 0x12, 0 }, { "Crunch", 3, 0x13, 0x01 }, { "Chorus", 6, 0x16, 0 }, { "Lead", 1, 0x1B, 0x09 },
+        { "Ambient", 7, 0x1E, 0x18 }, { "", 0, 0, 0 },
+    };
+    for (int i = 0; i < UI_SCENES; i++) {
+        snprintf(view.scene_names[i], sizeof(view.scene_names[i]), "%s", scenes[i].name);
+        view.scene_colors[i] = scenes[i].color;
+        view.scene_fx[i] = scenes[i].fx;
+        view.scene_set[i] = scenes[i].set;
+    }
+    // Expression pedal: a wah-like sweep on Pre FX 1, the delay's amount, a little more level
+    view.exp_used = true;
+    ui_show_state(&st, &view);
+    ui_set_jack(NANO_JACK_EXPRESSION);
+    open_expression(NULL);
+    static const nano_exp_range_t sweeps[NANO_EXP_RANGES] = { [0] = { true, 0, 255 }, [3] = { true, 51, 153 }, [9] = { true, 128, 166 } };
+    // ... and switches Pre FX 1 on with the pedal off the heel, the reverb with a footswitch
+    static const nano_exp_switch_t switches[NANO_EXP_SWITCHES] = {
+        { false, 0, false, false, 600 }, { false, 0, false, false, 600 }, { true, NANO_EXP_HEEL_TOE, false, false, 400 },
+        { false, 0, false, false, 600 }, { false, 0, false, false, 600 }, { false, 0, false, false, 600 },
+        { true, NANO_EXP_SWITCH, false, true, 600 }, { false, 0, false, false, 600 },
+    };
+    ui_set_expression(sweeps, switches);
+    shot("23-expression");
+    on_ex_page(NULL);
+    s_ex_sw_selected = NANO_EXP_SW_POST3;
+    style_expression();
+    shot("24-expression-switches");
+    close_all();
+
+    view.scenes = true;
+    view.scene_active = 3;
+    view.fx_mode = false;
+    ui_show_state(&st, &view);
+    shot("20-scene-mode");
+    open_scene_editor(1);
+    shot("21-scene");
+    lv_obj_set_hidden(s_scene_editor, true);
+    view.scenes = false;
+    view.fx_mode = true;
+    ui_show_state(&st, &view);
+
     set_fullscreen(true);
     view.fx_mode = false;
     ui_show_state(&st, &view);
@@ -201,6 +245,9 @@ int main(void)
     static const char fx_presets[UI_FX_PRESETS][16] = { "Slapback", "Ambient Wash", "", "" };
     ui_fx_presets_show(fx_presets, 1, true);
     shot("04-fx-editor");
+    open_panel(PANEL_SCENE, 0);
+    shot("22-scene-settings");
+    close_panel();
     ui_fx_editor_close();
     close_all();
 

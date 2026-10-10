@@ -357,61 +357,130 @@ size_t nano_exp_request(int preset, uint8_t *out)
     return 3 + put_varint(out + 3, (uint64_t)(preset - 1));
 }
 
-// Expression reply: the Amount range of FX slot s is field 7 + s,
-// { 1: inverted, 2: min, 3: max } with values 0-255.
-bool nano_exp_amount_range(const uint8_t *payload, size_t len, int slot, float pos[2])
+// Expression assignments (message definitions from the Cortex Cloud app). RetrievePresetExpressionPedalAssignments-
+// Response (61) carries one record per assigned target; SavePresetExpressionPedalAssignmentsRequest (62) is
+// { 3: presetIndex, records } with every field number one higher than in the reply.
+//   sweep  ExpressionPedalRangeRecord { 1: invertedRange, 2: minValue, 3: maxValue } (0-255): save fields 4-7 gain,
+//          bass, mid, treble, 8-12 Amount of FX slot 1-5, 13 level, 21 input gate
+//   on/off ExpressionPedalBypassRecord, one of { 1: heelToe { 1: inverted, 2: switchDelay ms }, 2: switch
+//          { 1: inverted, 2: latchEmulation }, 3: stop { 1: switchDelay ms } }: save fields 14 capture, 15 cab,
+//          16-20 FX slot 1-5, 22 input gate
+// A target without a record is not assigned. Inverted sweep = the heel value is the higher one. Records are written
+// as the Nano Cortex Editor writes them (every value, also a zero).
+static const uint8_t EXP_RANGE_FIELD[NANO_EXP_RANGES] = { 8, 9, 10, 11, 12, 4, 5, 6, 7, 13, 21 };   // save numbers
+static const uint8_t EXP_SWITCH_FIELD[NANO_EXP_SWITCHES] = { 14, 15, 16, 17, 18, 19, 20, 22 };
+#define EXP_FIRST_FIELD 4
+#define EXP_LAST_FIELD 22
+
+static int exp_index(const uint8_t *fields, int count, uint32_t save_field)
 {
+    for (int i = 0; i < count; i++) if (fields[i] == save_field) return i;
+    return -1;
+}
+
+void nano_exp_assignments(const uint8_t *payload, size_t len, nano_exp_range_t ranges[NANO_EXP_RANGES],
+                          nano_exp_switch_t switches[NANO_EXP_SWITCHES])
+{
+    memset(ranges, 0, sizeof(nano_exp_range_t) * NANO_EXP_RANGES);
+    memset(switches, 0, sizeof(nano_exp_switch_t) * NANO_EXP_SWITCHES);
+    for (int i = 0; i < NANO_EXP_SWITCHES; i++) switches[i].delay_ms = NANO_EXP_DELAY_DEFAULT;
     pb_reader_t r = { payload, payload + len };
     pb_field_t f;
     while (pb_next(&r, &f)) {
-        if (f.field != (uint32_t)(7 + slot) || f.wire != 2) continue;
-        bool inverted = nano_field_varint(f.data, f.len, 1) != 0;
-        float min = nano_field_varint(f.data, f.len, 2) / 255.0f, max = nano_field_varint(f.data, f.len, 3) / 255.0f;
-        pos[0] = inverted ? max : min;
-        pos[1] = inverted ? min : max;
-        return true;
+        uint32_t save_field = f.field + 1;
+        if (f.wire != 2) continue;
+        int i = exp_index(EXP_RANGE_FIELD, NANO_EXP_RANGES, save_field);
+        if (i >= 0) {
+            bool inverted = nano_field_varint(f.data, f.len, 1) != 0;
+            uint64_t min = nano_field_varint(f.data, f.len, 2), max = nano_field_varint(f.data, f.len, 3);
+            if (min > 255) min = 255;
+            if (max > 255) max = 255;
+            ranges[i].on = true;
+            ranges[i].heel = (uint8_t)(inverted ? max : min);
+            ranges[i].toe = (uint8_t)(inverted ? min : max);
+            continue;
+        }
+        i = exp_index(EXP_SWITCH_FIELD, NANO_EXP_SWITCHES, save_field);
+        if (i < 0) continue;
+        nano_exp_switch_t *sw = &switches[i];
+        sw->on = true;
+        sw->mode = NANO_EXP_HEEL_TOE;
+        pb_reader_t inner = { f.data, f.data + f.len };
+        pb_field_t way;
+        while (f.len && pb_next(&inner, &way)) {
+            if (way.wire != 2 || way.field < 1 || way.field > 3) continue;
+            sw->mode = (uint8_t)(way.field - 1);
+            uint64_t first = nano_field_varint(way.data, way.len, 1), second = nano_field_varint(way.data, way.len, 2);
+            uint64_t delay = sw->mode == NANO_EXP_STOP ? first : second;
+            sw->inverted = sw->mode != NANO_EXP_STOP && first != 0;
+            sw->latch = sw->mode == NANO_EXP_SWITCH && second != 0;
+            if (sw->mode != NANO_EXP_SWITCH) sw->delay_ms = (uint16_t)(delay > NANO_EXP_DELAY_MAX ? NANO_EXP_DELAY_MAX : delay);
+            break;
+        }
     }
-    return false;
 }
 
-// SaveExpAssignments { 3: presetIndex, 4-22: assignments }: the reply carries the same entries one field
-// number lower (Amount range of FX slot s: reply 7 + s, save 8 + s). Inverted = Pos 1 above Pos 2.
-size_t nano_exp_save_amount_range(const uint8_t *reply, size_t reply_len, int preset, int slot,
-                                  uint8_t pos1, uint8_t pos2, uint8_t *out, size_t max)
+size_t nano_exp_save(int preset, const nano_exp_range_t ranges[NANO_EXP_RANGES], const nano_exp_switch_t switches[NANO_EXP_SWITCHES],
+                     uint8_t *out, size_t max)
 {
-    uint8_t range[8];
-    size_t m = 0;
-    range[m++] = 0x08; range[m++] = pos1 > pos2;
-    range[m++] = 0x10; m += put_varint(range + m, pos1 > pos2 ? pos2 : pos1);
-    range[m++] = 0x18; m += put_varint(range + m, pos1 > pos2 ? pos1 : pos2);
-
     size_t n = 0;
     out[n++] = 0x18;
     n += put_varint(out + n, (uint64_t)(preset - 1));
-    for (uint32_t field = 3; field <= 21; field++) {
-        const uint8_t *data = NULL;
+    for (uint32_t field = EXP_FIRST_FIELD; field <= EXP_LAST_FIELD; field++) {
+        uint8_t record[16];
         size_t len = 0;
-        if (field == (uint32_t)(7 + slot)) {
-            data = range;
-            len = m;
+        int i = exp_index(EXP_RANGE_FIELD, NANO_EXP_RANGES, field);
+        if (i >= 0) {
+            if (!ranges[i].on) continue;
+            bool inverted = ranges[i].heel > ranges[i].toe;
+            record[len++] = 0x08; record[len++] = inverted;
+            record[len++] = 0x10; len += put_varint(record + len, inverted ? ranges[i].toe : ranges[i].heel);
+            record[len++] = 0x18; len += put_varint(record + len, inverted ? ranges[i].heel : ranges[i].toe);
         } else {
-            pb_reader_t r = { reply, reply + reply_len };
-            pb_field_t f;
-            while (pb_next(&r, &f)) {
-                if (f.field == field && f.wire == 2) {
-                    data = f.data ? f.data : range;   // empty entry: no bytes to copy
-                    len = f.len;
-                    break;
-                }
+            i = exp_index(EXP_SWITCH_FIELD, NANO_EXP_SWITCHES, field);
+            if (i < 0 || !switches[i].on) continue;
+            const nano_exp_switch_t *sw = &switches[i];
+            uint8_t way[8];
+            size_t m = 0;
+            uint16_t delay = sw->delay_ms > NANO_EXP_DELAY_MAX ? NANO_EXP_DELAY_MAX : sw->delay_ms;
+            if (sw->mode == NANO_EXP_SWITCH) {
+                way[m++] = 0x08; way[m++] = sw->inverted;
+                way[m++] = 0x10; way[m++] = sw->latch;
+            } else if (sw->mode == NANO_EXP_STOP) {
+                way[m++] = 0x08; m += put_varint(way + m, delay);
+            } else {
+                way[m++] = 0x08; way[m++] = sw->inverted;
+                way[m++] = 0x10; m += put_varint(way + m, delay);
             }
-            if (!data) continue;
+            record[len++] = (uint8_t)((sw->mode == NANO_EXP_SWITCH ? 2 : sw->mode == NANO_EXP_STOP ? 3 : 1) << 3 | 2);
+            record[len++] = (uint8_t)m;
+            memcpy(record + len, way, m);
+            len += m;
         }
         if (n + 4 + len > max) return 0;
-        n += put_varint(out + n, ((uint64_t)(field + 1) << 3) | 2);
+        n += put_varint(out + n, ((uint64_t)field << 3) | 2);
         n += put_varint(out + n, len);
-        memcpy(out + n, data, len);
+        memcpy(out + n, record, len);
         n += len;
     }
+    return n;
+}
+
+// MeteringMessage { 3: type (0 capture in gain, 1 capture output level, 2 expression pedal position), 4: value }.
+void nano_metering(const uint8_t *payload, size_t len, int *what, int *value)
+{
+    *what = (int)nano_field_varint(payload, len, 3);
+    *value = (int)nano_field_varint(payload, len, 4);
+}
+
+// SaveExpressionPedalCalibrationRequest { 3: min, 4: max }.
+size_t nano_exp_calibration_save(int min, int max, uint8_t *out)
+{
+    size_t n = 0;
+    out[n++] = 0x18;
+    n += put_varint(out + n, (uint64_t)(min < 0 ? 0 : min));
+    out[n++] = 0x20;
+    n += put_varint(out + n, (uint64_t)(max < 0 ? 0 : max));
     return n;
 }
 
@@ -515,6 +584,25 @@ bool nano_settings_usb_gain(const uint8_t *payload, size_t len, float *db)
         if (f.wire == 1) { double d; memcpy(&d, f.data, sizeof(d)); *db = (float)d; return true; }
     }
     return false;
+}
+
+// The EXP/MIDI connector's mode is reply field 10: left out (0) with the connector on MIDI, 1 on TRS Expression -
+// read from the user's Nano in both modes on 2026-10-10 (field 18, 2 with "MIDI Clock source: TRS MIDI", went to 0 at
+// the same time: the clock cannot come from the connector then).
+int nano_settings_jack(const uint8_t *payload, size_t len)
+{
+    uint64_t value = nano_field_varint(payload, len, 10);
+    return value <= NANO_JACK_EXPRESSION ? (int)value : -1;
+}
+
+// UpdateSettings { 7: mode }. The update's field numbers are the reply's minus 3 (as the USB volume: reply 17,
+// update 14 - the reply starts with three fields of its own); a zero is written out, it is the value meant.
+// Confirmed on the user's Nano: the settings read back afterwards carried the new mode and nothing else had changed.
+size_t nano_jack_update(int mode, uint8_t *out)
+{
+    out[0] = 0x38;
+    out[1] = mode == NANO_JACK_EXPRESSION ? 1 : 0;
+    return 2;
 }
 
 // ---- capture volume and cab settings (as the editor sends them) ----

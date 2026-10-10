@@ -47,10 +47,11 @@
 static ui_command_cb s_on_command;
 static ui_param_cb s_on_param;
 static ui_text_cb s_on_text;
-static lv_obj_t *s_save_button, *s_save_label, *s_ask, *s_ask_text, *s_rename, *s_rename_title, *s_rename_area;
+static lv_obj_t *s_save_button, *s_ask, *s_ask_text, *s_ask_ok, *s_rename, *s_rename_title, *s_rename_area;
 static lv_obj_t *s_rename_ok;
 static char s_rename_kind = 'N';   // 'N' preset name, '1'-'4' FX preset
 static char s_ask_command;
+static int s_ask_arg;
 static int s_current_preset;
 static bool s_fx_mode;
 static bool s_looper_mode;   // the tiles are the switches of a looper app (footswitch 1 held)
@@ -66,7 +67,9 @@ static lv_obj_t *s_tile_square[TILES], *s_tile_pedal[TILES];
 static lv_obj_t *s_tile_other[TILES];   // second line under the caption: the other effect of an A/B slot
 static uint32_t s_tile_ink[TILES];
 static uint32_t s_tile_pedal_type[TILES], s_tile_other_type[TILES];   // shown by show_tile_extras
-static const char *s_tile_note[TILES];   // a line of text under the caption instead (looper mode), NULL = none
+static const char *s_tile_note[TILES];   // a line of text under the caption instead (looper mode, what holding does), NULL = none
+static const lv_image_dsc_t *s_tile_note_icon[TILES];   // ... with this symbol in front of it, NULL = none
+static lv_obj_t *s_tile_note_image[TILES];
 static uint32_t s_tile_head[TILES];   // colour of a tile that is not active, dimmed behind its top row (0 = none)
 static lv_obj_t *s_capture_square, *s_capture_slot_label, *s_cab_square, *s_cab_slot_label;
 static lv_obj_t *s_picker, *s_picker_title, *s_picker_list, *s_picker_tab[2], *s_picker_chips, *s_picker_chip[LIB_CATEGORY_COUNT];
@@ -80,9 +83,10 @@ static int s_capture_volume = NANO_CAPTURE_VOLUME_0DB;
 static int s_amp_values[NANO_AMP_KNOBS];
 static uint32_t s_volume_tick, s_amp_tick;
 static lv_obj_t *s_mix_editor, *s_mix_model_label, *s_mix_info, *s_mix_slider[2], *s_mix_value[2];
-static lv_obj_t *s_mix_tab[2], *s_mix_panel[2], *s_rev_dropdown, *s_rev_edit;
+static lv_obj_t *s_mix_tab[2], *s_mix_panel[2], *s_rev_dropdown, *s_rev_edit, *s_mix_free;
 static char s_mix_model[48];
 static bool s_mix_touched;                 // Pos 1 / Pos 2 moved: SAVE writes them
+static int s_mix_tab_shown;                // the tab in front: saved, it is what footswitch 8 does
 static uint32_t s_rev_types[16];           // reverb models for the dropdown (index + 1; 0 = none)
 static int s_rev_type_count;
 static lv_obj_t *s_learn, *s_learn_title, *s_learn_text, *s_learn_first;
@@ -94,6 +98,39 @@ static char s_le_name[UI_LOOPER_NAME];
 static const char *const LOOPER_SYMBOLS[UI_LOOPER_SYMBOLS] = {
     NULL, LV_SYMBOL_LOOP, LV_SYMBOL_PLAY, LV_SYMBOL_PAUSE, LV_SYMBOL_STOP, LV_SYMBOL_REFRESH, LV_SYMBOL_AUDIO,
 };
+// Scenes: the button next to Save, the marks on a scene's tile (which effects it switches on) and its dialog
+// (long press on a tile in scene mode): name, colour and the five effects
+static lv_obj_t *s_scene_button;
+// Expression pedal: its button in the top bar (green while the pedal does something in this preset) and its dialog -
+// the values the pedal sweeps, one field each, and the heel and toe value of the chosen one
+static lv_obj_t *s_exp_button, *s_exp_dialog, *s_ex_sub, *s_ex_field[UI_EXP_TARGETS], *s_ex_caption[UI_EXP_TARGETS];
+static lv_obj_t *s_ex_name[UI_EXP_TARGETS], *s_ex_range_label[UI_EXP_TARGETS], *s_ex_target, *s_ex_toggle, *s_ex_toggle_label;
+static lv_obj_t *s_ex_slider[2], *s_ex_value[2], *s_ex_save;
+static ui_exp_range_t s_ex_range[UI_EXP_TARGETS];
+static int s_ex_selected, s_ex_preset;
+static bool s_ex_loaded;      // the preset's assignments have arrived
+// ... its second page: what the pedal switches on and off, and how
+static lv_obj_t *s_ex_pages[2], *s_ex_page_button, *s_ex_calibrate;
+static lv_obj_t *s_ex_sw_field[NANO_EXP_SWITCHES], *s_ex_sw_caption[NANO_EXP_SWITCHES], *s_ex_sw_name[NANO_EXP_SWITCHES];
+static lv_obj_t *s_ex_sw_way[NANO_EXP_SWITCHES], *s_ex_sw_target, *s_ex_sw_toggle, *s_ex_sw_toggle_label, *s_ex_sw_mode[NANO_EXP_MODES];
+static lv_obj_t *s_ex_sw_invert, *s_ex_sw_latch, *s_ex_sw_delay_name, *s_ex_sw_delay, *s_ex_sw_delay_value;
+static nano_exp_switch_t s_ex_switch[NANO_EXP_SWITCHES];
+static int s_ex_page, s_ex_sw_selected;
+// ... and the calibration of the pedal: its position while it is moved over its whole way
+static lv_obj_t *s_cal_panel, *s_cal_bar, *s_cal_text, *s_cal_save;
+static lv_obj_t *s_ex_jack[2];   // the Nano's EXP/MIDI connector: [0] expression pedal, [1] MIDI
+static int s_jack_mode = -1;     // NANO_JACK_*, -1 = not known
+static bool s_linked;         // connected to the Nano
+static int s_tile_marks[TILES];                 // 0 = none, else 0x200 | 0x100 if the tile is filled | bit n = FX slot n on
+                                                // | bit 16 + n = the scene carries settings for slot n
+static uint32_t s_slot_type[NANO_FX_SLOTS];     // effects of the current preset (filled by ui_show_state)
+static bool s_slot_on[NANO_FX_SLOTS];
+static lv_obj_t *s_scene_editor, *s_se_title, *s_se_hint, *s_se_name_label, *s_se_swatch[UI_BANK_COLOR_COUNT], *s_se_clear;
+static lv_obj_t *s_se_fx[NANO_FX_SLOTS], *s_se_fx_caption[NANO_FX_SLOTS], *s_se_fx_state[NANO_FX_SLOTS], *s_se_fx_name[NANO_FX_SLOTS];
+static lv_obj_t *s_se_fx_set[NANO_FX_SLOTS];    // "with settings": the scene carries values for this effect
+static int s_se_scene, s_se_color, s_se_preset;
+static uint8_t s_se_fx_on;                      // bit n = FX slot n on in the edited scene
+static char s_se_name[UI_SCENE_NAME];
 static lv_obj_t *s_preset_card, *s_source_card[2];
 static lv_obj_t *s_midi_label, *s_midi, *s_midi_status, *s_midi_list;
 static ui_midi_t s_midi_state;
@@ -131,6 +168,7 @@ static int s_panel_mode, s_panel_param;
 static int s_panel_built_mode = -1, s_panel_built_slot;   // the entries in s_panel_list (-1 = none)
 static intptr_t s_panel_current;                          // model or option drawn as the current one
 static lv_obj_t *s_fxp_bar, *s_fxp_chip[UI_FX_PRESETS + 1];   // FX presets above the parameters: 0 = ORIGINAL
+static lv_obj_t *s_fxp_scene, *s_fxp_scene_icon, *s_fxp_scene_count;   // at their end: this effect's settings for a scene
 static char s_fxp_names[UI_FX_PRESETS][16];
 static int s_fxp_active = -1;
 static bool s_fxp_usable;
@@ -166,6 +204,8 @@ static void on_tuner(lv_event_t *e) { send('w', 2); }
 static void on_tuner_down(lv_event_t *e) { send('^', -1); }
 static void on_tuner_up(lv_event_t *e) { send('^', 1); }
 static void on_tuner_mute(lv_event_t *e) { send('~', 0); }
+static void on_scene_button(lv_event_t *e) { send('$', -1); }
+static void open_expression(lv_event_t *e);
 static void on_tile(lv_event_t *e)
 {
     if (lv_tick_elaps(s_gesture_tick) < 150) return;   // end of a swipe, not a tap
@@ -176,6 +216,7 @@ static void set_fullscreen(bool on);
 
 static void open_bank_editor(int tile);
 static void open_looper_editor(int tile);
+static void open_scene_editor(int scene);
 static void open_mix_editor(void);
 static void open_learn(int number);
 
@@ -187,6 +228,7 @@ static void on_tile_long(lv_event_t *e)
     else if (tile == 1) open_learn(2);              // (footswitch 1 is learned from this dialog too)
     else if (s_fx_mode && tile < 2 + NANO_FX_SLOTS) send('O', tile - 2);
     else if (s_fx_mode && tile == 2 + NANO_FX_SLOTS) open_mix_editor();
+    else if (!s_fx_mode && tile >= 2 && s_view.scenes) open_scene_editor(tile - 2);
     else if (!s_fx_mode && tile >= 2) open_bank_editor(tile - 2);
 }
 
@@ -198,7 +240,7 @@ static void on_gesture(lv_event_t *e)
     if (s_splash) return;   // start screen
     // Swipes work only on the main screen, not in an open dialog.
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
-                                   s_volume, s_cab_settings, s_amp, s_looper_editor };
+                                   s_volume, s_cab_settings, s_amp, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
         if (overlays[i] && !lv_obj_is_hidden(overlays[i])) return;
     }
@@ -509,15 +551,54 @@ static void fit_names(void)
     }
 }
 
+// A scene's tile: five marks in its top row, one per FX slot in the effect's colour - filled = the scene switches
+// it on, outlined = off, a dot = the slot is empty. On the filled tile of the current scene they are in its ink.
+static void draw_scene_marks(lv_layer_t *layer, const lv_area_t *tile, int i)
+{
+    bool filled = s_tile_marks[i] & 0x100;
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
+        const nano_fx_model_t *model = nano_fx_model(s_slot_type[slot]);
+        bool on = (s_tile_marks[i] >> slot) & 1;
+        uint32_t color = filled ? s_tile_ink[i] : model ? model->color : 0x4A4F55;
+        lv_area_t a = { tile->x1 + 14 + slot * 21, tile->y1 + 16, tile->x1 + 14 + slot * 21 + 14, tile->y1 + 16 + 14 };
+        lv_draw_rect_dsc_t r;
+        lv_draw_rect_dsc_init(&r);
+        r.radius = 4;
+        if (!model) {
+            a = (lv_area_t){ a.x1 + 5, a.y1 + 5, a.x2 - 5, a.y2 - 5 };
+            r.radius = LV_RADIUS_CIRCLE;
+            r.bg_color = lv_color_hex(color);
+            r.bg_opa = filled ? LV_OPA_50 : LV_OPA_COVER;
+        } else if (on) {
+            r.bg_color = lv_color_hex(color);
+        } else {
+            r.bg_opa = LV_OPA_TRANSP;
+            r.border_width = 2;
+            r.border_color = lv_color_hex(color);
+            r.border_opa = filled ? LV_OPA_50 : 150;
+        }
+        lv_draw_rect(layer, &r, &a);
+        if (model && ((s_tile_marks[i] >> (16 + slot)) & 1)) {   // the scene carries settings for this effect
+            lv_area_t bar = { a.x1 + 1, a.y2 + 4, a.x2 - 1, a.y2 + 6 };
+            lv_draw_rect_dsc_init(&r);
+            r.radius = 1;
+            r.bg_color = lv_color_hex(color);
+            r.bg_opa = on ? LV_OPA_COVER : filled ? LV_OPA_50 : 150;
+            lv_draw_rect(layer, &r, &bar);
+        }
+    }
+}
+
 // A tile that is not active: its top row (symbol, caption, number) lies on the dimmed colour.
 static void on_tile_draw(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (!s_tile_head[i]) return;
+    if (!s_tile_head[i] && !s_tile_marks[i]) return;
     lv_area_t a;
     lv_obj_get_coords(lv_event_get_current_target_obj(e), &a);
     lv_area_t in = { a.x1 + 2, a.y1 + 2, a.x2 - 2, a.y2 - 2 };   // inside the border
-    draw_top(lv_event_get_layer(e), &in, 14, 46, blend(s_tile_head[i], TILE_OFF_BG, 0.24f));
+    if (s_tile_head[i]) draw_top(lv_event_get_layer(e), &in, 14, 46, blend(s_tile_head[i], TILE_OFF_BG, 0.24f));
+    if (s_tile_marks[i]) draw_scene_marks(lv_event_get_layer(e), &a, i);
 }
 
 static void build_tile(lv_obj_t *parent, int i)
@@ -558,6 +639,13 @@ static void build_tile(lv_obj_t *parent, int i)
     lv_label_set_long_mode(s_tile_other[i], LV_LABEL_LONG_DOT);
     lv_obj_set_pos(s_tile_other[i], 56, 32);
     lv_obj_set_hidden(s_tile_other[i], true);
+    s_tile_note_image[i] = lv_image_create(tile);   // a small symbol in front of that line
+    lv_image_set_scale(s_tile_note_image[i], 256 * 15 / 36);
+    lv_obj_set_size(s_tile_note_image[i], 15, 15);
+    lv_image_set_inner_align(s_tile_note_image[i], LV_IMAGE_ALIGN_CENTER);
+    lv_obj_set_style_image_recolor_opa(s_tile_note_image[i], LV_OPA_COVER, 0);
+    lv_obj_set_pos(s_tile_note_image[i], 55, 32);
+    lv_obj_set_hidden(s_tile_note_image[i], true);
 
     s_tile_number[i] = label(tile, &ui_font_20, TEXT);
     lv_label_set_text_fmt(s_tile_number[i], "%d", i + 1);
@@ -609,6 +697,8 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     s_tile_pedal_type[i] = 0;   // set again by set_tile_pedal / set_tile_other, shown by show_tile_extras
     s_tile_other_type[i] = 0;
     s_tile_note[i] = NULL;
+    s_tile_note_icon[i] = NULL;
+    s_tile_marks[i] = 0;        // set again by show_scene_tiles
     lv_obj_t *t = s_tile[i];
     uint32_t head = empty || active ? 0 : color;
     if (head != s_tile_head[i]) {
@@ -656,11 +746,19 @@ static void set_tile_other(int i, uint32_t type)
     s_tile_other_type[i] = type;
 }
 
-// After the tiles are set: the pedal drawings (FX tiles) and the A/B lines.
+// After the tiles are set: the pedal drawings (FX tiles), the A/B lines and the marks of the scenes.
 static void show_tile_extras(void)
 {
     char text[48];
+    static int drawn_marks[TILES];
+    static uint32_t drawn_types[NANO_FX_SLOTS];   // the marks have the colours of these effects
+    bool types_changed = memcmp(drawn_types, s_slot_type, sizeof(drawn_types)) != 0;
+    memcpy(drawn_types, s_slot_type, sizeof(drawn_types));
     for (int i = 0; i < TILES; i++) {
+        if (s_tile_marks[i] != drawn_marks[i] || (types_changed && s_tile_marks[i])) {
+            drawn_marks[i] = s_tile_marks[i];
+            lv_obj_invalidate(s_tile[i]);
+        }
         const lv_image_dsc_t *pedal = s_tile_pedal_type[i] ? nano_fx_pedal_tile(s_tile_pedal_type[i]) : NULL;
         set_hidden(s_tile_pedal[i], pedal == NULL);
         if (pedal) {
@@ -668,13 +766,21 @@ static void show_tile_extras(void)
             set_color_prop(s_tile_pedal[i], LV_STYLE_IMAGE_RECOLOR, s_tile_accent[i]);
         }
         uint32_t other = s_tile_other_type[i];
+        const lv_image_dsc_t *note_icon = s_tile_note[i] ? s_tile_note_icon[i] : NULL;
         set_hidden(s_tile_other[i], !other && !s_tile_note[i]);
+        set_hidden(s_tile_note_image[i], note_icon == NULL);
         if (other || s_tile_note[i]) {
             if (s_tile_note[i]) snprintf(text, sizeof(text), "%s", s_tile_note[i]);
             else snprintf(text, sizeof(text), LV_SYMBOL_SHUFFLE " %s", nano_fx_name(other));
             set_text(s_tile_other[i], text);
-            set_color_prop(s_tile_other[i], LV_STYLE_TEXT_COLOR, s_tile_ink[i] == TEXT ? MUTED : s_tile_ink[i]);
-            set_num_prop(s_tile_other[i], LV_STYLE_TEXT_OPA, 210);
+            uint32_t color = s_tile_ink[i] == TEXT ? 0xC8CCD1 : s_tile_ink[i];   // a little lighter than the caption: it is read
+            set_color_prop(s_tile_other[i], LV_STYLE_TEXT_COLOR, color);
+            set_num_prop(s_tile_other[i], LV_STYLE_TEXT_OPA, 230);
+            set_num_prop(s_tile_other[i], LV_STYLE_X, note_icon ? 75 : 56);
+            if (note_icon) {
+                set_image(s_tile_note_image[i], note_icon);
+                set_color_prop(s_tile_note_image[i], LV_STYLE_IMAGE_RECOLOR, color);
+            }
         }
     }
 }
@@ -1087,6 +1193,7 @@ static void build_bank_editor(lv_obj_t *screen)
 // What a looper switch does is set in the app on the phone, so its tile is the user's to label.
 
 static void show_rename(char kind, const char *title, const char *ok, const char *text, int max_length);
+static void scene_editor_named(const char *text);
 
 static void style_looper_editor(void)
 {
@@ -1251,15 +1358,23 @@ static void on_ask(lv_event_t *e)
 {
     bool yes = (int)(intptr_t)lv_event_get_user_data(e);
     lv_obj_set_hidden(s_ask, true);
-    if (yes) send(s_ask_command, 0);
+    if (yes) send(s_ask_command, s_ask_arg);
+}
+
+// A question with Cancel and a button that says what happens (ok); then command and arg are sent.
+static void ask_for(const char *text, const char *ok, char command, int arg)
+{
+    lv_label_set_text(s_ask_text, text);
+    lv_label_set_text(lv_obj_get_child(s_ask_ok, 0), ok);
+    s_ask_command = command;
+    s_ask_arg = arg;
+    lv_obj_set_hidden(s_ask, false);
+    lv_obj_move_foreground(s_ask);
 }
 
 static void ask(const char *text, char command)
 {
-    lv_label_set_text(s_ask_text, text);
-    s_ask_command = command;
-    lv_obj_set_hidden(s_ask, false);
-    lv_obj_move_foreground(s_ask);
+    ask_for(text, "Save", command, 0);
 }
 
 static void build_ask(lv_obj_t *screen)
@@ -1270,7 +1385,8 @@ static void build_ask(lv_obj_t *screen)
     lv_label_set_long_mode(s_ask_text, LV_LABEL_LONG_WRAP);
     lv_obj_set_pos(s_ask_text, 20, 18);
     small_button(s_ask, 160, 116, 150, 48, "Cancel", on_ask, 0);
-    primary(small_button(s_ask, 330, 116, 150, 48, "Save", on_ask, 1));
+    s_ask_ok = small_button(s_ask, 330, 116, 150, 48, "Save", on_ask, 1);
+    primary(s_ask_ok);
     lv_obj_set_hidden(s_ask, true);
 }
 
@@ -1297,6 +1413,7 @@ static void submit_rename(void)
         return;
     }
     if (s_rename_kind == 'L') looper_editor_named(text);   // into the looper tile's dialog, sent with its Save
+    else if (s_rename_kind == 'S') scene_editor_named(text);   // the same for a scene
     else if (s_on_text) s_on_text(s_rename_kind, text);
     close_rename();
 }
@@ -1320,7 +1437,7 @@ static void show_rename(char kind, const char *title, const char *ok, const char
     lv_label_set_text(s_rename_title, title);
     lv_label_set_text(lv_obj_get_child(s_rename_ok, 0), ok);
     lv_textarea_set_max_length(s_rename_area, max_length);
-    lv_textarea_set_placeholder_text(s_rename_area, kind == 'N' || kind == 'L' ? "" : "Name (empty name = delete)");
+    lv_textarea_set_placeholder_text(s_rename_area, kind == 'N' || kind == 'L' || kind == 'S' ? "" : "Name (empty name = delete)");
     lv_textarea_set_text(s_rename_area, text);
     lv_obj_set_hidden(s_rename, false);
     lv_obj_move_foreground(s_rename);
@@ -1806,10 +1923,12 @@ static void on_mix_slider(lv_event_t *e)
 
 static void show_mix_tab(int tab)
 {
+    s_mix_tab_shown = tab;
     for (int i = 0; i < 2; i++) {
         style_tab(s_mix_tab[i], i == tab);
         lv_obj_set_hidden(s_mix_panel[i], i != tab);
     }
+    lv_obj_set_hidden(s_mix_free, tab != 0 || !s_view.mix_exp);
 }
 
 static void on_mix_tab(lv_event_t *e)
@@ -1829,17 +1948,27 @@ static void on_rev_dropdown(lv_event_t *e)
     else lv_obj_add_state(s_rev_edit, LV_STATE_DISABLED);
 }
 
-// 0 cancel, 1 save, 2 edit reverb B
+// 0 cancel, 1 save, 2 edit reverb B, 3 save and take the reverb off the Nano's expression pedal.
+// The tab in front decides what footswitch 8 does from now on: saved on the mix tab it switches the mix (a second
+// reverb stays stored for later), saved on the 2nd reverb tab it swaps the two reverbs.
 static void on_mix_button(lv_event_t *e)
 {
     int action = (int)(intptr_t)lv_event_get_user_data(e);
     lv_obj_set_hidden(s_mix_editor, true);
-    if (action && s_mix_touched) {
+    bool decide = action == 1 || action == 2;   // (Free pedal leaves the switch as it is)
+    bool mix = s_mix_tab_shown == 0;
+    // Pos 1 / Pos 2: when moved - and the ones shown, if the preset has none yet and the switch is to use them
+    if (action && (s_mix_touched || (decide && mix && !s_view.mix_known))) {
         send('W', (int)lv_slider_get_value(s_mix_slider[0]) << 8 | (int)lv_slider_get_value(s_mix_slider[1]));
     }
-    if (action && chosen_rev_b() != s_view.rev_b_type) send('A', (int)chosen_rev_b());
+    if (decide) {
+        uint32_t chosen = chosen_rev_b();
+        bool parked = mix && chosen, was_parked = s_view.rev_b_stored && !s_view.rev_b_type;
+        if (chosen != s_view.rev_b_stored || parked != was_parked) send('A', (parked ? 2 : 0) << 24 | (int)chosen);
+    }
     send('K', 0);
     if (action == 2) send('H', 0);
+    if (action == 3) send('!', 0);
 }
 
 static void open_mix_editor(void)
@@ -1856,14 +1985,21 @@ static void open_mix_editor(void)
     }
     s_mix_touched = false;
     lv_label_set_text(s_mix_model_label, s_mix_model);
-    lv_label_set_text(s_mix_info, s_view.mix_known
-        ? "Moving a slider plays that mix. Save stores both in the preset."
-        : "This preset has no Pos 1 / Pos 2 yet: Save adds them (expression Amount of the reverb).");
+    // Pos 1 / Pos 2 are the controller's. A preset set up before 1.8 still has the reverb on the Nano's expression
+    // pedal (they were stored there): Free pedal takes it off, the switch keeps its values.
+    lv_label_set_text(s_mix_info, s_view.mix_exp
+        ? "Save here: footswitch 8 switches the mix, Pos 1 / Pos 2. The Nano's preset still has this reverb on the expression pedal - Free pedal ends that."
+        : s_view.rev_b_stored ? "Save here: footswitch 8 switches the reverb's mix between Pos 1 and Pos 2 again. The second reverb stays stored."
+        : "Save here: footswitch 8 switches the reverb's mix between Pos 1 and Pos 2. Moving a slider plays that mix.");
     int selected = 0;
-    for (int i = 0; i < s_rev_type_count; i++) if (s_rev_types[i] == s_view.rev_b_type) selected = i + 1;
+    for (int i = 0; i < s_rev_type_count; i++) if (s_rev_types[i] == s_view.rev_b_stored) selected = i + 1;
     lv_dropdown_set_selected(s_rev_dropdown, (uint32_t)selected);
     on_rev_dropdown(NULL);
-    show_mix_tab(s_view.rev_b_type ? 1 : 0);
+    // The tab of what footswitch 8 does now is in front and carries a tick.
+    int used = s_view.rev_b_type ? 1 : 0;
+    lv_label_set_text(lv_obj_get_child(s_mix_tab[0], 0), used == 0 ? LV_SYMBOL_OK "  Mix Pos 1 / 2" : "Mix Pos 1 / 2");
+    lv_label_set_text(lv_obj_get_child(s_mix_tab[1], 0), used == 1 ? LV_SYMBOL_OK "  2nd reverb" : "2nd reverb");
+    show_mix_tab(used);
     lv_obj_set_hidden(s_mix_editor, false);
     lv_obj_move_foreground(s_mix_editor);
 }
@@ -1898,7 +2034,7 @@ static void build_mix_editor(lv_obj_t *screen)
     lv_obj_set_pos(s_mix_info, 20, 0);
     static const char *const names[2] = { "POS 1", "POS 2" };
     for (int i = 0; i < 2; i++) {
-        int y = 30 + i * 54;
+        int y = 38 + i * 52;   // below the two lines of the text above
         lv_obj_t *name = label(mix, &ui_font_16, 0xC8CCD1);
         lv_obj_set_style_text_letter_space(name, 2, 0);
         lv_label_set_text(name, names[i]);
@@ -1921,8 +2057,8 @@ static void build_mix_editor(lv_obj_t *screen)
     lv_obj_t *info = label(rev, &ui_font_14, MUTED);
     lv_obj_set_width(info, 520);
     lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(info, "Footswitch 8 switches between the preset's reverb (A) and a second one (B). "
-                            "Reverb B and its settings are stored on the controller; Edit B sets it up.");
+    lv_label_set_text(info, "Save here: footswitch 8 switches between the preset's reverb (A) and a second one (B). "
+                            "B and its settings are stored on the controller; Edit B sets it up.");
     lv_obj_set_pos(info, 20, 0);
     static char options[512];
     size_t n = (size_t)snprintf(options, sizeof(options), "None (footswitch 8 = mix)");
@@ -1941,6 +2077,7 @@ static void build_mix_editor(lv_obj_t *screen)
     lv_obj_add_event_cb(s_rev_dropdown, on_rev_dropdown, LV_EVENT_VALUE_CHANGED, NULL);
     s_rev_edit = small_button(rev, 360, 56, 180, 52, "Edit B", on_mix_button, 2);
 
+    s_mix_free = small_button(s_mix_editor, 20, 254, 150, 46, "Free pedal", on_mix_button, 3);
     small_button(s_mix_editor, 200, 254, 160, 46, "Cancel", on_mix_button, 0);
     primary(small_button(s_mix_editor, 380, 254, 160, 46, "Save", on_mix_button, 1));
     lv_obj_set_hidden(s_mix_editor, true);
@@ -2229,6 +2366,12 @@ static void build_tuner(lv_obj_t *screen)
 }
 
 static void build_editor(lv_obj_t *screen);
+static void build_scene_editor(lv_obj_t *screen);
+static void build_expression(lv_obj_t *screen);
+static void style_scene_editor(void);
+static void style_scene_chip(void);
+static bool scene_panel_open(void);
+static void close_expression(void);
 
 // ---- start screen: shown until the Nano's presets are loaded (or a tap) ----
 
@@ -2340,9 +2483,9 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_scrollable(s_main, false);
     lv_obj_set_clickable(s_main, false);
 
-    // Top bar as in the editor: symbol buttons (refresh, capture volume, MIDI, USB) on the left, connection and
-    // preset / bank in the middle, Save on the right (green when there is something to save). Below: the arrows and
-    // the preset name, an orange dot next to it for unsaved changes. No card, no picture behind it.
+    // Top bar as in the editor, symbol buttons on both sides: refresh, capture volume, MIDI and USB on the left,
+    // connection and preset / bank in the middle, expression pedal, scenes and Save (green when there is something to
+    // save) on the right. Below: the arrows and the preset name, an orange dot next to it for unsaved changes.
     lv_obj_t *preset = lv_obj_create(s_main);
     lv_obj_remove_style_all(preset);
     lv_obj_set_pos(preset, 0, 0);
@@ -2381,12 +2524,14 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_label_set_text(s_app, "APP");
     lv_obj_set_hidden(s_app, true);
 
-    s_save_button = button(preset, 664, 4, 126, 44, on_save_button);
-    lv_obj_t *save_icon = ui_icon(s_save_button, UI_ICON_SAVE, 22, TEXT);
-    lv_obj_align(save_icon, LV_ALIGN_LEFT_MID, 6, 0);
-    s_save_label = label(s_save_button, &ui_font_16, TEXT);
-    lv_label_set_text(s_save_label, "Save");
-    lv_obj_align(s_save_label, LV_ALIGN_LEFT_MID, 38, 0);
+    // Expression pedal: what the Nano's pedal moves in this preset
+    s_exp_button = button(preset, 610, 4, 56, 44, open_expression);
+    lv_obj_center(ui_icon(s_exp_button, UI_ICON_EXP, 24, 0xC8CCD1));
+    // Scenes: footswitches 3-8 switch between the scenes of this preset instead of between the bank's presets
+    s_scene_button = button(preset, 672, 4, 56, 44, on_scene_button);
+    lv_obj_center(ui_icon(s_scene_button, UI_ICON_SCENES, 24, 0xC8CCD1));
+    s_save_button = button(preset, 734, 4, 56, 44, on_save_button);
+    lv_obj_center(ui_icon(s_save_button, UI_ICON_SAVE, 24, 0xC8CCD1));
 
     lv_obj_t *prev = button(preset, 10, 52, 64, 66, on_previous);
     lv_obj_t *prev_label = label(prev, &ui_font_title_40, TEXT);
@@ -2461,6 +2606,9 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_style_border_width(s_gig_mode, 2, 0);
     lv_obj_set_style_border_color(s_gig_mode, lv_color_hex(TEXT), 0);
     lv_obj_align(s_gig_mode, LV_ALIGN_RIGHT_MID, -12, 0);
+    lv_obj_set_clickable(s_gig_mode, true);   // a tap: as the Scenes button of the top bar, which is hidden here
+    lv_obj_set_ext_click_area(s_gig_mode, 14);
+    lv_obj_add_event_cb(s_gig_mode, on_scene_button, LV_EVENT_CLICKED, NULL);
     lv_obj_set_hidden(s_gig_bar, true);
 
     // Capture and cab cards
@@ -2474,6 +2622,8 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     build_bank_editor(screen);
     build_looper_editor(screen);
     build_editor(screen);
+    build_scene_editor(screen);
+    build_expression(screen);
     build_tuner(screen);
     build_ask(screen);
     build_rename(screen);
@@ -2513,6 +2663,7 @@ void ui_set_app(bool connected)
 void ui_set_link(bool connected)
 {
     lvgl_port_lock(0);
+    s_linked = connected;
     lv_obj_set_style_bg_color(s_status_dot, lv_color_hex(connected ? GREEN : 0x555555), 0);
     lv_obj_set_style_bg_color(s_gig_dot, lv_color_hex(connected ? GREEN : 0x555555), 0);
 #ifdef NANO_WEB   // the browser connects when CONNECT is clicked
@@ -2534,6 +2685,9 @@ void ui_set_link(bool connected)
         lv_obj_set_hidden(s_editor, true);
         lv_obj_set_hidden(s_picker, true);
         lv_obj_set_hidden(s_bank_editor, true);
+        lv_obj_set_hidden(s_scene_editor, true);
+        lv_obj_set_hidden(s_exp_dialog, true);
+        lv_obj_set_hidden(s_cal_panel, true);
         lv_obj_set_hidden(s_ask, true);
         lv_obj_set_hidden(s_rename, true);
         lv_label_set_text(s_capture_slot_label, "");
@@ -2561,9 +2715,15 @@ static void show_fixed_tiles(const ui_view_t *view)
 {
     char caption[24];
     if (view->fx_mode) snprintf(caption, sizeof(caption), "MODE");
+    else if (view->scenes) snprintf(caption, sizeof(caption), "PRESET %d", s_current_preset);
     else snprintf(caption, sizeof(caption), "BANK %d", view->bank + 1);
-    set_tile(0, caption, view->fx_mode ? "FX" : "Presets", 0x8A9099, false, false, NULL, LV_SYMBOL_LOOP);
+    set_tile(0, caption, view->fx_mode ? "FX" : view->scenes ? "Scenes" : "Presets", 0x8A9099, false, false, NULL, LV_SYMBOL_LOOP);
     set_tile(1, "TUNER", "Tuner", 0xBDBDBD, false, false, NANO_ICONS[NANO_ICON_TUNER], NANO_ICONS[NANO_ICON_TUNER] ? NULL : LV_SYMBOL_AUDIO);
+    // Under the caption: what holding the footswitch does (as the other effect of an A/B slot on its tile) - the
+    // looper mode, and the scenes or the bank's presets with the symbol of the scenes button
+    s_tile_note[0] = LV_SYMBOL_LOOP " Hold: Looper";
+    s_tile_note[1] = view->scenes && !view->fx_mode ? "Hold: Presets" : "Hold: Scenes";
+    s_tile_note_icon[1] = UI_ICONS[UI_ICON_SCENES];
 }
 
 static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
@@ -2638,6 +2798,25 @@ static void show_preset_tiles(const nano_state_t *st, const ui_view_t *view)
     }
 }
 
+// Scene mode: the scenes of the current preset. The name gets the whole tile (as a preset's); the marks in the top
+// row say which effects the scene switches on. Lit: the scene whose effects are on right now.
+static void show_scene_tiles(const ui_view_t *view)
+{
+    for (int i = 0; i < UI_SCENES; i++) {
+        if (!view->scene_names[i][0]) {
+            char caption[12];
+            snprintf(caption, sizeof(caption), "SCENE %d", i + 1);
+            set_tile(2 + i, caption, "Hold to set", 0x3A3A3A, false, true, NULL, NULL);
+            continue;
+        }
+        bool active = i == view->scene_active;
+        uint32_t color = BANK_COLORS[view->scene_colors[i] < UI_BANK_COLOR_COUNT ? view->scene_colors[i] : 0];
+        set_tile(2 + i, "", view->scene_names[i], color, active, false, NULL, NULL);
+        s_tile_marks[2 + i] = 0x200 | (active ? 0x100 : 0) | (view->scene_fx[i] & ((1 << NANO_FX_SLOTS) - 1))
+                              | (view->scene_set[i] & ((1 << NANO_FX_SLOTS) - 1)) << 16;
+    }
+}
+
 void ui_show_state(const nano_state_t *st, const ui_view_t *view)
 {
     char text[96];
@@ -2645,6 +2824,26 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
 
     s_fx_mode = view->fx_mode;
     s_looper_mode = view->looper;
+    s_current_preset = st->current_preset;
+    bool slots_changed = false;
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
+        uint32_t type = st->fx_known ? st->fx_type[slot] : 0;
+        slots_changed |= type != s_slot_type[slot];
+        s_slot_type[slot] = type;
+        s_slot_on[slot] = type && st->fx_on[slot];
+    }
+    if (!lv_obj_is_hidden(s_scene_editor)) {   // the dialog edits a scene of the preset it was opened in
+        if (st->current_preset != s_se_preset) lv_obj_set_hidden(s_scene_editor, true);
+        else if (slots_changed) style_scene_editor();
+    }
+    if (!lv_obj_is_hidden(s_exp_dialog) && st->current_preset != s_ex_preset) close_expression();   // it is the other preset's
+    if (!lv_obj_is_hidden(s_editor)) {   // the FX editor's scene button and list say which scenes carry settings
+        bool scenes_changed = memcmp(s_view.scene_set, view->scene_set, sizeof(s_view.scene_set)) || s_view.scene_active != view->scene_active
+                           || memcmp(s_view.scene_names, view->scene_names, sizeof(s_view.scene_names));
+        s_view = *view;
+        style_scene_chip();
+        if (scenes_changed && scene_panel_open()) lv_obj_invalidate(s_panel_list);
+    }
     if (!view->looper) show_fixed_tiles(view);
     if (view->mix_slot >= 0) {
         snprintf(s_mix_model, sizeof(s_mix_model), "%s  -  %s", nano_fx_name(st->fx_type[view->mix_slot]),
@@ -2655,13 +2854,19 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     set_text(s_preset_number, text);
     set_hidden(s_preset_number, false);
     set_hidden(s_status, true);    // the green dot says "connected"
-    s_current_preset = st->current_preset;
+    // Scenes button: filled while the tiles show scenes (as every switch of the editor: filled = on)
+    bool scenes_shown = view->scenes && !view->fx_mode && !view->looper;
+    set_color_prop(s_scene_button, LV_STYLE_BG_COLOR, scenes_shown ? 0xECECEC : 0x191B1D);
+    set_num_prop(s_scene_button, LV_STYLE_BG_GRAD_DIR, scenes_shown ? LV_GRAD_DIR_NONE : LV_GRAD_DIR_VER);
+    set_color_prop(s_scene_button, LV_STYLE_BORDER_COLOR, scenes_shown ? 0xECECEC : 0x3A3D40);
+    set_color_prop(lv_obj_get_child(s_scene_button, 0), LV_STYLE_IMAGE_RECOLOR, scenes_shown ? INK : 0xC8CCD1);
+    // Expression pedal: green while it does something in this preset (as MIDI while a controller is connected)
+    set_color_prop(lv_obj_get_child(s_exp_button, 0), LV_STYLE_IMAGE_RECOLOR, view->exp_used ? GREEN : 0xC8CCD1);
     // Save: neutral, green when there is something to save (as in the editor), plus the orange dot by the name.
     set_color_prop(s_save_button, LV_STYLE_BG_COLOR, st->dirty ? GREEN : 0x191B1D);
     set_num_prop(s_save_button, LV_STYLE_BG_GRAD_DIR, st->dirty ? LV_GRAD_DIR_NONE : LV_GRAD_DIR_VER);
     set_color_prop(s_save_button, LV_STYLE_BORDER_COLOR, st->dirty ? GREEN : 0x3A3D40);
-    set_color_prop(s_save_label, LV_STYLE_TEXT_COLOR, st->dirty ? INK : TEXT);
-    set_color_prop(lv_obj_get_child(s_save_button, 0), LV_STYLE_IMAGE_RECOLOR, st->dirty ? INK : TEXT);
+    set_color_prop(lv_obj_get_child(s_save_button, 0), LV_STYLE_IMAGE_RECOLOR, st->dirty ? INK : 0xC8CCD1);
     const char *name = st->preset_names[st->current_preset - 1];
     const char *shown = st->names_loaded && name[0] ? name : "-";
     set_text(s_preset_name, shown);
@@ -2682,7 +2887,7 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     half = (name_size.x < 440 ? name_size.x : 440) / 2;
     set_align_if(s_gig_dirty, LV_ALIGN_CENTER, half + 12, 0);
     set_hidden(s_gig_dirty, !st->dirty);
-    set_text(s_gig_mode, view->looper ? "LOOPER" : view->fx_mode ? "FX" : "PRESETS");
+    set_text(s_gig_mode, view->looper ? "LOOPER" : view->fx_mode ? "FX" : view->scenes ? "SCENES" : "PRESETS");
     set_color_prop(s_gig_mode, LV_STYLE_BG_COLOR, view->looper ? 0xFF4D4D : TEXT);
     set_color_prop(s_gig_mode, LV_STYLE_BORDER_COLOR, view->looper ? 0xFF4D4D : TEXT);
     set_num_prop(s_gig_mode, LV_STYLE_BG_OPA, view->looper || view->fx_mode ? LV_OPA_COVER : LV_OPA_TRANSP);
@@ -2738,6 +2943,7 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
 
     if (view->looper) show_looper_tiles(view);
     else if (view->fx_mode) show_fx_tiles(st, view);
+    else if (view->scenes) show_scene_tiles(view);
     else show_preset_tiles(st, view);
     show_tile_extras();
     fit_names();
@@ -2814,10 +3020,11 @@ void ui_show_tuner_reading(const nano_tuner_reading_t *reading)
 #define ED_DIM 0.42f          // frame of a field that is not active: effect colour mixed with the background
 #define ED_NEUTRAL 0x2E3237   // frame of an empty field or an unknown value
 
-enum { PANEL_MODEL, PANEL_SECOND, PANEL_OPTION };
+enum { PANEL_MODEL, PANEL_SECOND, PANEL_OPTION, PANEL_SCENE };
 
 static void on_fxp_chip(lv_event_t *e);
 static void on_fxp_chip_long(lv_event_t *e);
+static void on_scene_chip(lv_event_t *e);
 
 static float param_from_normalized(const nano_param_t *p, float n)
 {
@@ -2931,6 +3138,11 @@ static void on_ab(lv_event_t *e)
 
 static void on_panel_close(lv_event_t *e) { close_panel(); }
 
+static bool scene_panel_open(void)
+{
+    return s_panel_mode == PANEL_SCENE && !lv_obj_is_hidden(s_panel);
+}
+
 static void set_param_norm(int idx, float n);
 
 static void set_enum(int idx, int choice)
@@ -2942,11 +3154,16 @@ static void set_enum(int idx, int choice)
     if (s_on_param) s_on_param(s_editor_slot_index, idx, n);
 }
 
-// A tap on an entry: data is the model (0 = none) or the option.
+// A tap on an entry: data is the model (0 = none), the option or the scene (| 0x100: held).
 static void panel_choice(intptr_t data)
 {
     close_panel();
-    if (s_panel_mode == PANEL_MODEL) {
+    if (s_panel_mode == PANEL_SCENE) {
+        // The scene gets the effect's settings as they are now; held: it leaves the effect alone again.
+        int scene = (int)data & 0xFF;
+        bool carries = (s_view.scene_set[scene] >> s_editor_slot_index) & 1;
+        if (!(data & 0x100) || carries) send('&', (int)data);
+    } else if (s_panel_mode == PANEL_MODEL) {
         if ((uint32_t)data != s_editor_model_type) send('M', (int)data);
     } else if (s_panel_mode == PANEL_SECOND) {
         if ((uint32_t)data != s_view.pre1_b_type) send('A', 1 << 24 | (int)data);
@@ -2960,11 +3177,28 @@ static void draw_entry(lv_obj_t *obj, lv_layer_t *layer, intptr_t data)
     lv_area_t a;
     lv_obj_get_coords(obj, &a);
     int32_t cy = (a.y1 + a.y2) / 2;
+    bool pressed = lv_obj_has_state(obj, LV_STATE_PRESSED);
+    if (s_panel_mode == PANEL_SCENE) {
+        // A scene of the preset in its colour: filled = it carries settings for this effect.
+        int scene = (int)data;
+        uint32_t tone = BANK_COLORS[s_view.scene_colors[scene] < UI_BANK_COLOR_COUNT ? s_view.scene_colors[scene] : 0];
+        bool carries = (s_view.scene_set[scene] >> s_editor_slot_index) & 1, now = scene == s_view.scene_active;
+        if (carries) draw_frame(layer, &a, tone, tone, 10);
+        else {
+            uint32_t dim = blend(tone, PANEL_BG, ED_DIM);
+            draw_frame(layer, &a, pressed ? 0x23272B : NO_FILL, dim, 10);
+            draw_top(layer, &a, 10, 7, dim);
+        }
+        uint32_t ink = carries ? ink_for(tone) : TEXT;
+        draw_text(layer, s_view.scene_names[scene], true, &ui_font_20, ink, a.x1 + 16, cy - 13, a.x2 - 150, LV_TEXT_ALIGN_LEFT);
+        const char *state = carries ? (now ? "ON NOW  \xC2\xB7  SAVED" : "SAVED") : now ? "ON NOW" : "";
+        draw_text(layer, state, false, &ui_font_12, carries ? ink : MUTED, a.x2 - 150, cy - 7, a.x2 - 14, LV_TEXT_ALIGN_RIGHT);
+        return;
+    }
     bool option = s_panel_mode == PANEL_OPTION;
     const nano_fx_model_t *m = option || !data ? NULL : nano_fx_model((uint32_t)data);
     uint32_t color = option ? s_editor_color : m ? m->color : 0x9AA0A6;
     bool current = data == s_panel_current;
-    bool pressed = lv_obj_has_state(obj, LV_STATE_PRESSED);
     // The current one filled in its colour, the others framed in the dimmed colour.
     if (current) draw_frame(layer, &a, color, color, 10);
     else {
@@ -3001,6 +3235,10 @@ static void on_entry_event(lv_event_t *e)
     intptr_t data = (intptr_t)lv_event_get_user_data(e);
     if (code == LV_EVENT_DRAW_MAIN_END) draw_entry(obj, lv_event_get_layer(e), data);
     else if (code == LV_EVENT_PRESSED || code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) lv_obj_invalidate(obj);
+    else if (s_panel_mode == PANEL_SCENE) {   // a scene: tap = save for it, hold = remove
+        if (code == LV_EVENT_SHORT_CLICKED) panel_choice(data);
+        else if (code == LV_EVENT_LONG_PRESSED) panel_choice(data | 0x100);
+    }
     else if (code == LV_EVENT_CLICKED) panel_choice(data);
 }
 
@@ -3046,9 +3284,9 @@ static void open_panel(int mode, int param)
     const nano_fx_model_t *cur = s_editor_model_def;
     if (mode == PANEL_OPTION && (!cur || param >= cur->param_count)) return;
     int slot = mode == PANEL_SECOND ? 0 : s_editor_slot_index;
-    char sub[80];
+    char sub[120];
     // The model lists stay built while the editor shows this slot; an option list is built each time (it is short).
-    if (mode == PANEL_OPTION || mode != s_panel_built_mode || slot != s_panel_built_slot) {
+    if (mode == PANEL_OPTION || mode == PANEL_SCENE || mode != s_panel_built_mode || slot != s_panel_built_slot) {
         lv_async_call_cancel(panel_clean_later, NULL);
         lv_obj_clean(s_panel_list);
         s_panel_built_mode = mode;
@@ -3057,6 +3295,8 @@ static void open_panel(int mode, int param)
         s_panel_param = param;
         if (mode == PANEL_OPTION) {
             for (int i = 0; i < cur->params[param].option_count; i++) panel_entry(ED_OPTION_W, i);
+        } else if (mode == PANEL_SCENE) {
+            for (int i = 0; i < UI_SCENES; i++) if (s_view.scene_names[i][0]) panel_entry(ED_ENTRY_W, i);
         } else {
             if (mode == PANEL_SECOND) panel_entry(ED_ENTRY_W, 0);   // None
             const char *group = NULL;
@@ -3076,6 +3316,10 @@ static void open_panel(int mode, int param)
         lv_label_set_text(s_panel_title, p->name);
         snprintf(sub, sizeof(sub), "%s  \xC2\xB7  %s", cur->name, NANO_FX_SLOT_NAMES[s_editor_slot_index]);
         s_panel_current = option_index(p, s_param_norm[param]);
+    } else if (mode == PANEL_SCENE) {
+        lv_label_set_text(s_panel_title, "Settings for a scene");
+        snprintf(sub, sizeof(sub), "Tap a scene: it sets %.24s as it is now  \xC2\xB7  hold: remove", cur ? cur->name : "this effect");
+        s_panel_current = -1;
     } else if (mode == PANEL_SECOND) {
         lv_label_set_text(s_panel_title, "Second effect (B)");
         snprintf(sub, sizeof(sub), "%s  \xC2\xB7  hold footswitch 3 to swap A and B", NANO_FX_SLOT_NAMES[0]);
@@ -3451,13 +3695,21 @@ static void build_editor(lv_obj_t *screen)
         lv_obj_add_event_cb(chip, on_fxp_chip, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)i);
         if (i) lv_obj_add_event_cb(chip, on_fxp_chip_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)i);
         lv_obj_t *l = label(chip, &ui_font_16, TEXT);
-        lv_obj_set_width(l, 136);
+        lv_obj_set_width(l, 120);
         lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
         lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(l);
         if (i) lv_obj_center(ui_icon(chip, UI_ICON_PLUS, 20, 0x5D6267));   // empty place
         s_fxp_chip[i] = chip;
     }
+    // At the end of the row: these settings for a scene of the preset (and how many scenes carry some).
+    s_fxp_scene = frame_button(s_fxp_bar);
+    lv_obj_set_size(s_fxp_scene, 84, LV_PCT(100));
+    lv_obj_add_event_cb(s_fxp_scene, on_scene_chip, LV_EVENT_CLICKED, NULL);
+    s_fxp_scene_icon = ui_icon(s_fxp_scene, UI_ICON_SCENES, 26, TEXT);
+    lv_obj_center(s_fxp_scene_icon);
+    s_fxp_scene_count = label(s_fxp_scene, &ui_font_16, TEXT);
+    lv_obj_align(s_fxp_scene_count, LV_ALIGN_RIGHT_MID, -12, 0);
 
     // Instead of the presets: why there is nothing to edit (effect off, reading, empty slot).
     s_editor_info = lv_obj_create(s_editor);
@@ -3531,6 +3783,40 @@ static void build_editor(lv_obj_t *screen)
 
 // ---- FX presets (bar above the parameters) ----
 
+// The scene button at the end of the FX preset row: filled while the scene that is on carries settings for this
+// effect, with the number of scenes that do; grey while the preset has no scenes.
+static void style_scene_chip(void)
+{
+    static int shown = -1;
+    int scenes = 0, carrying = 0, slot = s_editor_slot_index;
+    if (slot < 0) return;
+    for (int i = 0; i < UI_SCENES; i++) {
+        scenes += s_view.scene_names[i][0] != 0;
+        carrying += s_view.scene_names[i][0] && ((s_view.scene_set[i] >> slot) & 1);
+    }
+    bool active = s_view.scene_active >= 0 && ((s_view.scene_set[s_view.scene_active] >> slot) & 1);
+    int state = (int)(s_editor_color << 8) | carrying << 2 | (scenes ? 2 : 0) | active;
+    if (state == shown) return;   // (this runs with every state update of the Nano)
+    shown = state;
+    uint32_t ink = active ? ink_for(s_editor_color) : scenes ? TEXT : 0x5D6267;
+    style_frame_button(s_fxp_scene, s_editor_color, active, !scenes);
+    lv_obj_set_style_image_recolor(s_fxp_scene_icon, lv_color_hex(ink), 0);
+    lv_obj_set_style_text_color(s_fxp_scene_count, lv_color_hex(ink), 0);
+    if (carrying) lv_label_set_text_fmt(s_fxp_scene_count, "%d", carrying);
+    else lv_label_set_text(s_fxp_scene_count, "");
+    lv_obj_align(s_fxp_scene_icon, carrying ? LV_ALIGN_LEFT_MID : LV_ALIGN_CENTER, carrying ? 14 : 0, 0);
+}
+
+static void on_scene_chip(lv_event_t *e)
+{
+    for (int i = 0; i < UI_SCENES; i++) {
+        if (!s_view.scene_names[i][0]) continue;
+        open_panel(PANEL_SCENE, 0);
+        return;
+    }
+    ui_show_message("This preset has no scenes yet - tap the scenes button (top right of the main screen) and hold a tile.");
+}
+
 static void style_fxp_chips(void)
 {
     // Only when something changed (this runs with every state update of the Nano).
@@ -3540,6 +3826,7 @@ static void style_fxp_chips(void)
     static bool shown_hidden;
     bool hidden = !s_fxp_usable || !lv_obj_is_hidden(s_editor_info);   // the info line is there then
     set_hidden(s_fxp_bar, hidden);
+    style_scene_chip();
     if (hidden == shown_hidden && shown_active == s_fxp_active && shown_color == s_editor_color
         && !memcmp(shown_names, s_fxp_names, sizeof(shown_names))) return;
     shown_hidden = hidden;
@@ -3558,7 +3845,7 @@ static void style_fxp_chips(void)
         // The large font if the name fits, otherwise the small one (and dots if it is still too long).
         lv_point_t size;
         lv_text_get_size(&size, text, &ui_font_16, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-        lv_obj_set_style_text_font(l, size.x <= 132 ? &ui_font_16 : &ui_font_14, 0);
+        lv_obj_set_style_text_font(l, size.x <= 116 ? &ui_font_16 : &ui_font_14, 0);
         lv_obj_set_style_text_color(l, lv_color_hex(active ? ink_for(color) : i == 0 ? 0xC8CCD1 : 0xE6E8EA), 0);
         style_frame_button(chip, color, active, !filled);
         if (i) set_hidden(lv_obj_get_child(chip, 1), filled);
@@ -3697,6 +3984,693 @@ void ui_fx_editor_close(void)
     update_main_hidden();
     s_editor_slot_index = -1;
     lvgl_port_unlock();
+}
+
+// ---- scenes: name, colour and effects of a scene (long press on a tile in scene mode) ----
+// A scene is which of the preset's five effects are on. The dialog starts from the stored scene - or, for an empty
+// one, from what is on right now - and Save stores it on the controller and switches to it.
+
+static void style_scene_editor(void)
+{
+    for (int i = 0; i < UI_BANK_COLOR_COUNT; i++) {
+        bool selected = i == s_se_color;
+        lv_obj_set_style_border_width(s_se_swatch[i], selected ? 4 : 1, 0);
+        lv_obj_set_style_border_color(s_se_swatch[i], lv_color_hex(selected ? 0xFFFFFF : 0x3A3D40), 0);
+    }
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {   // as everywhere: filled = on, framed in the dimmed colour = off
+        const nano_fx_model_t *model = nano_fx_model(s_slot_type[slot]);
+        bool on = model && ((s_se_fx_on >> slot) & 1);
+        uint32_t color = model ? model->color : 0x6A6A6A;
+        uint32_t ink = on ? ink_for(color) : model ? TEXT : 0x5D6267;
+        style_frame_button(s_se_fx[slot], color, on, !model);
+        lv_obj_set_style_text_color(s_se_fx_caption[slot], lv_color_hex(on ? ink : MUTED), 0);
+        lv_obj_set_style_text_color(s_se_fx_state[slot], lv_color_hex(on ? ink : MUTED), 0);
+        lv_label_set_text(s_se_fx_state[slot], !model ? "" : on ? "ON" : "OFF");
+        lv_obj_set_style_text_color(s_se_fx_name[slot], lv_color_hex(ink), 0);
+        lv_label_set_text(s_se_fx_name[slot], model ? nano_fx_name(s_slot_type[slot]) : "Empty");
+        bool carries = model && s_view.scene_names[s_se_scene][0] && ((s_view.scene_set[s_se_scene] >> slot) & 1);
+        lv_obj_set_style_text_color(s_se_fx_set[slot], lv_color_hex(on ? ink : MUTED), 0);
+        lv_label_set_text(s_se_fx_set[slot], carries ? "WITH SETTINGS" : "");
+    }
+    lv_label_set_text(s_se_name_label, s_se_name);
+}
+
+static void on_scene_swatch(lv_event_t *e)
+{
+    s_se_color = (int)(intptr_t)lv_event_get_user_data(e);
+    style_scene_editor();
+}
+
+static void on_scene_fx(lv_event_t *e)
+{
+    int slot = (int)(intptr_t)lv_event_get_user_data(e);
+    if (!nano_fx_model(s_slot_type[slot])) return;
+    s_se_fx_on ^= (uint8_t)(1u << slot);
+    style_scene_editor();
+}
+
+static void on_scene_name(lv_event_t *e)
+{
+    char title[40];
+    snprintf(title, sizeof(title), "Name of scene %d", s_se_scene + 1);
+    show_rename('S', title, "OK", s_se_name, UI_SCENE_NAME - 1);
+}
+
+// From the keyboard: the name stays in the dialog until Save.
+static void scene_editor_named(const char *text)
+{
+    if (text[0]) strlcpy(s_se_name, text, sizeof(s_se_name));
+    style_scene_editor();
+}
+
+static void open_scene_editor(int scene)
+{
+    static const uint8_t COLORS[UI_SCENES] = { 4, 3, 2, 1, 6, 7 };   // of a new scene: green, yellow, orange, red, blue, violet
+    char text[128];
+    if (scene < 0 || scene >= UI_SCENES) return;
+    bool stored = s_view.scene_names[scene][0] != 0;
+    s_se_scene = scene;
+    s_se_preset = s_current_preset;
+    s_se_color = !stored ? COLORS[scene] : s_view.scene_colors[scene] < UI_BANK_COLOR_COUNT ? s_view.scene_colors[scene] : 0;
+    s_se_fx_on = stored ? s_view.scene_fx[scene] : 0;
+    for (int slot = 0; slot < NANO_FX_SLOTS && !stored; slot++) s_se_fx_on |= (uint8_t)(s_slot_on[slot] << slot);
+    if (stored) strlcpy(s_se_name, s_view.scene_names[scene], sizeof(s_se_name));
+    else snprintf(s_se_name, sizeof(s_se_name), "Scene %d", scene + 1);
+    snprintf(text, sizeof(text), "Scene %d  \xC2\xB7  switch %d", scene + 1, scene + 3);
+    lv_label_set_text(s_se_title, text);
+    snprintf(text, sizeof(text), "Preset %d: tap the effects that are on in this scene. Their settings: scene button in the FX editor", s_se_preset);
+    lv_label_set_text(s_se_hint, text);
+    lv_obj_set_hidden(s_se_clear, !stored);
+    style_scene_editor();
+    lv_obj_set_hidden(s_scene_editor, false);
+    lv_obj_move_foreground(s_scene_editor);
+}
+
+static void on_scene_editor_button(lv_event_t *e)
+{
+    int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 cancel, 1 save, 2 remove the scene
+    char text[UI_SCENE_NAME + NANO_FX_SLOTS + 4];
+    lv_obj_set_hidden(s_scene_editor, true);
+    if (action == 1) {
+        int n = snprintf(text, sizeof(text), "%c%c", '3' + s_se_scene, 'a' + s_se_color);
+        for (int slot = 0; slot < NANO_FX_SLOTS; slot++) text[n++] = (s_se_fx_on >> slot) & 1 ? '1' : '0';
+        snprintf(text + n, sizeof(text) - (size_t)n, "%s", s_se_name);
+    } else if (action == 2) {
+        snprintf(text, sizeof(text), "%c!", '3' + s_se_scene);
+    } else {
+        return;
+    }
+    if (s_on_text) s_on_text('S', text);
+}
+
+static void build_scene_editor(lv_obj_t *screen)
+{
+    s_scene_editor = panel(screen, 50, 26, 700, 428);
+    s_se_title = dialog_title(s_scene_editor, "");
+    s_se_hint = label(s_scene_editor, &ui_font_14, MUTED);
+    lv_obj_set_pos(s_se_hint, 20, 46);
+
+    lv_obj_t *name = button(s_scene_editor, 18, 78, 662, 56, on_scene_name);   // tap: the keyboard
+    s_se_name_label = label(name, &ui_font_title_22, TEXT);
+    lv_obj_align(s_se_name_label, LV_ALIGN_LEFT_MID, 4, 0);
+    lv_obj_t *hint = label(name, &ui_font_14, MUTED);
+    lv_label_set_text(hint, "Rename");
+    lv_obj_align(hint, LV_ALIGN_RIGHT_MID, -4, 0);
+
+    for (int i = 0; i < UI_BANK_COLOR_COUNT; i++) {
+        lv_obj_t *sw = lv_obj_create(s_scene_editor);
+        s_se_swatch[i] = sw;
+        lv_obj_set_size(sw, 52, 52);
+        lv_obj_set_pos(sw, 18 + i * 68, 150);
+        lv_obj_set_style_radius(sw, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_color(sw, lv_color_hex(BANK_COLORS[i]), 0);
+        lv_obj_set_scrollable(sw, false);
+        lv_obj_set_clickable(sw, true);
+        lv_obj_add_event_cb(sw, on_scene_swatch, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+    }
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {   // the five effects in the order of the signal chain
+        lv_obj_t *fx = frame_button(s_scene_editor);
+        s_se_fx[slot] = fx;
+        lv_obj_set_pos(fx, 18 + slot * 134, 220);
+        lv_obj_set_size(fx, 126, 112);
+        lv_obj_add_event_cb(fx, on_scene_fx, LV_EVENT_CLICKED, (void *)(intptr_t)slot);
+        s_se_fx_caption[slot] = label(fx, &ui_font_12, MUTED);
+        lv_obj_set_style_text_letter_space(s_se_fx_caption[slot], 1, 0);
+        char caption[16];   // small capitals, as the captions of the tiles
+        size_t n = 0;
+        for (const char *c = NANO_FX_SLOT_NAMES[slot]; *c && n < sizeof(caption) - 1; c++) caption[n++] = (char)toupper((unsigned char)*c);
+        caption[n] = 0;
+        lv_label_set_text(s_se_fx_caption[slot], caption);
+        lv_obj_set_pos(s_se_fx_caption[slot], 10, 15);
+        s_se_fx_state[slot] = label(fx, &ui_font_12, MUTED);
+        lv_obj_set_style_text_letter_space(s_se_fx_state[slot], 1, 0);
+        lv_obj_align(s_se_fx_state[slot], LV_ALIGN_TOP_RIGHT, -10, 15);
+        s_se_fx_name[slot] = label(fx, &ui_font_16, TEXT);
+        lv_obj_set_pos(s_se_fx_name[slot], 10, 38);
+        lv_obj_set_size(s_se_fx_name[slot], 106, 2 * lv_font_get_line_height(&ui_font_16));
+        lv_label_set_long_mode(s_se_fx_name[slot], LV_LABEL_LONG_DOT);
+        s_se_fx_set[slot] = label(fx, &ui_font_12, MUTED);
+        lv_obj_set_style_text_letter_space(s_se_fx_set[slot], 1, 0);
+        lv_obj_set_pos(s_se_fx_set[slot], 10, 86);
+    }
+    s_se_clear = small_button(s_scene_editor, 18, 358, 150, 52, "Remove", on_scene_editor_button, 2);
+    small_button(s_scene_editor, 372, 358, 150, 52, "Cancel", on_scene_editor_button, 0);
+    primary(small_button(s_scene_editor, 530, 358, 150, 52, "Save", on_scene_editor_button, 1));
+    lv_obj_set_hidden(s_scene_editor, true);
+}
+
+// ---- expression pedal: what the Nano's pedal does in this preset (the pedal button of the top bar) ----
+// First page: eleven values can follow the pedal, each from its heel to its toe value - the Amount of the five
+// effects (the wah position of a wah, the mix of a reverb ...) and the capture's knobs, its level and the input
+// gate. Second page: what the pedal switches on and off - the capture, the cab, the effects, the gate - and in which
+// way (the Cortex Cloud app's three: Heel-Toe, Switch for a footswitch on the connector, Stop). A field is filled
+// while it is assigned; the chosen one shows its settings below. Save writes the assignments into the Nano's preset
+// (they belong to it, as in the editor's Expression panel). Top right: what the Nano's EXP/MIDI connector takes;
+// Calibrate teaches the Nano the pedal's lowest and highest position.
+
+static const char *const EXP_WAYS[NANO_EXP_MODES] = { "Heel-Toe", "Switch", "Stop" };
+
+static uint32_t exp_color(int i)
+{
+    if (i >= NANO_FX_SLOTS) return 0xF2F2F2;
+    const nano_fx_model_t *model = nano_fx_model(s_slot_type[i]);
+    return model ? model->color : 0x6A6A6A;
+}
+
+// The FX slot of an on/off assignment, -1 for the capture, the cab and the gate.
+static int exp_switch_slot(int i)
+{
+    return i >= NANO_EXP_SW_PRE1 && i <= NANO_EXP_SW_POST3 ? i - NANO_EXP_SW_PRE1 : -1;
+}
+
+static const char *exp_switch_name(int i)
+{
+    int slot = exp_switch_slot(i);
+    if (slot >= 0) return nano_fx_model(s_slot_type[slot]) ? nano_fx_name(s_slot_type[slot]) : "Empty";
+    return i == NANO_EXP_SW_CAPTURE ? "Capture" : i == NANO_EXP_SW_CAB ? "Cab / IR" : "Gate";
+}
+
+static int exp_percent(uint8_t value)
+{
+    return (int)lroundf(value * 100 / 255.0f);
+}
+
+static void style_exp_field(int i)
+{
+    static const char *const NAMES[UI_EXP_TARGETS - NANO_FX_SLOTS] = { "Gain", "Bass", "Mid", "Treble", "Level", "Gate" };
+    const ui_exp_range_t *range = &s_ex_range[i];
+    bool fx = i < NANO_FX_SLOTS, empty = fx && !nano_fx_model(s_slot_type[i]), on = s_ex_loaded && range->on;
+    uint32_t color = exp_color(i), ink = on ? ink_for(color) : empty || !s_ex_loaded ? 0x8E9297 : TEXT;
+    style_frame_button(s_ex_field[i], color, on, empty && !on);
+    lv_obj_set_style_text_color(s_ex_caption[i], lv_color_hex(on ? ink : MUTED), 0);
+    lv_obj_set_style_text_color(s_ex_name[i], lv_color_hex(ink), 0);
+    lv_label_set_text(s_ex_name[i], !fx ? NAMES[i - NANO_FX_SLOTS] : empty ? "Empty" : nano_fx_name(s_slot_type[i]));
+    lv_obj_set_style_text_color(s_ex_range_label[i], lv_color_hex(ink), 0);
+    if (on) lv_label_set_text_fmt(s_ex_range_label[i], "%d\xE2\x80\x93%d", exp_percent(range->heel), exp_percent(range->toe));
+    else lv_label_set_text(s_ex_range_label[i], "");
+    bool selected = s_ex_loaded && i == s_ex_selected;
+    lv_obj_set_style_outline_width(s_ex_field[i], selected ? 3 : 0, 0);
+}
+
+// The chosen value: its name, whether it is on the pedal, its heel and toe value.
+static void style_exp_detail(void)
+{
+    static const char *const NAMES[UI_EXP_TARGETS - NANO_FX_SLOTS] = { "Capture gain", "Capture bass", "Capture mid", "Capture treble",
+                                                                      "Capture level", "Input gate amount" };
+    int i = s_ex_selected;
+    const ui_exp_range_t *range = &s_ex_range[i];
+    char text[96];
+    if (i >= NANO_FX_SLOTS) snprintf(text, sizeof(text), "%s", NAMES[i - NANO_FX_SLOTS]);
+    else snprintf(text, sizeof(text), "%s Amount  \xC2\xB7  %s", NANO_FX_SLOT_NAMES[i], nano_fx_model(s_slot_type[i]) ? nano_fx_name(s_slot_type[i]) : "empty slot");
+    lv_label_set_text(s_ex_target, s_ex_loaded ? text : "");
+    bool on = s_ex_loaded && range->on;
+    uint32_t color = exp_color(i);
+    style_frame_button(s_ex_toggle, color, on, !s_ex_loaded);
+    lv_label_set_text(s_ex_toggle_label, on ? "On" : "Off");
+    lv_obj_set_style_text_color(s_ex_toggle_label, lv_color_hex(on ? ink_for(color) : s_ex_loaded ? TEXT : 0x5D6267), 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(s_ex_toggle, 0), lv_color_hex(on ? ink_for(color) : MUTED), 0);
+    for (int k = 0; k < 2; k++) {
+        uint8_t value = k ? range->toe : range->heel;
+        style_slider(s_ex_slider[k], on ? color : 0x6A6F75);
+        lv_slider_set_value(s_ex_slider[k], value, LV_ANIM_OFF);
+        lv_label_set_text_fmt(s_ex_value[k], "%d%%", exp_percent(value));
+        lv_obj_set_style_text_color(s_ex_value[k], lv_color_hex(on ? 0xFFFFFF : 0x8E9297), 0);
+        if (s_ex_loaded) lv_obj_remove_state(s_ex_slider[k], LV_STATE_DISABLED);
+        else lv_obj_add_state(s_ex_slider[k], LV_STATE_DISABLED);
+    }
+}
+
+static uint32_t exp_switch_color(int i)
+{
+    int slot = exp_switch_slot(i);
+    return slot >= 0 ? exp_color(slot) : 0xF2F2F2;
+}
+
+static void style_exp_switch_field(int i)
+{
+    const nano_exp_switch_t *sw = &s_ex_switch[i];
+    int slot = exp_switch_slot(i);
+    bool empty = slot >= 0 && !nano_fx_model(s_slot_type[slot]), on = s_ex_loaded && sw->on;
+    uint32_t color = exp_switch_color(i), ink = on ? ink_for(color) : empty || !s_ex_loaded ? 0x8E9297 : TEXT;
+    style_frame_button(s_ex_sw_field[i], color, on, empty && !on);
+    lv_obj_set_style_text_color(s_ex_sw_caption[i], lv_color_hex(on ? ink : MUTED), 0);
+    lv_obj_set_style_text_color(s_ex_sw_name[i], lv_color_hex(ink), 0);
+    lv_label_set_text(s_ex_sw_name[i], exp_switch_name(i));
+    lv_obj_set_style_text_color(s_ex_sw_way[i], lv_color_hex(ink), 0);
+    char way[12] = "";
+    for (size_t n = 0; on && EXP_WAYS[sw->mode][n] && n < sizeof(way) - 1; n++) {
+        way[n] = (char)toupper((unsigned char)EXP_WAYS[sw->mode][n]);
+        way[n + 1] = 0;
+    }
+    lv_label_set_text(s_ex_sw_way[i], way);
+    lv_obj_set_style_outline_width(s_ex_sw_field[i], s_ex_loaded && i == s_ex_sw_selected ? 3 : 0, 0);
+}
+
+// The chosen on/off assignment: its name, whether the pedal switches it, the way, and what belongs to that way.
+static void style_exp_switch_detail(void)
+{
+    int i = s_ex_sw_selected, slot = exp_switch_slot(i);
+    const nano_exp_switch_t *sw = &s_ex_switch[i];
+    char text[96];
+    if (slot >= 0) snprintf(text, sizeof(text), "%s on / off  \xC2\xB7  %s", NANO_FX_SLOT_NAMES[slot], exp_switch_name(i));
+    else snprintf(text, sizeof(text), "%s on / off", i == NANO_EXP_SW_GATE ? "Input gate" : exp_switch_name(i));
+    lv_label_set_text(s_ex_sw_target, s_ex_loaded ? text : "");
+    bool on = s_ex_loaded && sw->on;
+    uint32_t color = exp_switch_color(i);
+    style_frame_button(s_ex_sw_toggle, color, on, !s_ex_loaded);
+    lv_label_set_text(s_ex_sw_toggle_label, on ? "On" : "Off");
+    lv_obj_set_style_text_color(s_ex_sw_toggle_label, lv_color_hex(on ? ink_for(color) : s_ex_loaded ? TEXT : 0x5D6267), 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(s_ex_sw_toggle, 0), lv_color_hex(on ? ink_for(color) : MUTED), 0);
+    for (int k = 0; k < NANO_EXP_MODES; k++) style_tab(s_ex_sw_mode[k], on && k == sw->mode);
+    bool delay = sw->mode != NANO_EXP_SWITCH;
+    lv_obj_set_hidden(s_ex_sw_invert, sw->mode == NANO_EXP_STOP);
+    style_tab(s_ex_sw_invert, on && sw->inverted);
+    lv_obj_set_hidden(s_ex_sw_latch, delay);
+    style_tab(s_ex_sw_latch, on && sw->latch);
+    lv_label_set_text(lv_obj_get_child(s_ex_sw_latch, 0), sw->latch ? "Latch emulation: on" : "Latch emulation: off");
+    lv_obj_set_hidden(s_ex_sw_delay_name, !delay);
+    lv_obj_set_hidden(s_ex_sw_delay, !delay);
+    lv_obj_set_hidden(s_ex_sw_delay_value, !delay);
+    style_slider(s_ex_sw_delay, on ? color : 0x6A6F75);
+    lv_slider_set_value(s_ex_sw_delay, sw->delay_ms / 10, LV_ANIM_OFF);
+    lv_label_set_text_fmt(s_ex_sw_delay_value, "%d ms", sw->delay_ms);
+    lv_obj_set_style_text_color(s_ex_sw_delay_value, lv_color_hex(on ? 0xFFFFFF : 0x8E9297), 0);
+}
+
+static void style_expression(void)
+{
+    char text[96];
+    const char *by = s_jack_mode == NANO_JACK_MIDI ? "MIDI CC 1" : "the pedal";
+    if (!s_ex_loaded) snprintf(text, sizeof(text), "Preset %d  \xC2\xB7  reading its assignments ...", s_ex_preset);
+    else if (s_ex_page) snprintf(text, sizeof(text), "Preset %d  \xC2\xB7  what %s switches on and off", s_ex_preset, by);
+    else if (s_jack_mode == NANO_JACK_MIDI) snprintf(text, sizeof(text), "Preset %d  \xC2\xB7  what MIDI CC 1 moves: 0 = heel, 127 = toe", s_ex_preset);
+    else snprintf(text, sizeof(text), "Preset %d  \xC2\xB7  what the pedal moves, from heel to toe", s_ex_preset);
+    lv_label_set_text(s_ex_sub, text);
+    style_tab(s_ex_jack[0], s_jack_mode == NANO_JACK_EXPRESSION);
+    style_tab(s_ex_jack[1], s_jack_mode == NANO_JACK_MIDI);
+    lv_obj_set_hidden(s_ex_pages[0], s_ex_page != 0);
+    lv_obj_set_hidden(s_ex_pages[1], s_ex_page != 1);
+    int sweeps = 0, switches = 0;
+    for (int i = 0; i < UI_EXP_TARGETS; i++) {
+        style_exp_field(i);
+        sweeps += s_ex_loaded && s_ex_range[i].on;
+    }
+    for (int i = 0; i < NANO_EXP_SWITCHES; i++) {
+        style_exp_switch_field(i);
+        switches += s_ex_loaded && s_ex_switch[i].on;
+    }
+    style_exp_detail();
+    style_exp_switch_detail();
+    // The button to the other page says how much is assigned there.
+    if (s_ex_page) lv_label_set_text_fmt(lv_obj_get_child(s_ex_page_button, 0), "Sweeps  \xC2\xB7  %d", sweeps);
+    else lv_label_set_text_fmt(lv_obj_get_child(s_ex_page_button, 0), "On / off  \xC2\xB7  %d", switches);
+    lv_obj_set_hidden(s_ex_calibrate, s_jack_mode != NANO_JACK_EXPRESSION);   // a pedal on the connector only
+    if (s_ex_loaded) lv_obj_remove_state(s_ex_save, LV_STATE_DISABLED);
+    else lv_obj_add_state(s_ex_save, LV_STATE_DISABLED);
+}
+
+static void on_ex_field(lv_event_t *e)
+{
+    if (!s_ex_loaded) return;
+    int before = s_ex_selected;
+    s_ex_selected = (int)(intptr_t)lv_event_get_user_data(e);
+    style_exp_field(before);
+    style_exp_field(s_ex_selected);
+    style_exp_detail();
+}
+
+static void on_ex_toggle(lv_event_t *e)
+{
+    if (!s_ex_loaded) return;
+    ui_exp_range_t *range = &s_ex_range[s_ex_selected];
+    range->on = !range->on;
+    if (range->on && range->heel == range->toe) {   // never set: the whole way
+        range->heel = 0;
+        range->toe = 255;
+    }
+    style_exp_field(s_ex_selected);
+    style_exp_detail();
+}
+
+// A slider moved: that is the value at the heel (0) or the toe (1) - and the value is on the pedal.
+static void on_ex_slider(lv_event_t *e)
+{
+    if (!s_ex_loaded) return;
+    int which = (int)(intptr_t)lv_event_get_user_data(e);
+    ui_exp_range_t *range = &s_ex_range[s_ex_selected];
+    uint8_t value = (uint8_t)lv_slider_get_value(s_ex_slider[which]);
+    bool was_on = range->on;
+    if (which) range->toe = value;
+    else range->heel = value;
+    range->on = true;
+    lv_label_set_text_fmt(s_ex_value[which], "%d%%", exp_percent(value));
+    style_exp_field(s_ex_selected);
+    if (!was_on) style_exp_detail();
+}
+
+// On/off page: a field chosen (0-7), the assignment switched (8), a way chosen (10-12: that also assigns), invert
+// (20) or latch emulation (21) switched.
+static void on_ex_switch(lv_event_t *e)
+{
+    if (!s_ex_loaded) return;
+    int what = (int)(intptr_t)lv_event_get_user_data(e), before = s_ex_sw_selected;
+    nano_exp_switch_t *sw = &s_ex_switch[s_ex_sw_selected];
+    if (what < NANO_EXP_SWITCHES) {
+        s_ex_sw_selected = what;
+        style_exp_switch_field(before);
+    } else if (what == 8) {
+        sw->on = !sw->on;
+    } else if (what >= 10 && what < 10 + NANO_EXP_MODES) {
+        sw->mode = (uint8_t)(what - 10);
+        sw->on = true;
+    } else if (what == 20) {
+        sw->inverted = !sw->inverted;
+        sw->on = true;
+    } else if (what == 21) {
+        sw->latch = !sw->latch;
+        sw->on = true;
+    }
+    style_exp_switch_field(s_ex_sw_selected);
+    style_exp_switch_detail();
+}
+
+static void on_ex_delay(lv_event_t *e)
+{
+    if (!s_ex_loaded) return;
+    nano_exp_switch_t *sw = &s_ex_switch[s_ex_sw_selected];
+    bool was_on = sw->on;
+    sw->delay_ms = (uint16_t)(lv_slider_get_value(s_ex_sw_delay) * 10);
+    sw->on = true;
+    lv_label_set_text_fmt(s_ex_sw_delay_value, "%d ms", sw->delay_ms);
+    if (!was_on) {
+        style_exp_switch_field(s_ex_sw_selected);
+        style_exp_switch_detail();
+    }
+}
+
+static void on_ex_page(lv_event_t *e)
+{
+    s_ex_page = !s_ex_page;
+    style_expression();
+}
+
+// The connector of the Nano takes an expression pedal or TRS MIDI, not both: a tap on the other one asks first.
+static void on_ex_jack(lv_event_t *e)
+{
+    int mode = (int)(intptr_t)lv_event_get_user_data(e);
+    if (mode == s_jack_mode) return;
+    if (mode == NANO_JACK_MIDI) {
+        ask_for("Set the Nano's EXP/MIDI connector to MIDI? An expression pedal plugged into it stops working.", "Switch", '+', mode);
+    } else {
+        ask_for("Set the Nano's EXP/MIDI connector to expression pedal? MIDI through it stops working.", "Switch", '+', mode);
+    }
+}
+
+void ui_set_jack(int mode)
+{
+    lvgl_port_lock(0);
+    if (mode != s_jack_mode) {
+        s_jack_mode = mode;
+        if (!lv_obj_is_hidden(s_exp_dialog)) style_expression();
+    }
+    lvgl_port_unlock();
+}
+
+// Calibrate: the Nano forgets what it knew of the pedal and reports where it is; the lowest and highest position
+// of a few sweeps over the whole way are saved as the new calibration.
+static void on_ex_calibrate(lv_event_t *e)
+{
+    ask_for("Calibrate the expression pedal? The Nano forgets its calibration first.", "Start", '<', 1);
+}
+
+static void on_cal_button(lv_event_t *e)
+{
+    int save = (int)(intptr_t)lv_event_get_user_data(e);
+    lv_obj_set_hidden(s_cal_panel, true);
+    send('<', save ? 2 : 0);
+}
+
+void ui_set_pedal(int value, int min, int max)
+{
+    char text[96];
+    lvgl_port_lock(0);
+    bool seen = max > min;
+    lv_bar_set_range(s_cal_bar, seen ? min : 0, seen ? max : 1);
+    lv_bar_set_value(s_cal_bar, seen ? value : 0, LV_ANIM_OFF);
+    if (seen) snprintf(text, sizeof(text), "Position %d  \xC2\xB7  lowest %d  \xC2\xB7  highest %d", value, min, max);
+    else snprintf(text, sizeof(text), "Waiting for the pedal to move ...");
+    lv_label_set_text(s_cal_text, text);
+    if (seen) lv_obj_remove_state(s_cal_save, LV_STATE_DISABLED);
+    else lv_obj_add_state(s_cal_save, LV_STATE_DISABLED);
+    if (lv_obj_is_hidden(s_cal_panel)) {
+        lv_obj_set_hidden(s_cal_panel, false);
+        lv_obj_move_foreground(s_cal_panel);
+    }
+    lvgl_port_unlock();
+}
+
+static void close_expression(void)
+{
+    if (lv_obj_is_hidden(s_exp_dialog)) return;
+    lv_obj_set_hidden(s_exp_dialog, true);
+    if (!lv_obj_is_hidden(s_cal_panel)) {
+        lv_obj_set_hidden(s_cal_panel, true);
+        send('<', 0);
+    }
+    send('=', 0);
+}
+
+static void on_ex_button(lv_event_t *e)
+{
+    bool save = (int)(intptr_t)lv_event_get_user_data(e) && s_ex_loaded;
+    close_expression();
+    if (!save || !s_on_text) return;
+    char text[5 * UI_EXP_TARGETS + 8 * NANO_EXP_SWITCHES + 1];
+    for (int i = 0; i < UI_EXP_TARGETS; i++) {
+        snprintf(text + 5 * i, 6, "%c%02X%02X", s_ex_range[i].on ? '1' : '0', s_ex_range[i].heel, s_ex_range[i].toe);
+    }
+    for (int i = 0; i < NANO_EXP_SWITCHES; i++) {
+        const nano_exp_switch_t *sw = &s_ex_switch[i];
+        snprintf(text + 5 * UI_EXP_TARGETS + 8 * i, 9, "%c%c%c%c%04X", sw->on ? '1' : '0', '0' + sw->mode, sw->inverted ? '1' : '0',
+                 sw->latch ? '1' : '0', sw->delay_ms);
+    }
+    s_on_text('X', text);
+}
+
+static void open_expression(lv_event_t *e)
+{
+    if (!s_linked) {
+        ui_show_message("Not connected - still searching for the Nano.");
+        return;
+    }
+    s_ex_loaded = false;
+    s_ex_preset = s_current_preset;
+    s_ex_selected = s_ex_sw_selected = 0;
+    s_ex_page = 0;
+    memset(s_ex_range, 0, sizeof(s_ex_range));
+    memset(s_ex_switch, 0, sizeof(s_ex_switch));
+    style_expression();
+    lv_obj_set_hidden(s_exp_dialog, false);
+    lv_obj_move_foreground(s_exp_dialog);
+    send('=', 1);
+}
+
+void ui_set_expression(const nano_exp_range_t *ranges, const nano_exp_switch_t *switches)
+{
+    lvgl_port_lock(0);
+    if (!lv_obj_is_hidden(s_exp_dialog)) {
+        bool first = !s_ex_loaded;
+        memcpy(s_ex_range, ranges, sizeof(s_ex_range));
+        memcpy(s_ex_switch, switches, sizeof(s_ex_switch));
+        s_ex_loaded = true;
+        if (first) {   // in front: the first one that is assigned
+            s_ex_selected = s_ex_sw_selected = 0;
+            for (int i = UI_EXP_TARGETS - 1; i >= 0; i--) if (ranges[i].on) s_ex_selected = i;
+            for (int i = NANO_EXP_SWITCHES - 1; i >= 0; i--) if (switches[i].on) s_ex_sw_selected = i;
+        }
+        style_expression();
+    }
+    lvgl_port_unlock();
+}
+
+// One field of the two grids: a caption, a name, a short note at the top right.
+static lv_obj_t *exp_field(lv_obj_t *parent, int index, const char *caption, lv_event_cb_t cb, lv_obj_t **caption_label,
+                           lv_obj_t **name_label, lv_obj_t **note_label)
+{
+    lv_obj_t *field = frame_button(parent);
+    lv_obj_set_pos(field, 18 + (index % 4) * 178, 74 + (index / 4) * 66);
+    lv_obj_set_size(field, 170, 58);
+    lv_obj_set_style_outline_color(field, lv_color_white(), 0);
+    lv_obj_set_style_outline_pad(field, 2, 0);
+    lv_obj_add_event_cb(field, cb, LV_EVENT_CLICKED, (void *)(intptr_t)index);
+    *caption_label = label(field, &ui_font_12, MUTED);
+    lv_obj_set_style_text_letter_space(*caption_label, 1, 0);
+    char upper[16];   // small capitals, as the captions of the tiles
+    size_t n = 0;
+    for (const char *c = caption; *c && n < sizeof(upper) - 1; c++) upper[n++] = (char)toupper((unsigned char)*c);
+    upper[n] = 0;
+    lv_label_set_text(*caption_label, upper);
+    lv_obj_set_pos(*caption_label, 10, 12);
+    *name_label = label(field, &ui_font_16, TEXT);
+    lv_obj_set_pos(*name_label, 10, 29);
+    lv_obj_set_size(*name_label, 148, lv_font_get_line_height(&ui_font_16));
+    lv_label_set_long_mode(*name_label, LV_LABEL_LONG_DOT);
+    *note_label = label(field, &ui_font_12, TEXT);
+    lv_obj_set_style_text_letter_space(*note_label, 1, 0);
+    lv_obj_align(*note_label, LV_ALIGN_TOP_RIGHT, -10, 12);
+    return field;
+}
+
+// "ON THE PEDAL" with On / Off below: the assignment of the chosen field.
+static lv_obj_t *exp_toggle(lv_obj_t *parent, int y, lv_event_cb_t cb, int data, lv_obj_t **state_label)
+{
+    lv_obj_t *toggle = frame_button(parent);
+    lv_obj_set_pos(toggle, 18, y);
+    lv_obj_set_size(toggle, 150, 74);
+    lv_obj_add_event_cb(toggle, cb, LV_EVENT_CLICKED, (void *)(intptr_t)data);
+    lv_obj_t *caption = label(toggle, &ui_font_12, MUTED);
+    lv_obj_set_style_text_letter_space(caption, 1, 0);
+    lv_label_set_text(caption, "ON THE PEDAL");
+    lv_obj_set_pos(caption, 10, 14);
+    *state_label = label(toggle, &ui_font_title_22, TEXT);
+    lv_obj_set_pos(*state_label, 10, 34);
+    return toggle;
+}
+
+static lv_obj_t *exp_page(void)
+{
+    lv_obj_t *page = lv_obj_create(s_exp_dialog);
+    lv_obj_remove_style_all(page);
+    lv_obj_set_size(page, 740, 386);
+    lv_obj_set_scrollable(page, false);
+    lv_obj_set_clickable(page, false);
+    return page;
+}
+
+static void build_expression(lv_obj_t *screen)
+{
+    s_exp_dialog = panel(screen, 30, 16, 740, 448);
+    dialog_title(s_exp_dialog, "Expression pedal");
+    s_ex_sub = label(s_exp_dialog, &ui_font_14, MUTED);
+    lv_obj_set_pos(s_ex_sub, 20, 46);
+    // Top right: what the Nano's EXP/MIDI connector takes (a setting of the Nano, the same for all presets)
+    lv_obj_t *jack = label(s_exp_dialog, &ui_font_12, MUTED);
+    lv_obj_set_style_text_letter_space(jack, 1, 0);
+    lv_label_set_text(jack, "EXP/MIDI JACK");
+    lv_obj_set_width(jack, 130);
+    lv_obj_set_style_text_align(jack, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_pos(jack, 340, 21);
+    s_ex_jack[0] = small_button(s_exp_dialog, 480, 8, 118, 38, "Expression", on_ex_jack, NANO_JACK_EXPRESSION);
+    s_ex_jack[1] = small_button(s_exp_dialog, 604, 8, 118, 38, "MIDI", on_ex_jack, NANO_JACK_MIDI);
+
+    // Page 1: the sweeps, four in a row - the effects in the order of the signal chain first
+    lv_obj_t *page = s_ex_pages[0] = exp_page();
+    static const char *const CAPTIONS[UI_EXP_TARGETS - NANO_FX_SLOTS] = { "Capture", "Capture", "Capture", "Capture", "Capture", "Input" };
+    for (int i = 0; i < UI_EXP_TARGETS; i++) {
+        s_ex_field[i] = exp_field(page, i, i < NANO_FX_SLOTS ? NANO_FX_SLOT_NAMES[i] : CAPTIONS[i - NANO_FX_SLOTS], on_ex_field,
+                                  &s_ex_caption[i], &s_ex_name[i], &s_ex_range_label[i]);
+    }
+    s_ex_target = label(page, &ui_font_16, 0xC8CCD1);
+    lv_obj_set_pos(s_ex_target, 20, 276);
+    s_ex_toggle = exp_toggle(page, 304, on_ex_toggle, 0, &s_ex_toggle_label);
+    static const char *const ENDS[2] = { "HEEL", "TOE" };
+    for (int k = 0; k < 2; k++) {
+        int y = 304 + k * 40;
+        lv_obj_t *name = label(page, &ui_font_16, 0xC8CCD1);
+        lv_obj_set_style_text_letter_space(name, 2, 0);
+        lv_label_set_text(name, ENDS[k]);
+        lv_obj_set_pos(name, 192, y + 8);
+        s_ex_slider[k] = lv_slider_create(page);
+        lv_slider_set_range(s_ex_slider[k], 0, 255);
+        lv_obj_set_size(s_ex_slider[k], 330, 16);
+        lv_obj_set_pos(s_ex_slider[k], 270, y + 12);
+        lv_obj_set_ext_click_area(s_ex_slider[k], 14);
+        style_slider(s_ex_slider[k], 0x6A6F75);
+        lv_obj_add_event_cb(s_ex_slider[k], on_ex_slider, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)k);
+        s_ex_value[k] = label(page, &ui_font_28, 0xFFFFFF);
+        lv_obj_set_width(s_ex_value[k], 100);
+        lv_obj_set_style_text_align(s_ex_value[k], LV_TEXT_ALIGN_RIGHT, 0);
+        lv_obj_set_pos(s_ex_value[k], 620, y + 2);
+    }
+
+    // Page 2: on / off - the capture, the cab, the five effects, the gate
+    page = s_ex_pages[1] = exp_page();
+    for (int i = 0; i < NANO_EXP_SWITCHES; i++) {
+        int slot = exp_switch_slot(i);
+        s_ex_sw_field[i] = exp_field(page, i, slot >= 0 ? NANO_FX_SLOT_NAMES[slot] : i == NANO_EXP_SW_GATE ? "Input" : "On / off", on_ex_switch,
+                                     &s_ex_sw_caption[i], &s_ex_sw_name[i], &s_ex_sw_way[i]);
+    }
+    s_ex_sw_target = label(page, &ui_font_16, 0xC8CCD1);
+    lv_obj_set_pos(s_ex_sw_target, 20, 214);
+    s_ex_sw_toggle = exp_toggle(page, 242, on_ex_switch, 8, &s_ex_sw_toggle_label);
+    for (int k = 0; k < NANO_EXP_MODES; k++) {   // the way the pedal switches it
+        s_ex_sw_mode[k] = small_button(page, 192 + k * 116, 242, 110, 34, EXP_WAYS[k], on_ex_switch, 10 + k);
+    }
+    s_ex_sw_invert = small_button(page, 580, 242, 142, 34, "Invert", on_ex_switch, 20);
+    s_ex_sw_latch = small_button(page, 192, 284, 250, 34, "Latch emulation: off", on_ex_switch, 21);
+    s_ex_sw_delay_name = label(page, &ui_font_16, 0xC8CCD1);
+    lv_obj_set_style_text_letter_space(s_ex_sw_delay_name, 2, 0);
+    lv_label_set_text(s_ex_sw_delay_name, "DELAY");
+    lv_obj_set_pos(s_ex_sw_delay_name, 192, 292);
+    s_ex_sw_delay = lv_slider_create(page);
+    lv_slider_set_range(s_ex_sw_delay, 0, NANO_EXP_DELAY_MAX / 10);   // steps of 10 ms
+    lv_obj_set_size(s_ex_sw_delay, 300, 16);
+    lv_obj_set_pos(s_ex_sw_delay, 282, 296);
+    lv_obj_set_ext_click_area(s_ex_sw_delay, 14);
+    style_slider(s_ex_sw_delay, 0x6A6F75);
+    lv_obj_add_event_cb(s_ex_sw_delay, on_ex_delay, LV_EVENT_VALUE_CHANGED, NULL);
+    s_ex_sw_delay_value = label(page, &ui_font_title_22, 0xFFFFFF);
+    lv_obj_set_width(s_ex_sw_delay_value, 120);
+    lv_obj_set_style_text_align(s_ex_sw_delay_value, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_pos(s_ex_sw_delay_value, 600, 288);
+
+    s_ex_page_button = small_button(s_exp_dialog, 18, 390, 170, 46, "On / off", on_ex_page, 0);
+    s_ex_calibrate = small_button(s_exp_dialog, 196, 390, 150, 46, "Calibrate", on_ex_calibrate, 0);
+    small_button(s_exp_dialog, 410, 390, 150, 46, "Cancel", on_ex_button, 0);
+    s_ex_save = small_button(s_exp_dialog, 570, 390, 150, 46, "Save", on_ex_button, 1);
+    primary(s_ex_save);
+    lv_obj_set_hidden(s_exp_dialog, true);
+
+    // Calibration: the pedal's position between the lowest and the highest seen
+    s_cal_panel = panel(screen, 170, 126, 460, 228);
+    dialog_title(s_cal_panel, "Calibrate the pedal");
+    lv_obj_t *how = label(s_cal_panel, &ui_font_16, 0xC8CCD1);
+    lv_obj_set_width(how, 420);
+    lv_label_set_long_mode(how, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(how, "Move the pedal from heel to toe a few times, then tap Save.");
+    lv_obj_set_pos(how, 20, 52);
+    s_cal_bar = lv_bar_create(s_cal_panel);
+    lv_obj_set_pos(s_cal_bar, 20, 108);
+    lv_obj_set_size(s_cal_bar, 420, 14);
+    lv_obj_set_style_bg_color(s_cal_bar, lv_color_hex(0x2B2F34), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(s_cal_bar, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_cal_bar, lv_color_hex(GREEN), LV_PART_INDICATOR);
+    s_cal_text = label(s_cal_panel, &ui_font_14, MUTED);
+    lv_obj_set_pos(s_cal_text, 20, 132);
+    small_button(s_cal_panel, 150, 166, 140, 46, "Cancel", on_cal_button, 0);
+    s_cal_save = small_button(s_cal_panel, 300, 166, 140, 46, "Save", on_cal_button, 1);
+    primary(s_cal_save);
+    lv_obj_set_hidden(s_cal_panel, true);
 }
 
 #ifdef NANO_BENCH

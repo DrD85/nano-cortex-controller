@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """UI symbols of the board in the desktop editor's drawings (nano-cortex-editor/tools/icons.py, own drawings):
 top bar (refresh, volume, MIDI, USB, save), dialog close, the capture types (amp head, combo, amp + cab, cab,
-pedal, overdrive) and the FX editor's back, chevron and plus. Writes main/ui_icons.c (published). With the
+pedal, overdrive), the FX editor's back, chevron and plus and the scenes and expression pedal buttons. Writes main/ui_icons.c (published). With the
 private icon set (nano-cortex-editor/img/icons.css) the capture types also go into main/private/ui_icons_private.c
 with the original symbols (own build only).
 Run from the project folder:  python3 tools/gen_ui_icons.py
@@ -37,10 +37,12 @@ OWN = {   # not in the editor's set
     'back': '<path d="M15 5l-7 7 7 7"/>',
     'chevron-down': '<path d="M6 9l6 6 6-6"/>',
     'plus': '<path d="M12 5v14M5 12h14"/>',
+    'scenes': '<path d="M12 4l8 4.3-8 4.3-8-4.3z"/><path d="M4 12.3l8 4.3 8-4.3"/><path d="M4 16l8 4.3 8-4.3"/>',
 }
 KEYS = ['refresh', 'volume', 'midi', 'usb', 'save', 'close',
         'cap-amp-head', 'cap-amp-combo', 'cap-amp-cab', 'cap-cab', 'cap-pedal', 'cap-overdrive',
-        'back', 'chevron-down', 'plus']   # FX editor
+        'back', 'chevron-down', 'plus',   # FX editor
+        'scenes', 'exp']                  # scenes and expression pedal buttons
 CAPTURE_KEYS = KEYS[6:12]
 
 

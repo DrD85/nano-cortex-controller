@@ -2,7 +2,7 @@
 
 Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../README.de.md); wie die Firmware gebaut wird und wie sie mit dem Nano spricht, steht in [development.de.md](development.de.md).
 
-**Inhalt:** [Der Bildschirm](#der-bildschirm) · [Fußschalter und Kacheln](#fußschalter-und-kacheln) · [Lange drücken](#lange-drücken) · [Eigene Bänke](#eigene-bänke) · [Capture und Cab/IR](#capture-und-cabir) · [FX-Editor](#fx-editor) · [Reverb-Schalter](#reverb-schalter-fußschalter-8) · [Zweiter Effekt auf Pre FX 1](#zweiter-effekt-auf-pre-fx-1-fußschalter-3) · [Stimmgerät](#stimmgerät) · [USB-Audio-Lautstärke](#usb-audio-lautstärke) · [Bluetooth-MIDI](#bluetooth-midi) · [Looper-Modus](#looper-modus-eine-looper-app-auf-dem-telefon) · [Editor über den Controller](#nano-cortex-editor-über-den-controller) · [Fußschalter-Learn](#fußschalter-learn) · [Fußschalter (Verkabelung)](#fußschalter) · [Was wo gespeichert ist](#was-wo-gespeichert-ist)
+**Inhalt:** [Der Bildschirm](#der-bildschirm) · [Fußschalter und Kacheln](#fußschalter-und-kacheln) · [Lange drücken](#lange-drücken) · [Eigene Bänke](#eigene-bänke) · [Szenen](#szenen) · [Expression-Pedal](#expression-pedal) · [Capture und Cab/IR](#capture-und-cabir) · [FX-Editor](#fx-editor) · [Reverb-Schalter](#reverb-schalter-fußschalter-8) · [Zweiter Effekt auf Pre FX 1](#zweiter-effekt-auf-pre-fx-1-fußschalter-3) · [Stimmgerät](#stimmgerät) · [USB-Audio-Lautstärke](#usb-audio-lautstärke) · [Bluetooth-MIDI](#bluetooth-midi) · [Looper-Modus](#looper-modus-eine-looper-app-auf-dem-telefon) · [Editor über den Controller](#nano-cortex-editor-über-den-controller) · [Fußschalter-Learn](#fußschalter-learn) · [Fußschalter (Verkabelung)](#fußschalter) · [Was wo gespeichert ist](#was-wo-gespeichert-ist)
 
 ## Der Bildschirm
 
@@ -17,8 +17,12 @@ Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../R
 - Das **Lautsprecher**-Symbol daneben stellt die Capture-Lautstärke des aktuellen Presets ein, danach **MIDI** und **USB**.
 - **Nach links / rechts wischen**: nächstes / vorheriges Preset.
 - **Nach oben wischen – Gig-Ansicht**: die Kacheln füllen den Bildschirm mit größeren Namen, eine schmale Leiste
-  oben zeigt Verbindung, Preset-Nummer, Bank, Preset-Name, ungespeicherte Änderungen und den Modus (PRESETS / FX).
+  oben zeigt Verbindung, Preset-Nummer, Bank, Preset-Name, ungespeicherte Änderungen und den Modus (PRESETS / SCENES / FX).
   **Nach unten wischen**: zurück.
+- Rechts in der oberen Leiste: der **Pedal**-Knopf für das [Expression-Pedal](#expression-pedal), der
+  **Szenen**-Knopf (Ebenen) und **Save**. Der Szenen-Knopf legt die [Szenen](#szenen) des aktuellen Presets auf die
+  Kacheln 3–8, anstelle der Presets der Bank; nochmal tippen geht zurück. In der Gig-Ansicht macht ein Tipp auf den
+  Modus oben rechts dasselbe.
 - Der grüne Punkt zeigt die Bluetooth-Verbindung zum Nano; **Save** wird grün und neben dem Namen erscheint ein
   oranger Punkt, wenn das Preset ungespeicherte Änderungen hat. **MIDI** wird grün, solange ein Bluetooth-MIDI-Controller verbunden ist.
 - Die **Capture-Karte** zeigt wie im Editor den Typ des Captures (Amp-Head, Combo, Amp + Cab, Cab, Pedal …).
@@ -28,9 +32,16 @@ Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../R
 | Schalter | Preset-Modus | FX-Modus |
 |---|---|---|
 | 1 | in den FX-Modus wechseln; **gehalten: Looper-Modus** | in den Preset-Modus wechseln; **gehalten: Looper-Modus** |
-| 2 | Stimmgerät an/aus | Stimmgerät an/aus |
+| 2 | Stimmgerät an/aus; **gehalten: Szenen ↔ Presets** | Stimmgerät an/aus; **gehalten: zu den Szenen** |
 | 3–8 | die sechs Presets der aktuellen Bank | 3–7: Pre FX 1, Pre FX 2, Post FX 1–3 an/aus |
 | 8 | (sechstes Preset) | Reverb: Mix Pos 1 ↔ Pos 2 oder Reverb A ↔ B |
+
+Sind die Szenen gewählt (der Ebenen-Knopf oder Fußschalter 2 gehalten), sind die Schalter 3–8 die sechs
+[Szenen](#szenen) des aktuellen Presets statt der Presets der Bank, und Fußschalter 1 wechselt zwischen FX-Modus und
+Szenen. Die Fußschalter 1 und 2 schalten beim Loslassen (sie haben eine Halte-Funktion): Fußschalter 1 gehalten (0,6 s)
+öffnet den Looper-Modus, Fußschalter 2 gehalten wechselt zwischen den Szenen und den Presets der Bank wie der
+Szenen-Knopf (ist das Stimmgerät offen, schließt Fußschalter 2 es sofort). Die Kacheln 1 und 2 zeigen das unter
+ihrer Beschriftung: *Hold: Looper* und *Hold: Scenes* (oder *Presets*).
 
 Aktive Kacheln leuchten in voller Farbe, inaktive sind gedimmt. FX-Kacheln tragen die Farben der Effektkategorien.
 
@@ -42,6 +53,7 @@ Aktive Kacheln leuchten in voller Farbe, inaktive sind gedimmt. FX-Kacheln trage
 | Kachel 2–8 im Looper-Modus | **Looper-Kachel**: Name, Farbe und Symbol dieses Schalters |
 | Kachel 2 | **Learn** für Fußschalter 2 – und mit *Switch 1* in diesem Fenster für Fußschalter 1 |
 | Preset-Kachel (3–8, Preset-Modus) | **Bank-Fenster**: Farbe, Symbol und Preset dieses Schalters; `DEFAULT` stellt das Standard-Preset her; `LEARN SWITCH` |
+| Szenen-Kachel (3–8, Szenen) | **Szene**: Name, Farbe und welche Effekte an sind; `Remove` leert den Schalter |
 | FX-Kachel (3–7, FX-Modus) | **FX-Editor**: Modell (auf den Kopf tippen), an/aus und alle Parameter |
 | Kachel 8 (FX-Modus) | **Reverb-Fenster** mit den Reitern *MIX POS 1 / 2* und *2ND REVERB* |
 | Preset-Name | **Umbenennen** mit Bildschirmtastatur (mindestens 4 Zeichen, eindeutig) |
@@ -55,6 +67,92 @@ Lange auf eine Preset-Kachel drücken, dann beliebiges Preset, eine von zehn Far
 (Clean, Edge, Drive, Solo, Fuzz, Atmospheric, Metal, Boost, Rhythm, Bass, Acoustic, Blues, Live, Favorite,
 Fuzz Wave, Guitarist, Rocket, Space, Swell).
 Die Bänke speichert der Controller, die Presets selbst bleiben auf dem Nano.
+
+## Szenen
+
+<img src="images/20-scene-mode.png" alt="" width="49%"> <img src="images/21-scene.png" alt="" width="49%">
+
+Eine Szene ist eine Einstellung der Effekte **innerhalb eines Presets**: welche der fünf FX-Slots an sind und auf
+Wunsch, wie sie eingestellt sind. Jedes Preset kann sechs Szenen haben, auf den Fußschaltern 3–8. Der Schalter einer
+Szene sendet nur, was sich ändert: Mehrere Effekte wechseln mit einem Tritt, und der Ton reißt nicht ab wie beim
+Laden eines anderen Presets – zum Beispiel *Clean*, *Crunch* und *Lead* in einem Song.
+
+- Der **Szenen-Knopf** (Ebenen, neben Save) zeigt die Szenen des aktuellen Presets auf den Kacheln 3–8; nochmal tippen bringt die Presets
+  der Bank zurück. **Fußschalter 2 halten** macht dasselbe mit dem Fuß. Der Controller merkt sich die Wahl.
+  Fußschalter 1 wechselt zwischen FX-Modus und dem, was davon
+  gewählt ist.
+- **Szene einrichten**: ihre Kachel halten. Name (15 Zeichen) und Farbe vergeben und die Effekte antippen, die in
+  dieser Szene an sind – gefüllt = an, umrandet = aus. Eine leere Szene beginnt mit dem, was gerade an ist; man kann
+  die Effekte also auch vorher im FX-Modus einstellen. **Save** speichert die Szene und schaltet auf sie um,
+  **Remove** leert den Schalter.
+- **Auf der Kachel** stehen fünf Quadrate für Pre FX 1–2 und Post FX 1–3 in den Farben ihrer Effekte: gefüllt = die
+  Szene schaltet den Effekt an, umrandet = aus, ein Punkt = der Slot ist leer.
+- **Es leuchtet** die Szene, deren Effekte gerade an sind. Wird ein Effekt von Hand geschaltet (FX-Modus, Schalter
+  am Nano, Editor), leuchtet keine Szene, bis wieder eine getreten wird.
+- Eine Szene schaltet den Effekt, der gerade im Slot liegt; Modelle ändert sie nicht. Leere Slots werden
+  übersprungen.
+- Ein Szenenwechsel markiert das Preset als geändert (oranger Punkt), wie jeder von Hand geschaltete Effekt;
+  gespeichert werden muss nichts. Was direkt nach dem Laden eines Presets an ist, bestimmt weiterhin das auf dem Nano
+  gespeicherte Preset – es also im Zustand der Szene speichern, mit der man beginnen will.
+- Szenen liegen auf dem Controller, pro Preset-Nummer. Über Bluetooth-MIDI wählt CC 60 Szenen oder Presets.
+
+### Einstellungen eines Effekts pro Szene
+
+<img src="images/22-scene-settings.png" alt="" width="440">
+
+Eine Szene kann auch die Werte eines Effekts setzen – mehr Delay und Gain in *Lead* als in *Crunch*:
+
+1. Den Effekt im [FX-Editor](#fx-editor) öffnen (er muss an sein) und so einstellen, wie die Szene klingen soll.
+2. Auf den **Szenen-Knopf** am Ende der FX-Preset-Leiste tippen und dann auf die Szene. Sie trägt jetzt diese
+   Einstellungen für diesen Effekt und sendet sie bei jedem Tritt auf ihren Fußschalter.
+3. Dasselbe für die anderen Szenen, die diesen Effekt setzen sollen – vorher die Werte ändern, wo sie abweichen sollen.
+
+- In der Liste ist eine Szene **gefüllt**, wenn sie Einstellungen für diesen Effekt trägt; *ON NOW* markiert die
+  Szene, deren Effekte gerade an sind. Eine gefüllte Szene **antippen** ersetzt ihre Einstellungen durch die
+  aktuellen, **halten** entfernt sie.
+- Der Szenen-Knopf zeigt, wie viele Szenen Einstellungen für den Effekt tragen, und ist gefüllt, solange die
+  laufende Szene dazugehört. Auf der Kachel einer Szene sagt ein kleiner Strich unter dem Quadrat des Effekts
+  dasselbe, in ihrem Fenster *WITH SETTINGS*.
+- **Eine Szene setzt nur, was für sie gespeichert wurde.** Ein Effekt, für den sie keine Einstellungen hat, bleibt,
+  wie er ist – auch so, wie ihn eine andere Szene hinterlassen hat. Sollen sich zwei Szenen in einem Effekt
+  unterscheiden, seine Einstellungen in beiden speichern.
+- Gesendet werden nur die Werte, die abweichen: Ein Szenenwechsel, der ein paar Werte ändert, ist so schnell wie
+  einer, der nur schaltet. Ein Effekt, der angeht, bekommt zuerst seine Werte.
+- Die Einstellungen gehören zum Modell. Liegt ein anderes Modell im Slot, bleiben sie erhalten, werden aber nicht gesendet.
+
+## Expression-Pedal
+
+<img src="images/23-expression.png" alt="" width="49%"> <img src="images/24-expression-switches.png" alt="" width="49%">
+
+Der **Pedal-Knopf** in der oberen Leiste öffnet, was das Expression-Pedal des Nano im aktuellen Preset bewegt. Es
+sind dieselben Zuweisungen wie in der Cortex-Cloud-App und im Expression-Fenster des Editors: Sie gehören zum Preset
+des Nano. Das Symbol des Knopfs ist grün, solange das Pedal im Preset etwas tut.
+
+- Elf Werte können dem Pedal folgen: der **Amount** jedes der fünf Effekte (der AMOUNT-Regler – die Stellung eines
+  Wah, der Mix eines Reverbs …), Gain, Bass, Mid, Treble und Level des Captures und das Input-Gate. Ein Feld ist
+  **gefüllt**, solange sein Wert auf dem Pedal liegt, und zeigt seinen Bereich.
+- **Feld antippen** wählt es. **On the pedal** schaltet seine Zuweisung; **HEEL** und **TOE** sind die Werte an den
+  beiden Enden des Pedalwegs (ein Fersenwert über dem Spitzenwert dreht die Richtung um). Einen Regler bewegen legt
+  den Wert aufs Pedal.
+- **Save** schreibt die Zuweisungen sofort ins Preset des Nano – das Preset selbst muss nicht gespeichert werden –
+  und liest sie zur Kontrolle zurück. **Cancel** verwirft die Änderungen.
+- **On / off** (unten links) öffnet die zweite Seite: was das Pedal ein- und ausschaltet – Capture, Cab, jeden
+  Effekt, das Input-Gate. Feld wählen, dann die Art, benannt wie in der Cortex-Cloud-App: **Heel-Toe** und **Stop**
+  mit einer Verzögerung (0–2000 ms), **Switch** für einen Fußschalter an der Buchse – mit **Latch Emulation** für
+  einen, der nur Kontakt gibt, solange er gedrückt ist. **Invert** dreht Heel-Toe und Switch um. Der Knopf heißt
+  dann *Sweeps* und führt zurück; Save schreibt beide Seiten.
+- **Calibrate** (wenn die Buchse auf *Expression* steht) bringt dem Nano den Weg des Pedals bei: Nach *Start*
+  vergisst der Nano seine Kalibrierung und meldet, wo das Pedal steht. Das Pedal ein paar Mal über den ganzen Weg
+  bewegen und *Save* tippen – die niedrigste und die höchste Stellung werden im Nano gespeichert. *Cancel* lässt das
+  Pedal unkalibriert.
+- Für ein Wah: ein Wah-Modell auf Pre FX 1 oder 2 legen, das Fenster öffnen, den Slot wählen und *On the pedal*
+  einschalten.
+- **EXP/MIDI JACK** (oben rechts): was die EXP/MIDI-Buchse des Nano annimmt – ein **Expression**-Pedal oder
+  TRS-**MIDI**, nicht beides. Es ist die Einstellung des Nano selbst (*EXP/MIDI Input Behavior* in der
+  Cortex-Cloud-App) und gilt für alle Presets. Gefüllt ist, was der Nano meldet; ein Tipp auf die andere Seite fragt
+  nach, schaltet um und prüft. Steht die Buchse auf MIDI, übernimmt CC 1 die Rolle des Pedals (0 = Ferse,
+  127 = Spitze). Der Nano setzt seine MIDI-Clock-Quelle zurück, wenn die Buchse MIDI verlässt – nach dem
+  Zurückschalten in der App nachsehen.
 
 ## Capture und Cab/IR
 
@@ -99,20 +197,33 @@ gespeichert auf dem Controller und in jedem Preset und Slot mit diesem Modell nu
 
 Geladene Einstellungen zählen als Änderung am Nano-Preset: **SAVE** behält sie dort.
 
+Der **Szenen-Knopf** am Ende der Leiste speichert die aktuellen Einstellungen für eine
+[Szene](#einstellungen-eines-effekts-pro-szene) des Presets.
+
 ## Reverb-Schalter (Fußschalter 8)
 
 <img src="images/07-reverb.png" alt="" width="440">
 
-- **MIX POS 1 / 2**: Fußschalter 8 setzt den Mix des Reverbs auf Pos 1 oder Pos 2. Das sind die Fersen- und
-  Spitzenwerte der Expression-Einstellung des Presets für das Reverb („Post FX 3 Amount“). Beim Bewegen eines
-  Reglers hörst du den Mix; **SAVE** schreibt beide Werte ins Preset (und legt die Expression-Einstellung an,
-  falls es noch keine gibt).
+Das Fenster hat zwei Reiter, einen für jede Funktion von Fußschalter 8. **Der Reiter, der beim Tippen auf SAVE
+vorne ist, bestimmt, was der Schalter ab dann tut**; der gerade verwendete trägt einen Haken.
+
+- **MIX POS 1 / 2**: Fußschalter 8 setzt den Mix des Reverbs auf Pos 1 oder Pos 2. Beim Bewegen eines Reglers
+  hörst du den Mix; **SAVE** speichert beide Werte auf dem Controller, für dieses Preset. Das Expression-Pedal des
+  Nano ist daran nicht beteiligt und bleibt frei für ein Wah oder anderes.
+- **Presets, die vor 1.8 eingerichtet wurden**, hatten Pos 1 und Pos 2 als Fersen- und Spitzenwert der
+  Expression-Einstellung des Presets für das Reverb („Post FX 3 Amount“) auf dem Nano. Der Controller übernimmt sie,
+  wenn er so ein Preset das erste Mal lädt. Die Einstellung selbst steht weiter im Preset des Nano, ein
+  Expression-Pedal würde das Reverb also noch bewegen: **FREE PEDAL** in diesem Fenster nimmt sie aus dem Preset
+  (die anderen Expression-Einstellungen bleiben, wie sie sind, der Schalter behält seine Positionen). Den Knopf gibt
+  es nur, solange das Reverb auf dem Pedal liegt.
 - **2ND REVERB**: ein zweites Reverb (B) für dieses Preset wählen. Fußschalter 8 wechselt dann zwischen dem
   Reverb des Presets (A) und B. Der Nano hat nur einen Reverb-Platz, deshalb tauscht der Controller das Modell aus
   und schickt die gespeicherten Werte (dauert etwa eine halbe Sekunde). Kachel 8 zeigt Reverb B und leuchtet,
   solange es läuft; Kachel 7 zeigt das Reverb, das gerade im Slot ist. **EDIT B** lädt B und öffnet den FX-Editor
   zum Einstellen. Reverb B speichert der Controller, pro Preset. Wird das Preset gespeichert, während B läuft,
   wird B zum Reverb des Presets.
+  Auf dem Reiter *MIX POS 1 / 2* gespeichert, ist Fußschalter 8 wieder der Mix-Schalter, und Reverb B bleibt mit
+  seinen Einstellungen für später gespeichert; *None* in der Liste entfernt es.
 
 ## Zweiter Effekt auf Pre FX 1 (Fußschalter 3)
 
@@ -169,6 +280,7 @@ Nano (zum Beispiel aus dem MC6-Export des Nano Cortex Editors) funktionieren als
 | CC 50–57, Wert 64–127 | Fußschalter 1–8 drücken (Modus, Stimmgerät, Presets oder FX, Reverb-Schalter) |
 | CC 58, Wert 64–127 | Fußschalter 3 halten: Pre FX 1 wechselt zum zweiten Effekt und zurück |
 | CC 59 | Looper-Modus: Wert 64–127 an, 0–63 aus |
+| CC 60 | Fußschalter 3–8: Wert 64–127 [Szenen](#szenen) des Presets, 0–63 Presets der Bank |
 
 Ein MIDI-Kabeleingang ist auf diesem Board ohne zusätzliche Hardware nicht möglich; dafür einen
 Bluetooth-MIDI-Adapter verwenden.
@@ -252,4 +364,4 @@ Ohne SX1509 funktioniert der Controller nur mit dem Touchscreen.
 
 | Auf dem Nano | Auf dem Controller |
 |---|---|
-| Presets, Namen, Captures, Cabs, FX und ihre Werte, Expression-Einstellungen (Pos 1 / Pos 2), USB-Lautstärke | eigene Bänke (Preset, Farbe, Symbol), Fußschalter-Reihenfolge, zweite Reverbs, das Bluetooth-MIDI-Gerät |
+| Presets, Namen, Captures, Cabs, FX und ihre Werte, Expression-Einstellungen, USB-Lautstärke | eigene Bänke (Preset, Farbe, Symbol), Szenen, Reverb-Mix Pos 1 / Pos 2, Fußschalter-Reihenfolge, zweite Reverbs, das Bluetooth-MIDI-Gerät |

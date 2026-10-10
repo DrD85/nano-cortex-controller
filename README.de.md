@@ -2,8 +2,8 @@
 
 Ein Touchscreen- und Fußschalter-Controller für den **Neural DSP Nano Cortex**. Er läuft auf einem
 **Waveshare ESP32-S3-Touch-LCD-4.3**, verbindet sich per Bluetooth und arbeitet wie ein kleiner Bodencontroller im
-Stil des Quad Cortex: acht Kacheln für acht Fußschalter, eigene Preset-Bänke, ein FX-Editor, die Capture- und
-IR-Library, ein Stimmgerät und ein Looper-Modus. Er ist das Hardware-Gegenstück zum
+Stil des Quad Cortex: acht Kacheln für acht Fußschalter, eigene Preset-Bänke, Szenen, ein FX-Editor, die Capture-
+und IR-Library, die Belegung des Expression-Pedals, ein Stimmgerät und ein Looper-Modus. Er ist das Hardware-Gegenstück zum
 [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).
 
 ![Nano Cortex Controller](docs/images/00-overview.png)
@@ -19,9 +19,11 @@ IR-Library, ein Stimmgerät und ein Looper-Modus. Er ist das Hardware-Gegenstüc
 ## Was er kann
 
 - **Presets und Bänke** – sechs Presets pro Bank auf den Fußschaltern 3–8, 16 Bänke mit eigenen Farben und Symbolen
+- **Szenen** – sechs pro Preset: ein Fußschalter schaltet mehrere Effekte auf einmal, ohne die Lücke eines Preset-Wechsels
 - **FX-Modus** – die fünf FX-Slots mit dem Fuß schalten, dazu ein Reverb-Schalter und ein zweiter Effekt auf Pre FX 1
 - **FX-Editor** – Modelle wählen und jeden Parameter am Touchscreen einstellen, mit benannten FX-Presets
 - **Capture und Cab/IR** – Slots wählen oder alles aus der Library des Nano laden; Capture-Klang, Lautstärke, Cab
+- **Expression-Pedal** – pro Preset festlegen, was das Pedal des Nano bewegt (ein Wah, einen Mix, den Pegel …) und wie weit
 - **Stimmgerät**, **Gig-Ansicht** mit großen Kacheln, **Bluetooth-MIDI** für einen weiteren Controller
 - **Looper-Modus** – die Fußschalter steuern eine Looper-App auf dem Telefon (zum Beispiel Loopy Pro)
 - Der [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) kann sich **über** den Controller verbinden
@@ -63,7 +65,9 @@ das aktuelle. Findet es den Nano nicht innerhalb einer Minute, den Nano aus- und
 
 1. **↻** alles neu lesen · **Lautsprecher** Capture-Lautstärke · **MIDI**-Geräte · **USB**-Audio-Lautstärke
 2. Grüner Punkt = mit dem Nano verbunden; Preset und Bank
-3. **Save** speichert das Preset auf dem Nano – grün bei ungespeicherten Änderungen
+3. **Pedal**: was das [Expression-Pedal](docs/manual.de.md#expression-pedal) bewegt · **Ebenen**: [Szenen](#szenen) auf
+   den Kacheln 3–8, nochmal tippen: die Presets der Bank · **Diskette**: Preset auf dem Nano speichern – grün bei
+   ungespeicherten Änderungen
 4. Vorherige / nächste **Bank**
 5. Preset-Name – **halten** zum Umbenennen
 6. Capture und Cab – **tippen** zum Auswählen, **halten** für Klang / Cab-Einstellungen
@@ -97,6 +101,36 @@ anderes Preset, eine Farbe und ein Symbol zu geben.
 
 **Fußschalter 1** wechselt zwischen den beiden Modi, **Fußschalter 2** ist das Stimmgerät.
 
+### Szenen
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/20-scene-mode.png" alt="Scene-Modus"></td>
+<td width="50%"><img src="docs/images/21-scene.png" alt="Szenen-Fenster"></td>
+</tr>
+<tr>
+<td>
+
+**Szenen** (der Ebenen-Knopf neben Save) – die Kacheln 3–8 werden zu sechs Szenen des aktuellen Presets. Eine Szene legt fest, welche
+seiner fünf Effekte an sind – und auf Wunsch, wie sie eingestellt sind. Ihr Fußschalter ändert das alles auf einmal,
+ohne die Lücke eines Preset-Wechsels. Die Quadrate auf einer Kachel zeigen die fünf Effekte in ihren Farben: gefüllt = an.
+
+</td>
+<td>
+
+Eine Kachel **halten**, um eine Szene einzurichten: Name, Farbe und die Effekte, die an sind – ein Effekt wird durch
+Antippen geschaltet. Eine leere Szene beginnt mit dem, was gerade an ist. Szenen liegen auf dem Controller, pro Preset.
+
+</td>
+</tr>
+</table>
+
+Nochmal auf den Szenen-Knopf tippen bringt die Presets der Bank zurück – oder **Fußschalter 2 halten**, um mit dem Fuß
+zu wechseln. Fußschalter 1 wechselt zwischen FX und dem, was du davon gewählt hast.
+
+**Andere Einstellungen pro Szene** (mehr Delay im Solo): den Effekt im [FX-Editor](#fx-editor) öffnen, einstellen und
+auf den Szenen-Knopf am Ende der FX-Preset-Leiste tippen, dann auf die Szene, die diese Einstellungen bekommen soll.
+
 ### Gig-Ansicht
 
 <table>
@@ -121,7 +155,8 @@ Preset, Bank, ungespeicherte Änderungen und den Modus. **Nach unten wischen**: 
 2. **Tippen**, um ein anderes Modell zu wählen. Das Symbol ist gefüllt, wenn der Effekt an ist
 3. Effekt an / aus
 4. **FX-Presets**: Tippen = laden, **halten** = aktuelle Einstellungen unter einem Namen speichern
-5. Auf einem Balken **seitlich wischen** ändert den Wert; hoch und runter scrollt
+5. **Szene**: diese Einstellungen für eine [Szene](#szenen) des Presets – sie setzt sie bei jedem Tritt auf ihren Schalter
+6. Auf einem Balken **seitlich wischen** ändert den Wert; hoch und runter scrollt
 
 Werte sind sichtbar, solange der Effekt an ist. *Off | On* wird angetippt. Mehr: [Handbuch](docs/manual.de.md#fx-editor).
 
@@ -176,7 +211,10 @@ Einrichtung Schritt für Schritt: [Handbuch](docs/manual.de.md#looper-modus-eine
 | Aktion | Wo | Was passiert |
 |---|---|---|
 | **Tippen** | eine Kachel | dasselbe wie ihr Fußschalter |
+| | der **Szenen**-Knopf (obere Leiste) | Kacheln 3–8: Szenen des Presets ↔ Presets der Bank |
+| | der **Pedal**-Knopf (obere Leiste) | was das Expression-Pedal des Nano in diesem Preset bewegt |
 | **Halten** | eine Preset-Kachel | Bank-Fenster: Preset, Farbe und Symbol dieses Schalters |
+| | eine Szenen-Kachel | die Szene: Name, Farbe und welche Effekte an sind |
 | | eine FX-Kachel | FX-Editor |
 | | Kachel 8 im FX-Modus | Reverb-Schalter: Mix-Positionen oder ein zweites Reverb |
 | | Kachel 1 | Looper-Modus an / aus |
@@ -186,13 +224,13 @@ Einrichtung Schritt für Schritt: [Handbuch](docs/manual.de.md#looper-modus-eine
 | | Capture- / Cab-Feld | Capture-Klang / Cab-Einstellungen |
 | **Wischen** links / rechts | überall | nächstes / vorheriges Preset |
 | **Wischen** hoch / runter | überall | Gig-Ansicht an / aus |
-| **Fußschalter 1** | | kurz: Presets ↔ FX · gehalten: Looper-Modus |
-| **Fußschalter 2** | | Stimmgerät |
+| **Fußschalter 1** | | kurz: Presets oder Szenen ↔ FX · gehalten: Looper-Modus |
+| **Fußschalter 2** | | kurz: Stimmgerät · gehalten: Szenen ↔ Presets |
 | **Fußschalter 3** gehalten | FX-Modus | Pre FX 1 wechselt zum zweiten Effekt |
 
 ## Mehr
 
-- **[Handbuch](docs/manual.de.md)** – alle Funktionen im Detail: Bänke, Capture und Cab, FX-Presets, Reverb-Schalter,
+- **[Handbuch](docs/manual.de.md)** – alle Funktionen im Detail: Bänke, Szenen, Expression-Pedal, Capture und Cab, FX-Presets, Reverb-Schalter,
   zweiter Effekt, [Bluetooth-MIDI](docs/manual.de.md#bluetooth-midi) mit allen Befehlen, Looper-Modus, der Editor über
   den Controller, [Verkabelung der Fußschalter](docs/manual.de.md#fußschalter), was wo gespeichert ist
 - **[Entwicklung](docs/development.de.md)** – selbst bauen, Aufbau des Projekts, serielle Konsole, wie der Controller

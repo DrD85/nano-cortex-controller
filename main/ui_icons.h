@@ -19,6 +19,8 @@ enum {
     UI_ICON_BACK,
     UI_ICON_CHEVRON_DOWN,
     UI_ICON_PLUS,
+    UI_ICON_SCENES,
+    UI_ICON_EXP,
     UI_ICON_COUNT
 };
 

@@ -2,8 +2,8 @@
 
 A touch screen and footswitch controller for the **Neural DSP Nano Cortex**. It runs on a
 **Waveshare ESP32-S3-Touch-LCD-4.3**, connects over Bluetooth and works like a small Quad Cortex floor unit:
-eight tiles for eight footswitches, your own preset banks, an FX editor, the capture and IR library, a tuner and
-a looper mode. It is the hardware companion of the [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).
+eight tiles for eight footswitches, your own preset banks, scenes, an FX editor, the capture and IR library, the
+expression pedal's assignments, a tuner and a looper mode. It is the hardware companion of the [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).
 
 ![Nano Cortex Controller](docs/images/00-overview.png)
 
@@ -18,9 +18,11 @@ a looper mode. It is the hardware companion of the [Nano Cortex Editor](https://
 ## What it can do
 
 - **Presets and banks** – six presets per bank on footswitches 3–8, 16 banks with your own colours and symbols
+- **Scenes** – six per preset: one footswitch switches several effects at once, without the gap of a preset change
 - **FX mode** – switch the five FX slots with your feet, plus a reverb switch and a second effect on Pre FX 1
 - **FX editor** – choose models and set every parameter on the touch screen, with named FX presets
 - **Capture and Cab/IR** – pick slots or load anything from the Nano's library; capture tone, volume, cab settings
+- **Expression pedal** – choose per preset what the Nano's pedal moves (a wah, a mix, the level …) and how far
 - **Tuner**, **gig view** with large tiles, **Bluetooth MIDI** for an extra controller
 - **Looper mode** – the footswitches control a looper app on a phone (for example Loopy Pro)
 - The [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) can connect **through** the controller
@@ -62,7 +64,8 @@ If it does not find the Nano within a minute, switch the Nano off and on again.
 
 1. **↻** read everything again · **speaker** capture volume · **MIDI** devices · **USB** audio volume
 2. Green dot = connected to the Nano; preset and bank
-3. **Save** the preset on the Nano – green when there are unsaved changes
+3. **pedal** what the [expression pedal](docs/manual.md#expression-pedal) moves · **layers** [scenes](#scenes) on
+   tiles 3–8, tap again for the bank's presets · **disk** save the preset on the Nano – green when there are unsaved changes
 4. Previous / next **bank**
 5. Preset name – **hold** to rename
 6. Capture and cab – **tap** to choose, **hold** for tone / cab settings
@@ -96,6 +99,36 @@ its editor.
 
 **Footswitch 1** changes between the two modes, **footswitch 2** is the tuner.
 
+### Scenes
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/20-scene-mode.png" alt="Scene mode"></td>
+<td width="50%"><img src="docs/images/21-scene.png" alt="Scene dialog"></td>
+</tr>
+<tr>
+<td>
+
+**Scenes** (the layers button next to Save) – tiles 3–8 become six scenes of the current preset. A scene is which of its five effects
+are on – and, if you like, how they are set. Its footswitch changes all of that at once, without the gap of a preset
+change. The squares on a tile show the five effects in their colours: filled = on.
+
+</td>
+<td>
+
+**Hold** a tile to set a scene up: name, colour and the effects that are on – tap an effect to switch it. An empty
+scene starts from what is on right now. Scenes are stored on the controller, per preset.
+
+</td>
+</tr>
+</table>
+
+Tap the scenes button again for the bank's presets – or **hold footswitch 2** to change with your foot. Footswitch 1
+changes between FX and whichever of the two you chose.
+
+**Other settings per scene** (more delay in the solo): open the effect in the [FX editor](#fx-editor), set it and tap
+the scene button at the end of the FX preset row, then the scene that should use these settings.
+
 ### Gig view
 
 <table>
@@ -120,7 +153,8 @@ changes and the mode. **Swipe down**: back.
 2. **Tap** to choose another model. The symbol is filled when the effect is on
 3. Effect on / off
 4. **FX presets**: tap = load, **hold** = save the current settings under a name
-5. **Slide sideways** on a bar to change a value; up and down scrolls
+5. **Scene**: these settings for a [scene](#scenes) of the preset – it sets them whenever its footswitch is pressed
+6. **Slide sideways** on a bar to change a value; up and down scrolls
 
 Values are shown while the effect is on. *Off | On* settings switch with a tap. More: [manual](docs/manual.md#fx-editor).
 
@@ -175,7 +209,10 @@ Setup step by step: [manual](docs/manual.md#looper-mode-a-looper-app-on-a-phone)
 | Do this | Where | What happens |
 |---|---|---|
 | **Tap** | a tile | the same as its footswitch |
+| | the **scenes** button (top bar) | tiles 3–8: scenes of the preset ↔ presets of the bank |
+| | the **pedal** button (top bar) | what the Nano's expression pedal moves in this preset |
 | **Hold** | a preset tile | bank editor: preset, colour and symbol of this switch |
+| | a scene tile | the scene: name, colour and which effects are on |
 | | an FX tile | FX editor |
 | | tile 8 in FX mode | reverb switch: mix positions or a second reverb |
 | | tile 1 | looper mode on / off |
@@ -185,13 +222,13 @@ Setup step by step: [manual](docs/manual.md#looper-mode-a-looper-app-on-a-phone)
 | | capture / cab card | capture tone / cab settings |
 | **Swipe** left / right | anywhere | next / previous preset |
 | **Swipe** up / down | anywhere | gig view on / off |
-| **Footswitch 1** | | short: presets ↔ FX · held: looper mode |
-| **Footswitch 2** | | tuner |
+| **Footswitch 1** | | short: presets or scenes ↔ FX · held: looper mode |
+| **Footswitch 2** | | short: tuner · held: scenes ↔ presets |
 | **Footswitch 3** held | FX mode | Pre FX 1 swaps to its second effect |
 
 ## More
 
-- **[Manual](docs/manual.md)** – every function in detail: banks, capture and cab, FX presets, reverb switch, second
+- **[Manual](docs/manual.md)** – every function in detail: banks, scenes, expression pedal, capture and cab, FX presets, reverb switch, second
   effect, [Bluetooth MIDI](docs/manual.md#bluetooth-midi) with all messages, looper mode, the editor through the
   controller, [footswitch wiring](docs/manual.md#footswitches), what is stored where
 - **[Development](docs/development.md)** – build from source, project layout, serial console, how the controller talks

@@ -18,6 +18,9 @@
 #define NANO_MSG_SET_PRESET_SLOTS_RESPONSE 30
 #define NANO_MSG_BYPASS 31
 #define NANO_MSG_EXP_REQUEST 60               // expression assignments of a preset
+#define NANO_MSG_METERING 64                  // a level or the expression pedal's position, from the Nano
+#define NANO_MSG_EXP_CAL_RESET 69             // forget the expression pedal's calibration
+#define NANO_MSG_EXP_CAL_SAVE 71              // the pedal's lowest and highest position
 #define NANO_MSG_EXP_SAVE 62                  // write all expression assignments of a preset
 #define NANO_MSG_SETTINGS_REQUEST 65          // global settings of the Nano
 #define NANO_MSG_SETTINGS_RESPONSE 66
@@ -112,6 +115,12 @@ size_t nano_usb_gain(float db, uint8_t *out);
 // USB playback volume from a settings reply. False if the field is missing (0 dB, or an older firmware).
 bool nano_settings_usb_gain(const uint8_t *payload, size_t len, float *db);
 
+// What the Nano's EXP/MIDI connector takes ("EXP/MIDI Input Behavior" in the Cortex Cloud app's settings): TRS MIDI
+// or an expression pedal. A global setting of the Nano.
+enum { NANO_JACK_MIDI, NANO_JACK_EXPRESSION };
+int nano_settings_jack(const uint8_t *payload, size_t len);   // NANO_JACK_*, -1 for a value that is not known
+size_t nano_jack_update(int mode, uint8_t *out);
+
 // Capture volume of the current preset: 0-255 on the Nano, -24 dB .. 0 dB below 128, 0 .. +12 dB above.
 #define NANO_CAPTURE_VOLUME_0DB 128
 float nano_capture_volume_db(int raw);
@@ -132,14 +141,45 @@ bool nano_cab_settings_values(const uint8_t *payload, size_t len, float normaliz
 // Parameter values (0-1, in parameter index order) of an FxParameters reply. Returns the count.
 int nano_fx_params_values(const uint8_t *payload, size_t len, float *values, int max);
 
-// Pos 1 (heel) and Pos 2 (toe) of an FX slot's Amount in an expression reply, 0-1. False if not assigned.
-bool nano_exp_amount_range(const uint8_t *payload, size_t len, int slot, float pos[2]);
+// Expression pedal: the values it sweeps in a preset, from its heel to its toe position - the Amount of the five FX
+// slots (the first five, so the index is the slot) and the capture's knobs, level and the input gate.
+enum { NANO_EXP_PRE1, NANO_EXP_PRE2, NANO_EXP_POST1, NANO_EXP_POST2, NANO_EXP_POST3,
+       NANO_EXP_GAIN, NANO_EXP_BASS, NANO_EXP_MID, NANO_EXP_TREBLE, NANO_EXP_LEVEL, NANO_EXP_GATE, NANO_EXP_RANGES };
+typedef struct {
+    bool on;             // assigned to the pedal
+    uint8_t heel, toe;   // 0-255 = 0-100 %
+} nano_exp_range_t;
 
-// SaveExpAssignments with a new Amount range (Pos 1 / Pos 2, 0-255) for one FX slot. The save replaces all
-// assignments of the preset, so the others are copied from the preset's expression reply.
-// Returns 0 if the result does not fit into max bytes.
-size_t nano_exp_save_amount_range(const uint8_t *reply, size_t reply_len, int preset, int slot,
-                                  uint8_t pos1, uint8_t pos2, uint8_t *out, size_t max);
+// ... and what it switches on and off: the capture, the cab, the five effects and the input gate, each in one of
+// three ways (the Cortex Cloud app's names): Heel-Toe and Stop with a delay, Switch for a footswitch on the
+// connector - with latch emulation for one that only makes contact while it is held.
+enum { NANO_EXP_SW_CAPTURE, NANO_EXP_SW_CAB, NANO_EXP_SW_PRE1, NANO_EXP_SW_PRE2, NANO_EXP_SW_POST1, NANO_EXP_SW_POST2,
+       NANO_EXP_SW_POST3, NANO_EXP_SW_GATE, NANO_EXP_SWITCHES };
+enum { NANO_EXP_HEEL_TOE, NANO_EXP_SWITCH, NANO_EXP_STOP, NANO_EXP_MODES };
+#define NANO_EXP_DELAY_MAX 2000   // ms
+#define NANO_EXP_DELAY_DEFAULT 600
+typedef struct {
+    bool on;             // assigned
+    uint8_t mode;        // NANO_EXP_HEEL_TOE ...
+    bool inverted;       // Heel-Toe and Switch
+    bool latch;          // Switch: latch emulation
+    uint16_t delay_ms;   // Heel-Toe and Stop
+} nano_exp_switch_t;
+
+// The assignments of an expression reply.
+void nano_exp_assignments(const uint8_t *payload, size_t len, nano_exp_range_t ranges[NANO_EXP_RANGES],
+                          nano_exp_switch_t switches[NANO_EXP_SWITCHES]);
+
+// SaveExpAssignments: all assignments of the preset (the save replaces them). Returns 0 if they do not fit.
+size_t nano_exp_save(int preset, const nano_exp_range_t ranges[NANO_EXP_RANGES], const nano_exp_switch_t switches[NANO_EXP_SWITCHES],
+                     uint8_t *out, size_t max);
+
+// Metering from the Nano: what (NANO_METER_*) and its value.
+enum { NANO_METER_CAPTURE_IN, NANO_METER_CAPTURE_OUT, NANO_METER_PEDAL };
+void nano_metering(const uint8_t *payload, size_t len, int *what, int *value);
+
+// Expression pedal calibration: the lowest and highest position seen while the pedal was moved over its whole way.
+size_t nano_exp_calibration_save(int min, int max, uint8_t *out);
 
 typedef struct {
     char note[8];

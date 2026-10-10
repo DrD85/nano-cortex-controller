@@ -51,7 +51,7 @@ no rights to.
 
 With the board on the **USB** port, any serial monitor at 115200 baud (for example `idf.py monitor --no-reset`)
 shows a log of all messages and accepts commands: `n`/`p` next/previous preset, a number (1–64) selects a preset,
-`a`–`e` switch FX slots 1–5, `m` mode, `o` looper mode, `t` tuner, `x` reverb switch, `s` read the preset again, `r` read everything again,
+`a`–`e` switch FX slots 1–5, `m` mode, `o` looper mode, `$` scenes / presets, `t` tuner, `x` reverb switch, `s` read the preset again, `r` read everything again,
 `l` list the preset names, `h` help.
 
 ## How it works

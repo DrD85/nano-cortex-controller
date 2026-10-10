@@ -51,7 +51,7 @@ denen du keine Rechte hast, bitte nicht veröffentlichen.
 
 Am **USB**-Anschluss zeigt jeder serielle Monitor mit 115200 Baud (zum Beispiel `idf.py monitor --no-reset`)
 ein Protokoll aller Nachrichten und nimmt Befehle an: `n`/`p` nächstes/vorheriges Preset, eine Zahl (1–64)
-wählt ein Preset, `a`–`e` schalten FX-Slot 1–5, `m` Modus, `o` Looper-Modus, `t` Stimmgerät, `x` Reverb-Schalter,
+wählt ein Preset, `a`–`e` schalten FX-Slot 1–5, `m` Modus, `o` Looper-Modus, `$` Szenen / Presets, `t` Stimmgerät, `x` Reverb-Schalter,
 `s` Preset neu lesen, `r` alles neu lesen, `l` alle Preset-Namen, `h` Hilfe.
 
 ## So funktioniert es
