@@ -108,6 +108,9 @@ static looper_tile_t s_looper_tiles[UI_LOOPER_SWITCHES];
 #define LOOPER_STORE_KEY "looper"
 #define LOOPER_STATUS 0xBF            // control change on MIDI channel 16
 #define LOOPER_CC(number) ((uint8_t)(100 + (number)))   // footswitch 2-8 = CC 102-108
+// The Nano Cortex Editor, connected through the controller, hears of every press too ({ 1: footswitch }; a message
+// type of our own, far from the Nano's): it treats it as that controller, for example for its jam track player.
+#define APP_MSG_SWITCH 0x4E430001u
 static bool s_footswitches;     // SX1509 found
 
 // Scenes: up to UI_SCENES per preset on footswitches 3-8, shown in place of the bank's presets (the Scenes button
@@ -181,6 +184,7 @@ static esp_timer_handle_t s_library_timer;
 // After a preset change, state replies of the previous preset can still be on their way; they are ignored
 // until the new preset is confirmed (otherwise the display jumps back and forth).
 static int s_expect_preset;     // 0 = none
+static bool s_expect_ack;       // the Nano has not confirmed the change yet: a state reply is from before it
 static int64_t s_expect_us;
 static int s_bank;              // 0-15
 static int s_last_preset;
@@ -733,7 +737,7 @@ static void looper_tiles_load(void)
     nvs_close(nvs);
 }
 
-// From the looper tile's dialog: "<footswitch 2-8><colour a-j><symbol a-g>name", or "<footswitch>!" for the default.
+// From the looper tile's dialog: "<footswitch 2-8><colour a-j><symbol a-j>name", or "<footswitch>!" for the default.
 static void looper_tile_edit(const char *text)
 {
     int i = text[0] - '2';
@@ -1062,6 +1066,7 @@ static void request_current_state(void)
 }
 
 static void ab_cache(int slot, int delay_ms);
+static void ab_leave_preset(void);
 
 static void select_preset(int preset)
 {
@@ -1070,10 +1075,12 @@ static void select_preset(int preset)
     if (preset > NANO_PRESETS) preset = 1;
     uint8_t buf[64];
     char label[32];
+    ab_leave_preset();   // also for the preset that is on: the Nano reads it from its memory again
     snprintf(label, sizeof(label), "Preset change %d", preset);
     send(label, NANO_MSG_SET_PRESET_SLOTS, buf, nano_preset_change(&s_state, preset, buf));
     s_state.current_preset = preset;
     s_expect_preset = preset;
+    s_expect_ack = true;
     s_expect_us = esp_timer_get_time();
     show();
     schedule_refresh(450);
@@ -2153,6 +2160,27 @@ static void ab_load(int preset)
 }
 
 // The slot of an A/B now (the reverb's slot comes from the preset), -1 = none.
+static int ab_slot(const ab_t *ab);
+static void ab_capture_editor(void);
+
+// A preset is about to be loaded from the Nano's memory - another one, or the one that is on once more. Edits of
+// a second effect are kept; a swap under way stops; and nothing of "B is running" outlives it: the preset's own
+// effect (A) is in the slot again. The next state reply reads the second effects afresh (ab_load), also for the
+// same preset number. Without this, "B" stayed marked as running over a reload, and the state reply naming A's
+// model was taken for a new choice of B - which overwrote the stored second effect.
+static void ab_leave_preset(void)
+{
+    ab_capture_editor();
+    esp_timer_stop(s_ab_timer);
+    for (int i = 0; i < AB_COUNT; i++) {
+        ab_t *ab = &s_ab[i];
+        ab->phase = AB_IDLE;
+        ab->cache_only = ab->restore_off = ab->open_editor = false;
+        ab->preset = 0;   // nothing is stored or compared with the Nano's state until ab_load()
+    }
+    s_last_preset = 0;
+}
+
 static int ab_slot(const ab_t *ab)
 {
     return ab - s_ab == AB_REVERB ? s_mix.slot : 0;
@@ -2584,7 +2612,11 @@ static void looper_set(bool on)
     ESP_LOGI(TAG, "Looper mode %s%s", on ? "on" : "off", on && !phone_midi_connected() ? " (no phone connected)" : "");
     looper_switches();
     if (nano_link_ready()) show();
-    if (on && !phone_midi_connected()) ui_show_message("Looper mode - no phone yet: in Loopy Pro open the menu > Bluetooth Devices.");
+    if (on && !phone_midi_connected() && !app_link_connected()) {
+        ui_show_message("Looper mode - no phone yet: in Loopy Pro open the menu > Bluetooth Devices.");
+    } else if (on && !phone_midi_connected()) {
+        ui_show_message("Looper mode - the footswitches go to the Nano Cortex Editor.");
+    }
 }
 
 // The Scenes button: to the scenes of the preset, or back to the bank's presets if they are showing. Either way
@@ -2629,10 +2661,15 @@ static bool looper_switch(int arg)
         sent = phone_midi_send(LOOPER_STATUS, LOOPER_CC(number), 127);
         phone_midi_send(LOOPER_STATUS, LOOPER_CC(number), 0);
     }
-    ESP_LOGI(TAG, "Looper switch %d: CC %d %s", number, LOOPER_CC(number), sent ? "sent" : "NOT sent");
-    s_looper_sent = sent ? LOOPER_CC(number) : -LOOPER_CC(number);
+    bool app = app_link_connected();   // the editor takes the press as well
+    if (app) {
+        const uint8_t payload[2] = { 0x08, (uint8_t)number };
+        app_link_send(APP_MSG_SWITCH, payload, sizeof(payload));
+    }
+    ESP_LOGI(TAG, "Looper switch %d: CC %d %s%s", number, LOOPER_CC(number), sent ? "sent" : "NOT sent", app ? ", told the editor" : "");
+    s_looper_sent = sent || app ? LOOPER_CC(number) : -LOOPER_CC(number);
     if (nano_link_ready()) show();   // tile 1 says what went out
-    if (!phone_midi_connected()) ui_show_message("No phone connected - in Loopy Pro open the menu > Bluetooth Devices.");
+    if (!phone_midi_connected() && !app) ui_show_message("No phone connected - in Loopy Pro open the menu > Bluetooth Devices.");
     return true;
 }
 
@@ -2947,12 +2984,13 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         s_incomplete_retries = 0;
         if (!s_waiting_full_state && s_expect_preset) {
             int reply_preset = (int)nano_field_varint(payload, len, 13) + 1;
-            if (reply_preset != s_expect_preset && esp_timer_get_time() - s_expect_us < 2000000) {
+            if ((reply_preset != s_expect_preset || s_expect_ack) && esp_timer_get_time() - s_expect_us < 2000000) {
                 ESP_LOGI(TAG, "State of preset %d ignored (waiting for preset %d)", reply_preset, s_expect_preset);
                 schedule_refresh(150);   // ask again for the new one
                 break;
             }
             s_expect_preset = 0;
+            s_expect_ack = false;
         }
         bool names = nano_state_apply(&s_state, payload, len);
         // Right after an A/B swap a reply sent before the model change still names the previous model: the slot
@@ -2964,6 +3002,11 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             if (!expected || now == expected) continue;
             if (esp_timer_get_time() - ab->swapped_us < AB_SETTLE_US) {
                 s_state.fx_type[ab->slot] = expected;
+            } else if (ab->active && now == ab->a_type) {
+                // The preset's own effect is back while B was running: the preset was loaded again somewhere else
+                // (the app, MIDI at the Nano). B is not touched.
+                ESP_LOGI(TAG, "%s: A is back (%s) - the preset was loaded again", AB_NAMES[i], nano_fx_name(now));
+                ab->active = 0;
             } else if (now) {
                 ESP_LOGI(TAG, "%s %c changed elsewhere: %s", AB_NAMES[i], ab->active ? 'B' : 'A', nano_fx_name(now));
                 if (ab->active) {
@@ -3170,8 +3213,10 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         break;
     }
     case NANO_MSG_SET_PRESET_SLOTS: {   // preset changed on the Nano itself
+        ab_leave_preset();   // (before the number changes: edits belong to the preset that was on)
         nano_state_apply_preset_change(&s_state, payload, len);
         s_expect_preset = 0;
+        s_expect_ack = false;
         ESP_LOGI(TAG, "Preset changed on the Nano: %d", s_state.current_preset);
         uint8_t buf[4];
         send("Preset change ack", NANO_MSG_SET_PRESET_SLOTS_RESPONSE, buf, nano_preset_change_ack(buf));
@@ -3180,6 +3225,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
     }
     case NANO_MSG_SET_PRESET_SLOTS_RESPONSE:
         ESP_LOGI(TAG, "Preset change %s", nano_field_varint(payload, len, 4) == 1 ? "confirmed" : "FAILED");
+        s_expect_ack = false;
         if (s_expect_preset) schedule_refresh(40);   // the new preset is ready: read it now (not after a fixed wait)
         break;
     case NANO_MSG_SETTINGS_RESPONSE: {

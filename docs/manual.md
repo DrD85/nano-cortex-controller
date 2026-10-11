@@ -211,6 +211,7 @@ switch does** from then on; the one in use carries a tick.
   reverb (A) and B; the Nano has one reverb slot, so the controller swaps the model and sends the stored values
   (takes about half a second). Tile 8 shows reverb B and lights up while it runs; tile 7 shows the reverb in the slot. **EDIT B** loads B and opens the FX editor to set it up. Reverb B is stored on the
   controller, per preset. If you save the preset while B is active, B becomes the preset's reverb.
+  Loading a preset – also the one that is on, once more – always brings back its own reverb (A); B stays stored.
   Saved on the *MIX POS 1 / 2* tab, footswitch 8 is the mix switch again and reverb B stays stored with its settings
   for later; *None* in the list removes it.
 
@@ -319,7 +320,8 @@ the name **"Nano Cortex Controller"**.
 | 3–8 | CC 103–108 | Loop 1–6 |
 
 **Your own names**: a long press on a tile in looper mode opens its dialog – name (keyboard), colour and symbol,
-stored on the controller; *Default* brings back the tile shown above. Tile 1 shows what the last press sent
+stored on the controller; *Default* brings back the tile shown above. The symbols: loop, play, pause, stop, undo and
+a note, and for a player – such as the jam tracks of the Nano Cortex Editor – previous, next and play / pause. Tile 1 shows what the last press sent
 (*Sent CC 103*), which helps when you bind a switch in the app.
 
 By default the tiles show the loops in three colour pairs, as a two-column Loopy Pro project does. What a switch
@@ -347,6 +349,10 @@ Without the controller (or before it has connected) the app connects to the Nano
 - Changes made in the app appear on the controller a moment later; changes made on the controller (footswitches,
   touch, MIDI) make the app read the preset again, as after a change on the pedal.
 - While the app is connected, **APP** is shown in the status line.
+- **Footswitches for the editor:** in looper mode (hold footswitch 1) every press of footswitch 2–8 is also passed
+  on to the connected editor. It takes them as the controllers the looper mode sends (102–108 on channel 16) – by
+  default footswitch 2 plays and pauses its jam track player, 7 goes to the previous track and 8 to the next; MIDI
+  Learn in the editor assigns them to anything else. No phone is needed for this.
 
 ## Footswitch learn
 

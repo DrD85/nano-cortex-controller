@@ -67,7 +67,7 @@ typedef void (*ui_command_cb)(char command, int arg);
 
 // Text input from the on-screen keyboard: 'N' = new name for the current preset; '1'-'4' = save the FX editor's
 // values as FX preset 1-4 under this name ("" deletes it). 'L' = a looper tile from its dialog:
-// "<footswitch 2-8><colour a-j><symbol a-g>name", or "<footswitch>!" for the default. 'S' = a scene of the current
+// "<footswitch 2-8><colour a-j><symbol a-j>name", or "<footswitch>!" for the default. 'S' = a scene of the current
 // preset from its dialog: "<footswitch 3-8><colour a-j><five times 0 / 1: FX slot on>name", or "<footswitch>!" to
 // empty it. 'X' = the expression dialog's assignments, saved: one entry per sweep (NANO_EXP_RANGES, in their order),
 // "<0 / 1: on the pedal><heel, two hex digits><toe, two hex digits>", then one per on/off assignment
@@ -80,7 +80,7 @@ typedef void (*ui_param_cb)(int slot, int param, float value);
 // Looper mode: the tiles of footswitches 2-8, each with a name, a colour (as the banks') and a symbol.
 #define UI_LOOPER_SWITCHES 7
 #define UI_LOOPER_NAME 16      // with the terminating 0
-#define UI_LOOPER_SYMBOLS 7    // none, loop, play, pause, stop, undo, note
+#define UI_LOOPER_SYMBOLS 10   // none, loop, play, pause, stop, undo, note, previous, next, play / pause
 
 // Scenes of the current preset (footswitches 3-8 in scene mode).
 #define UI_SCENES 6

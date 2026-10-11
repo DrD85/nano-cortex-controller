@@ -95,8 +95,10 @@ static lv_obj_t *s_looper_editor, *s_le_title, *s_le_hint, *s_le_name_label, *s_
 static lv_obj_t *s_le_symbol[UI_LOOPER_SYMBOLS];
 static int s_le_tile, s_le_color, s_le_icon;   // tile 0-6 = footswitch 2-8
 static char s_le_name[UI_LOOPER_NAME];
+// (new ones go at the end: the stored tiles name a symbol by its place)
 static const char *const LOOPER_SYMBOLS[UI_LOOPER_SYMBOLS] = {
     NULL, LV_SYMBOL_LOOP, LV_SYMBOL_PLAY, LV_SYMBOL_PAUSE, LV_SYMBOL_STOP, LV_SYMBOL_REFRESH, LV_SYMBOL_AUDIO,
+    LV_SYMBOL_PREV, LV_SYMBOL_NEXT, LV_SYMBOL_PLAY LV_SYMBOL_PAUSE,   // for a player: previous, next, play / pause
 };
 // Scenes: the button next to Save, the marks on a scene's tile (which effects it switches on) and its dialog
 // (long press on a tile in scene mode): name, colour and the five effects
@@ -1208,6 +1210,7 @@ static void style_looper_editor(void)
         lv_obj_t *sq = s_le_symbol[i], *sym = lv_obj_get_child(sq, 1);
         set_icon_square(sq, color, NULL, true);
         lv_label_set_text(sym, i ? LOOPER_SYMBOLS[i] : LV_SYMBOL_CLOSE);
+        lv_obj_set_style_text_font(sym, i && LOOPER_SYMBOLS[i][3] ? &ui_font_20 : &ui_font_28, 0);   // two symbols in one square: smaller
         lv_obj_set_style_text_color(sym, lv_color_hex(selected ? ink_for(color) : 0xBDBDBD), 0);
         lv_obj_set_style_border_width(sq, selected ? 4 : 1, 0);
         lv_obj_set_style_border_color(sq, lv_color_hex(selected ? 0xFFFFFF : 0x3A3D40), 0);

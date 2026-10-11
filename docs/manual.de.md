@@ -222,7 +222,8 @@ vorne ist, bestimmt, was der Schalter ab dann tut**; der gerade verwendete träg
   und schickt die gespeicherten Werte (dauert etwa eine halbe Sekunde). Kachel 8 zeigt Reverb B und leuchtet,
   solange es läuft; Kachel 7 zeigt das Reverb, das gerade im Slot ist. **EDIT B** lädt B und öffnet den FX-Editor
   zum Einstellen. Reverb B speichert der Controller, pro Preset. Wird das Preset gespeichert, während B läuft,
-  wird B zum Reverb des Presets.
+  wird B zum Reverb des Presets. Ein Preset laden – auch dasselbe noch einmal – bringt immer sein eigenes Reverb (A)
+  zurück; B bleibt gespeichert.
   Auf dem Reiter *MIX POS 1 / 2* gespeichert, ist Fußschalter 8 wieder der Mix-Schalter, und Reverb B bleibt mit
   seinen Einstellungen für später gespeichert; *None* in der Liste entfernt es.
 
@@ -335,7 +336,9 @@ dem Namen **„Nano Cortex Controller“**.
 | 3–8 | CC 103–108 | Loop 1–6 |
 
 **Eigene Namen**: Langes Drücken auf eine Kachel im Looper-Modus öffnet ihr Fenster – Name (Tastatur), Farbe und
-Symbol, gespeichert auf dem Controller; *Default* stellt die oben gezeigte Kachel wieder her. Kachel 1 zeigt, was der
+Symbol, gespeichert auf dem Controller; *Default* stellt die oben gezeigte Kachel wieder her. Die Symbole: Loop,
+Play, Pause, Stop, Undo und eine Note, dazu für einen Player – etwa die Jamtracks des Nano Cortex Editor – Zurück,
+Weiter und Play/Pause. Kachel 1 zeigt, was der
 letzte Tritt gesendet hat (*Sent CC 103*) – hilfreich beim Belegen eines Schalters in der App.
 
 Ab Werk zeigen die Kacheln die Loops in drei Farbpaaren, wie ein zweispaltiges Loopy-Pro-Projekt. Was ein Schalter
@@ -363,6 +366,10 @@ Ohne Controller (oder bevor er verbunden ist) verbindet sich die App wie bisher 
 - Änderungen in der App erscheinen kurz danach am Controller; Änderungen am Controller (Fußschalter, Touch, MIDI)
   lassen die App das Preset neu lesen, wie nach einem Wechsel am Pedal.
 - Solange die App verbunden ist, steht **APP** in der Statuszeile.
+- **Fußschalter für den Editor:** Im Looper-Modus (Fußschalter 1 halten) geht jeder Tritt auf Fußschalter 2–8 auch an
+  den verbundenen Editor. Er nimmt sie als die Controller, die der Looper-Modus sendet (102–108 auf Kanal 16) –
+  ab Werk startet und pausiert Fußschalter 2 seinen Jamtrack-Player, 7 geht zum vorigen Track und 8 zum nächsten;
+  mit MIDI Learn im Editor legst du sie auf etwas anderes. Ein Telefon braucht es dafür nicht.
 
 ## Fußschalter-Learn
 
