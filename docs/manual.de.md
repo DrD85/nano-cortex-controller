@@ -143,8 +143,9 @@ des Nano. Das Symbol des Knopfs ist grün, solange das Pedal im Preset etwas tut
   dann *Sweeps* und führt zurück; Save schreibt beide Seiten.
 - **Calibrate** (wenn die Buchse auf *Expression* steht) bringt dem Nano den Weg des Pedals bei: Nach *Start*
   vergisst der Nano seine Kalibrierung und meldet, wo das Pedal steht. Das Pedal ein paar Mal über den ganzen Weg
-  bewegen und *Save* tippen – die niedrigste und die höchste Stellung werden im Nano gespeichert. *Cancel* lässt das
-  Pedal unkalibriert.
+  bewegen und *Save* tippen – die niedrigste und die höchste Stellung werden im Nano gespeichert. *Cancel* schreibt
+  den Bereich zurück, der zuletzt vom Controller aus gespeichert wurde; wurde das Pedal von hier aus noch nie
+  kalibriert, bleibt es unkalibriert, und eine Meldung sagt das.
 - Für ein Wah: ein Wah-Modell auf Pre FX 1 oder 2 legen, das Fenster öffnen, den Slot wählen und *On the pedal*
   einschalten.
 - **EXP/MIDI JACK** (oben rechts): was die EXP/MIDI-Buchse des Nano annimmt – ein **Expression**-Pedal oder

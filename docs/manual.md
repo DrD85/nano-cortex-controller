@@ -136,7 +136,9 @@ The button's symbol is green while the pedal does something in the preset.
   *Sweeps* and leads back; Save writes both pages.
 - **Calibrate** (with the connector on *Expression*) teaches the Nano the pedal's range: after *Start* the Nano
   forgets its calibration and reports where the pedal is. Move the pedal over its whole way a few times and tap
-  *Save* – the lowest and highest position are stored in the Nano. *Cancel* leaves the pedal uncalibrated.
+  *Save* – the lowest and highest position are stored in the Nano. *Cancel* puts back the range that was saved
+  from the controller last; if the pedal was never calibrated from here, it is left uncalibrated and a message
+  says so.
 - For a wah: put a wah model on Pre FX 1 or 2, open the dialog, choose that slot and switch *On the pedal* on.
 - **EXP/MIDI JACK** (top right): what the Nano's EXP/MIDI connector takes – an **expression** pedal or TRS **MIDI**,
   not both. It is the Nano's own setting (*EXP/MIDI Input Behavior* in the Cortex Cloud app) and the same for all

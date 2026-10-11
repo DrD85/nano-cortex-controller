@@ -197,8 +197,6 @@ static struct {
     int active;        // -1 = as stored in the preset, 0 = Pos 1, 1 = Pos 2
     bool own;          // Pos 1 / Pos 2 are in the controller's store
     bool exp;          // the Nano preset has the reverb's Amount on the expression pedal
-    int pending;       // expression requests without reply; only the last reply counts
-    int64_t request_us;
     bool touched;          // mix changed while editing: set back to the active position when closed
 } s_mix = { .slot = -1, .active = -1 };
 #define MIX_STORE_KEY "mix%02d"       // Pos 1, Pos 2 (0-255)
@@ -216,17 +214,39 @@ static struct {
     int write;             // EXP_WRITE_*: what to write once the assignments are read again
     int verify;            // EXP_WRITE_*: what was written; the next reply is compared with `wanted`
     int preset;            // preset a write or a check belongs to
+    int64_t pending_us;    // when that write or check was started (one that gets no reply is given up)
     nano_exp_range_t wanted[NANO_EXP_RANGES];
     nano_exp_switch_t wanted_switches[NANO_EXP_SWITCHES];
+    bool shown;            // the open dialog has got the assignments
+    int retries;           // ... it asked again so often
 } s_exp;
 
+// Expression requests on their way. The reply (61) does not say which preset it is for, so every request is
+// remembered with its preset and what it is for; a reply belongs to the oldest one and is dropped if that was for
+// another preset than the current one. A request without a reply is forgotten after EXP_REPLY_US - a lost reply
+// must not shift the pairing for good (it once left the expression dialog waiting for ever).
+enum { EXP_ASK_READ, EXP_ASK_WRITE, EXP_ASK_VERIFY };
+#define EXP_ASKED 6
+#define EXP_REPLY_US (3 * 1000 * 1000)
+static struct { int preset, purpose; int64_t at_us; } s_exp_asked[EXP_ASKED];
+static int s_exp_asked_count;
+static esp_timer_handle_t s_exp_retry_timer;
+
 // Expression pedal calibration (the dialog's Calibrate): the Nano forgets its calibration and reports the pedal's
-// position (metering) while it is moved over its whole way; the lowest and highest position are then saved.
+// position (metering) while it is moved over its whole way; the lowest and highest position are then saved - on the
+// Nano, and here: Cancel puts them back, so the pedal is not left without a calibration.
 static struct {
     bool active;
-    int value, min, max;   // min > max = nothing seen yet
+    bool reset;            // the Nano's calibration was reset and not saved again yet
     int64_t logged_us;
 } s_cal;
+#define CAL_STORE_KEY "expcal"        // the range saved last: lowest, highest (int32 each)
+// The pedal's position arrives many times a second while the pedal moves. It is taken where it arrives (host task),
+// with the lowest and highest while calibrating; the app task hears of it once per round, not once per message.
+static volatile int s_pedal_value, s_pedal_min, s_pedal_max;   // min > max = nothing seen yet
+static volatile bool s_pedal_collect;
+static volatile int64_t s_pedal_collect_from_us;   // positions before that are still the old calibration's
+static int s_pedal_event;                          // an event is on its way (atomic)
 
 // FX editor (long press on an FX tile). Parameter values are only read for FX that are on;
 // moving a control sends at most one value per PARAM_SEND_MS, plus the last one.
@@ -354,6 +374,20 @@ static void post(app_event_t ev)
 static void on_message(uint32_t type, const uint8_t *payload, size_t len)
 {
     if (type == NANO_MSG_TUNER_METERING && !s_tuner_on) return;
+    if (type == NANO_MSG_METERING) {
+        int what, value;
+        nano_metering(payload, len, &what, &value);
+        if (what != NANO_METER_PEDAL) return;   // (levels are not used)
+        s_pedal_value = value;
+        if (s_pedal_collect && esp_timer_get_time() >= s_pedal_collect_from_us) {
+            if (value < s_pedal_min) s_pedal_min = value;
+            if (value > s_pedal_max) s_pedal_max = value;
+        }
+        if (__atomic_exchange_n(&s_pedal_event, 1, __ATOMIC_SEQ_CST)) return;
+        app_event_t ev = { .kind = EV_COMMAND, .command = ':' };
+        if (xQueueSend(s_events, &ev, 0) != pdTRUE) __atomic_store_n(&s_pedal_event, 0, __ATOMIC_SEQ_CST);
+        return;
+    }
     app_event_t ev = { .kind = EV_MESSAGE, .type = type, .len = len };
     ev.data = malloc(len ? len : 1);
     if (!ev.data) {
@@ -453,6 +487,11 @@ static void param_timer_cb(void *arg)
 static void jack_timer_cb(void *arg)
 {
     command('?', 0);
+}
+
+static void exp_retry_timer_cb(void *arg)
+{
+    command(';', 0);
 }
 
 static void usb_timer_cb(void *arg)
@@ -1494,12 +1533,35 @@ static void editor_choose_model(uint32_t type)
     editor_read_later(500);
 }
 
-static void mix_exp_request(const char *label)
+// Forgets expression requests that got no reply in time, and a write or check that waited for one of them.
+static void exp_expire(void)
+{
+    int64_t now = esp_timer_get_time();
+    int gone = 0;
+    while (gone < s_exp_asked_count && now - s_exp_asked[gone].at_us > EXP_REPLY_US) gone++;
+    if (gone) {
+        ESP_LOGW(TAG, "%d expression request%s without a reply", gone, gone == 1 ? "" : "s");
+        s_exp_asked_count -= gone;
+        memmove(s_exp_asked, s_exp_asked + gone, sizeof(s_exp_asked[0]) * (size_t)s_exp_asked_count);
+    }
+    if ((s_exp.write || s_exp.verify) && now - s_exp.pending_us > EXP_REPLY_US) {
+        if (s_exp.verify) ui_show_message("Not confirmed: the Nano did not report the expression assignments.");
+        s_exp.write = s_exp.verify = EXP_WRITE_NONE;
+    }
+}
+
+static void mix_exp_request(const char *label, int purpose)
 {
     uint8_t buf[8];
-    s_mix.pending++;
-    s_mix.request_us = esp_timer_get_time();
-    send(label, NANO_MSG_EXP_REQUEST, buf, nano_exp_request(s_state.current_preset, buf));
+    exp_expire();
+    if (!send(label, NANO_MSG_EXP_REQUEST, buf, nano_exp_request(s_state.current_preset, buf))) return;   // not on its way
+    if (s_exp_asked_count == EXP_ASKED) {
+        s_exp_asked_count--;
+        memmove(s_exp_asked, s_exp_asked + 1, sizeof(s_exp_asked[0]) * (size_t)s_exp_asked_count);
+    }
+    s_exp_asked[s_exp_asked_count].preset = s_state.current_preset;
+    s_exp_asked[s_exp_asked_count].purpose = purpose;
+    s_exp_asked[s_exp_asked_count++].at_us = esp_timer_get_time();
 }
 
 static void mix_store(void)
@@ -1540,7 +1602,7 @@ static void mix_load(void)
         }
         nvs_close(nvs);
     }
-    mix_exp_request("Expression request");
+    mix_exp_request("Expression request", EXP_ASK_READ);
 }
 
 static int mix_param(void)
@@ -1608,40 +1670,108 @@ static void mix_free_pedal(void)
     if (s_mix.slot < 0) return;
     s_exp.write = EXP_WRITE_FREE_REVERB;
     s_exp.preset = s_state.current_preset;
-    mix_exp_request("Expression request");
+    s_exp.pending_us = esp_timer_get_time();
+    mix_exp_request("Expression request", EXP_ASK_WRITE);
+}
+
+// The range of the pedal that was saved last (Calibrate), false if there is none.
+static bool cal_stored(int32_t range[2], bool write)
+{
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, write ? NVS_READWRITE : NVS_READONLY, &nvs) != ESP_OK) return false;
+    size_t size = 2 * sizeof(int32_t);
+    bool ok = write ? nvs_set_blob(nvs, CAL_STORE_KEY, range, size) == ESP_OK && nvs_commit(nvs) == ESP_OK
+                    : nvs_get_blob(nvs, CAL_STORE_KEY, range, &size) == ESP_OK && size == 2 * sizeof(int32_t) && range[1] > range[0];
+    nvs_close(nvs);
+    return ok;
+}
+
+static void cal_send(int min, int max)
+{
+    uint8_t buf[16];
+    char label[48];
+    snprintf(label, sizeof(label), "Pedal calibration %d - %d", min, max);
+    send(label, NANO_MSG_EXP_CAL_SAVE, buf, nano_exp_calibration_save(min, max, buf));
+    s_cal.reset = false;
 }
 
 // Expression dialog, Calibrate. arg 1: start - the Nano forgets its calibration and its positions are collected;
-// 2: save the lowest and highest position seen; 0: stop collecting (the calibration stays forgotten).
+// 2: save the lowest and highest position seen; 0: stop - the range saved last is put back (if there is one), so
+// the pedal is not left without a calibration.
 static void exp_calibrate(int arg)
 {
     if (arg == 1) {
         uint8_t none[1] = { 0 };   // the message has no content
         send("Reset the pedal calibration", NANO_MSG_EXP_CAL_RESET, none, 0);
-        s_cal.active = true;
-        s_cal.min = INT32_MAX;
-        s_cal.max = INT32_MIN;
-        ui_set_pedal(s_cal.value, 0, -1);
+        s_cal.reset = true;
+        s_pedal_min = INT32_MAX;
+        s_pedal_max = INT32_MIN;
+        s_pedal_collect_from_us = esp_timer_get_time() + 400 * 1000;   // (what is on its way is the old calibration's)
+        s_pedal_collect = s_cal.active = true;
+        ui_set_pedal(s_pedal_value, 0, -1);
     } else if (arg == 2) {
-        if (!s_cal.active || s_cal.max <= s_cal.min) return;
-        s_cal.active = false;
-        uint8_t buf[16];
-        char label[48];
-        snprintf(label, sizeof(label), "Pedal calibration %d - %d", s_cal.min, s_cal.max);
-        send(label, NANO_MSG_EXP_CAL_SAVE, buf, nano_exp_calibration_save(s_cal.min, s_cal.max, buf));
+        int min = s_pedal_min, max = s_pedal_max;
+        if (!s_cal.active || max <= min) return;
+        s_pedal_collect = s_cal.active = false;
+        cal_send(min, max);
+        int32_t range[2] = { min, max };
+        cal_stored(range, true);
+        ESP_LOGI(TAG, "Pedal calibrated: %d - %d", min, max);
         ui_show_message("Pedal calibration saved.");
     } else {
-        s_cal.active = false;
+        s_pedal_collect = s_cal.active = false;
+        if (!s_cal.reset) return;
+        int32_t range[2];
+        if (cal_stored(range, false)) {
+            cal_send(range[0], range[1]);
+            ui_show_message("Calibration as it was before.");
+        } else {
+            ui_show_message("The pedal is not calibrated now - calibrate it again.");
+        }
     }
+}
+
+// The pedal moved (or the Nano reported where it is): shown while calibrating.
+static void pedal_moved(void)
+{
+    int value = s_pedal_value;
+    int64_t now = esp_timer_get_time();
+    if (now - s_cal.logged_us > 500 * 1000) {   // (a moving pedal reports many positions)
+        s_cal.logged_us = now;
+        ESP_LOGI(TAG, "Pedal position %d", value);
+    }
+    if (s_cal.active) ui_set_pedal(value, s_pedal_min, s_pedal_max);
+}
+
+// The open expression dialog still waits for the assignments: ask again, a few times.
+static void exp_dialog_retry(void)
+{
+    if (!s_exp.open || s_exp.shown) return;
+    exp_expire();
+    if (s_exp.write || s_exp.verify) {   // a save is being checked: its reply fills the dialog
+        esp_timer_start_once(s_exp_retry_timer, 1000 * 1000);
+        return;
+    }
+    if (s_exp.retries++ >= 3) {
+        ui_show_message("The Nano does not report the expression assignments - close the dialog and try again.");
+        return;
+    }
+    ESP_LOGW(TAG, "No expression assignments yet - asking again");
+    mix_exp_request("Expression request (again)", EXP_ASK_READ);
+    esp_timer_start_once(s_exp_retry_timer, 1500 * 1000);
 }
 
 // Expression dialog opened (1): read the assignments for it; closed (0).
 static void exp_dialog(int open)
 {
     s_exp.open = open != 0;
+    esp_timer_stop(s_exp_retry_timer);
     if (!open) return;
-    mix_exp_request("Expression request");
+    s_exp.shown = false;
+    s_exp.retries = 0;
+    mix_exp_request("Expression request", EXP_ASK_READ);
     request_settings();   // how the connector is set, for the switch at the top of the dialog
+    esp_timer_start_once(s_exp_retry_timer, 1500 * 1000);
 }
 
 // Writes the wanted assignments into the preset; the result is read back and compared.
@@ -1668,6 +1798,7 @@ static void exp_write(int what)
     send(label, NANO_MSG_EXP_SAVE, buf, n);
     app_sync_later();
     s_exp.verify = what;
+    s_exp.pending_us = esp_timer_get_time();
     esp_timer_start_once(s_exp_timer, 400 * 1000);   // then read back and compare, as the editor does
 }
 
@@ -1699,7 +1830,7 @@ static void exp_dialog_save(const char *text)
 
 static void mix_verify_request(void)
 {
-    if (s_exp.verify && s_exp.preset == s_state.current_preset) mix_exp_request("Expression check");
+    if (s_exp.verify && s_exp.preset == s_state.current_preset) mix_exp_request("Expression check", EXP_ASK_VERIFY);
 }
 
 // Pos 1 / Pos 2 editor closed: back to the mix of the active position (Pos 1 if none was chosen yet).
@@ -2401,6 +2532,11 @@ static void handle_midi(int arg)
 
 static void handle_command(char c, int arg)
 {
+    if (c == ':') {                                    // the pedal's position (see on_message)
+        __atomic_store_n(&s_pedal_event, 0, __ATOMIC_SEQ_CST);
+        pedal_moved();
+        return;
+    }
     if (c == 'h') { print_help(); return; }
     if (c == 'l') { print_presets(); return; }
     if (c == 'D' || c == 'Z') { footswitch_learn(c, arg); return; }   // works without the Nano
@@ -2524,7 +2660,7 @@ static void handle_command(char c, int arg)
     case 'j':
         if (s_app_names_changed) request_full_state();
         else request_current_state();
-        if (s_app_exp_changed) mix_exp_request("Expression request");   // is the reverb (still) on the pedal?
+        if (s_app_exp_changed) mix_exp_request("Expression request", EXP_ASK_READ);   // is the reverb (still) on the pedal?
         s_app_names_changed = s_app_exp_changed = false;
         break;
     case 'f':   // tell the app: preset "changed" -> it reads the current state again
@@ -2538,6 +2674,7 @@ static void handle_command(char c, int arg)
     case '!': mix_free_pedal(); break;
     case '=': exp_dialog(arg); break;
     case '<': exp_calibrate(arg); break;
+    case ';': exp_dialog_retry(); break;
     case '+': jack_set(arg); break;
     case '?': request_settings(); break;
     case 'J': mix_verify_request(); break;
@@ -2663,10 +2800,20 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         break;
     }
     case NANO_MSG_EXP_RESPONSE: {
-        // Replies come in order; skip older ones while a newer request is out (unless it is overdue).
-        bool newer_pending = s_mix.pending > 1 && esp_timer_get_time() - s_mix.request_us < 3000000;
-        s_mix.pending = newer_pending ? s_mix.pending - 1 : 0;
-        if (newer_pending) break;
+        // Replies come in the order of the requests: this one belongs to the oldest request that still waits. Without
+        // one the Nano reports on its own, and that is about the current preset.
+        exp_expire();
+        int asked = s_state.current_preset, purpose = EXP_ASK_READ;
+        if (s_exp_asked_count) {
+            asked = s_exp_asked[0].preset;
+            purpose = s_exp_asked[0].purpose;
+            s_exp_asked_count--;
+            memmove(s_exp_asked, s_exp_asked + 1, sizeof(s_exp_asked[0]) * (size_t)s_exp_asked_count);
+        }
+        ESP_LOGI(TAG, "Expression assignments of preset %d (%u bytes)%s", asked, (unsigned)len,
+                 asked != s_state.current_preset ? " - not the current preset any more, ignored" : "");
+        ESP_LOG_BUFFER_HEX(TAG, payload, len < 96 ? len : 96);
+        if (asked != s_state.current_preset) break;
         s_mix.slot = reverb_slot();
         nano_exp_assignments(payload, len, s_exp.ranges, s_exp.switches);
         s_exp.known = true;
@@ -2681,11 +2828,11 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             ESP_LOGI(TAG, "Preset %d: reverb Pos 1 %ld%%, Pos 2 %ld%% taken over from the expression assignment",
                      s_state.current_preset, lroundf(s_mix.pos[0] * 100), lroundf(s_mix.pos[1] * 100));
         }
-        if (s_exp.write) {
+        if (s_exp.write && purpose == EXP_ASK_WRITE) {
             int what = s_exp.write;
             s_exp.write = EXP_WRITE_NONE;
             exp_write(what);
-        } else if (s_exp.verify) {
+        } else if (s_exp.verify && purpose == EXP_ASK_VERIFY) {
             int what = s_exp.verify;
             s_exp.verify = EXP_WRITE_NONE;
             bool same = true;
@@ -2706,7 +2853,10 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
                             : what == EXP_WRITE_FREE_REVERB ? "The expression pedal no longer moves the reverb in this preset."
                             : "Expression pedal saved.");
         }
-        if (s_exp.open && !s_exp.write && !s_exp.verify) ui_set_expression(s_exp.ranges, s_exp.switches);
+        if (s_exp.open && !s_exp.write && !s_exp.verify) {
+            s_exp.shown = true;
+            ui_set_expression(s_exp.ranges, s_exp.switches);
+        }
         show();
         break;
     }
@@ -2837,24 +2987,6 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         }
         break;
     }
-    case NANO_MSG_METERING: {
-        // The expression pedal's position: sent after a settings read and while the pedal moves.
-        int what, value;
-        nano_metering(payload, len, &what, &value);
-        int64_t now = esp_timer_get_time();
-        if (now - s_cal.logged_us > 500 * 1000) {   // (a moving pedal sends many)
-            s_cal.logged_us = now;
-            ESP_LOGI(TAG, "Metering: type %d, value %d (%u bytes)", what, value, (unsigned)len);
-            ESP_LOG_BUFFER_HEX(TAG, payload, len < 16 ? len : 16);
-        }
-        if (what != NANO_METER_PEDAL) break;
-        s_cal.value = value;
-        if (!s_cal.active) break;
-        if (value < s_cal.min) s_cal.min = value;
-        if (value > s_cal.max) s_cal.max = value;
-        ui_set_pedal(value, s_cal.min, s_cal.max);
-        break;
-    }
     case NANO_MSG_UPDATE_SETTINGS_RESPONSE:
         ESP_LOGI(TAG, "Settings update answered (%u bytes)", (unsigned)len);
         ESP_LOG_BUFFER_HEX(TAG, payload, len < 32 ? len : 32);
@@ -2910,7 +3042,9 @@ static void app_event(app_event_t ev)
         esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
         s_tuner_on = false;
         s_last_preset = 0;
-        s_mix.pending = 0;
+        s_exp_asked_count = 0;
+        s_exp.write = s_exp.verify = EXP_WRITE_NONE;
+        s_pedal_collect = s_cal.active = false;
         s_usb.known = false;
         memset(&s_src, 0, sizeof(s_src));   // also a throttle whose timer command came while disconnected
         s_edit.slot = -1;
@@ -3047,6 +3181,8 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&read_timer, &s_read_timer));
     const esp_timer_create_args_t jack_timer = { .callback = jack_timer_cb, .name = "jack" };
     ESP_ERROR_CHECK(esp_timer_create(&jack_timer, &s_jack_timer));
+    const esp_timer_create_args_t exp_retry_timer = { .callback = exp_retry_timer_cb, .name = "exp_retry" };
+    ESP_ERROR_CHECK(esp_timer_create(&exp_retry_timer, &s_exp_retry_timer));
     const esp_timer_create_args_t usb_timer = { .callback = usb_timer_cb, .name = "usb" };
     ESP_ERROR_CHECK(esp_timer_create(&usb_timer, &s_usb_timer));
     const esp_timer_create_args_t fxp_timer = { .callback = fxp_timer_cb, .name = "fxp" };
