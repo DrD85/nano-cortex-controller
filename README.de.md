@@ -21,6 +21,7 @@ und IR-Library, die Belegung des Expression-Pedals, ein Stimmgerät und ein Loop
 - **Presets und Bänke** – sechs Presets pro Bank auf den Fußschaltern 3–8, 16 Bänke mit eigenen Farben und Symbolen
 - **Szenen** – sechs pro Preset: ein Fußschalter schaltet mehrere Effekte auf einmal, ohne die Lücke eines Preset-Wechsels
 - **FX-Modus** – die fünf FX-Slots mit dem Fuß schalten, dazu ein Reverb-Schalter und ein zweiter Effekt auf Pre FX 1
+- **Auto-Wah** – der Controller bewegt ein Wah im Tempo des Nano: solange es an ist, oder nur solange du seinen Fußschalter hältst
 - **FX-Editor** – Modelle wählen und jeden Parameter am Touchscreen einstellen, mit benannten FX-Presets
 - **Capture und Cab/IR** – Slots wählen oder alles aus der Library des Nano laden; Capture-Klang, Lautstärke, Cab
 - **Expression-Pedal** – pro Preset festlegen, was das Pedal des Nano bewegt (ein Wah, einen Mix, den Pegel …) und wie weit

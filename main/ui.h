@@ -56,10 +56,14 @@
 //                  (1 / 0 = scenes / presets)
 //   '&', n         FX editor, scene button: the settings of the edited effect as they are now belong to scene n (0-5)
 //                  from now on; 0x100 | n = the scene leaves this effect's settings alone again
+//   '|', r<<16|v   FX editor of a wah: auto-wah setting r (UI_WAH_*) of this preset changed to v (answer with
+//                  ui_set_autowah)
 typedef void (*ui_command_cb)(char command, int arg);
 #define UI_SWITCH_HOLD 0x100
 #define UI_SWITCH_SENT 0x200   // looper mode: the footswitch's message went out already, only show the press
 #define UI_SWITCH_LOST 0x400   // ... but it could not be sent (no phone)
+#define UI_SWITCH_DOWN 0x800   // a footswitch that acts while it is held (auto-wah "Hold") went down ...
+#define UI_SWITCH_UP 0x1000    // ... and up again
 
 // Text input from the on-screen keyboard: 'N' = new name for the current preset; '1'-'4' = save the FX editor's
 // values as FX preset 1-4 under this name ("" deletes it). 'L' = a looper tile from its dialog:
@@ -112,6 +116,8 @@ typedef struct {
     uint8_t scene_colors[UI_SCENES];                          // colour index (UI_BANK_COLOR_COUNT)
     uint8_t scene_fx[UI_SCENES];                              // bit n = FX slot n on
     uint8_t scene_set[UI_SCENES];                             // bit n = the scene carries settings for the effect in slot n
+    uint8_t wah_mode[NANO_FX_SLOTS];                          // auto-wah of the wah in this slot (UI_WAH_OFF / ON / HELD)
+    uint8_t wah_rate[NANO_FX_SLOTS];                          // its rate (index into the list of UI_WAH_RATES)
 } ui_view_t;
 
 #define UI_BANK_COLOR_COUNT 10
@@ -134,6 +140,24 @@ void ui_set_library(const nano_library_t *library);
 
 // USB playback volume (dB, -40 = off) read from the Nano's settings.
 void ui_set_usb_gain(float db);
+
+// Auto-wah: the controller moves the position of a wah in tempo. Its settings belong to the preset and are shown in
+// the FX editor of a wah below the wah's own parameter: the mode (off, moving while the effect is on, or the
+// footswitch switches the wah on only while it is held), the rate as a note value, the shape, the heel and toe ends
+// (0-100 %) and the tempo - the Nano's (nano_bpm, 0 = not known) or an own one.
+enum { UI_WAH_MODE, UI_WAH_RATE, UI_WAH_SHAPE, UI_WAH_HEEL, UI_WAH_TOE, UI_WAH_TEMPO, UI_WAH_BPM, UI_WAH_ROWS };
+enum { UI_WAH_OFF, UI_WAH_ON, UI_WAH_HELD };
+#define UI_WAH_RATES 6         // 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16
+#define UI_WAH_SHAPES 3        // triangle, sine, up
+#define UI_WAH_BPM_MIN 40
+#define UI_WAH_BPM_MAX 240
+typedef struct {
+    uint8_t mode, rate, shape, heel, toe;
+    bool own_tempo;
+    uint16_t bpm;        // the own tempo
+    float nano_bpm;
+} ui_autowah_t;
+void ui_set_autowah(const ui_autowah_t *wah);
 
 // FX presets of the model in the FX editor (a row above its parameters): names of the places ("" = empty), the one
 // loaded or saved last (-1 = none, 0 = ORIGINAL, 1-UI_FX_PRESETS) and whether they can be used (the effect is on).

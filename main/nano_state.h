@@ -71,6 +71,7 @@ typedef struct {
     char capture_names[NANO_CAPTURE_SLOTS][48];
     char cab_names[NANO_CAB_SLOTS][48];
     float tuner_base_hz;                // reference pitch (default 440)
+    float tempo;                        // the Nano's tempo in BPM (state field 56; its synced delays follow it), 0 = not reported
     bool tuner_muted;                   // output muted while the tuner is open (state field 63)
     bool names_loaded;
     char preset_names[NANO_PRESETS][65];

@@ -20,6 +20,7 @@ expression pedal's assignments, a tuner and a looper mode. It is the hardware co
 - **Presets and banks** – six presets per bank on footswitches 3–8, 16 banks with your own colours and symbols
 - **Scenes** – six per preset: one footswitch switches several effects at once, without the gap of a preset change
 - **FX mode** – switch the five FX slots with your feet, plus a reverb switch and a second effect on Pre FX 1
+- **Auto-wah** – the controller moves a wah in the Nano's tempo: while the wah is on, or only while you hold its footswitch
 - **FX editor** – choose models and set every parameter on the touch screen, with named FX presets
 - **Capture and Cab/IR** – pick slots or load anything from the Nano's library; capture tone, volume, cab settings
 - **Expression pedal** – choose per preset what the Nano's pedal moves (a wah, a mix, the level …) and how far

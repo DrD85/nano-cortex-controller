@@ -10,7 +10,8 @@
 //   scene mode     3-8 = the six scenes of the current preset instead (the Scenes button next to Save): a scene is
 //                  which of its effects are on (long press on a tile: name, colour, effects; stored on the board)
 //   FX mode        3-7 = FX slots 1-5 on/off, 8 = reverb mix Pos 1 <-> Pos 2, or reverb A <-> B;
-//                  with a second effect for Pre FX 1, holding 3 swaps it A <-> B (it stays on or off)
+//                  with a second effect for Pre FX 1, holding 3 swaps it A <-> B (it stays on or off);
+//                  a wah set to auto-wah moves in tempo while it is on (set to Hold: only while its switch is held)
 // A long press on an FX tile opens the FX editor (model and parameters of that slot), on tile 8 the reverb
 // dialog, on tiles 1-2 the footswitch learn.
 
@@ -361,6 +362,37 @@ static const char *const AB_A_KEYS[AB_COUNT] = { "rva%02d", "pfa%02d" };
 // Switches whose short press acts on release because they have a held function (bit n = footswitch n).
 static volatile uint32_t s_hold_switches;
 
+// Auto-wah: the controller moves the position of a wah (its only parameter) between a heel and a toe value, in
+// tempo - the Nano's own (its state reports it) or one set here - while the effect is on. Set up per preset in the
+// FX editor of the wah and stored on the controller. In mode "Hold" the footswitch of the slot switches the wah on
+// only while it is held (it acts on press and release, so the wah starts at once). The values go out like those of
+// a moved slider: the link keeps only the newest per control and sends them without waiting for an answer.
+typedef struct {
+    uint32_t type;      // wah model the settings belong to, 0 = none set
+    uint8_t mode;       // UI_WAH_OFF / UI_WAH_ON / UI_WAH_HELD
+    uint8_t rate;       // index into WAH_BEATS
+    uint8_t shape;      // 0 triangle, 1 sine, 2 up (heel to toe, then back at once)
+    uint8_t heel, toe;  // 0-100 %
+    uint8_t own_tempo;  // 0 = the Nano's tempo
+    uint16_t bpm;       // the own tempo
+} wah_t;                // stored in NVS as an array of NANO_FX_SLOTS
+_Static_assert(sizeof(wah_t) == 12, "wah_t is stored as it is: its size must not change");
+static const wah_t WAH_DEFAULT = { .rate = 3, .toe = 100, .bpm = 120 };
+static const float WAH_BEATS[UI_WAH_RATES] = { 8, 4, 2, 1, 0.5f, 0.25f };   // beats per round: 2 bars ... 1/16
+static wah_t s_wah[NANO_FX_SLOTS];
+static int s_wah_preset;              // preset the settings belong to, 0 = none read yet
+#define WAH_STORE_KEY "awh%02d"
+#define WAH_STEP_MS 25                // one value per step (as a moved slider, PARAM_SEND_MS)
+#define WAH_PARAM 0                   // the position is the only parameter of the four wah models
+static struct {
+    int slot;                         // FX slot that is being moved, -1 = none
+    int64_t start_us;                 // the round starts at the heel
+    unsigned steps;                   // (the FX editor's bar follows every fourth)
+} s_sweep = { .slot = -1 };
+static esp_timer_handle_t s_wah_timer;
+// Footswitches that switch their effect on while they are held (auto-wah "Hold"; bit n = footswitch n).
+static volatile uint32_t s_momentary_switches;
+
 // ---- events (all state is handled in the app task) ----
 
 static void post(app_event_t ev)
@@ -425,6 +457,19 @@ static void on_footswitch(int number, footswitch_event_t event)
         if (event == FOOTSWITCH_PRESS) {
             sounding[number] = phone_midi_send(LOOPER_STATUS, LOOPER_CC(number), 127);
             command('w', (sounding[number] ? UI_SWITCH_SENT : UI_SWITCH_SENT | UI_SWITCH_LOST) | number);   // the screen shows the press
+        }
+        return;
+    }
+    // A switch that acts while it is held: down and up go out as they happen (its release also if the mode changed
+    // meanwhile - what went on has to go off).
+    static bool held[FOOTSWITCH_COUNT + 1];
+    if (held[number] || (event == FOOTSWITCH_PRESS && ((s_momentary_switches >> number) & 1))) {
+        if (event == FOOTSWITCH_PRESS) {
+            held[number] = true;
+            command('w', UI_SWITCH_DOWN | number);
+        } else if (event == FOOTSWITCH_RELEASE) {
+            held[number] = false;
+            command('w', UI_SWITCH_UP | number);
         }
         return;
     }
@@ -507,6 +552,11 @@ static void fxp_timer_cb(void *arg)
 static void scene_timer_cb(void *arg)
 {
     command('*', 0);
+}
+
+static void wah_timer_cb(void *arg)
+{
+    command('/', 0);
 }
 
 static void source_timer_cb(void *arg)
@@ -875,11 +925,23 @@ static bool reverb_b_used(void)
 // Which footswitches wait for their release (they have a held function): 1 (held = looper mode) and 2 (held =
 // scenes <-> presets) always, 3 in FX mode with a second effect. In looper mode none - there every press goes out
 // at once.
+static int wah_mode(int slot);
+
 static void looper_switches(void)
 {
     s_hold_switches = s_looper ? 0 : 1u << 1 | 1u << 2 | (s_fx_mode && s_ab[AB_PRE1].b.type ? 1u << 3 : 0);
+    // FX mode: the switch of a wah set to "Hold" acts while it is held. Pre FX 1 with a second effect keeps its
+    // held function, the swap A <-> B; its wah then moves while it is on.
+    uint32_t momentary = 0;
+    for (int slot = 0; slot < NANO_FX_SLOTS && s_fx_mode && !s_looper; slot++) {
+        if (wah_mode(slot) == UI_WAH_HELD && !(slot == 0 && s_ab[AB_PRE1].b.type)) momentary |= 1u << (slot + 3);
+    }
+    s_momentary_switches = momentary;
     s_looper_live = s_looper;
 }
+
+static void wah_load(int preset);
+static void wah_update(void);
 
 static void show(void)
 {
@@ -905,6 +967,12 @@ static void show(void)
     for (int i = 0; i < NANO_EXP_RANGES && s_exp.known; i++) view.exp_used |= s_exp.ranges[i].on;
     for (int i = 0; i < NANO_EXP_SWITCHES && s_exp.known; i++) view.exp_used |= s_exp.switches[i].on;
     if (s_scenes_preset != s_state.current_preset) scenes_load(s_state.current_preset);
+    if (s_wah_preset != s_state.current_preset) wah_load(s_state.current_preset);
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
+        view.wah_mode[slot] = (uint8_t)wah_mode(slot);
+        view.wah_rate[slot] = s_wah[slot].rate;
+    }
+    wah_update();
     view.scene_active = scene_active();
     for (int i = 0; i < UI_SCENES; i++) {
         strlcpy(view.scene_names[i], s_scenes[i].name, sizeof(view.scene_names[i]));
@@ -931,9 +999,12 @@ static void show(void)
 
 static void fxp_show(void);
 
+static void wah_show(int slot);
+
 static void editor_show(void)
 {
     if (s_edit.slot < 0) return;
+    wah_show(s_edit.slot);   // first: the editor builds the auto-wah rows of a wah with these values
     ui_fx_editor_show(s_edit.slot, s_state.fx_type[s_edit.slot], s_state.fx_on[s_edit.slot],
                       s_edit.known ? s_edit.values : NULL, s_edit.count);
     fxp_show();
@@ -1250,6 +1321,164 @@ static void editor_throttle_done(void)
     s_edit.pending_param = -1;
     s_edit.throttling = true;
     esp_timer_start_once(s_param_timer, PARAM_SEND_MS * 1000);
+}
+
+// ---- auto-wah ----
+
+static bool is_wah(uint32_t type)
+{
+    const nano_fx_model_t *model = nano_fx_model(type);
+    return model && model->icon == NANO_ICON_WAH;
+}
+
+// The auto-wah mode of the wah in this slot: its settings count while their model is the one in the slot.
+static int wah_mode(int slot)
+{
+    const wah_t *w = &s_wah[slot];
+    return s_state.fx_known && w->type && w->type == s_state.fx_type[slot] && is_wah(w->type) ? w->mode : UI_WAH_OFF;
+}
+
+static void wah_load(int preset)
+{
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) s_wah[slot] = WAH_DEFAULT;
+    s_wah_preset = preset;
+    char key[16];
+    snprintf(key, sizeof(key), WAH_STORE_KEY, preset);
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
+    wah_t stored[NANO_FX_SLOTS];
+    size_t size = sizeof(stored);
+    if (nvs_get_blob(nvs, key, stored, &size) == ESP_OK && size == sizeof(stored)) {
+        for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
+            const wah_t *w = &stored[slot];
+            if (w->mode > UI_WAH_HELD || w->rate >= UI_WAH_RATES || w->shape >= UI_WAH_SHAPES || w->heel > 100 || w->toe > 100
+                || w->bpm < UI_WAH_BPM_MIN || w->bpm > UI_WAH_BPM_MAX) continue;   // not ours: the defaults stay
+            s_wah[slot] = *w;
+        }
+    }
+    nvs_close(nvs);
+}
+
+static void wah_save(void)
+{
+    char key[16];
+    snprintf(key, sizeof(key), WAH_STORE_KEY, s_wah_preset);
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
+    if (nvs_set_blob(nvs, key, s_wah, sizeof(s_wah)) != ESP_OK || nvs_commit(nvs) != ESP_OK) {
+        ui_show_message("Could not store the auto-wah (memory full?).");
+    }
+    nvs_close(nvs);
+}
+
+// The FX editor's auto-wah rows: the settings of the wah in this slot (the defaults until it has its own).
+static void wah_show(int slot)
+{
+    const wah_t *w = s_wah[slot].type && s_wah[slot].type == s_state.fx_type[slot] ? &s_wah[slot] : &WAH_DEFAULT;
+    ui_autowah_t shown = { .mode = w->mode, .rate = w->rate, .shape = w->shape, .heel = w->heel, .toe = w->toe,
+                           .own_tempo = w->own_tempo != 0, .bpm = w->bpm, .nano_bpm = s_state.tempo };
+    ui_set_autowah(&shown);
+}
+
+static float wah_bpm(const wah_t *w)
+{
+    return w->own_tempo || s_state.tempo < UI_WAH_BPM_MIN ? (float)w->bpm : s_state.tempo;
+}
+
+// The next position: where the round is now, between heel and toe.
+static void wah_step(void)
+{
+    int slot = s_sweep.slot;
+    if (slot < 0) return;
+    esp_timer_start_once(s_wah_timer, WAH_STEP_MS * 1000);
+    if (s_tuner_on || s_expect_preset) return;   // nothing to hear, or the Nano is loading another preset
+    const wah_t *w = &s_wah[slot];
+    double period_us = (double)WAH_BEATS[w->rate] * 60e6 / (double)wah_bpm(w);
+    double phase = fmod((double)(esp_timer_get_time() - s_sweep.start_us), period_us) / period_us;   // 0-1
+    float x = w->shape == 2 ? (float)phase
+            : w->shape == 1 ? 0.5f - 0.5f * cosf(2 * (float)M_PI * (float)phase)
+            : (float)(phase < 0.5 ? 2 * phase : 2 - 2 * phase);
+    float value = ((float)w->heel + ((float)w->toe - (float)w->heel) * x) / 100;
+    send_param(slot, WAH_PARAM, value);
+    if (slot == s_edit.slot && s_edit.known && ++s_sweep.steps % 4 == 0) {   // the wah's bar in the FX editor moves along
+        s_edit.values[WAH_PARAM] = value;
+        editor_show();
+    }
+}
+
+// Starts or stops the movement: it runs while a wah with auto-wah is on (the first such slot).
+static void wah_update(void)
+{
+    int slot = -1;
+    for (int i = 0; i < NANO_FX_SLOTS && slot < 0 && nano_link_ready(); i++) {
+        if (wah_mode(i) != UI_WAH_OFF && s_state.fx_on[i]) slot = i;
+    }
+    if (slot == s_sweep.slot) return;
+    int before = s_sweep.slot;
+    esp_timer_stop(s_wah_timer);
+    s_sweep.slot = slot;
+    if (slot >= 0) {
+        const wah_t *w = &s_wah[slot];
+        ESP_LOGI(TAG, "Auto-wah on %s: a round per %g beats at %.0f BPM (%s), %d-%d %%", NANO_FX_SLOT_NAMES[slot], (double)WAH_BEATS[w->rate],
+                 (double)wah_bpm(w), w->own_tempo || s_state.tempo < UI_WAH_BPM_MIN ? "own" : "the Nano's", w->heel, w->toe);
+        s_sweep.start_us = esp_timer_get_time();
+        wah_step();
+    } else {
+        ESP_LOGI(TAG, "Auto-wah stopped");
+        // Switched off in the editor while the wah stays on: it stays where it stopped, and the editor reads that.
+        if (before == s_edit.slot && s_state.fx_on[before] && nano_link_ready()) editor_read_later(300);
+    }
+}
+
+// A row of the FX editor's auto-wah settings changed (UI_WAH_*).
+static void wah_edit(int row, int value)
+{
+    int slot = s_edit.slot;
+    if (slot < 0 || !is_wah(s_state.fx_type[slot]) || s_wah_preset != s_state.current_preset) return;
+    wah_t *w = &s_wah[slot];
+    if (w->type != s_state.fx_type[slot]) {   // the first setting for this wah: from the defaults
+        *w = WAH_DEFAULT;
+        w->type = s_state.fx_type[slot];
+    }
+    switch (row) {
+    case UI_WAH_MODE:
+        w->mode = (uint8_t)(value < 0 ? 0 : value > UI_WAH_HELD ? UI_WAH_HELD : value);
+        if (w->mode == UI_WAH_HELD && slot == 0 && s_ab[AB_PRE1].b.type) {
+            ui_show_message("Pre FX 1 has a second effect: holding its switch swaps A and B, so this wah moves while it is on.");
+        } else if (w->mode == UI_WAH_HELD) {
+            ui_show_message("Hold: in FX mode the wah is on and moves while you hold its footswitch.");
+        }
+        break;
+    case UI_WAH_RATE: w->rate = (uint8_t)(value < 0 ? 0 : value >= UI_WAH_RATES ? UI_WAH_RATES - 1 : value); break;
+    case UI_WAH_SHAPE: w->shape = (uint8_t)(value < 0 ? 0 : value >= UI_WAH_SHAPES ? UI_WAH_SHAPES - 1 : value); break;
+    case UI_WAH_HEEL: w->heel = (uint8_t)(value < 0 ? 0 : value > 100 ? 100 : value); break;
+    case UI_WAH_TOE: w->toe = (uint8_t)(value < 0 ? 0 : value > 100 ? 100 : value); break;
+    case UI_WAH_TEMPO:
+        w->own_tempo = value != 0;
+        if (w->own_tempo && s_state.tempo >= UI_WAH_BPM_MIN && s_state.tempo <= UI_WAH_BPM_MAX) w->bpm = (uint16_t)lroundf(s_state.tempo);   // start from the Nano's
+        break;
+    case UI_WAH_BPM:   // moving the tempo makes it the own one
+        w->own_tempo = 1;
+        w->bpm = (uint16_t)(value < UI_WAH_BPM_MIN ? UI_WAH_BPM_MIN : value > UI_WAH_BPM_MAX ? UI_WAH_BPM_MAX : value);
+        break;
+    default: return;
+    }
+    wah_save();
+    if (row == UI_WAH_RATE || row == UI_WAH_SHAPE) s_sweep.start_us = esp_timer_get_time();   // the new round starts at the heel
+    show();          // the tile's note, the switches, and the movement starts or stops
+    editor_show();   // the rows (tempo and BPM belong together)
+}
+
+// A footswitch that acts while it is held (auto-wah "Hold") went down or up: its wah on or off.
+static void wah_hold(int number, bool down)
+{
+    int slot = number - 3;
+    if (slot < 0 || slot >= NANO_FX_SLOTS || !s_state.fx_known || !s_state.fx_type[slot]) return;
+    if (down) ui_flash_tile(number - 1);
+    app_sync_later();
+    set_fx(slot, down);
+    show();
+    schedule_refresh(300);
 }
 
 static void request_settings(void)
@@ -2602,7 +2831,10 @@ static void handle_command(char c, int arg)
     case 'w': {
         int number = arg & 0xFF;
         if (number < 1 || number > FOOTSWITCH_COUNT) break;
-        if ((arg & UI_SWITCH_HOLD) && number == 3 && s_ab[AB_PRE1].b.type) {   // held: Pre FX 1 A <-> B
+        if (arg & (UI_SWITCH_DOWN | UI_SWITCH_UP)) {   // a wah set to "Hold": on while its switch is down
+            if (!s_looper && s_fx_mode) wah_hold(number, (arg & UI_SWITCH_DOWN) != 0);
+            else if (arg & UI_SWITCH_DOWN) handle_switch(number);   // the mode changed meanwhile: an ordinary press
+        } else if ((arg & UI_SWITCH_HOLD) && number == 3 && s_ab[AB_PRE1].b.type) {   // held: Pre FX 1 A <-> B
             ui_flash_tile(2);
             ab_swap(AB_PRE1);
         } else if ((arg & UI_SWITCH_HOLD) && number == 2) {   // held: scenes <-> presets, as the scenes button
@@ -2682,6 +2914,8 @@ static void handle_command(char c, int arg)
     case '$': scene_mode(arg); break;
     case '&': scene_values(arg); break;
     case '*': scene_send_step(SCENE_SEND_CHUNK); break;
+    case '|': wah_edit(arg >> 16, arg & 0xFFFF); break;
+    case '/': wah_step(); break;
     default: break;
     }
 }
@@ -3050,6 +3284,8 @@ static void app_event(app_event_t ev)
         s_edit.slot = -1;
         s_edit.request_slot = -1;
         s_scene_queued = s_scene_sent = 0;
+        esp_timer_stop(s_wah_timer);
+        s_sweep.slot = -1;
         values_forget();
         ui_set_link(false);
         break;
@@ -3207,6 +3443,8 @@ void app_main(void)
     configASSERT(s_scenes);
     const esp_timer_create_args_t scene_timer = { .callback = scene_timer_cb, .name = "scene" };
     ESP_ERROR_CHECK(esp_timer_create(&scene_timer, &s_scene_timer));
+    const esp_timer_create_args_t wah_timer = { .callback = wah_timer_cb, .name = "wah" };
+    ESP_ERROR_CHECK(esp_timer_create(&wah_timer, &s_wah_timer));
     nvs_handle_t nvs;
     if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) == ESP_OK) {
         uint8_t stored = 0;

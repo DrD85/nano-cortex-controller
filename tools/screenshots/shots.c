@@ -265,6 +265,29 @@ int main(void)
     ui_fx_editor_close();
     close_all();
 
+    // Auto-wah: a wah on Pre FX 2 that the controller moves in tempo while its footswitch is held
+    uint32_t pre2 = st.fx_type[1];
+    bool pre2_on = st.fx_on[1];
+    st.fx_type[1] = type_of("Crying Wah");
+    st.fx_on[1] = true;
+    view.fx_mode = true;
+    view.wah_mode[1] = UI_WAH_HELD;
+    view.wah_rate[1] = 3;
+    ui_show_state(&st, &view);
+    shot("25-auto-wah-tile");
+    static const ui_autowah_t wah = { .mode = UI_WAH_HELD, .rate = 3, .shape = 0, .heel = 15, .toe = 85, .own_tempo = false, .bpm = 120, .nano_bpm = 120 };
+    ui_set_autowah(&wah);
+    static const float wah_values[] = { 0.62f };
+    ui_fx_editor_show(1, st.fx_type[1], true, wah_values, 1);
+    static const char no_presets[UI_FX_PRESETS][16] = { "", "", "", "" };
+    ui_fx_presets_show(no_presets, 0, true);
+    shot("26-auto-wah");
+    ui_fx_editor_close();
+    close_all();
+    st.fx_type[1] = pre2;
+    st.fx_on[1] = pre2_on;
+    view.wah_mode[1] = UI_WAH_OFF;
+
     view.fx_mode = false;
     ui_show_state(&st, &view);
     open_bank_editor(1);

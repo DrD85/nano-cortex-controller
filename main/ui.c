@@ -2726,6 +2726,11 @@ static void show_fixed_tiles(const ui_view_t *view)
     s_tile_note_icon[1] = UI_ICONS[UI_ICON_SCENES];
 }
 
+static const char *const WAH_NOTES[2][UI_WAH_RATES] = {
+    { "Auto: 2 bars", "Auto: 1 bar", "Auto: 1/2", "Auto: 1/4", "Auto: 1/8", "Auto: 1/16" },
+    { "Hold: auto 2 bars", "Hold: auto 1 bar", "Hold: auto 1/2", "Hold: auto 1/4", "Hold: auto 1/8", "Hold: auto 1/16" },
+};
+
 static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
 {
     for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
@@ -2739,6 +2744,10 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
                  model ? model->color : 0x6A6A6A, on, empty, model ? NANO_ICONS[model->icon] : NULL, NULL);
         if (!empty) set_tile_pedal(2 + slot, st->fx_type[slot]);
         if (slot == 0 && view->pre1_b_type) set_tile_other(2, view->pre1_active ? view->pre1_a_type : view->pre1_b_type);
+        // A wah with auto-wah: under the caption how it moves ("Hold": while its footswitch is held)
+        else if (!empty && view->wah_mode[slot] && view->wah_rate[slot] < UI_WAH_RATES) {
+            s_tile_note[2 + slot] = WAH_NOTES[view->wah_mode[slot] == UI_WAH_HELD][view->wah_rate[slot]];
+        }
     }
 
     // Footswitch 8: reverb A/B, or the reverb mix between Pos 1 and Pos 2 of the expression assignment.
@@ -3022,6 +3031,66 @@ void ui_show_tuner_reading(const nano_tuner_reading_t *reading)
 
 enum { PANEL_MODEL, PANEL_SECOND, PANEL_OPTION, PANEL_SCENE };
 
+static float param_from_normalized(const nano_param_t *p, float n);
+static int option_index(const nano_param_t *p, float n);
+
+// The rows of the editor are the model's parameters; a wah gets the auto-wah settings of the preset after them
+// (rows as parameters: the same bars and switches, but their values go to the controller, not to the Nano).
+static const nano_param_t WAH_ROWS[UI_WAH_ROWS] = {
+    [UI_WAH_MODE] = { "Auto-wah", NANO_PARAM_ENUM, 0, 0, 0, "", 0, 3, "Off\nOn\nHold" },
+    [UI_WAH_RATE] = { "Rate", NANO_PARAM_ENUM, 0, 0, 0, "", 0, UI_WAH_RATES, "2 bars\n1 bar\n1/2\n1/4\n1/8\n1/16" },
+    [UI_WAH_SHAPE] = { "Shape", NANO_PARAM_ENUM, 0, 0, 0, "", 0, UI_WAH_SHAPES, "Triangle\nSine\nUp" },
+    [UI_WAH_HEEL] = { "Heel", NANO_PARAM_RANGE, 0, 100, 1, "%", 0, 0, NULL },
+    [UI_WAH_TOE] = { "Toe", NANO_PARAM_RANGE, 0, 100, 1, "%", 0, 0, NULL },
+    [UI_WAH_TEMPO] = { "Tempo", NANO_PARAM_ENUM, 0, 0, 0, "", 0, 2, "Nano\nOwn" },
+    [UI_WAH_BPM] = { "BPM", NANO_PARAM_RANGE, UI_WAH_BPM_MIN, UI_WAH_BPM_MAX, 1, "", 0, 0, NULL },
+};
+static ui_autowah_t s_wah = { .rate = 3, .toe = 100, .bpm = 120 };
+
+static int ed_model_params(void)
+{
+    const nano_fx_model_t *m = s_editor_model_def;
+    return !m ? 0 : m->param_count < NANO_MAX_PARAMS ? m->param_count : NANO_MAX_PARAMS;
+}
+
+static int ed_param_count(void)
+{
+    const nano_fx_model_t *m = s_editor_model_def;
+    int count = ed_model_params();
+    return m && m->icon == NANO_ICON_WAH && count + UI_WAH_ROWS <= NANO_MAX_PARAMS ? count + UI_WAH_ROWS : count;
+}
+
+static const nano_param_t *ed_param(int idx)
+{
+    int count = ed_model_params();
+    return idx < count ? &s_editor_model_def->params[idx] : &WAH_ROWS[idx - count];
+}
+
+// Value of an auto-wah row as the bars hold it (0-1).
+static float wah_row_norm(int row)
+{
+    const nano_param_t *p = &WAH_ROWS[row];
+    float bpm = s_wah.own_tempo || s_wah.nano_bpm < UI_WAH_BPM_MIN ? (float)s_wah.bpm : s_wah.nano_bpm;
+    float v = row == UI_WAH_MODE ? s_wah.mode : row == UI_WAH_RATE ? s_wah.rate : row == UI_WAH_SHAPE ? s_wah.shape
+            : row == UI_WAH_HEEL ? s_wah.heel : row == UI_WAH_TOE ? s_wah.toe : row == UI_WAH_TEMPO ? s_wah.own_tempo : bpm;
+    float max = p->kind == NANO_PARAM_ENUM ? (float)(p->option_count - 1) : p->max, min = p->kind == NANO_PARAM_ENUM ? 0 : p->min;
+    float n = max > min ? (v - min) / (max - min) : 0;
+    return n < 0 ? 0 : n > 1 ? 1 : n;
+}
+
+// A row changed by the finger: the Nano gets a parameter, the controller an auto-wah setting.
+static void row_changed(int idx, float n)
+{
+    int count = ed_model_params();
+    if (idx < count) {
+        if (s_on_param) s_on_param(s_editor_slot_index, idx, n);
+        return;
+    }
+    const nano_param_t *p = &WAH_ROWS[idx - count];
+    int value = p->kind == NANO_PARAM_ENUM ? option_index(p, n) : (int)lroundf(param_from_normalized(p, n));
+    send('|', (idx - count) << 16 | (value & 0xFFFF));
+}
+
 static void on_fxp_chip(lv_event_t *e);
 static void on_fxp_chip_long(lv_event_t *e);
 static void on_scene_chip(lv_event_t *e);
@@ -3147,11 +3216,11 @@ static void set_param_norm(int idx, float n);
 
 static void set_enum(int idx, int choice)
 {
-    const nano_param_t *p = &s_editor_model_def->params[idx];
+    const nano_param_t *p = ed_param(idx);
     if (choice == option_index(p, s_param_norm[idx])) return;
     float n = p->option_count > 1 ? (float)choice / (p->option_count - 1) : 0;
     set_param_norm(idx, n);
-    if (s_on_param) s_on_param(s_editor_slot_index, idx, n);
+    row_changed(idx, n);
 }
 
 // A tap on an entry: data is the model (0 = none), the option or the scene (| 0x100: held).
@@ -3167,7 +3236,7 @@ static void panel_choice(intptr_t data)
         if ((uint32_t)data != s_editor_model_type) send('M', (int)data);
     } else if (s_panel_mode == PANEL_SECOND) {
         if ((uint32_t)data != s_view.pre1_b_type) send('A', 1 << 24 | (int)data);
-    } else if (s_editor_model_def && s_panel_param < s_editor_model_def->param_count) {
+    } else if (s_editor_model_def && s_panel_param < ed_param_count()) {
         set_enum(s_panel_param, (int)data);
     }
 }
@@ -3210,7 +3279,7 @@ static void draw_entry(lv_obj_t *obj, lv_layer_t *layer, intptr_t data)
     uint32_t ink = current ? ink_for(color) : TEXT;
     if (option) {
         char text[24];
-        option_text(&s_editor_model_def->params[s_panel_param], (int)data, text, sizeof(text));
+        option_text(ed_param(s_panel_param), (int)data, text, sizeof(text));
         draw_text(layer, text, true, &ui_font_20, ink, a.x1 + 4, cy - 13, a.x2 - 4, LV_TEXT_ALIGN_CENTER);
         return;
     }
@@ -3282,7 +3351,7 @@ static const char *model_group(int icon)
 static void open_panel(int mode, int param)
 {
     const nano_fx_model_t *cur = s_editor_model_def;
-    if (mode == PANEL_OPTION && (!cur || param >= cur->param_count)) return;
+    if (mode == PANEL_OPTION && (!cur || param >= ed_param_count())) return;
     int slot = mode == PANEL_SECOND ? 0 : s_editor_slot_index;
     char sub[120];
     // The model lists stay built while the editor shows this slot; an option list is built each time (it is short).
@@ -3294,7 +3363,7 @@ static void open_panel(int mode, int param)
         s_panel_mode = mode;
         s_panel_param = param;
         if (mode == PANEL_OPTION) {
-            for (int i = 0; i < cur->params[param].option_count; i++) panel_entry(ED_OPTION_W, i);
+            for (int i = 0; i < ed_param(param)->option_count; i++) panel_entry(ED_OPTION_W, i);
         } else if (mode == PANEL_SCENE) {
             for (int i = 0; i < UI_SCENES; i++) if (s_view.scene_names[i][0]) panel_entry(ED_ENTRY_W, i);
         } else {
@@ -3312,7 +3381,7 @@ static void open_panel(int mode, int param)
     s_panel_mode = mode;
     s_panel_param = param;
     if (mode == PANEL_OPTION) {
-        const nano_param_t *p = &cur->params[param];
+        const nano_param_t *p = ed_param(param);
         lv_label_set_text(s_panel_title, p->name);
         snprintf(sub, sizeof(sub), "%s  \xC2\xB7  %s", cur->name, NANO_FX_SLOT_NAMES[s_editor_slot_index]);
         s_panel_current = option_index(p, s_param_norm[param]);
@@ -3349,7 +3418,7 @@ static void open_panel(int mode, int param)
 // Value and its text (the number of a range, the option of a long enum) for drawing.
 static void set_param_norm(int idx, float n)
 {
-    const nano_param_t *p = &s_editor_model_def->params[idx];
+    const nano_param_t *p = ed_param(idx);
     s_param_norm[idx] = n;
     if (n < 0) strlcpy(s_param_text[idx], "\xE2\x80\x93", sizeof(s_param_text[idx]));   // en dash: not known
     else if (p->kind == NANO_PARAM_RANGE)
@@ -3370,7 +3439,7 @@ static void enum_switch_area(const lv_area_t *bar, int count, lv_area_t *out)
 
 static void draw_bar(lv_obj_t *bar, int idx, lv_layer_t *layer)
 {
-    const nano_param_t *p = &s_editor_model_def->params[idx];
+    const nano_param_t *p = ed_param(idx);
     lv_area_t a;
     lv_obj_get_coords(bar, &a);
     int32_t cy = (a.y1 + a.y2) / 2;
@@ -3464,12 +3533,12 @@ static void draw_bar(lv_obj_t *bar, int idx, lv_layer_t *layer)
 
 static void set_bar_value(int idx, float n)
 {
-    const nano_param_t *p = &s_editor_model_def->params[idx];
+    const nano_param_t *p = ed_param(idx);
     float v = param_from_normalized(p, n < 0 ? 0 : n > 1 ? 1 : n);   // snap to the parameter's step
     n = p->max > p->min ? (v - p->min) / (p->max - p->min) : 0;
     if (fabsf(n - s_param_norm[idx]) < 0.0001f) return;
     set_param_norm(idx, n);
-    if (s_on_param) s_on_param(s_editor_slot_index, idx, n);
+    row_changed(idx, n);
 }
 
 static void stop_drag(void)
@@ -3484,14 +3553,14 @@ static void on_bar_event(lv_event_t *e)
     lv_event_code_t code = lv_event_get_code(e);
     int idx = (int)(intptr_t)lv_event_get_user_data(e);
     lv_obj_t *bar = lv_event_get_current_target_obj(e);
-    if (!s_editor_model_def || idx >= s_editor_model_def->param_count) return;
+    if (!s_editor_model_def || idx >= ed_param_count()) return;
     if (code == LV_EVENT_DRAW_MAIN_END) {
         draw_bar(bar, idx, lv_event_get_layer(e));
         return;
     }
     if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING && code != LV_EVENT_RELEASED && code != LV_EVENT_PRESS_LOST
         && code != LV_EVENT_CLICKED) return;
-    const nano_param_t *p = &s_editor_model_def->params[idx];
+    const nano_param_t *p = ed_param(idx);
     lv_indev_t *indev = lv_indev_active();
     lv_point_t point = { 0, 0 };
     if (indev) lv_indev_get_point(indev, &point);
@@ -3543,19 +3612,20 @@ static void build_param_rows(void)
     lv_obj_clean(s_editor_body);
     memset(s_param_bar, 0, sizeof(s_param_bar));
     const nano_fx_model_t *m = s_editor_model_def;
-    for (int i = 0; m && i < m->param_count && i < NANO_MAX_PARAMS; i++) {
+    int own = ed_model_params(), count = ed_param_count();   // the model's, then the auto-wah rows of a wah
+    for (int i = 0; i < count; i++) {
         lv_point_t size = { 0, 0 };
-        const char *unit = m->params[i].unit;
-        if (m->params[i].kind == NANO_PARAM_RANGE && unit && unit[0])
-            lv_text_get_size(&size, unit, &ui_font_14, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        const nano_param_t *p = ed_param(i);
+        if (p->kind == NANO_PARAM_RANGE && p->unit && p->unit[0])
+            lv_text_get_size(&size, p->unit, &ui_font_14, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
         s_param_unit_w[i] = (int16_t)size.x;
-        set_param_norm(i, -1);
+        set_param_norm(i, i < own ? -1 : wah_row_norm(i - own));
     }
     if (!m) return;
     int pos = 0;
-    for (int row = 0; row < m->param_count; row++) {
-        int idx = m->order ? m->order[row] : row;
-        if (idx >= m->param_count || idx >= NANO_MAX_PARAMS) continue;
+    for (int row = 0; row < count; row++) {
+        int idx = row < own && m->order ? m->order[row] : row;
+        if (idx >= count) continue;
         lv_obj_t *bar = lv_obj_create(s_editor_body);
         lv_obj_remove_style_all(bar);   // drawn in on_bar_event
         lv_obj_set_size(bar, ED_BAR_W, ED_BAR_H);
@@ -3972,6 +4042,23 @@ void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, i
 
     set_hidden(s_editor, false);
     update_main_hidden();
+    lvgl_port_unlock();
+}
+
+// The auto-wah settings of the wah in the FX editor (its rows below the wah's own parameter).
+void ui_set_autowah(const ui_autowah_t *wah)
+{
+    lvgl_port_lock(0);
+    s_wah = *wah;
+    int own = ed_model_params();
+    if (!lv_obj_is_hidden(s_editor) && ed_param_count() > own) {
+        for (int row = 0; row < UI_WAH_ROWS; row++) {
+            int idx = own + row;
+            if (s_dragging && idx == s_drag_param) continue;   // the finger has it
+            float n = wah_row_norm(row);
+            if (n != s_param_norm[idx]) set_param_norm(idx, n);   // only what changed is drawn again
+        }
+    }
     lvgl_port_unlock();
 }
 

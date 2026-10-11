@@ -2,7 +2,7 @@
 
 Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../README.de.md); wie die Firmware gebaut wird und wie sie mit dem Nano spricht, steht in [development.de.md](development.de.md).
 
-**Inhalt:** [Der Bildschirm](#der-bildschirm) · [Fußschalter und Kacheln](#fußschalter-und-kacheln) · [Lange drücken](#lange-drücken) · [Eigene Bänke](#eigene-bänke) · [Szenen](#szenen) · [Expression-Pedal](#expression-pedal) · [Capture und Cab/IR](#capture-und-cabir) · [FX-Editor](#fx-editor) · [Reverb-Schalter](#reverb-schalter-fußschalter-8) · [Zweiter Effekt auf Pre FX 1](#zweiter-effekt-auf-pre-fx-1-fußschalter-3) · [Stimmgerät](#stimmgerät) · [USB-Audio-Lautstärke](#usb-audio-lautstärke) · [Bluetooth-MIDI](#bluetooth-midi) · [Looper-Modus](#looper-modus-eine-looper-app-auf-dem-telefon) · [Editor über den Controller](#nano-cortex-editor-über-den-controller) · [Fußschalter-Learn](#fußschalter-learn) · [Fußschalter (Verkabelung)](#fußschalter) · [Was wo gespeichert ist](#was-wo-gespeichert-ist)
+**Inhalt:** [Der Bildschirm](#der-bildschirm) · [Fußschalter und Kacheln](#fußschalter-und-kacheln) · [Lange drücken](#lange-drücken) · [Eigene Bänke](#eigene-bänke) · [Szenen](#szenen) · [Expression-Pedal](#expression-pedal) · [Capture und Cab/IR](#capture-und-cabir) · [FX-Editor](#fx-editor) · [Reverb-Schalter](#reverb-schalter-fußschalter-8) · [Zweiter Effekt auf Pre FX 1](#zweiter-effekt-auf-pre-fx-1-fußschalter-3) · [Auto-Wah](#auto-wah) · [Stimmgerät](#stimmgerät) · [USB-Audio-Lautstärke](#usb-audio-lautstärke) · [Bluetooth-MIDI](#bluetooth-midi) · [Looper-Modus](#looper-modus-eine-looper-app-auf-dem-telefon) · [Editor über den Controller](#nano-cortex-editor-über-den-controller) · [Fußschalter-Learn](#fußschalter-learn) · [Fußschalter (Verkabelung)](#fußschalter) · [Was wo gespeichert ist](#was-wo-gespeichert-ist)
 
 ## Der Bildschirm
 
@@ -245,6 +245,31 @@ ausgeschaltet wird. B wird im FX-Editor eingestellt, während es läuft, und auf
 (MIDI: CC 58). Die Einstellungen von A merkt sich der Controller ebenfalls, gelesen immer wenn A an ist. Nur wenn A
 seit dem Einrichten von B nie an war, schaltet der erste Wechsel A kurz an, um sie zu lesen.
 
+## Auto-Wah
+
+<img src="images/26-auto-wah.png" alt="" width="440">
+
+Die vier Wah-Modelle des Nano haben einen Regler, die Pedalstellung. Der Controller kann sie für dich bewegen, im
+Tempo. Leg ein Wah auf Pre FX 1 oder 2 und halte seine Kachel, um den FX-Editor zu öffnen: Unter dem Balken des Wah
+stehen die Einstellungen des Auto-Wah, gespeichert auf dem Controller für dieses Preset.
+
+- **Auto-wah** – *Off*: ein gewöhnliches Wah. *On*: Das Wah bewegt sich immer, wenn es an ist – sein Fußschalter
+  schaltet es wie gewohnt an und aus, Szenen ebenso. *Hold*: Im FX-Modus ist das Wah nur an und in Bewegung, solange
+  du seinen Fußschalter hältst; es startet in dem Moment, in dem du drauftrittst. Ein Tipp auf die Kachel schaltet es
+  weiterhin an und aus.
+- **Rate** – eine Runde von Heel zu Toe und zurück pro 2 Takte, 1 Takt, 1/2, 1/4, 1/8 oder 1/16.
+- **Shape** – *Triangle* (gleichmäßig auf und ab), *Sine* (an den Enden langsamer) oder *Up* (von Heel zu Toe, dann
+  sofort zurück).
+- **Heel** und **Toe** – die beiden Enden der Bewegung in Prozent des Pedalwegs. Heel über Toe dreht sie um.
+- **Tempo** – *Nano*: das Tempo, das der Nano für das Preset meldet (das seine synchronisierten Delays nutzen).
+  *Own*: die **BPM** daneben; wer den BPM-Balken bewegt, schaltet auf *Own*.
+
+Die Kachel des Wah zeigt die Rate (*Auto: 1/4* oder *Hold: auto 1/4*), und der Balken des Wah im FX-Editor bewegt sich
+mit. Der Controller schickt etwa 40 Stellungen pro Sekunde per Bluetooth: Langsame Raten sind weich, bei 1/16 kann
+man Stufen hören. Bei offenem Stimmgerät bewegt sich nichts. Auf Pre FX 1 mit zweitem Effekt bleibt das Halten von
+Fußschalter 3 der Tausch A ↔ B – ein Wah auf *Hold* bewegt sich dort, solange es an ist. Die Bewegung verändert die
+Stellung des Wah im Preset des Nano, das Preset zeigt deshalb ungespeicherte Änderungen; das schadet nicht.
+
 ## Stimmgerät
 
 <img src="images/08-tuner.png" alt="" width="440">
@@ -365,4 +390,4 @@ Ohne SX1509 funktioniert der Controller nur mit dem Touchscreen.
 
 | Auf dem Nano | Auf dem Controller |
 |---|---|
-| Presets, Namen, Captures, Cabs, FX und ihre Werte, Expression-Einstellungen, USB-Lautstärke | eigene Bänke (Preset, Farbe, Symbol), Szenen, Reverb-Mix Pos 1 / Pos 2, Fußschalter-Reihenfolge, zweite Reverbs, das Bluetooth-MIDI-Gerät |
+| Presets, Namen, Captures, Cabs, FX und ihre Werte, Expression-Einstellungen, USB-Lautstärke | eigene Bänke (Preset, Farbe, Symbol), Szenen, Reverb-Mix Pos 1 / Pos 2, Fußschalter-Reihenfolge, zweite Reverbs, Auto-Wah-Einstellungen, das Bluetooth-MIDI-Gerät |

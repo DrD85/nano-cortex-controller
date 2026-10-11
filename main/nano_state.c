@@ -168,6 +168,13 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
                 if (hz >= 400 && hz <= 480) st->tuner_base_hz = hz;
             }
             break;
+        case 56:
+            if (f.wire == 5) {
+                float bpm;
+                memcpy(&bpm, f.data, sizeof(bpm));
+                if (bpm >= 20 && bpm <= 400) st->tempo = bpm;
+            }
+            break;
         case 31:
             if (f.wire == 2 && f.len >= NANO_FX_SLOTS) {
                 for (int i = 0; i < NANO_FX_SLOTS; i++) st->fx_on[i] = f.data[i] == 0;

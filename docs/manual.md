@@ -2,7 +2,7 @@
 
 Every function in detail. The short illustrated guide is in the [README](../README.md); building the firmware and how it talks to the Nano are in [development.md](development.md).
 
-**Contents:** [The screen](#the-screen) · [Footswitches and tiles](#footswitches-and-tiles) · [Long presses](#long-presses) · [Own banks](#own-banks) · [Scenes](#scenes) · [Expression pedal](#expression-pedal) · [Capture and Cab/IR](#capture-and-cabir) · [FX editor](#fx-editor) · [Reverb switch](#reverb-switch-footswitch-8) · [Second effect on Pre FX 1](#second-effect-on-pre-fx-1-footswitch-3) · [Tuner](#tuner) · [USB audio volume](#usb-audio-volume) · [Bluetooth MIDI](#bluetooth-midi) · [Looper mode](#looper-mode-a-looper-app-on-a-phone) · [Editor through the controller](#nano-cortex-editor-through-the-controller) · [Footswitch learn](#footswitch-learn) · [Footswitches (wiring)](#footswitches) · [What is stored where](#what-is-stored-where)
+**Contents:** [The screen](#the-screen) · [Footswitches and tiles](#footswitches-and-tiles) · [Long presses](#long-presses) · [Own banks](#own-banks) · [Scenes](#scenes) · [Expression pedal](#expression-pedal) · [Capture and Cab/IR](#capture-and-cabir) · [FX editor](#fx-editor) · [Reverb switch](#reverb-switch-footswitch-8) · [Second effect on Pre FX 1](#second-effect-on-pre-fx-1-footswitch-3) · [Auto-wah](#auto-wah) · [Tuner](#tuner) · [USB audio volume](#usb-audio-volume) · [Bluetooth MIDI](#bluetooth-midi) · [Looper mode](#looper-mode-a-looper-app-on-a-phone) · [Editor through the controller](#nano-cortex-editor-through-the-controller) · [Footswitch learn](#footswitch-learn) · [Footswitches (wiring)](#footswitches) · [What is stored where](#what-is-stored-where)
 
 ## The screen
 
@@ -233,6 +233,29 @@ B is edited in the FX editor while it runs and is stored on the controller, per 
 also keeps the settings of A, read whenever A is on. Only if A was never on since B was set up, the first swap
 switches A on for a moment to read them.
 
+## Auto-wah
+
+<img src="images/26-auto-wah.png" alt="" width="440">
+
+The Nano's four wah models have one control, the pedal position. The controller can move it for you, in tempo. Put a
+wah on Pre FX 1 or 2, hold its tile to open the FX editor: below the wah's own bar are the settings of the auto-wah,
+stored on the controller for this preset.
+
+- **Auto-wah** – *Off*: an ordinary wah. *On*: the wah moves whenever it is on – its footswitch switches it on and
+  off as usual, so do scenes. *Hold*: in FX mode the wah is on, and moving, only while you hold its footswitch; it
+  starts the moment you step on it. A tap on the tile still switches it on and off.
+- **Rate** – one round from heel to toe and back per 2 bars, 1 bar, 1/2, 1/4, 1/8 or 1/16.
+- **Shape** – *Triangle* (evenly up and down), *Sine* (slower at the ends) or *Up* (heel to toe, then back at once).
+- **Heel** and **Toe** – the two ends of the movement in per cent of the pedal's way. Heel above toe turns it round.
+- **Tempo** – *Nano*: the tempo the Nano reports for the preset (the one its synced delays use). *Own*: the **BPM**
+  set next to it; moving the BPM bar switches to *Own*.
+
+The tile of the wah shows the rate (*Auto: 1/4*, or *Hold: auto 1/4*), and the wah's bar in the FX editor moves along.
+The controller sends about 40 positions a second over Bluetooth: slow rates are smooth, at 1/16 you may hear steps.
+While the tuner is open nothing moves. On Pre FX 1 with a second effect, holding footswitch 3 stays the swap A ↔ B –
+a wah set to *Hold* there moves while it is on. The moving changes the wah's position in the Nano's preset, so the
+preset shows unsaved changes; that does no harm.
+
 ## Tuner
 
 <img src="images/08-tuner.png" alt="" width="440">
@@ -351,4 +374,4 @@ Without an SX1509 the controller works with the touch screen only.
 
 | On the Nano | On the controller |
 |---|---|
-| presets, names, captures, cabs, FX and their values, expression settings, USB volume | own banks (preset, colour, symbol), scenes, reverb mix Pos 1 / Pos 2, footswitch order, second reverbs, the Bluetooth MIDI device |
+| presets, names, captures, cabs, FX and their values, expression settings, USB volume | own banks (preset, colour, symbol), scenes, reverb mix Pos 1 / Pos 2, footswitch order, second reverbs, auto-wah settings, the Bluetooth MIDI device |
