@@ -61,8 +61,9 @@ static int chr_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt 
     if (n < 6 || frame[1] != 0xC0) return 0;
     uint32_t type = frame[n - 4] | (frame[n - 3] << 8) | (frame[n - 2] << 16) | ((uint32_t)frame[n - 1] << 24);
     if (type == 30) return 0;   // preset change acknowledgement: the controller answers the Nano itself
+    if (type != 99) ESP_LOGD(TAG, "App -> Nano: type %lu (%u bytes)", (unsigned long)type, n);
     nano_link_send_frame(frame, n);
-    if (s_on_write) s_on_write(type);
+    if (s_on_write) s_on_write(type, frame + 2, n - 6);
     return 0;
 }
 
@@ -292,7 +293,12 @@ void app_link_send_message(const uint8_t *message, size_t len)
 {
     if (!s_subscribed || s_conn == BLE_HS_CONN_HANDLE_NONE || !len) return;
     tx_message_t m = { .data = malloc(len), .len = len };
-    if (!m.data) return;
+    if (!m.data) {
+        ESP_LOGW(TAG, "No memory for a message to the app (%u bytes) - dropped", (unsigned)len);
+        return;
+    }
+    uint32_t type = len >= 4 ? message[len - 4] | (message[len - 3] << 8) | (message[len - 2] << 16) | ((uint32_t)message[len - 1] << 24) : 0;
+    if (type != 128 && type != 138) ESP_LOGD(TAG, "Nano -> app: type %lu (%u bytes)", (unsigned long)type, (unsigned)len);
     memcpy(m.data, message, len);
     if (xQueueSend(s_tx_queue, &m, 0) != pdTRUE) {
         free(m.data);

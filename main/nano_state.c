@@ -179,6 +179,7 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
             if (f.wire == 2 && f.len >= NANO_FX_SLOTS) {
                 for (int i = 0; i < NANO_FX_SLOTS; i++) st->fx_on[i] = f.data[i] == 0;
                 fx_seen = true;
+                st->fx_reports++;
             }
             break;
         case 48: case 49: case 50: case 51: case 52:

@@ -157,6 +157,14 @@ static struct {
 } s_values[NANO_FX_SLOTS];
 static volatile bool s_values_stale;  // the app wrote to the Nano (host task): forget them before they are used
 
+// What an effect was last switched to (from here or by the app) while the Nano's report has not followed it, -1 =
+// nothing waiting. The Nano reports an effect whose on/off is on the expression pedal (heel-toe) as the pedal has it,
+// not as it was switched over Bluetooth - the effect sounds anyway. Without this the next press sent "on" again.
+static int8_t s_fx_switched[NANO_FX_SLOTS] = { -1, -1, -1, -1, -1 };
+static bool s_fx_reported[NANO_FX_SLOTS];   // the on/off states of the last reply
+static uint32_t s_fx_reports_seen;
+static int s_fx_preset;
+
 static void values_forget(void)
 {
     memset(s_values, 0, sizeof(s_values));
@@ -589,9 +597,13 @@ static void app_notify_cb(void *arg)
 }
 
 // From the NimBLE host task: the app sent a message (type) / the app connected or left.
-static void on_app_write(uint32_t type)
+static void on_app_write(uint32_t type, const uint8_t *payload, size_t len)
 {
     s_values_stale = true;   // it may have set an effect's values
+    if (type == NANO_MSG_BYPASS) {   // BypassControl { 3: slot 4-8, 4: 0 = on }: the editor switched an effect
+        int slot = (int)nano_field_varint(payload, len, 3) - 4;
+        if (slot >= 0 && slot < NANO_FX_SLOTS) command('%', slot << 1 | (nano_field_varint(payload, len, 4) == 0));
+    }
     switch (type) {
     case 3: case 111:                               // save, rename: names may have changed
         command('i', 1);
@@ -1092,14 +1104,39 @@ static void set_fx(int slot, bool on)
     uint8_t buf[8];
     char label[32];
     snprintf(label, sizeof(label), "%s %s", NANO_FX_SLOT_NAMES[slot], on ? "ON" : "OFF");
-    send(label, NANO_MSG_BYPASS, buf, nano_fx_bypass(slot, on, buf));
+    size_t n = nano_fx_bypass(slot, on, buf);
+    send(label, NANO_MSG_BYPASS, buf, n);
+    app_link_send(NANO_MSG_BYPASS, buf, n);   // the editor shows it at once (and does not go by the Nano's report)
     s_state.fx_on[slot] = on;
+    s_fx_switched[slot] = on;
     if (slot == s_edit.slot) {
         if (!on) s_edit.known = false;
         editor_show();
         if (on) editor_read_later(400);
     } else if (on) {
         ab_cache(slot, 400);   // values of A for a later swap, if this slot has a second effect
+    }
+}
+
+// After a state reply: the on/off states as the Nano reports them - except for an effect whose report did not move
+// since it was switched: then the switch counts (an effect on the expression pedal, or a reply that left the Nano
+// before the switch).
+static void fx_follow_switches(void)
+{
+    if (s_state.fx_reports == s_fx_reports_seen) return;   // no on/off states in this reply
+    s_fx_reports_seen = s_state.fx_reports;
+    bool other_preset = s_state.current_preset != s_fx_preset;
+    s_fx_preset = s_state.current_preset;
+    for (int i = 0; i < NANO_FX_SLOTS; i++) {
+        bool reported = s_state.fx_on[i];
+        if (other_preset || reported != s_fx_reported[i] || reported == s_fx_switched[i]) {
+            s_fx_switched[i] = -1;   // the report moved or agrees: it counts
+        } else if (s_fx_switched[i] >= 0) {
+            ESP_LOGI(TAG, "%s reported %s, switched %s - stays %s (expression pedal?)", NANO_FX_SLOT_NAMES[i],
+                     reported ? "ON" : "off", s_fx_switched[i] ? "ON" : "off", s_fx_switched[i] ? "ON" : "off");
+            s_state.fx_on[i] = s_fx_switched[i];
+        }
+        s_fx_reported[i] = reported;
     }
 }
 
@@ -2938,6 +2975,11 @@ static void handle_command(char c, int arg)
             app_link_send(NANO_MSG_SET_PRESET_SLOTS, buf, nano_preset_changed_notice(&s_state, buf));
         }
         break;
+    case '%':   // the app switched an effect: shown at once, and the Nano's report may not follow it (s_fx_switched)
+        s_state.fx_on[arg >> 1] = arg & 1;
+        s_fx_switched[arg >> 1] = arg & 1;
+        show();
+        break;
     case 'Q': mix_preview(arg); break;
     case 'W': mix_save(arg); break;
     case '!': mix_free_pedal(); break;
@@ -2993,6 +3035,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             s_expect_ack = false;
         }
         bool names = nano_state_apply(&s_state, payload, len);
+        fx_follow_switches();
         // Right after an A/B swap a reply sent before the model change still names the previous model: the slot
         // holds the loaded one. Later a different model was chosen elsewhere (editor, app): it becomes A or B.
         for (int i = 0; i < AB_COUNT; i++) {

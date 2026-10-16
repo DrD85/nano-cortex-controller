@@ -14,8 +14,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// A framed message arrived from the app (type = its message type). Called from the NimBLE host task.
-typedef void (*app_write_cb)(uint32_t type);
+// A framed message arrived from the app (type = its message type, payload = what is between the frame header and
+// the type). Called from the NimBLE host task.
+typedef void (*app_write_cb)(uint32_t type, const uint8_t *payload, size_t len);
 // App connected / disconnected. Called from the NimBLE host task.
 typedef void (*app_state_cb)(bool connected);
 

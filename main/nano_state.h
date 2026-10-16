@@ -61,6 +61,7 @@ typedef struct {
     int slot_preset[4];                 // presets on footswitch slots A1, B1, A2, B2 (0-based)
     bool fx_known;
     bool fx_on[NANO_FX_SLOTS];          // Pre FX 1-2, Post FX 1-3
+    uint32_t fx_reports;                // counts the replies that carried the on/off states (field 31)
     uint32_t fx_type[NANO_FX_SLOTS];    // model type, 0 = empty slot
     char capture[64];
     char cab[64];
