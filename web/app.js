@@ -533,7 +533,9 @@ function midiAttach() {
 async function bleMidiChoose() {
   let device;
   try {
-    device = await navigator.bluetooth.requestDevice({ filters: [{ services: [BLE_MIDI_SERVICE] }] });
+    // The M-VAVE Chocolate ("FootCtrl") does not advertise the MIDI service: found by its name.
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [BLE_MIDI_SERVICE] }, { namePrefix: 'FootCtrl' }], optionalServices: [BLE_MIDI_SERVICE] });
   } catch (e) {
     if (!(e.name === 'NotFoundError' && /cancel/i.test(e.message))) midiProblem('Bluetooth MIDI: ' + e.message);
     return;

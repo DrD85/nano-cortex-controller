@@ -2798,9 +2798,32 @@ static void midi_expression(int value)
     }
 }
 
+// M-VAVE Chocolate (4 switches, no display). Out of the box it sends PC 0-3 on A-D and moves in groups of four with
+// A+B (down) / C+D (up). Here a group is footswitches 1-4, the next one 5-8 (PC n = footswitch n % 8 + 1). In its CC
+// mode A-D send CC 20-23 (127 press, 0 release), A+B CC 24 and C+D CC 25: those choose footswitches 1-4 / 5-8.
+// True when the message was the Chocolate's.
+static bool chocolate_midi(uint8_t type, uint8_t d1, uint8_t d2)
+{
+    static int group;   // CC mode
+    int number;
+    if (type == 0xC0) {
+        number = d1 % 8 + 1;
+    } else if (type == 0xB0 && (d1 == 24 || d1 == 25)) {
+        if (d2 >= 64) group = d1 - 24;
+        return true;
+    } else if (type == 0xB0 && d1 >= 20 && d1 <= 23) {
+        if (d2 < 64) return true;
+        number = group * 4 + d1 - 19;
+    } else {
+        return false;
+    }
+    if (!looper_switch(number) && nano_link_ready()) handle_switch(number);
+    return true;
+}
+
 // As the Nano's own MIDI over USB: PC 0-63 = presets, CC 37-41 = FX 1-5 (127 on, 0 off), CC 1 = expression.
 // In addition CC 50-57 (value 64-127) press footswitches 1-8, CC 59 is the looper mode and CC 60 the scene mode
-// (64-127 on, below off). All channels.
+// (64-127 on, below off). All channels. The Chocolate has its own mapping (chocolate_midi).
 static void handle_midi(int arg)
 {
     uint8_t status = (uint8_t)(arg >> 16), d1 = (uint8_t)(arg >> 8), d2 = (uint8_t)arg;
@@ -2811,6 +2834,7 @@ static void handle_midi(int arg)
         return;
     }
     ESP_LOGI(TAG, "MIDI %02X %u %u", status, d1, d2);
+    if (midi_ble_chocolate() && chocolate_midi(type, d1, d2)) return;
     if (type == 0xB0 && d1 == 59) {   // looper mode on (64-127) / off
         if (d2 >= 64 && !s_looper && !nano_link_ready()) return;
         looper_set(d2 >= 64);

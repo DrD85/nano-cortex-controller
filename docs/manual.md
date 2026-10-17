@@ -295,6 +295,12 @@ for the Nano (for example with the MC6 export of the Nano Cortex Editor) work ov
 | CC 59 | looper mode: value 64–127 on, 0–63 off |
 | CC 60 | footswitches 3–8: value 64–127 [scenes](#scenes) of the preset, 0–63 presets of the bank |
 
+**M-VAVE Chocolate** (Cuvave): it shows up in the list as "FootCtrl (Chocolate)" and has its own mapping. Out of the
+box A–D are the controller's footswitches 1–4 (mode, tuner, switches 3 and 4); C+D together moves the Chocolate on,
+then A–D are footswitches 5–8, A+B back again. The Chocolate has no display, so remember where you are after
+changing the group. In the Chocolate's CC mode (set in the Cubesuit app) it is the same: A+B chooses footswitches 1–4,
+C+D footswitches 5–8.
+
 A wired MIDI input is not possible on this board without extra hardware; use a Bluetooth MIDI adapter instead.
 
 ## Looper mode (a looper app on a phone)

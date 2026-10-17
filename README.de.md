@@ -25,7 +25,7 @@ und IR-Library, die Belegung des Expression-Pedals, ein Stimmgerät und ein Loop
 - **FX-Editor** – Modelle wählen und jeden Parameter am Touchscreen einstellen, mit benannten FX-Presets
 - **Capture und Cab/IR** – Slots wählen oder alles aus der Library des Nano laden; Capture-Klang, Lautstärke, Cab
 - **Expression-Pedal** – pro Preset festlegen, was das Pedal des Nano bewegt (ein Wah, einen Mix, den Pegel …) und wie weit
-- **Stimmgerät**, **Gig-Ansicht** mit großen Kacheln, **Bluetooth-MIDI** für einen weiteren Controller
+- **Stimmgerät**, **Gig-Ansicht** mit großen Kacheln, **Bluetooth-MIDI** für einen weiteren Controller (zum Beispiel einen M-VAVE Chocolate)
 - **Looper-Modus** – die Fußschalter steuern eine Looper-App auf dem Telefon (zum Beispiel Loopy Pro)
 - Der [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) kann sich **über** den Controller verbinden
 

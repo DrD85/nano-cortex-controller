@@ -87,6 +87,11 @@ bool midi_ble_status(char *name, size_t size)
     return s_connected;
 }
 
+bool midi_ble_chocolate(void)
+{
+    return s_connected && midi_is_chocolate(s_stored);
+}
+
 // ---- from app.js ----
 
 // The name the screen shows for the chosen input (it may differ from the list entry, e.g. a Bluetooth device).

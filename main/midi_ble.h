@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #define MIDI_MAX_DEVICES 8
 
@@ -20,6 +21,13 @@ typedef struct {
     int8_t rssi;
     bool remembered;
 } midi_device_t;
+
+// The M-VAVE (Cuvave) Chocolate footswitch: its Bluetooth name is "FootCtrl" (in the browser the input name may
+// carry more around it). It has the MIDI service but does not advertise it, so it is recognised by its name.
+static inline bool midi_is_chocolate(const char *name)
+{
+    return strstr(name, "FootCtrl") != NULL;
+}
 
 // Call after nano_link_start().
 void midi_ble_start(midi_message_cb on_message, midi_change_cb on_change);
@@ -45,3 +53,6 @@ void midi_ble_forget(void);
 
 // True while connected; name of the connected (or stored) device in name.
 bool midi_ble_status(char *name, size_t size);
+
+// True while the connected device is a Chocolate (its messages get their own mapping, see handle_midi in main.c).
+bool midi_ble_chocolate(void);

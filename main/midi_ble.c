@@ -1,5 +1,6 @@
 #include "midi_ble.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "esp_log.h"
@@ -46,6 +47,7 @@ static volatile bool s_allowed = true;
 
 static uint16_t s_conn = BLE_HS_CONN_HANDLE_NONE;
 static bool s_connecting, s_ready, s_security_tried;
+static volatile bool s_chocolate;  // the connected device is a Chocolate
 static stored_device_t s_target;   // device being connected / connected
 static uint16_t s_svc_end, s_chr, s_cccd;
 
@@ -144,7 +146,8 @@ static int on_subscribed(uint16_t conn, const struct ble_gatt_error *err, struct
 {
     if (err->status == 0) {
         s_ready = true;
-        ESP_LOGI(TAG, "MIDI device ready: %s", s_target.name);
+        s_chocolate = midi_is_chocolate(s_target.name);
+        ESP_LOGI(TAG, "MIDI device ready: %s%s", s_target.name, s_chocolate ? " (M-VAVE Chocolate)" : "");
         changed();
         return 0;
     }
@@ -258,7 +261,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGW(TAG, "MIDI device disconnected (reason 0x%X)", event->disconnect.reason);
         s_conn = BLE_HS_CONN_HANDLE_NONE;
-        s_ready = false;
+        s_ready = s_chocolate = false;
         // Switched to another device in the dialog: connect it now (it was already seen in this scan).
         if (s_have_stored && ble_addr_cmp(&s_stored.addr, &s_target.addr) != 0) connect_device(&s_stored);
         update_scan();
@@ -320,6 +323,7 @@ static void on_adv(const ble_addr_t *addr, int8_t rssi, const struct ble_hs_adv_
         entry->rssi = rssi;
         if (midi && !entry->midi) { entry->midi = true; news = true; }
         if (name[0] && strcmp(entry->name, name)) { strlcpy(entry->name, name, sizeof(entry->name)); news = entry->midi; }
+        if (!entry->midi && midi_is_chocolate(entry->name)) { entry->midi = true; news = true; }
     }
     bool stored = s_have_stored && entry && entry->midi &&
                   (ble_addr_cmp(addr, &s_stored.addr) == 0 || (entry->name[0] && !strcmp(entry->name, s_stored.name)));
@@ -369,7 +373,8 @@ int midi_ble_devices(midi_device_t *out, int max)
     for (int i = 0; i < s_found_count && count < max; i++) {
         const found_t *f = &s_found[i];
         if (!f->midi) continue;
-        strlcpy(out[count].name, f->name[0] ? f->name : "MIDI device", sizeof(out[count].name));
+        if (midi_is_chocolate(f->name)) snprintf(out[count].name, sizeof(out[count].name), "%s (Chocolate)", f->name);
+        else strlcpy(out[count].name, f->name[0] ? f->name : "MIDI device", sizeof(out[count].name));
         out[count].rssi = f->rssi;
         out[count].remembered = s_have_stored && ble_addr_cmp(&f->addr, &s_stored.addr) == 0;
         count++;
@@ -409,6 +414,11 @@ void midi_ble_forget(void)
     if (s_conn != BLE_HS_CONN_HANDLE_NONE) ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
     update_scan();
     changed();
+}
+
+bool midi_ble_chocolate(void)
+{
+    return s_chocolate;
 }
 
 bool midi_ble_status(char *name, size_t size)

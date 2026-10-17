@@ -309,6 +309,12 @@ Nano (zum Beispiel aus dem MC6-Export des Nano Cortex Editors) funktionieren als
 | CC 59 | Looper-Modus: Wert 64–127 an, 0–63 aus |
 | CC 60 | Fußschalter 3–8: Wert 64–127 [Szenen](#szenen) des Presets, 0–63 Presets der Bank |
 
+**M-VAVE Chocolate** (Cuvave): Er erscheint in der Liste als „FootCtrl (Chocolate)“ und hat eine eigene
+Belegung. Ab Werk sind A–D die Fußschalter 1–4 des Controllers (Modus, Stimmgerät, Schalter 3 und 4); C+D zusammen
+blättert am Chocolate weiter, dann sind A–D die Fußschalter 5–8, A+B wieder zurück. Der Chocolate hat kein Display –
+nach einem Wechsel der Gruppe also merken, wo man ist. Im CC-Modus des Chocolate (in der App Cubesuit eingestellt)
+gilt dasselbe: A+B wählt die Fußschalter 1–4, C+D die Fußschalter 5–8.
+
 Ein MIDI-Kabeleingang ist auf diesem Board ohne zusätzliche Hardware nicht möglich; dafür einen
 Bluetooth-MIDI-Adapter verwenden.
 

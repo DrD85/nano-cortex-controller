@@ -24,7 +24,7 @@ expression pedal's assignments, a tuner and a looper mode. It is the hardware co
 - **FX editor** – choose models and set every parameter on the touch screen, with named FX presets
 - **Capture and Cab/IR** – pick slots or load anything from the Nano's library; capture tone, volume, cab settings
 - **Expression pedal** – choose per preset what the Nano's pedal moves (a wah, a mix, the level …) and how far
-- **Tuner**, **gig view** with large tiles, **Bluetooth MIDI** for an extra controller
+- **Tuner**, **gig view** with large tiles, **Bluetooth MIDI** for an extra controller (for example an M-VAVE Chocolate)
 - **Looper mode** – the footswitches control a looper app on a phone (for example Loopy Pro)
 - The [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) can connect **through** the controller
 
