@@ -44,6 +44,7 @@ Szenen-Knopf (ist das Stimmgerät offen, schließt Fußschalter 2 es sofort). Di
 ihrer Beschriftung: *Hold: Looper* und *Hold: Scenes* (oder *Presets*).
 
 Aktive Kacheln leuchten in voller Farbe, inaktive sind gedimmt. FX-Kacheln tragen die Farben der Effektkategorien.
+Die Nummern hier sind die Funktionen der Schalter; wo sie liegen, bestimmt die [Kachel-Anordnung](#kachel-anordnung-6-oder-8-felder).
 
 ## Lange drücken
 
@@ -304,7 +305,7 @@ Nano (zum Beispiel aus dem MC6-Export des Nano Cortex Editors) funktionieren als
 | Program Change 0–63 | Preset 1–64 |
 | CC 37–41 | FX-Slot 1–5 (Pre FX 1, Pre FX 2, Post FX 1–3): Wert 64–127 an, 0–63 aus |
 | CC 1 | Expression: Reverb-Mix von Pos 1 (0) bis Pos 2 (127) |
-| CC 50–57, Wert 64–127 | Fußschalter 1–8 drücken (Modus, Stimmgerät, Presets oder FX, Reverb-Schalter) |
+| CC 50–57, Wert 64–127 | Feld 1–8 der [Kachel-Anordnung](#kachel-anordnung-6-oder-8-felder) drücken (Modus, Stimmgerät, Presets oder FX, Reverb-Schalter) |
 | CC 58, Wert 64–127 | Fußschalter 3 halten: Pre FX 1 wechselt zum zweiten Effekt und zurück |
 | CC 59 | Looper-Modus: Wert 64–127 an, 0–63 aus |
 | CC 60 | Fußschalter 3–8: Wert 64–127 [Szenen](#szenen) des Presets, 0–63 Presets der Bank |
@@ -377,9 +378,20 @@ Ohne Controller (oder bevor er verbunden ist) verbindet sich die App wie bisher 
   ab Werk startet und pausiert Fußschalter 2 seinen Jamtrack-Player, 7 geht zum vorigen Track und 8 zum nächsten;
   mit MIDI Learn im Editor legst du sie auf etwas anderes. Ein Telefon braucht es dafür nicht.
 
+## Kachel-Anordnung: 6 oder 8 Felder
+
+**Tile layout** im Bluetooth-MIDI-Fenster (MIDI-Knopf oben). **6 fields** (2 × 3, größere Kacheln) oder **8 fields**
+wählen, dann zwei Felder antippen, um sie zu tauschen – etwa das Stimmgerät an eine andere Stelle oder Post FX 3 und
+den Reverb-Schalter aus den sechs heraus. **Save** speichert die Anordnung auf dem Controller, **Default** stellt 8
+Felder in der gewohnten Reihenfolge wieder her.
+
+Feld *n* drücken Fußschalter *n*, MIDI **CC 49 + n** (CC 50–55 bei 6 Feldern) und Schalter *n* des Chocolate; die
+kleine Zahl in der Kachelecke ist ihr Feld. Ein Schalter, der nicht auf dem Bildschirm ist, tut über die Fußschalter
+und CC 50–57 nichts (CC 37–41 schalten die Effekte weiterhin). Bei 6 Feldern sind die Fußschalter 7 und 8 frei.
+
 ## Fußschalter-Learn
 
-Lange auf Kachel 2 drücken (Fußschalter 2; **Switch 1** im Fenster lernt stattdessen Fußschalter 1) oder **LEARN SWITCH**
+Lange auf die Stimmgerät-Kachel drücken (ihr Fußschalter; **Switch 1** im Fenster lernt stattdessen Fußschalter 1) oder **LEARN SWITCH**
 im Bank-Fenster. Dann innerhalb von 15 Sekunden den
 Fußschalter drücken, der diese Funktion bekommen soll. Hatte er eine andere Funktion, werden die beiden getauscht.
 **DEFAULT ORDER** stellt die Standard-Reihenfolge wieder her.
@@ -403,4 +415,4 @@ Ohne SX1509 funktioniert der Controller nur mit dem Touchscreen.
 
 | Auf dem Nano | Auf dem Controller |
 |---|---|
-| Presets, Namen, Captures, Cabs, FX und ihre Werte, Expression-Einstellungen, USB-Lautstärke | eigene Bänke (Preset, Farbe, Symbol), Szenen, Reverb-Mix Pos 1 / Pos 2, Fußschalter-Reihenfolge, zweite Reverbs, Auto-Wah-Einstellungen, das Bluetooth-MIDI-Gerät |
+| Presets, Namen, Captures, Cabs, FX und ihre Werte, Expression-Einstellungen, USB-Lautstärke | eigene Bänke (Preset, Farbe, Symbol), Szenen, Reverb-Mix Pos 1 / Pos 2, Fußschalter-Reihenfolge, Kachel-Anordnung, zweite Reverbs, Auto-Wah-Einstellungen, das Bluetooth-MIDI-Gerät |

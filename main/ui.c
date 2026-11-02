@@ -137,6 +137,12 @@ static lv_obj_t *s_preset_card, *s_source_card[2];
 static lv_obj_t *s_midi_label, *s_midi, *s_midi_status, *s_midi_list;
 static ui_midi_t s_midi_state;
 static bool s_fullscreen;
+static lv_obj_t *s_layout;   // the tile layout dialog
+// Tile layout (ui_set_layout): position p (footswitch / CC 50+p) shows the tile of switch s_layout_order[p]; only the
+// first s_layout_count positions are on the screen (6 = 2 x 3, 8 = 2 x 4). Tiles stay indexed by their switch.
+static uint8_t s_layout_order[TILES] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+static int s_layout_count = TILES;
+static int s_tile_w = TILE_W;
 static uint32_t s_gesture_tick;   // a swipe ends with a click on the tile under the finger: ignore that one
 static lv_timer_t *s_toast_timer;
 
@@ -221,13 +227,14 @@ static void open_looper_editor(int tile);
 static void open_scene_editor(int scene);
 static void open_mix_editor(void);
 static void open_learn(int number);
+static int tile_position(int i);
 
 static void on_tile_long(lv_event_t *e)
 {
     int tile = (int)(intptr_t)lv_event_get_user_data(e);   // 0-7 = footswitch 1-8
     if (tile == 0) send('w', UI_SWITCH_HOLD | 1);   // looper mode on / off, as holding footswitch 1
     else if (s_looper_mode) open_looper_editor(tile - 1);
-    else if (tile == 1) open_learn(2);              // (footswitch 1 is learned from this dialog too)
+    else if (tile == 1) open_learn(tile_position(1) + 1);   // its footswitch (footswitch 1 is learned from this dialog too)
     else if (s_fx_mode && tile < 2 + NANO_FX_SLOTS) send('O', tile - 2);
     else if (s_fx_mode && tile == 2 + NANO_FX_SLOTS) open_mix_editor();
     else if (!s_fx_mode && tile >= 2 && s_view.scenes) open_scene_editor(tile - 2);
@@ -241,7 +248,7 @@ static void on_gesture(lv_event_t *e)
     s_gesture_tick = lv_tick_get();
     if (s_splash) return;   // start screen
     // Swipes work only on the main screen, not in an open dialog.
-    lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
+    lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi, s_layout,
                                    s_volume, s_cab_settings, s_amp, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
         if (overlays[i] && !lv_obj_is_hidden(overlays[i])) return;
@@ -490,11 +497,25 @@ static int tile_height(void)
     return s_fullscreen ? FULL_TILE_H : TILE_H;
 }
 
+// Where switch i's tile sits (0 = first position), or -1 when the layout leaves it out.
+static int tile_position(int i)
+{
+    for (int p = 0; p < s_layout_count; p++) if (s_layout_order[p] == i + 1) return p;
+    return -1;
+}
+
 static void place_tile(int i)
 {
-    int h = tile_height();
-    lv_obj_set_size(s_tile[i], TILE_W, h);
-    lv_obj_set_pos(s_tile[i], 10 + (i % 4) * (TILE_W + TILE_GAP), (s_fullscreen ? FULL_TILE_Y : TILE_Y) + (i / 4) * (h + 8));
+    int h = tile_height(), p = tile_position(i), columns = s_layout_count / 2;
+    s_tile_w = (780 - (columns - 1) * TILE_GAP) / columns;   // 186 with four columns, 252 with three
+    lv_obj_set_hidden(s_tile[i], p < 0);
+    if (p < 0) return;
+    lv_obj_set_size(s_tile[i], s_tile_w, h);
+    lv_obj_set_pos(s_tile[i], 10 + (p % columns) * (s_tile_w + TILE_GAP), (s_fullscreen ? FULL_TILE_Y : TILE_Y) + (p / columns) * (h + 8));
+    if (!s_tile_name[i]) return;   // (still being built)
+    lv_obj_set_width(s_tile_other[i], s_tile_w - 66);
+    lv_obj_set_width(s_tile_name[i], s_tile_w - 24);
+    lv_label_set_text_fmt(s_tile_number[i], "%d", p + 1);   // the footswitch that presses it
 }
 
 // True if every word of the text fits into one line (a font that would break a word is not used).
@@ -522,11 +543,12 @@ static void fit_names(void)
     static const lv_font_t *const normal[] = { &ui_font_title_26, &ui_font_24, &ui_font_20, &ui_font_16 };
     // Measuring takes a while and the names rarely change: only when a name or the view (gig / normal) changed.
     static char measured[TILES][65];
-    static int measured_view = -1;
-    bool same = measured_view == s_fullscreen;
+    static int measured_view = -1, measured_w;
+    bool same = measured_view == s_fullscreen && measured_w == s_tile_w;
     for (int i = 0; i < TILES && same; i++) same = !strcmp(measured[i], lv_label_get_text(s_tile_name[i]));
     if (same) return;
     measured_view = s_fullscreen;
+    measured_w = s_tile_w;
     for (int i = 0; i < TILES; i++) strlcpy(measured[i], lv_label_get_text(s_tile_name[i]), sizeof(measured[i]));
     const lv_font_t *const *fonts = s_fullscreen ? gig : normal;
     int room = tile_height() - (s_fullscreen ? 66 : 56);
@@ -538,8 +560,8 @@ static void fit_names(void)
             const char *name = lv_label_get_text(s_tile_name[i]);
             if (!name[0]) continue;
             lv_point_t size;
-            lv_text_get_size(&size, name, fonts[f], 0, line_space, TILE_W - 24, LV_TEXT_FLAG_NONE);
-            fits = size.y <= room && words_fit(name, fonts[f], TILE_W - 24);
+            lv_text_get_size(&size, name, fonts[f], 0, line_space, s_tile_w - 24, LV_TEXT_FLAG_NONE);
+            fits = size.y <= room && words_fit(name, fonts[f], s_tile_w - 24);
         }
         if (fits) {
             font = fonts[f];
@@ -632,12 +654,12 @@ static void build_tile(lv_obj_t *parent, int i)
 
     s_tile_caption[i] = label(tile, &ui_font_12, TEXT);
     lv_obj_set_style_text_letter_space(s_tile_caption[i], 2, 0);
-    lv_obj_set_width(s_tile_caption[i], TILE_W - 96);
+    lv_obj_set_width(s_tile_caption[i], s_tile_w - 96);
     lv_label_set_long_mode(s_tile_caption[i], LV_LABEL_LONG_CLIP);
     lv_obj_set_pos(s_tile_caption[i], 56, 14);
 
     s_tile_other[i] = label(tile, &ui_font_12, TEXT);
-    lv_obj_set_size(s_tile_other[i], TILE_W - 66, lv_font_get_line_height(&ui_font_12));   // one line
+    lv_obj_set_size(s_tile_other[i], s_tile_w - 66, lv_font_get_line_height(&ui_font_12));   // one line
     lv_label_set_long_mode(s_tile_other[i], LV_LABEL_LONG_DOT);
     lv_obj_set_pos(s_tile_other[i], 56, 32);
     lv_obj_set_hidden(s_tile_other[i], true);
@@ -654,9 +676,10 @@ static void build_tile(lv_obj_t *parent, int i)
     lv_obj_align(s_tile_number[i], LV_ALIGN_TOP_RIGHT, -12, 8);
 
     s_tile_name[i] = label(tile, &ui_font_title_26, TEXT);
-    lv_obj_set_width(s_tile_name[i], TILE_W - 24);
+    lv_obj_set_width(s_tile_name[i], s_tile_w - 24);
     lv_label_set_long_mode(s_tile_name[i], LV_LABEL_LONG_WRAP);
     lv_obj_align(s_tile_name[i], LV_ALIGN_BOTTOM_LEFT, 12, -10);
+    place_tile(i);   // number and widths by the layout
 }
 
 // Footswitch pressed (or tile tapped): the tile lights up for a moment - the press arrived.
@@ -726,7 +749,7 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     set_color_prop(sym, LV_STYLE_TEXT_COLOR, mark);
     set_num_prop(s_tile_caption[i], LV_STYLE_X, (icon || symbol) ? 56 : 14);
     set_num_prop(s_tile_caption[i], LV_STYLE_Y, 14);
-    set_num_prop(s_tile_caption[i], LV_STYLE_WIDTH, (icon || symbol) ? TILE_W - 96 : TILE_W - 54);
+    set_num_prop(s_tile_caption[i], LV_STYLE_WIDTH, (icon || symbol) ? s_tile_w - 96 : s_tile_w - 54);
 
     char upper[40];   // captions in small capitals, as the editor's labels
     size_t n = 0;
@@ -1141,7 +1164,7 @@ static void on_bank_button(lv_event_t *e)
 {
     int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 cancel, 1 save, 2 default, 3 learn
     if (action == 3) {   // over the bank editor, which stays open
-        open_learn(s_be_tile + 3);
+        open_learn(tile_position(s_be_tile + 2) + 1);   // the footswitch at the tile's position
         return;
     }
     lv_obj_set_hidden(s_bank_editor, true);
@@ -1327,7 +1350,7 @@ static void open_learn(int number)
 {
     lv_label_set_text_fmt(s_learn_title, "Learn footswitch %d", number);
     lv_label_set_text_fmt(s_learn_text, "Press the footswitch that should be switch %d now. Waiting 15 seconds.", number);
-    lv_obj_set_hidden(s_learn_first, number != 2);   // tile 1 held is the looper mode: its switch is learned from here
+    lv_obj_set_hidden(s_learn_first, number == 1);   // tile 1 held is the looper mode: its switch is learned from here
     lv_obj_set_hidden(s_learn, false);
     lv_obj_move_foreground(s_learn);
     send('D', number);
@@ -2154,6 +2177,143 @@ static void on_midi_button(lv_event_t *e)
     send('X', 0);
 }
 
+// ---- tile layout: 6 or 8 fields, in any order ----
+
+static lv_obj_t *s_layout_tab[2], *s_layout_cell[TILES], *s_layout_cell_number[TILES], *s_layout_cell_name[TILES];
+static lv_obj_t *s_layout_hidden_label;
+static uint8_t s_lay_order[TILES];   // being edited: position -> switch 1-8 (all eight; the last ones are not shown)
+static int s_lay_count, s_lay_selected = -1;
+
+static const char *const LAYOUT_NAMES[TILES] = {
+    "Mode", "Tuner", "Pre FX 1\npreset / scene 1", "Pre FX 2\npreset / scene 2", "Post FX 1\npreset / scene 3",
+    "Post FX 2\npreset / scene 4", "Post FX 3\npreset / scene 5", "Reverb\npreset / scene 6",
+};
+
+#define LAYOUT_GRID_Y 98
+#define LAYOUT_CELL_H 84
+
+static void fill_layout(void)
+{
+    style_tab(s_layout_tab[0], s_lay_count == 6);
+    style_tab(s_layout_tab[1], s_lay_count == 8);
+    int columns = s_lay_count / 2, w = (680 - (columns - 1) * 10) / columns;
+    for (int p = 0; p < TILES; p++) {
+        lv_obj_t *c = s_layout_cell[p];
+        bool shown = p < s_lay_count;
+        if (shown) {
+            lv_obj_set_pos(c, 20 + (p % columns) * (w + 10), LAYOUT_GRID_Y + (p / columns) * (LAYOUT_CELL_H + 10));
+            lv_obj_set_size(c, w, LAYOUT_CELL_H);
+            lv_label_set_text_fmt(s_layout_cell_number[p], "%d", p + 1);
+        } else {   // below "Not on the screen"
+            lv_obj_set_pos(c, 20 + (p - s_lay_count) * 220, 312);
+            lv_obj_set_size(c, 210, 50);
+            lv_label_set_text(s_layout_cell_number[p], "");
+        }
+        int sw = s_lay_order[p] - 1;
+        if (shown) {
+            lv_label_set_text(s_layout_cell_name[p], LAYOUT_NAMES[sw]);
+        } else {   // one line: the name only
+            char first[24];
+            strlcpy(first, LAYOUT_NAMES[sw], sizeof(first));
+            first[strcspn(first, "\n")] = 0;
+            lv_label_set_text(s_layout_cell_name[p], first);
+        }
+        lv_obj_set_width(s_layout_cell_name[p], (shown ? w : 210) - 44);
+        bool sel = p == s_lay_selected;
+        lv_obj_set_style_border_width(c, sel ? 3 : 1, 0);
+        lv_obj_set_style_border_color(c, lv_color_hex(sel ? 0xFFFFFF : 0x3A3D40), 0);
+        lv_obj_set_hidden(c, false);
+    }
+    lv_obj_set_hidden(s_layout_hidden_label, s_lay_count == TILES);
+}
+
+static void on_layout_cell(lv_event_t *e)
+{
+    int p = (int)(intptr_t)lv_event_get_user_data(e);
+    if (s_lay_selected < 0) {
+        s_lay_selected = p;
+    } else {   // the second tap: the two swap places
+        uint8_t t = s_lay_order[p];
+        s_lay_order[p] = s_lay_order[s_lay_selected];
+        s_lay_order[s_lay_selected] = t;
+        s_lay_selected = -1;
+    }
+    fill_layout();
+}
+
+static void on_layout_button(lv_event_t *e)
+{
+    int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 close, 6 / 8 fields, -1 default, 1 save
+    s_lay_selected = -1;
+    if (action == 6 || action == 8) {
+        s_lay_count = action;
+    } else if (action == -1) {
+        for (int p = 0; p < TILES; p++) s_lay_order[p] = (uint8_t)(p + 1);
+        s_lay_count = TILES;
+    } else {
+        lv_obj_set_hidden(s_layout, true);
+        if (action == 1) {
+            int packed = s_lay_count << 24;
+            for (int p = 0; p < TILES; p++) packed |= (s_lay_order[p] - 1) << (3 * p);
+            send(']', packed);
+        }
+        return;
+    }
+    fill_layout();
+}
+
+static void open_layout(lv_event_t *e)
+{
+    memcpy(s_lay_order, s_layout_order, sizeof(s_lay_order));
+    s_lay_count = s_layout_count;
+    s_lay_selected = -1;
+    fill_layout();
+    lv_obj_set_hidden(s_layout, false);
+    lv_obj_move_foreground(s_layout);
+}
+
+static void build_layout(lv_obj_t *screen)
+{
+    s_layout = panel(screen, 40, 20, 720, 440);
+    dialog_title(s_layout, "Tile layout");
+    s_layout_tab[0] = small_button(s_layout, 230, 12, 120, 44, "6 fields", on_layout_button, 6);
+    s_layout_tab[1] = small_button(s_layout, 358, 12, 120, 44, "8 fields", on_layout_button, 8);
+    close_button(s_layout, 660, 12, on_layout_button, 0);
+    lv_obj_t *info = label(s_layout, &ui_font_14, MUTED);
+    lv_obj_set_width(info, 680);
+    lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(info, "Tap two fields to swap them. Field n is footswitch n and MIDI CC 49 + n.");
+    lv_obj_set_pos(info, 20, 68);
+    s_layout_hidden_label = label(s_layout, &ui_font_12, MUTED);
+    lv_obj_set_style_text_letter_space(s_layout_hidden_label, 2, 0);
+    lv_label_set_text(s_layout_hidden_label, "NOT ON THE SCREEN");
+    lv_obj_set_pos(s_layout_hidden_label, 20, 292);
+    for (int p = 0; p < TILES; p++) {
+        lv_obj_t *c = button(s_layout, 0, 0, 100, 50, on_layout_cell);
+        lv_obj_remove_event_cb(c, on_layout_cell);
+        lv_obj_add_event_cb(c, on_layout_cell, LV_EVENT_CLICKED, (void *)(intptr_t)p);
+        s_layout_cell[p] = c;
+        s_layout_cell_number[p] = label(c, &ui_font_20, TEXT);
+        lv_obj_align(s_layout_cell_number[p], LV_ALIGN_TOP_RIGHT, -4, -2);
+        s_layout_cell_name[p] = label(c, &ui_font_16, TEXT);
+        lv_label_set_long_mode(s_layout_cell_name[p], LV_LABEL_LONG_WRAP);
+        lv_obj_align(s_layout_cell_name[p], LV_ALIGN_LEFT_MID, 0, 0);
+    }
+    small_button(s_layout, 20, 378, 150, 46, "Default", on_layout_button, -1);
+    primary(small_button(s_layout, 550, 378, 150, 46, "Save", on_layout_button, 1));
+    lv_obj_set_hidden(s_layout, true);
+}
+
+void ui_set_layout(int count, const uint8_t order[TILES])
+{
+    lvgl_port_lock(0);
+    s_layout_count = count;
+    memcpy(s_layout_order, order, sizeof(s_layout_order));
+    for (int i = 0; i < TILES; i++) place_tile(i);
+    fit_names();
+    lvgl_port_unlock();
+}
+
 static void build_midi(lv_obj_t *screen)
 {
     s_midi = panel(screen, 110, 60, 580, 400);
@@ -2169,7 +2329,7 @@ static void build_midi(lv_obj_t *screen)
     lv_obj_t *map = label(s_midi, &ui_font_14, MUTED);
     lv_obj_set_width(map, 540);
     lv_label_set_long_mode(map, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(map, "PC 0-63 = presets   CC 37-41 = FX 1-5   CC 1 = reverb mix   CC 50-57 = footswitches 1-8");
+    lv_label_set_text(map, "PC 0-63 = presets   CC 37-41 = FX 1-5   CC 1 = reverb mix   CC 50-57 = fields 1-8");
     lv_obj_set_pos(map, 20, 292);
 
     s_midi_list = lv_obj_create(s_midi);
@@ -2183,6 +2343,7 @@ static void build_midi(lv_obj_t *screen)
     lv_obj_set_scroll_dir(s_midi_list, LV_DIR_VER);
 
     small_button(s_midi, 20, 336, 180, 46, "Forget device", on_midi_button, -1);
+    small_button(s_midi, 210, 336, 180, 46, "Tile layout", open_layout, 0);
     lv_obj_set_hidden(s_midi, true);
 }
 
@@ -2637,6 +2798,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     build_mix_editor(screen);
     build_learn(screen);
     build_midi(screen);
+    build_layout(screen);
     build_toast(screen);
     build_splash(screen);
 

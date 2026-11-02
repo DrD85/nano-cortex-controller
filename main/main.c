@@ -139,6 +139,18 @@ static int s_scene_last = -1;   // recalled last: the lit one if two scenes are 
 #define SCENE_VALUES_KEY "scv%02d"    // the settings, apart from the names (stored as 1.8.0 did)
 #define SCENE_VALUES_MAX (UI_SCENES * NANO_FX_SLOTS * (6 + 2 * NANO_MAX_PARAMS))
 #define SCENE_MODE_KEY "scenemode"
+#define LAYOUT_KEY "layout"   // { count, order[8] }
+
+// Tile layout: footswitch / CC 50+p-1 / Chocolate switch p presses the switch s_layout[p - 1] (1-8) - for p up to
+// s_layout_count (6 or 8); the switches themselves keep their numbers everywhere else. Set in the layout dialog.
+static volatile uint8_t s_layout[FOOTSWITCH_COUNT] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+static volatile int s_layout_count = FOOTSWITCH_COUNT;
+
+// The switch at position p (1-8), 0 = no field there.
+static int layout_switch(int p)
+{
+    return p >= 1 && p <= s_layout_count ? s_layout[p - 1] : 0;
+}
 // Values of a scene on their way to the Nano: the first ones go out with the scene's switches, the rest a few at a
 // time (as an FX preset is sent; the Nano takes one write per 15 ms).
 #define SCENE_BURST 8
@@ -457,6 +469,8 @@ static void command(char c, int arg)
 // millisecond between the foot and the looper counts.
 static void on_footswitch(int number, footswitch_event_t event)
 {
+    number = layout_switch(number);   // the field at this footswitch's position
+    if (!number) return;
     static bool waiting[FOOTSWITCH_COUNT + 1];   // footswitch task only
     static bool sounding[FOOTSWITCH_COUNT + 1];  // its controller is at 127
     if (sounding[number] && event == FOOTSWITCH_RELEASE) {
@@ -732,6 +746,51 @@ static void banks_load(void)
 }
 
 static void show(void);
+
+// A layout is valid if it shows 6 or 8 fields and lists every switch once.
+static bool layout_valid(int count, const uint8_t *order)
+{
+    if (count != 6 && count != FOOTSWITCH_COUNT) return false;
+    unsigned seen = 0;
+    for (int p = 0; p < FOOTSWITCH_COUNT; p++) {
+        if (order[p] < 1 || order[p] > FOOTSWITCH_COUNT) return false;
+        seen |= 1u << order[p];
+    }
+    return seen == 0x1FE;
+}
+
+static void layout_load(void)
+{
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
+    uint8_t stored[1 + FOOTSWITCH_COUNT];
+    size_t size = sizeof(stored);
+    if (nvs_get_blob(nvs, LAYOUT_KEY, stored, &size) == ESP_OK && size == sizeof(stored) && layout_valid(stored[0], stored + 1)) {
+        for (int p = 0; p < FOOTSWITCH_COUNT; p++) s_layout[p] = stored[1 + p];
+        s_layout_count = stored[0];
+    }
+    nvs_close(nvs);
+}
+
+// From the layout dialog: count << 24 | (switch at position p - 1) << 3p.
+static void layout_set(int packed)
+{
+    uint8_t stored[1 + FOOTSWITCH_COUNT] = { (uint8_t)(packed >> 24) };
+    for (int p = 0; p < FOOTSWITCH_COUNT; p++) stored[1 + p] = (uint8_t)(((packed >> (3 * p)) & 7) + 1);
+    if (!layout_valid(stored[0], stored + 1)) return;
+    s_layout_count = stored[0];
+    for (int p = 0; p < FOOTSWITCH_COUNT; p++) s_layout[p] = stored[1 + p];
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
+        if (nvs_set_blob(nvs, LAYOUT_KEY, stored, sizeof(stored)) == ESP_OK) nvs_commit(nvs);
+        nvs_close(nvs);
+    }
+    ESP_LOGI(TAG, "Tile layout: %d fields, switches %d %d %d %d %d %d %d %d", stored[0], stored[1], stored[2], stored[3],
+             stored[4], stored[5], stored[6], stored[7], stored[8]);
+    ui_set_layout(stored[0], stored + 1);
+    if (nano_link_ready()) show();
+    ui_show_message(stored[0] == 6 ? "Tile layout saved: 6 fields." : "Tile layout saved: 8 fields.");
+}
 
 static void looper_tiles_load(void)
 {
@@ -2817,7 +2876,8 @@ static bool chocolate_midi(uint8_t type, uint8_t d1, uint8_t d2)
     } else {
         return false;
     }
-    if (!looper_switch(number) && nano_link_ready()) handle_switch(number);
+    number = layout_switch(number);   // field 1-8 of the layout
+    if (number && !looper_switch(number) && nano_link_ready()) handle_switch(number);
     return true;
 }
 
@@ -2851,7 +2911,8 @@ static void handle_midi(int arg)
         int slot = d1 - 37;
         if (s_state.fx_known && s_state.fx_type[slot] && s_state.fx_on[slot] != (d2 >= 64)) toggle_fx(slot);
     } else if (type == 0xB0 && d1 >= 50 && d1 <= 57 && d2 >= 64) {
-        handle_switch(d1 - 49);
+        int number = layout_switch(d1 - 49);   // field 1-8 of the layout
+        if (number) handle_switch(number);
     } else if (type == 0xB0 && d1 == 58 && d2 >= 64) {   // as footswitch 3 held: Pre FX 1 A <-> B
         ab_swap(AB_PRE1);
     }
@@ -2867,6 +2928,7 @@ static void handle_command(char c, int arg)
     if (c == 'h') { print_help(); return; }
     if (c == 'l') { print_presets(); return; }
     if (c == 'D' || c == 'Z') { footswitch_learn(c, arg); return; }   // works without the Nano
+    if (c == ']') { layout_set(arg); return; }        // tile layout, also without the Nano
     if (c == 'X' || c == 'P' || c == 'N') { midi_command(c, arg); return; }
     if (c == '@') {                                    // looper app on the phone connected / gone / other interval
         static int was = -1;
@@ -3552,6 +3614,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&library_timer, &s_library_timer));
     banks_load();
     looper_tiles_load();
+    layout_load();
     s_scenes = heap_caps_calloc(UI_SCENES, sizeof(scene_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     configASSERT(s_scenes);
     const esp_timer_create_args_t scene_timer = { .callback = scene_timer_cb, .name = "scene" };
@@ -3586,6 +3649,9 @@ void app_main(void)
     esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
 
     ui_init(command, on_param, on_text);
+    uint8_t order[FOOTSWITCH_COUNT];
+    for (int p = 0; p < FOOTSWITCH_COUNT; p++) order[p] = s_layout[p];
+    ui_set_layout(s_layout_count, order);
     char version[40];
     snprintf(version, sizeof(version), "v%s", esp_app_get_description()->version);
 #ifdef NANO_WEB

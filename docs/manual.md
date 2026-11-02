@@ -39,6 +39,7 @@ With scenes chosen (the layers button, or footswitch 2 held), switches 3–8 are
 preset instead of the bank's presets, and footswitch 1 changes between FX mode and the scenes.
 
 Active tiles light up in full colour, inactive ones are dimmed. FX tiles use the effect category colours.
+The numbers here are the switches' functions; where they sit is up to the [tile layout](#tile-layout-6-or-8-fields).
 Footswitches 1 and 2 act when you lift your foot (they have a held function). Holding footswitch 1 for 0.6 s opens
 the [looper mode](#looper-mode-a-looper-app-on-a-phone); holding footswitch 2 changes between the scenes and the
 bank's presets, as the scenes button does (while the tuner is open, footswitch 2 closes it at once). Tiles 1 and 2
@@ -290,7 +291,7 @@ for the Nano (for example with the MC6 export of the Nano Cortex Editor) work ov
 | Program Change 0–63 | preset 1–64 |
 | CC 37–41 | FX slot 1–5 (Pre FX 1, Pre FX 2, Post FX 1–3): value 64–127 on, 0–63 off |
 | CC 1 | expression: reverb mix from Pos 1 (0) to Pos 2 (127) |
-| CC 50–57, value 64–127 | press footswitch 1–8 (mode, tuner, presets or FX, reverb switch) |
+| CC 50–57, value 64–127 | press field 1–8 of the [tile layout](#tile-layout-6-or-8-fields) (mode, tuner, presets or FX, reverb switch) |
 | CC 58, value 64–127 | hold footswitch 3: Pre FX 1 swaps to its second effect and back |
 | CC 59 | looper mode: value 64–127 on, 0–63 off |
 | CC 60 | footswitches 3–8: value 64–127 [scenes](#scenes) of the preset, 0–63 presets of the bank |
@@ -360,9 +361,20 @@ Without the controller (or before it has connected) the app connects to the Nano
   default footswitch 2 plays and pauses its jam track player, 7 goes to the previous track and 8 to the next; MIDI
   Learn in the editor assigns them to anything else. No phone is needed for this.
 
+## Tile layout: 6 or 8 fields
+
+**Tile layout** in the Bluetooth MIDI dialog (MIDI button in the top bar). Choose **6 fields** (2 × 3, larger tiles)
+or **8 fields**, then tap two fields to swap them – for example the tuner to another place, or Post FX 3 and the
+reverb switch out of the six. **Save** stores the layout on the controller, **Default** brings back 8 fields in
+the usual order.
+
+Field *n* is pressed by footswitch *n*, MIDI **CC 49 + n** (CC 50–55 with 6 fields) and the Chocolate's switch *n*;
+the small number in a tile's corner is its field. A switch that is not on the screen does nothing from the
+footswitches or by CC 50–57 (CC 37–41 still switch the effects). With 6 fields footswitches 7 and 8 are free.
+
 ## Footswitch learn
 
-Long press on tile 2 (footswitch 2; **Switch 1** in the dialog learns footswitch 1 instead), or **LEARN SWITCH** in the
+Long press on the tuner tile (its footswitch; **Switch 1** in the dialog learns footswitch 1 instead), or **LEARN SWITCH** in the
 bank editor. Then press the footswitch that should have
 this function within 15 seconds. If it had another function, the two are swapped. **DEFAULT ORDER** restores
 the standard order.
@@ -386,4 +398,4 @@ Without an SX1509 the controller works with the touch screen only.
 
 | On the Nano | On the controller |
 |---|---|
-| presets, names, captures, cabs, FX and their values, expression settings, USB volume | own banks (preset, colour, symbol), scenes, reverb mix Pos 1 / Pos 2, footswitch order, second reverbs, auto-wah settings, the Bluetooth MIDI device |
+| presets, names, captures, cabs, FX and their values, expression settings, USB volume | own banks (preset, colour, symbol), scenes, reverb mix Pos 1 / Pos 2, footswitch order, tile layout, second reverbs, auto-wah settings, the Bluetooth MIDI device |

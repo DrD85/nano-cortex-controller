@@ -142,7 +142,7 @@ static nano_library_t *example_library(void)
 static void close_all(void)
 {
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
-                                   s_volume, s_cab_settings, s_amp, s_toast, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel };
+                                   s_layout, s_volume, s_cab_settings, s_amp, s_toast, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) lv_obj_set_hidden(overlays[i], true);
     update_main_hidden();
 }
@@ -349,5 +349,18 @@ int main(void)
     snprintf(info, sizeof(info), "%s  -  slot %d", st.cab, st.cab_slot);
     ui_set_cab_settings(cab, true, info);
     shot("12-cab-settings");
+    close_all();
+
+    // Tile layout: 6 fields (mode, Pre FX 1-2, tuner, Post FX 1-2; Post FX 3 and the reverb switch left out)
+    static const uint8_t six[8] = { 1, 3, 4, 2, 5, 6, 7, 8 };
+    ui_set_layout(6, six);
+    view.fx_mode = true;
+    ui_show_state(&st, &view);
+    shot("27-six-fields");
+    open_layout(NULL);
+    shot("28-tile-layout");
+    close_all();
+    static const uint8_t eight[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    ui_set_layout(8, eight);
     return 0;
 }

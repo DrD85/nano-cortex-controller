@@ -179,6 +179,11 @@ void ui_set_pedal(int value, int min, int max);
 // What the Nano's EXP/MIDI connector is set to (NANO_JACK_*, -1 = not known), shown at the top of that dialog.
 void ui_set_jack(int mode);
 
+// Tile layout: `count` fields (6 or 8) on the screen; position p shows the tile of switch order[p] (1-8, all eight
+// listed, the ones past count are left out). The footswitches and MIDI CC 50-57 are mapped the same way (main.c).
+// The layout dialog (from the MIDI dialog) sends ']' with count << 24 | (order[p] - 1) << 3p.
+void ui_set_layout(int count, const uint8_t order[8]);
+
 // The Nano Cortex Editor is connected through the controller (shown in the status line).
 void ui_set_app(bool connected);
 
