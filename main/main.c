@@ -145,6 +145,9 @@ static int s_scene_last = -1;   // recalled last: the lit one if two scenes are 
 // s_layout_count (6 or 8); the switches themselves keep their numbers everywhere else. Set in the layout dialog.
 static volatile uint8_t s_layout[FOOTSWITCH_COUNT] = { 1, 2, 3, 4, 5, 6, 7, 8 };
 static volatile int s_layout_count = FOOTSWITCH_COUNT;
+// What footswitch 1 changes between (UI_SWITCH1_*), chosen in the tile layout dialog.
+#define SWITCH1_KEY "switch1"
+static int s_switch1 = UI_SWITCH1_FX_PRESETS;
 
 // The switch at position p (1-8), 0 = no field there.
 static int layout_switch(int p)
@@ -803,25 +806,31 @@ static void layout_load(void)
         for (int p = 0; p < FOOTSWITCH_COUNT; p++) s_layout[p] = stored[1 + p];
         s_layout_count = stored[0];
     }
+    uint8_t switch1;
+    size = 1;
+    if (nvs_get_blob(nvs, SWITCH1_KEY, &switch1, &size) == ESP_OK && size == 1 && switch1 < UI_SWITCH1_COUNT) s_switch1 = switch1;
     nvs_close(nvs);
 }
 
 // From the layout dialog: count << 24 | (switch at position p - 1) << 3p.
 static void layout_set(int packed)
 {
-    uint8_t stored[1 + FOOTSWITCH_COUNT] = { (uint8_t)(packed >> 24) };
+    uint8_t stored[1 + FOOTSWITCH_COUNT] = { (uint8_t)((packed >> 24) & 0xF) };
+    int switch1 = (packed >> 28) & 3;
     for (int p = 0; p < FOOTSWITCH_COUNT; p++) stored[1 + p] = (uint8_t)(((packed >> (3 * p)) & 7) + 1);
     if (!layout_valid(stored[0], stored + 1)) return;
     s_layout_count = stored[0];
     for (int p = 0; p < FOOTSWITCH_COUNT; p++) s_layout[p] = stored[1 + p];
+    s_switch1 = switch1;
     nvs_handle_t nvs;
     if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
-        if (nvs_set_blob(nvs, LAYOUT_KEY, stored, sizeof(stored)) == ESP_OK) nvs_commit(nvs);
+        uint8_t s1 = (uint8_t)switch1;
+        if (nvs_set_blob(nvs, LAYOUT_KEY, stored, sizeof(stored)) == ESP_OK && nvs_set_blob(nvs, SWITCH1_KEY, &s1, 1) == ESP_OK) nvs_commit(nvs);
         nvs_close(nvs);
     }
     ESP_LOGI(TAG, "Tile layout: %d fields, switches %d %d %d %d %d %d %d %d", stored[0], stored[1], stored[2], stored[3],
              stored[4], stored[5], stored[6], stored[7], stored[8]);
-    ui_set_layout(stored[0], stored + 1);
+    ui_set_layout(stored[0], stored + 1, switch1);
     if (nano_link_ready()) show();
     ui_show_message(stored[0] == 6 ? "Tile layout saved: 6 fields." : "Tile layout saved: 8 fields.");
 }
@@ -3062,15 +3071,46 @@ static bool looper_switch(int arg)
     return true;
 }
 
+// Footswitch 1: the next mode of the ones it changes between (s_switch1). Holding footswitch 2 still changes between
+// scenes and presets.
+static void mode_switch(void)
+{
+    bool fx = s_fx_mode, scenes = !fx && s_scene_mode;
+    bool to_fx;
+    switch (s_switch1) {
+    case UI_SWITCH1_FX_SCENES:      // FX <-> scenes (from presets: scenes)
+        to_fx = scenes;
+        if (!to_fx) {
+            scene_mode(1);
+            return;
+        }
+        break;
+    case UI_SWITCH1_PRESETS_SCENES: // presets <-> scenes (from FX: presets)
+        scene_mode(!fx && !scenes);
+        return;
+    case UI_SWITCH1_ALL:            // presets -> scenes -> FX -> presets
+        if (fx || !scenes) {
+            scene_mode(!fx);
+            return;
+        }
+        to_fx = true;
+        break;
+    default:                        // FX <-> presets or scenes (whichever was chosen last)
+        to_fx = !fx;
+        break;
+    }
+    s_fx_mode = to_fx;
+    if (!s_fx_mode) follow_preset_with_bank(s_state.current_preset);
+    ESP_LOGI(TAG, "%s mode", s_fx_mode ? "FX" : s_scene_mode ? "Scene" : "Preset");
+    show();
+}
+
 static void handle_switch(int number)
 {
     if (looper_switch(number)) return;
     ui_flash_tile(number - 1);
     if (number == 1) {
-        s_fx_mode = !s_fx_mode;
-        if (!s_fx_mode) follow_preset_with_bank(s_state.current_preset);
-        ESP_LOGI(TAG, "%s mode", s_fx_mode ? "FX" : s_scene_mode ? "Scene" : "Preset");
-        show();
+        mode_switch();
     } else if (number == 2) {
         set_tuner(!s_tuner_on);
     } else if (s_fx_mode) {
@@ -3958,7 +3998,7 @@ void app_main(void)
     ui_init(command, on_param, on_text);
     uint8_t order[FOOTSWITCH_COUNT];
     for (int p = 0; p < FOOTSWITCH_COUNT; p++) order[p] = s_layout[p];
-    ui_set_layout(s_layout_count, order);
+    ui_set_layout(s_layout_count, order, s_switch1);
     char version[40];
     snprintf(version, sizeof(version), "v%s", esp_app_get_description()->version);
 #ifdef NANO_WEB

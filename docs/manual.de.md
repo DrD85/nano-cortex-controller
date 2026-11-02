@@ -423,11 +423,24 @@ Ohne Controller (oder bevor er verbunden ist) verbindet sich die App wie bisher 
 **Tile layout** im Bluetooth-MIDI-Fenster (MIDI-Knopf oben). **6 fields** (2 × 3, größere Kacheln) oder **8 fields**
 wählen, dann zwei Felder antippen, um sie zu tauschen – etwa das Stimmgerät an eine andere Stelle oder Post FX 3 und
 den Reverb-Schalter aus den sechs heraus. **Save** speichert die Anordnung auf dem Controller, **Default** stellt 8
-Felder in der gewohnten Reihenfolge wieder her.
+Felder in der gewohnten Reihenfolge wieder her, und Fußschalter 1 wechselt wieder zwischen FX und Presets.
 
 Feld *n* drücken Fußschalter *n*, MIDI **CC 49 + n** (CC 50–55 bei 6 Feldern) und Schalter *n* des Chocolate; die
 kleine Zahl in der Kachelecke ist ihr Feld. Ein Schalter, der nicht auf dem Bildschirm ist, tut über die Fußschalter
 und CC 50–57 nichts (CC 37–41 schalten die Effekte weiterhin). Bei 6 Feldern sind die Fußschalter 7 und 8 frei.
+
+**Wozwischen Fußschalter 1 wechselt** – der Knopf zwischen *Default* und *Save* (jedes Antippen nimmt die nächste
+Wahl, *Save* behält sie):
+
+| Wahl | Fußschalter 1 |
+|---|---|
+| *Switch 1: FX / presets* | FX-Modus ↔ die Presets der Bank oder die Szenen, je nachdem, was zuletzt gewählt war (wie bisher) |
+| *Switch 1: FX / scenes* | FX-Modus ↔ die Szenen des Presets |
+| *Switch 1: presets / scenes* | die Presets der Bank ↔ die Szenen; der FX-Modus wird nicht benutzt |
+| *Switch 1: presets, scenes, FX* | alle drei der Reihe nach: Presets → Szenen → FX → Presets |
+
+Fußschalter 1 gehalten öffnet weiter den Looper-Modus, Fußschalter 2 gehalten wechselt weiter zwischen Szenen und
+Presets.
 
 ## Fußschalter-Learn
 

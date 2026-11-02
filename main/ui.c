@@ -2185,7 +2185,12 @@ static void on_midi_button(lv_event_t *e)
 // ---- tile layout: 6 or 8 fields, in any order ----
 
 static lv_obj_t *s_layout_tab[2], *s_layout_cell[TILES], *s_layout_cell_number[TILES], *s_layout_cell_name[TILES];
-static lv_obj_t *s_layout_hidden_label;
+static lv_obj_t *s_layout_hidden_label, *s_layout_switch1;
+static int s_switch1, s_lay_switch1;   // what footswitch 1 changes between (UI_SWITCH1_*): stored / being edited
+static const char *const SWITCH1_NAMES[UI_SWITCH1_COUNT] = {
+    "Switch 1: FX / presets", "Switch 1: FX / scenes", "Switch 1: presets / scenes",
+    "Switch 1: presets, scenes, FX",
+};
 static uint8_t s_lay_order[TILES];   // being edited: position -> switch 1-8 (all eight; the last ones are not shown)
 static int s_lay_count, s_lay_selected = -1;
 
@@ -2230,6 +2235,7 @@ static void fill_layout(void)
         lv_obj_set_hidden(c, false);
     }
     lv_obj_set_hidden(s_layout_hidden_label, s_lay_count == TILES);
+    lv_label_set_text(lv_obj_get_child(s_layout_switch1, 0), SWITCH1_NAMES[s_lay_switch1]);
 }
 
 static void on_layout_cell(lv_event_t *e)
@@ -2248,17 +2254,20 @@ static void on_layout_cell(lv_event_t *e)
 
 static void on_layout_button(lv_event_t *e)
 {
-    int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 close, 6 / 8 fields, -1 default, 1 save
+    int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 close, 6 / 8 fields, -1 default, 1 save, 2 switch 1
     s_lay_selected = -1;
-    if (action == 6 || action == 8) {
+    if (action == 2) {
+        s_lay_switch1 = (s_lay_switch1 + 1) % UI_SWITCH1_COUNT;
+    } else if (action == 6 || action == 8) {
         s_lay_count = action;
     } else if (action == -1) {
         for (int p = 0; p < TILES; p++) s_lay_order[p] = (uint8_t)(p + 1);
         s_lay_count = TILES;
+        s_lay_switch1 = UI_SWITCH1_FX_PRESETS;
     } else {
         lv_obj_set_hidden(s_layout, true);
         if (action == 1) {
-            int packed = s_lay_count << 24;
+            int packed = s_lay_switch1 << 28 | s_lay_count << 24;
             for (int p = 0; p < TILES; p++) packed |= (s_lay_order[p] - 1) << (3 * p);
             send(']', packed);
         }
@@ -2271,6 +2280,7 @@ static void open_layout(lv_event_t *e)
 {
     memcpy(s_lay_order, s_layout_order, sizeof(s_lay_order));
     s_lay_count = s_layout_count;
+    s_lay_switch1 = s_switch1;
     s_lay_selected = -1;
     fill_layout();
     lv_obj_set_hidden(s_layout, false);
@@ -2305,13 +2315,16 @@ static void build_layout(lv_obj_t *screen)
         lv_obj_align(s_layout_cell_name[p], LV_ALIGN_LEFT_MID, 0, 0);
     }
     small_button(s_layout, 20, 378, 150, 46, "Default", on_layout_button, -1);
+    // Between them: what footswitch 1 changes between (a tap takes the next choice)
+    s_layout_switch1 = small_button(s_layout, 180, 378, 360, 46, SWITCH1_NAMES[0], on_layout_button, 2);
     primary(small_button(s_layout, 550, 378, 150, 46, "Save", on_layout_button, 1));
     lv_obj_set_hidden(s_layout, true);
 }
 
-void ui_set_layout(int count, const uint8_t order[TILES])
+void ui_set_layout(int count, const uint8_t order[TILES], int switch1)
 {
     lvgl_port_lock(0);
+    s_switch1 = switch1;
     s_layout_count = count;
     memcpy(s_layout_order, order, sizeof(s_layout_order));
     for (int i = 0; i < TILES; i++) place_tile(i);

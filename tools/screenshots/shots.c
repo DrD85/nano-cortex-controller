@@ -374,7 +374,7 @@ int main(void)
 
     // Tile layout: 6 fields (mode, Pre FX 1-2, tuner, Post FX 1-2; Post FX 3 and the reverb switch left out)
     static const uint8_t six[8] = { 1, 3, 4, 2, 5, 6, 7, 8 };
-    ui_set_layout(6, six);
+    ui_set_layout(6, six, UI_SWITCH1_ALL);
     view.fx_mode = true;
     ui_show_state(&st, &view);
     shot("27-six-fields");
@@ -382,6 +382,6 @@ int main(void)
     shot("28-tile-layout");
     close_all();
     static const uint8_t eight[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
-    ui_set_layout(8, eight);
+    ui_set_layout(8, eight, UI_SWITCH1_FX_PRESETS);
     return 0;
 }

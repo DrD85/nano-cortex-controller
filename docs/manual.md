@@ -404,11 +404,23 @@ Without the controller (or before it has connected) the app connects to the Nano
 **Tile layout** in the Bluetooth MIDI dialog (MIDI button in the top bar). Choose **6 fields** (2 × 3, larger tiles)
 or **8 fields**, then tap two fields to swap them – for example the tuner to another place, or Post FX 3 and the
 reverb switch out of the six. **Save** stores the layout on the controller, **Default** brings back 8 fields in
-the usual order.
+the usual order, and footswitch 1 changes between FX and presets again.
 
 Field *n* is pressed by footswitch *n*, MIDI **CC 49 + n** (CC 50–55 with 6 fields) and the Chocolate's switch *n*;
 the small number in a tile's corner is its field. A switch that is not on the screen does nothing from the
 footswitches or by CC 50–57 (CC 37–41 still switch the effects). With 6 fields footswitches 7 and 8 are free.
+
+**What footswitch 1 changes between** – the button between *Default* and *Save* (a tap takes the next choice, *Save*
+keeps it):
+
+| Choice | Footswitch 1 |
+|---|---|
+| *Switch 1: FX / presets* | FX mode ↔ the bank's presets or the scenes, whichever was chosen last (as before) |
+| *Switch 1: FX / scenes* | FX mode ↔ the scenes of the preset |
+| *Switch 1: presets / scenes* | the bank's presets ↔ the scenes; FX mode is not used |
+| *Switch 1: presets, scenes, FX* | all three in turn: presets → scenes → FX → presets |
+
+Holding footswitch 1 still opens the looper mode, holding footswitch 2 still changes between scenes and presets.
 
 ## Footswitch learn
 
