@@ -4,7 +4,8 @@
 //   scene mode:  in place of them the six scenes of the current preset - which of its effects are on (the Scenes
 //                button next to Save goes there and back; long press on a tile: name, colour and effects)
 //   FX mode:     FX slots 1-5 on/off, reverb mix Pos 1 / Pos 2 (long press: set them); Pre FX 1 can have
-//                a second effect (2ND in its FX editor), swapped by holding footswitch 3
+//                a second effect (2ND in its FX editor), swapped by holding footswitch 3; any FX slot can have a
+//                settings swap (an FX preset, swapped in by holding its footswitch: the tile shows its name)
 // VOL (top left): capture volume; long press on the capture card: its gain, bass, mid and treble; long press on the
 // cab card: cab output, high pass and low pass.
 #pragma once
@@ -58,6 +59,8 @@
 //                  from now on; 0x100 | n = the scene leaves this effect's settings alone again
 //   '|', r<<16|v   FX editor of a wah: auto-wah setting r (UI_WAH_*) of this preset changed to v (answer with
 //                  ui_set_autowah)
+//   '[', s<<8|n    FX editor, swap button: holding the footswitch of FX slot s (0-4) swaps between the preset's own
+//                  settings and FX preset n (1-UI_FX_PRESETS) of its model, for this preset; n = 0: no swap
 typedef void (*ui_command_cb)(char command, int arg);
 #define UI_SWITCH_HOLD 0x100
 #define UI_SWITCH_SENT 0x200   // looper mode: the footswitch's message went out already, only show the press
@@ -118,6 +121,10 @@ typedef struct {
     uint8_t scene_set[UI_SCENES];                             // bit n = the scene carries settings for the effect in slot n
     uint8_t wah_mode[NANO_FX_SLOTS];                          // auto-wah of the wah in this slot (UI_WAH_OFF / ON / HELD)
     uint8_t wah_rate[NANO_FX_SLOTS];                          // its rate (index into the list of UI_WAH_RATES)
+    uint8_t hold_fxp[NANO_FX_SLOTS];                          // settings swap: FX preset (1-4) that holding the slot's
+                                                              // footswitch swaps to, 0 = none
+    char hold_names[NANO_FX_SLOTS][16];                       // its name
+    uint8_t hold_active;                                      // bit n: slot n has that FX preset now
 } ui_view_t;
 
 #define UI_BANK_COLOR_COUNT 10

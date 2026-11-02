@@ -312,6 +312,34 @@ static struct {
 } s_fxp = { .active = -1 };
 static esp_timer_handle_t s_fxp_timer;
 
+// Settings swap: per preset and FX slot one FX preset of the effect's model can be chosen (the swap button in the FX
+// editor). Holding the slot's footswitch in FX mode then swaps between the preset's own settings (A) and that FX
+// preset (B); the tile shows the name of what is on. The model stays, so only values go out and the sound does not
+// break off. The values of A are read from the Nano before B goes out; for an effect that is off the ones read last
+// count (the Nano reports no values of effects that are off - if there are none yet, the effect is switched on for a
+// moment to read them).
+#define HS_STORE_KEY "hs%d"
+#define HS_SEND_CHUNK 4
+typedef struct {
+    uint32_t type[NANO_FX_SLOTS];     // the model a choice is for: it counts while this model is in the slot
+    uint8_t fxp[NANO_FX_SLOTS];       // FX preset 1-FXP_COUNT of that model, 0 = none
+} hs_store_t;                         // stored in NVS per preset
+enum { HS_IDLE, HS_TURNING_ON, HS_READING, HS_SENDING };
+static struct {
+    int preset;                       // the preset the choices were read for, 0 = none yet
+    hs_store_t set;
+    char names[NANO_FX_SLOTS][16];    // names of the chosen FX presets ("" = deleted since)
+    uint8_t active;                   // bit n: slot n has B now
+    uint8_t a_known;                  // bit n: a_values[n] are the values of A
+    uint8_t a_count[NANO_FX_SLOTS];
+    float a_values[NANO_FX_SLOTS][NANO_MAX_PARAMS];
+    int phase, slot, target, tries;   // the swap under way (one at a time)
+    bool restore_off;                 // the effect was switched on only to read A
+    int count, sent;                  // values being sent
+    float values[NANO_MAX_PARAMS];
+} s_hs;
+static esp_timer_handle_t s_hs_timer;
+
 // USB playback volume (dB) from the Nano's settings; the slider sends at most one value per PARAM_SEND_MS.
 static struct {
     bool known;
@@ -655,6 +683,11 @@ static void ab_timer_cb(void *arg)
     command('F', 0);
 }
 
+static void hs_timer_cb(void *arg)
+{
+    command('>', 0);
+}
+
 static void read_timer_cb(void *arg)
 {
     command('R', 0);
@@ -704,6 +737,7 @@ static void print_help(void)
            "  n / p        next / previous preset\n"
            "  1-64         go to a preset (Enter or wait a moment)\n"
            "  a-e          FX on/off: a = Pre FX 1 ... e = Post FX 3\n"
+           "  A-E          FX mode: hold its footswitch (second effect, settings swap)\n"
            "  m / t / x    mode (footswitch 1) / tuner (2) / reverb switch (8 in FX mode)\n"
            "  o            looper mode on / off (as holding footswitch 1); then t = its switch 2\n"
            "  $            scenes / presets on footswitches 3-8 (the scenes button, or footswitch 2 held)\n"
@@ -1001,16 +1035,19 @@ static bool reverb_b_used(void)
 // scenes <-> presets) always, 3 in FX mode with a second effect. In looper mode none - there every press goes out
 // at once.
 static int wah_mode(int slot);
+static int hs_b(int slot);
 
 static void looper_switches(void)
 {
-    s_hold_switches = s_looper ? 0 : 1u << 1 | 1u << 2 | (s_fx_mode && s_ab[AB_PRE1].b.type ? 1u << 3 : 0);
+    uint32_t hold = s_looper ? 0 : 1u << 1 | 1u << 2 | (s_fx_mode && s_ab[AB_PRE1].b.type ? 1u << 3 : 0);
     // FX mode: the switch of a wah set to "Hold" acts while it is held. Pre FX 1 with a second effect keeps its
-    // held function, the swap A <-> B; its wah then moves while it is on.
+    // held function, the swap A <-> B; its wah then moves while it is on. A slot with a settings swap is held for it.
     uint32_t momentary = 0;
     for (int slot = 0; slot < NANO_FX_SLOTS && s_fx_mode && !s_looper; slot++) {
         if (wah_mode(slot) == UI_WAH_HELD && !(slot == 0 && s_ab[AB_PRE1].b.type)) momentary |= 1u << (slot + 3);
+        else if (hs_b(slot)) hold |= 1u << (slot + 3);
     }
+    s_hold_switches = hold;
     s_momentary_switches = momentary;
     s_looper_live = s_looper;
 }
@@ -1048,6 +1085,11 @@ static void show(void)
         view.wah_rate[slot] = s_wah[slot].rate;
     }
     wah_update();
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
+        view.hold_fxp[slot] = (uint8_t)hs_b(slot);
+        if (view.hold_fxp[slot]) strlcpy(view.hold_names[slot], s_hs.names[slot], sizeof(view.hold_names[slot]));
+        if (view.hold_fxp[slot] && ((s_hs.active >> slot) & 1)) view.hold_active |= (uint8_t)(1u << slot);
+    }
     view.scene_active = scene_active();
     for (int i = 0; i < UI_SCENES; i++) {
         strlcpy(view.scene_names[i], s_scenes[i].name, sizeof(view.scene_names[i]));
@@ -1229,6 +1271,7 @@ static int scene_queue_values(const scene_t *scene, int slot)
 {
     const scene_fx_t *set = &scene->set[slot];
     if (!set->type || set->type != s_state.fx_type[slot]) return 0;   // none, or for a model that is not in the slot
+    s_hs.active &= (uint8_t)~(1u << slot);   // the scene's settings, not those of a settings swap
     bool tracked = s_values[slot].type == set->type;
     int queued = 0;
     for (int param = 0; param < set->count; param++) {
@@ -1359,6 +1402,10 @@ static void editor_read(void)
 {
     int slot = s_edit.slot;
     if (slot < 0 || !s_state.fx_type[slot] || !s_state.fx_on[slot]) return;
+    if (s_hs.phase == HS_READING) {   // one reply at a time: the settings swap's comes first
+        editor_read_later(200);
+        return;
+    }
     uint8_t buf[8];
     s_edit.request_slot = slot;
     send("FX parameters request", NANO_MSG_FX_PARAMS_REQUEST, buf, nano_fx_params_request(slot, buf));
@@ -1722,6 +1769,19 @@ static void fxp_key(uint32_t type, char *key)
     snprintf(key, 16, "fxp%lu", (unsigned long)type);
 }
 
+// The FX presets stored for a model (empty places if there are none).
+static void fxp_read(uint32_t type, fxp_t list[FXP_COUNT])
+{
+    size_t size = sizeof(fxp_t) * FXP_COUNT;
+    memset(list, 0, size);
+    nvs_handle_t nvs;
+    char key[16];
+    fxp_key(type, key);
+    if (!type || nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
+    if (nvs_get_blob(nvs, key, list, &size) != ESP_OK || size != sizeof(fxp_t) * FXP_COUNT) memset(list, 0, sizeof(fxp_t) * FXP_COUNT);
+    nvs_close(nvs);
+}
+
 // The presets of the model in the editor, and its original values once they are read.
 static void fxp_show(void)
 {
@@ -1732,15 +1792,7 @@ static void fxp_show(void)
         s_fxp.slot = slot;
         s_fxp.original_known = false;
         s_fxp.active = -1;
-        memset(s_fxp.list, 0, sizeof(s_fxp.list));
-        nvs_handle_t nvs;
-        char key[16];
-        fxp_key(type, key);
-        if (type && nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) == ESP_OK) {
-            size_t size = sizeof(s_fxp.list);
-            if (nvs_get_blob(nvs, key, s_fxp.list, &size) != ESP_OK || size != sizeof(s_fxp.list)) memset(s_fxp.list, 0, sizeof(s_fxp.list));
-            nvs_close(nvs);
-        }
+        fxp_read(type, s_fxp.list);
     }
     if (slot >= 0 && s_edit.known && !s_fxp.original_known) {
         s_fxp.original_known = true;
@@ -1751,6 +1803,8 @@ static void fxp_show(void)
     for (int i = 0; i < FXP_COUNT; i++) strlcpy(names[i], s_fxp.list[i].name, sizeof(names[i]));
     ui_fx_presets_show(names, s_fxp.active, slot >= 0 && s_edit.known && s_state.fx_on[slot]);
 }
+
+static void hs_names(void);
 
 static void fxp_send_step(void)
 {
@@ -1832,6 +1886,8 @@ static void fxp_save(int n, const char *name)
     }
     ESP_LOGI(TAG, "%s FX preset %d: %s", nano_fx_name(s_fxp.type), n, name[0] ? name : "deleted");
     ui_show_message(name[0] ? "FX preset saved." : "FX preset deleted.");
+    hs_names();   // a settings swap shows the new name (or none, if its FX preset was deleted)
+    show();
     editor_show();
 }
 
@@ -1853,6 +1909,8 @@ static void editor_choose_model(uint32_t type)
     int slot = s_edit.slot;
     if (slot < 0 || !nano_fx_model(type)) return;
     ab_model_chosen(slot, type);
+    s_hs.active &= (uint8_t)~(1u << slot);   // a settings swap belongs to a model: the new one has its defaults
+    s_hs.a_known &= (uint8_t)~(1u << slot);
     uint8_t buf[16];
     char label[48];
     snprintf(label, sizeof(label), "%s model %s", NANO_FX_SLOT_NAMES[slot], nano_fx_name(type));
@@ -2274,6 +2332,12 @@ static void ab_leave_preset(void)
         ab->cache_only = ab->restore_off = ab->open_editor = false;
         ab->preset = 0;   // nothing is stored or compared with the Nano's state until ab_load()
     }
+    // The settings swaps too: the preset's own settings (A) are in the slots again; read afresh with hs_load().
+    esp_timer_stop(s_hs_timer);
+    s_hs.phase = HS_IDLE;
+    s_hs.restore_off = false;
+    s_hs.preset = 0;
+    s_hs.active = s_hs.a_known = 0;
     s_last_preset = 0;
 }
 
@@ -2356,7 +2420,7 @@ static void ab_read(ab_t *ab)
 // Reads the values of A while it is on (preset loaded, or switched on), so a later swap need not switch it on.
 static void ab_cache(int slot, int delay_ms)
 {
-    if (ab_running() || s_edit.request_slot >= 0 || slot < 0 || !s_state.fx_on[slot] || !s_state.fx_type[slot]) return;
+    if (ab_running() || s_hs.phase != HS_IDLE || s_edit.request_slot >= 0 || slot < 0 || !s_state.fx_on[slot] || !s_state.fx_type[slot]) return;
     for (int i = 0; i < AB_COUNT; i++) {
         ab_t *ab = &s_ab[i];
         if (!ab->b.type || ab->active != 0 || ab_slot(ab) != slot) continue;
@@ -2374,7 +2438,7 @@ static void ab_swap(int which)
     ab_t *ab = &s_ab[which];
     if (!ab->b.type) return;
     ab_t *running = ab_running();
-    if (running && !running->cache_only) {
+    if ((running && !running->cache_only) || s_hs.phase != HS_IDLE) {
         ui_show_message("Still switching - try again in a moment.");
         return;
     }
@@ -2544,6 +2608,235 @@ static void ab_edit_b(int which)
         ab->open_editor = true;
         ab_swap(which);
     }
+}
+
+// ---- Settings swap (see s_hs) ----
+
+// The FX preset holding the slot's footswitch swaps to (1-FXP_COUNT), 0 = none: chosen for the model that is in the
+// slot, not deleted since, and not on Pre FX 1 with a second effect (holding footswitch 3 swaps the effects then).
+static int hs_b(int slot)
+{
+    if (slot < 0 || slot >= NANO_FX_SLOTS || !s_hs.preset || s_hs.preset != s_state.current_preset) return 0;
+    if (!s_hs.set.fxp[slot] || !s_state.fx_type[slot] || s_hs.set.type[slot] != s_state.fx_type[slot]) return 0;
+    if (!s_hs.names[slot][0] || (slot == 0 && s_ab[AB_PRE1].b.type)) return 0;
+    return s_hs.set.fxp[slot];
+}
+
+static void hs_names(void)
+{
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
+        s_hs.names[slot][0] = 0;
+        if (!s_hs.set.fxp[slot]) continue;
+        fxp_t list[FXP_COUNT];
+        fxp_read(s_hs.set.type[slot], list);
+        strlcpy(s_hs.names[slot], list[s_hs.set.fxp[slot] - 1].name, sizeof(s_hs.names[slot]));
+    }
+}
+
+// New preset: its settings swaps (A is in every slot).
+static void hs_load(int preset)
+{
+    esp_timer_stop(s_hs_timer);
+    memset(&s_hs.set, 0, sizeof(s_hs.set));
+    s_hs.phase = HS_IDLE;
+    s_hs.restore_off = false;
+    s_hs.active = s_hs.a_known = 0;
+    s_hs.preset = preset;
+    nvs_handle_t nvs;
+    char key[16];
+    snprintf(key, sizeof(key), HS_STORE_KEY, preset);
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) == ESP_OK) {
+        size_t size = sizeof(s_hs.set);
+        if (nvs_get_blob(nvs, key, &s_hs.set, &size) != ESP_OK || size != sizeof(s_hs.set)) memset(&s_hs.set, 0, sizeof(s_hs.set));
+        nvs_close(nvs);
+    }
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) if (s_hs.set.fxp[slot] > FXP_COUNT) s_hs.set.fxp[slot] = 0;
+    hs_names();
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
+        if (s_hs.set.fxp[slot]) ESP_LOGI(TAG, "%s of preset %d: hold swaps to \"%s\"", NANO_FX_SLOT_NAMES[slot], preset, s_hs.names[slot]);
+    }
+}
+
+static void hs_store(void)
+{
+    nvs_handle_t nvs;
+    char key[16];
+    bool empty = true;
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) empty &= !s_hs.set.fxp[slot];
+    snprintf(key, sizeof(key), HS_STORE_KEY, s_hs.preset);
+    if (!s_hs.preset || nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
+    esp_err_t err = empty ? nvs_erase_key(nvs, key) : nvs_set_blob(nvs, key, &s_hs.set, sizeof(s_hs.set));
+    if ((err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) || nvs_commit(nvs) != ESP_OK) {
+        ui_show_message("Could not store the settings swap (memory full?).");
+    }
+    nvs_close(nvs);
+}
+
+static void hs_step_later(int ms)
+{
+    esp_timer_stop(s_hs_timer);
+    esp_timer_start_once(s_hs_timer, (uint64_t)ms * 1000);
+}
+
+static void hs_restore_off(void)
+{
+    if (!s_hs.restore_off) return;
+    s_hs.restore_off = false;
+    if (s_state.fx_on[s_hs.slot]) toggle_fx(s_hs.slot);
+}
+
+// Sends the target's values (B: its FX preset, A: the values read before), a few at a time.
+static void hs_send(void)
+{
+    int slot = s_hs.slot;
+    const nano_fx_model_t *model = nano_fx_model(s_state.fx_type[slot]);
+    if (!model) return;
+    if (s_hs.target) {
+        fxp_t list[FXP_COUNT];
+        fxp_read(s_hs.set.type[slot], list);
+        const fxp_t *p = &list[s_hs.set.fxp[slot] - 1];
+        s_hs.count = p->count;
+        for (int i = 0; i < NANO_MAX_PARAMS; i++) s_hs.values[i] = p->values[i] / 65535.0f;
+    } else {
+        s_hs.count = s_hs.a_count[slot];
+        memcpy(s_hs.values, s_hs.a_values[slot], sizeof(s_hs.values));
+    }
+    if (s_hs.count > model->param_count) s_hs.count = model->param_count;
+    if (s_hs.count > NANO_MAX_PARAMS) s_hs.count = NANO_MAX_PARAMS;
+    ESP_LOGI(TAG, "%s: %s (%d values)", NANO_FX_SLOT_NAMES[slot], s_hs.target ? s_hs.names[slot] : "the preset's settings", s_hs.count);
+    if (s_hs.target) s_hs.active |= (uint8_t)(1u << slot);
+    else s_hs.active &= (uint8_t)~(1u << slot);
+    if (s_fxp.slot == slot && s_fxp.type == s_state.fx_type[slot]) s_fxp.active = s_hs.target ? s_hs.set.fxp[slot] : -1;
+    s_hs.sent = 0;
+    s_hs.phase = HS_SENDING;
+    show();
+    hs_step_later(1);
+}
+
+static void hs_read(void)
+{
+    if (s_edit.request_slot >= 0 && s_hs.tries++ < 10) {   // the editor's reply comes first: try again in a moment
+        s_hs.phase = HS_TURNING_ON;
+        hs_step_later(100);
+        return;
+    }
+    uint8_t buf[8];
+    s_hs.phase = HS_READING;
+    send("Settings swap: values request", NANO_MSG_FX_PARAMS_REQUEST, buf, nano_fx_params_request(s_hs.slot, buf));
+    hs_step_later(1500);   // timeout
+}
+
+// Footswitch of the slot held (or MIDI): target 1 = B, 0 = A, -1 = the other one. The effect stays on or off.
+static void hs_swap(int slot, int target)
+{
+    if (!hs_b(slot)) return;
+    int active = (s_hs.active >> slot) & 1;
+    if (target < 0) target = !active;
+    if (target == active) return;
+    ab_t *running = ab_running();
+    if (s_hs.phase != HS_IDLE || (running && !running->cache_only)) {
+        ui_show_message("Still switching - try again in a moment.");
+        return;
+    }
+    if (running) {   // a read for later (second effect): it can wait
+        esp_timer_stop(s_ab_timer);
+        running->phase = AB_IDLE;
+        running->cache_only = false;
+    }
+    s_hs.slot = slot;
+    s_hs.target = target;
+    s_hs.tries = 0;
+    if (!target) {
+        if ((s_hs.a_known >> slot) & 1) hs_send();
+        else ui_show_message("The preset's own settings are not known - load the preset again.");
+        return;
+    }
+    if (s_state.fx_on[slot]) hs_read();                  // A as it is now (it may have been edited)
+    else if ((s_hs.a_known >> slot) & 1) hs_send();      // off: A as read last
+    else {   // off and never read: switch it on for a moment to read A, then off again
+        s_hs.restore_off = true;
+        s_hs.phase = HS_TURNING_ON;
+        toggle_fx(slot);
+        hs_step_later(400);
+    }
+}
+
+// FX parameter values arrived: true if they were for a settings swap (A is kept, then B goes out).
+static bool hs_values_read(const uint8_t *payload, size_t len)
+{
+    if (s_hs.phase != HS_READING) return false;
+    esp_timer_stop(s_hs_timer);
+    int slot = s_hs.slot;
+    int count = nano_fx_params_values(payload, len, s_hs.a_values[slot], NANO_MAX_PARAMS);
+    hs_restore_off();
+    if (count <= 0) {
+        s_hs.phase = HS_IDLE;
+        s_hs.a_known &= (uint8_t)~(1u << slot);
+        ui_show_message("Not switched: the Nano sent no values.");
+        return true;
+    }
+    s_hs.a_count[slot] = (uint8_t)count;
+    s_hs.a_known |= (uint8_t)(1u << slot);
+    hs_send();
+    return true;
+}
+
+static void hs_step(void)
+{
+    switch (s_hs.phase) {
+    case HS_TURNING_ON:
+        hs_read();
+        break;
+    case HS_READING:
+        s_hs.phase = HS_IDLE;
+        hs_restore_off();
+        ui_show_message("Not switched: the Nano did not send the effect's values.");
+        break;
+    case HS_SENDING: {
+        int slot = s_hs.slot;
+        for (int n = 0; n < HS_SEND_CHUNK && s_hs.sent < s_hs.count; n++, s_hs.sent++) send_param(slot, s_hs.sent, s_hs.values[s_hs.sent]);
+        if (s_hs.sent < s_hs.count) {
+            hs_step_later(60);
+            break;
+        }
+        s_hs.phase = HS_IDLE;
+        app_sync_later();
+        schedule_refresh(300);
+        if (s_edit.slot == slot) {   // the editor shows the new values
+            s_edit.known = false;
+            editor_show();
+            editor_read_later(300);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+// The swap button of the FX editor: arg = slot << 8 | FX preset (1-FXP_COUNT, 0 = none) for this preset.
+static void hs_set(int arg)
+{
+    int slot = arg >> 8, n = arg & 0xFF;
+    if (slot < 0 || slot >= NANO_FX_SLOTS || n > FXP_COUNT || !s_state.fx_type[slot]) return;
+    if (s_hs.preset != s_state.current_preset) hs_load(s_state.current_preset);
+    if (s_hs.phase != HS_IDLE) {
+        ui_show_message("Still switching - try again in a moment.");
+        return;
+    }
+    if ((s_hs.active >> slot) & 1) {   // B is on: the preset's own settings come back first
+        s_hs.slot = slot;
+        s_hs.target = 0;
+        if ((s_hs.a_known >> slot) & 1) hs_send();
+        else s_hs.active &= (uint8_t)~(1u << slot);
+    }
+    s_hs.set.fxp[slot] = (uint8_t)n;
+    s_hs.set.type[slot] = n ? s_state.fx_type[slot] : 0;
+    hs_store();
+    hs_names();
+    ESP_LOGI(TAG, "%s of preset %d: hold swaps to %s", NANO_FX_SLOT_NAMES[slot], s_hs.preset, n ? s_hs.names[slot] : "nothing");
+    show();
+    editor_show();
 }
 
 static void set_tuner(bool on)
@@ -2915,6 +3208,8 @@ static void handle_midi(int arg)
         if (number) handle_switch(number);
     } else if (type == 0xB0 && d1 == 58 && d2 >= 64) {   // as footswitch 3 held: Pre FX 1 A <-> B
         ab_swap(AB_PRE1);
+    } else if (type == 0xB0 && d1 >= 61 && d1 <= 65) {   // settings swap of FX slot 1-5: 64-127 B, 0-63 A
+        hs_swap(d1 - 61, d2 >= 64);
     }
 }
 
@@ -2997,6 +3292,9 @@ static void handle_command(char c, int arg)
         } else if ((arg & UI_SWITCH_HOLD) && number == 3 && s_ab[AB_PRE1].b.type) {   // held: Pre FX 1 A <-> B
             ui_flash_tile(2);
             ab_swap(AB_PRE1);
+        } else if ((arg & UI_SWITCH_HOLD) && s_fx_mode && number >= 3 && number <= 7 && hs_b(number - 3)) {
+            ui_flash_tile(number - 1);   // held: settings swap of the slot
+            hs_swap(number - 3, -1);
         } else if ((arg & UI_SWITCH_HOLD) && number == 2) {   // held: scenes <-> presets, as the scenes button
             if (!s_tuner_on) {
                 ui_flash_tile(1);
@@ -3025,6 +3323,8 @@ static void handle_command(char c, int arg)
     case 'A': ab_set_b(arg); break;
     case 'H': ab_edit_b(arg); break;
     case 'F': ab_step(); break;
+    case '>': hs_step(); break;
+    case '[': hs_set(arg); break;
     case 'M': editor_choose_model((uint32_t)arg); break;
     case 'R': editor_read(); break;
     case 'C': select_capture(arg); break;
@@ -3189,6 +3489,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
                 }
                 ab_capture_editor();   // edits of a second effect in the previous preset
                 ab_load(s_state.current_preset);
+                hs_load(s_state.current_preset);
                 editor_close();
                 mix_load();
                 ab_cache(0, 700);      // values of Pre FX 1 A for a later swap, if it has a B and is on
@@ -3319,7 +3620,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         break;
     }
     case NANO_MSG_FX_PARAMS_RESPONSE: {
-        if (ab_values_read(payload, len)) break;
+        if (ab_values_read(payload, len) || hs_values_read(payload, len)) break;
         int slot = s_edit.request_slot;
         s_edit.request_slot = -1;
         if (slot < 0 || slot != s_edit.slot) break;   // editor closed or another slot meanwhile
@@ -3561,6 +3862,10 @@ static void console_task(void *arg)
             command('$', -1);
             continue;
         }
+        if (c >= 'A' && c <= 'E') {   // footswitch 3-7 held (FX mode: second effect or settings swap)
+            command('w', UI_SWITCH_HOLD | (c - 'A' + 3));
+            continue;
+        }
 #ifdef NANO_BENCH
         if (c == '%') {
             ui_bench();
@@ -3604,6 +3909,8 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&exp_timer, &s_exp_timer));
     const esp_timer_create_args_t ab_timer = { .callback = ab_timer_cb, .name = "ab" };
     ESP_ERROR_CHECK(esp_timer_create(&ab_timer, &s_ab_timer));
+    const esp_timer_create_args_t hs_timer = { .callback = hs_timer_cb, .name = "hs" };
+    ESP_ERROR_CHECK(esp_timer_create(&hs_timer, &s_hs_timer));
     const esp_timer_create_args_t gate_timer = { .callback = midi_gate_cb, .name = "midi_gate" };
     ESP_ERROR_CHECK(esp_timer_create(&gate_timer, &s_midi_gate_timer));
     const esp_timer_create_args_t app_read_timer = { .callback = app_read_cb, .name = "app_read" };

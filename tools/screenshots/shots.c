@@ -265,6 +265,27 @@ int main(void)
     ui_fx_editor_close();
     close_all();
 
+    // Settings swap: Post FX 2 has the FX preset "Ambient Wash" in now (footswitch 6 held), the tile shows its name
+    view.fx_mode = true;
+    view.hold_fxp[3] = 2;
+    snprintf(view.hold_names[3], sizeof(view.hold_names[3]), "Ambient Wash");
+    view.hold_active = 1u << 3;
+    ui_show_state(&st, &view);
+    shot("29-settings-swap");
+    view.hold_active = 0;
+    ui_show_state(&st, &view);
+    ui_fx_editor_show(3, st.fx_type[3], true, values, 11);
+    ui_fx_presets_show(fx_presets, -1, true);
+    shot("30-settings-swap-editor");
+    open_panel(PANEL_HOLD, 0);
+    shot("31-settings-swap-choice");
+    close_panel();
+    ui_fx_editor_close();
+    close_all();
+    view.hold_fxp[3] = 0;
+    view.hold_names[3][0] = 0;
+    ui_show_state(&st, &view);
+
     // Auto-wah: a wah on Pre FX 2 that the controller moves in tempo while its footswitch is held
     uint32_t pre2 = st.fx_type[1];
     bool pre2_on = st.fx_on[1];
