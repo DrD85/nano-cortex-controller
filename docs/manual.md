@@ -78,6 +78,10 @@ The songs of a gig in their order – up to 36, the same preset may come more th
 - **Tap a preset on the right** to add it as a song after the chosen one (or at the end).
 - **Tap a song on the left** to choose it, then move it up or down with the arrows or **Remove** it. **Clear**
   empties the list.
+- **Start scene** (the row below the lists): the chosen song can start with one of its preset's
+  [scenes](#scenes) – choosing the song loads the preset and then switches to that scene. So the same preset can be
+  in the set list twice, for example once as *Clean* and once as *Lead*. *None* starts with the preset as saved;
+  scenes that are not set up yet are grey. The song's tile names the scene under its caption.
 - **On / Off** at the top: while the set list is on, footswitches 3–8 in preset mode are its songs instead of the
   bank's presets. **Save** stores the list and the choice on the controller.
 

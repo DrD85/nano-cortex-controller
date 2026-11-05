@@ -79,6 +79,11 @@ oben tippen** (*PRESET 8 · BANK 2*) öffnet die Setlist:
 - **Ein Preset rechts antippen** fügt es als Song nach dem gewählten ein (oder am Ende).
 - **Einen Song links antippen** wählt ihn; dann mit den Pfeilen nach oben oder unten schieben oder mit **Remove**
   entfernen. **Clear** leert die Liste.
+- **Start-Szene** (die Reihe unter den Listen): Der gewählte Song kann mit einer [Szene](#szenen) seines Presets
+  beginnen – wer den Song wählt, lädt das Preset und schaltet dann auf diese Szene. So kann dasselbe Preset zweimal
+  in der Setlist stehen, etwa einmal als *Clean* und einmal als *Lead*. *None* beginnt mit dem Preset, wie es
+  gespeichert ist; noch nicht eingerichtete Szenen sind grau. Die Kachel des Songs nennt die Szene unter der
+  Überschrift.
 - **On / Off** oben: Solange die Setlist an ist, sind die Fußschalter 3–8 im Preset-Modus ihre Songs statt der Presets
   der Bank. **Save** speichert Liste und Wahl auf dem Controller.
 

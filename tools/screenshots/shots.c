@@ -139,6 +139,13 @@ static nano_library_t *example_library(void)
     return &lib;
 }
 
+// The set list dialog reads scene names of any preset: every example preset has the same three scenes.
+static void example_scene_names(int preset, char names[UI_SCENES][UI_SCENE_NAME])
+{
+    static const char *const scenes[] = { "Clean", "Crunch", "Lead" };
+    for (int i = 0; i < 3; i++) snprintf(names[i], UI_SCENE_NAME, "%s", scenes[i]);
+}
+
 static void close_all(void)
 {
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
@@ -157,6 +164,7 @@ int main(void)
     lv_display_set_flush_cb(d, flush);
 
     ui_init(on_command, on_param_cb, on_text_cb);
+    ui_set_scene_names_source(example_scene_names);
     ui_splash_status("Connected - loading presets ...", "v1.4.1");
     shot("15-start-screen");
     ui_splash_done();
@@ -392,6 +400,10 @@ int main(void)
 
     // Set list: eight songs, the fourth (preset 8) is on
     static const uint8_t songs[] = { 7, 9, 12, 8, 10, 11, 7, 9 };
+    view.setlist_scenes[1] = 2;   // song 2 starts with its scene "Crunch", song 4 with scene 3
+    snprintf(view.setlist_scene_names[1], sizeof(view.setlist_scene_names[1]), "Crunch");
+    view.setlist_scenes[3] = 3;
+    snprintf(view.setlist_scene_names[3], sizeof(view.setlist_scene_names[3]), "Lead");
     view.fx_mode = false;
     view.scenes = false;
     view.setlist_on = true;
@@ -408,6 +420,7 @@ int main(void)
     shot("33-setlist");
     close_all();
     view.setlist_on = false;
+    memset(view.setlist_scenes, 0, sizeof(view.setlist_scenes));
     memcpy(view.bank_presets, banked, sizeof(banked));
     ui_show_state(&st, &view);
     return 0;

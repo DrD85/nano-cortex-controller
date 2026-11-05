@@ -217,14 +217,19 @@ static int s_bank;              // 0-15
 // is on, footswitches 3-8 in preset mode are six songs of it (a page) instead of the bank's presets; the arrow buttons
 // turn the pages, a swipe goes to the previous / next song. Choosing the last song of a page turns to the next page,
 // so the footswitches alone get through the whole set.
-#define SETLIST_KEY "setlist"   // { on, count, presets[count] }
+// A song can start with a scene of its preset: choosing it loads the preset, then the scene.
+#define SETLIST_KEY "setlist"   // { on, count, presets[count], scenes[count] } (1.12.0 before the scenes: no scenes)
 static struct {
     bool on;
     int count;
     uint8_t presets[UI_SETLIST_MAX];
+    uint8_t scenes[UI_SETLIST_MAX];   // start scene 1-6, 0 = none
     int page;                   // the first song shown is page * BANK_SLOTS
     int song;                   // the song chosen last (0-based), -1 = none
-} s_setlist = { .song = -1 };
+    int start_preset, start_scene;    // a start scene waiting for its preset to be loaded (0 = none)
+    char names[BANK_SLOTS][UI_SCENE_NAME];   // names of the start scenes of the songs on the page
+    int names_page;             // the page they were read for, -1 = read again
+} s_setlist = { .song = -1, .names_page = -1 };
 static int s_last_preset;
 static volatile bool s_tuner_on;
 
@@ -1072,8 +1077,46 @@ static void setlist_choose(int song)
     if (song < 0 || song >= s_setlist.count) return;
     s_setlist.song = song;
     s_setlist.page = setlist_page_of(song);
-    ESP_LOGI(TAG, "Set list: song %d of %d, preset %d", song + 1, s_setlist.count, s_setlist.presets[song]);
+    s_setlist.start_preset = s_setlist.scenes[song] ? s_setlist.presets[song] : 0;
+    s_setlist.start_scene = s_setlist.scenes[song];
+    ESP_LOGI(TAG, "Set list: song %d of %d, preset %d%s", song + 1, s_setlist.count, s_setlist.presets[song],
+             s_setlist.scenes[song] ? ", then its scene" : "");
     select_preset(s_setlist.presets[song]);
+}
+
+static void scene_recall(int n);
+
+// A new preset is read: the start scene of the song that loaded it.
+static void setlist_start_scene(void)
+{
+    if (!s_setlist.start_scene || s_setlist.start_preset != s_state.current_preset || !s_state.fx_known) return;
+    int n = s_setlist.start_scene - 1;
+    s_setlist.start_scene = s_setlist.start_preset = 0;
+    if (s_scenes_preset != s_state.current_preset) scenes_load(s_state.current_preset);
+    if (s_scenes[n].name[0]) scene_recall(n);
+    else ESP_LOGW(TAG, "Set list: scene %d of preset %d is empty", n + 1, s_state.current_preset);
+}
+
+// Names of the scenes of a preset as stored ("" = empty) - also for the set list dialog (from the LVGL task).
+static void scene_names_read(int preset, char names[UI_SCENES][UI_SCENE_NAME])
+{
+    memset(names, 0, UI_SCENES * UI_SCENE_NAME);
+    nvs_handle_t nvs;
+    if (preset < 1 || preset > NANO_PRESETS || nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
+    char key[16];
+    snprintf(key, sizeof(key), SCENE_STORE_KEY, preset);
+    uint8_t stored[UI_SCENES * (3 + UI_SCENE_NAME)];
+    size_t size = sizeof(stored);
+    if (nvs_get_blob(nvs, key, stored, &size) == ESP_OK) {
+        for (size_t at = 0; at + 4 <= size;) {   // as scenes_load reads them
+            const uint8_t *entry = stored + at;
+            size_t length = strnlen((const char *)entry + 3, size - at - 3);
+            if (at + 3 + length >= size) break;
+            at += 3 + length + 1;
+            if (entry[0] < UI_SCENES && length && length < UI_SCENE_NAME) memcpy(names[entry[0]], entry + 3, length + 1);
+        }
+    }
+    nvs_close(nvs);
 }
 
 // Swipe or MIDI: the previous / next song (from the song that is on, or the first).
@@ -1090,11 +1133,13 @@ static void setlist_step(int step)
 
 static void setlist_store(void)
 {
-    uint8_t stored[2 + UI_SETLIST_MAX] = { s_setlist.on, (uint8_t)s_setlist.count };
+    uint8_t stored[2 + 2 * UI_SETLIST_MAX] = { s_setlist.on, (uint8_t)s_setlist.count };
     memcpy(stored + 2, s_setlist.presets, (size_t)s_setlist.count);
+    memcpy(stored + 2 + s_setlist.count, s_setlist.scenes, (size_t)s_setlist.count);
+    s_setlist.names_page = -1;
     nvs_handle_t nvs;
     if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
-    esp_err_t err = nvs_set_blob(nvs, SETLIST_KEY, stored, 2 + (size_t)s_setlist.count);
+    esp_err_t err = nvs_set_blob(nvs, SETLIST_KEY, stored, 2 + 2 * (size_t)s_setlist.count);
     if (err != ESP_OK || nvs_commit(nvs) != ESP_OK) ui_show_message("Could not store the set list (memory full?).");
     nvs_close(nvs);
 }
@@ -1103,13 +1148,18 @@ static void setlist_load(void)
 {
     nvs_handle_t nvs;
     if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
-    uint8_t stored[2 + UI_SETLIST_MAX];
+    uint8_t stored[2 + 2 * UI_SETLIST_MAX];
     size_t size = sizeof(stored);
-    if (nvs_get_blob(nvs, SETLIST_KEY, stored, &size) == ESP_OK && size >= 2 && stored[1] <= UI_SETLIST_MAX && size == 2 + (size_t)stored[1]) {
+    if (nvs_get_blob(nvs, SETLIST_KEY, stored, &size) == ESP_OK && size >= 2 && stored[1] <= UI_SETLIST_MAX
+        && (size == 2 + (size_t)stored[1] || size == 2 + 2 * (size_t)stored[1])) {
+        bool scenes = size == 2 + 2 * (size_t)stored[1];
         s_setlist.on = stored[0] != 0;
         s_setlist.count = 0;
         for (int i = 0; i < stored[1]; i++) {
-            if (stored[2 + i] >= 1 && stored[2 + i] <= NANO_PRESETS) s_setlist.presets[s_setlist.count++] = stored[2 + i];
+            if (stored[2 + i] < 1 || stored[2 + i] > NANO_PRESETS) continue;
+            uint8_t scene = scenes ? stored[2 + stored[1] + i] : 0;
+            s_setlist.scenes[s_setlist.count] = scene <= UI_SCENES ? scene : 0;
+            s_setlist.presets[s_setlist.count++] = stored[2 + i];
         }
     }
     nvs_close(nvs);
@@ -1128,15 +1178,17 @@ static void setlist_set_on(bool on)
     show();
 }
 
-// Text from the set list dialog: "<0 / 1: on><preset, two hex digits> ..." in the order of the songs.
+// Text from the set list dialog: "<0 / 1: on>" and per song "<preset, two hex digits><start scene 0-6>".
 static void setlist_edit(const char *text)
 {
     if (!text[0]) return;
     int count = 0;
-    for (const char *c = text + 1; c[0] && c[1] && count < UI_SETLIST_MAX; c += 2) {
+    for (const char *c = text + 1; c[0] && c[1] && c[2] && count < UI_SETLIST_MAX; c += 3) {
         char hex[3] = { c[0], c[1], 0 };
-        int preset = (int)strtol(hex, NULL, 16);
-        if (preset >= 1 && preset <= NANO_PRESETS) s_setlist.presets[count++] = (uint8_t)preset;
+        int preset = (int)strtol(hex, NULL, 16), scene = c[2] - '0';
+        if (preset < 1 || preset > NANO_PRESETS) continue;
+        s_setlist.scenes[count] = (uint8_t)(scene >= 0 && scene <= UI_SCENES ? scene : 0);
+        s_setlist.presets[count++] = (uint8_t)preset;
     }
     s_setlist.on = text[0] == '1';
     s_setlist.count = count;
@@ -1268,10 +1320,23 @@ static void show(void)
     view.setlist_on = s_setlist.on;
     view.setlist_count = (uint8_t)s_setlist.count;
     memcpy(view.setlist_presets, s_setlist.presets, sizeof(view.setlist_presets));
+    memcpy(view.setlist_scenes, s_setlist.scenes, sizeof(view.setlist_scenes));
     if (setlist_used()) {   // the songs of the page, in the colour and with the symbol of their preset's bank switch
         if (s_setlist.page >= setlist_pages()) s_setlist.page = 0;
         view.setlist_first = (uint8_t)(s_setlist.page * BANK_SLOTS);
         view.setlist_song = (int8_t)setlist_song_now();
+        if (s_setlist.names_page != s_setlist.page) {   // read when the page or the scenes change, not with every show
+            s_setlist.names_page = s_setlist.page;
+            for (int i = 0; i < BANK_SLOTS; i++) {
+                int song = view.setlist_first + i;
+                s_setlist.names[i][0] = 0;
+                if (song >= s_setlist.count || !s_setlist.scenes[song]) continue;
+                char names[UI_SCENES][UI_SCENE_NAME];
+                scene_names_read(s_setlist.presets[song], names);
+                strlcpy(s_setlist.names[i], names[s_setlist.scenes[song] - 1], sizeof(s_setlist.names[i]));
+            }
+        }
+        memcpy(view.setlist_scene_names, s_setlist.names, sizeof(view.setlist_scene_names));
         for (int i = 0; i < BANK_SLOTS; i++) {
             int song = view.setlist_first + i;
             int preset = song < s_setlist.count ? s_setlist.presets[song] : 0;
@@ -1577,6 +1642,7 @@ static void scene_edit(const char *text)
     }
     s_scenes[n] = scene;
     scenes_save();
+    s_setlist.names_page = -1;   // the set list shows scene names
     ESP_LOGI(TAG, "Preset %d scene %d: %s", s_scenes_preset, n + 1, scene.name[0] ? scene.name : "emptied");
     if (scene.name[0]) scene_recall(n);
     else show();
@@ -3731,6 +3797,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
                 ab_cache(0, 700);      // values of Pre FX 1 A for a later swap, if it has a B and is on
             }
             show();
+            setlist_start_scene();
             // Other preset or cab while the cab dialog is open: read its settings.
             if (s_src.cab_open && (s_src.cab_preset != s_state.current_preset || s_src.cab_slot != s_state.cab_slot)) {
                 request_cab_settings();
@@ -4194,6 +4261,7 @@ void app_main(void)
     esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
 
     ui_init(command, on_param, on_text);
+    ui_set_scene_names_source(scene_names_read);
     uint8_t order[FOOTSWITCH_COUNT];
     for (int p = 0; p < FOOTSWITCH_COUNT; p++) order[p] = s_layout[p];
     ui_set_layout(s_layout_count, order, s_switch1);

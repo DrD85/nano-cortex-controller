@@ -68,6 +68,7 @@ static lv_obj_t *s_tile_other[TILES];   // second line under the caption: the ot
 static uint32_t s_tile_ink[TILES];
 static uint32_t s_tile_pedal_type[TILES], s_tile_other_type[TILES];   // shown by show_tile_extras
 static char s_tile_other_text[TILES][20];   // ... or this text after the swap symbol (a settings swap)
+static char s_tile_note_text[TILES][24];    // a note that is not a fixed text (the start scene of a song)
 static const char *s_tile_note[TILES];   // a line of text under the caption instead (looper mode, what holding does), NULL = none
 static const lv_image_dsc_t *s_tile_note_icon[TILES];   // ... with this symbol in front of it, NULL = none
 static lv_obj_t *s_tile_note_image[TILES];
@@ -138,9 +139,11 @@ static int s_se_capture;                         // capture slot the edited scen
 static lv_obj_t *s_se_capture_label, *s_scene_cap, *s_scene_cap_list;   // the button and its list
 // Set list dialog (tap the preset / bank line at the top): the songs in order on the left, the presets on the right.
 static lv_obj_t *s_setlist, *s_sl_songs, *s_sl_presets, *s_sl_tab[2];
-static uint8_t s_sl_list[UI_SETLIST_MAX];
+static uint8_t s_sl_list[UI_SETLIST_MAX], s_sl_scenes[UI_SETLIST_MAX];   // preset and start scene (0 = none) per song
 static int s_sl_count, s_sl_selected = -1;
 static bool s_sl_on;
+static lv_obj_t *s_sl_scene_chip[1 + UI_SCENES], *s_sl_scene_hint;   // the chosen song's start scene: none, 1-6
+static ui_scene_names_cb s_scene_names;
 static lv_obj_t *s_preset_card, *s_source_card[2];
 static lv_obj_t *s_midi_label, *s_midi, *s_midi_status, *s_midi_list;
 static ui_midi_t s_midi_state;
@@ -2372,6 +2375,8 @@ static lv_obj_t *scroll_list(lv_obj_t *parent, int x, int y, int w, int h)
 // ---- set list: the songs in the order of the gig (tap the preset / bank line at the top) ----
 
 static void fill_setlist(void);
+static lv_obj_t *frame_button(lv_obj_t *parent);
+static void style_frame_button(lv_obj_t *b, uint32_t color, bool active, bool empty);
 
 static void on_setlist_song(lv_event_t *e)
 {
@@ -2390,7 +2395,9 @@ static void on_setlist_preset(lv_event_t *e)
     }
     int at = s_sl_selected >= 0 ? s_sl_selected + 1 : s_sl_count;
     memmove(s_sl_list + at + 1, s_sl_list + at, (size_t)(s_sl_count - at));
+    memmove(s_sl_scenes + at + 1, s_sl_scenes + at, (size_t)(s_sl_count - at));
     s_sl_list[at] = (uint8_t)preset;
+    s_sl_scenes[at] = 0;
     s_sl_count++;
     s_sl_selected = at;
     fill_setlist();
@@ -2403,12 +2410,15 @@ static void on_setlist_button(lv_event_t *e)
     if (action == 2 || action == 3) s_sl_on = action == 3;
     else if ((action == 4 && i > 0) || (action == 5 && i >= 0 && i + 1 < s_sl_count)) {
         int j = action == 4 ? i - 1 : i + 1;
-        uint8_t t = s_sl_list[i];
+        uint8_t t = s_sl_list[i], sc = s_sl_scenes[i];
         s_sl_list[i] = s_sl_list[j];
+        s_sl_scenes[i] = s_sl_scenes[j];
         s_sl_list[j] = t;
+        s_sl_scenes[j] = sc;
         s_sl_selected = j;
     } else if (action == 6 && i >= 0) {
         memmove(s_sl_list + i, s_sl_list + i + 1, (size_t)(s_sl_count - i - 1));
+        memmove(s_sl_scenes + i, s_sl_scenes + i + 1, (size_t)(s_sl_count - i - 1));
         s_sl_count--;
         s_sl_selected = i < s_sl_count ? i : s_sl_count - 1;
     } else if (action == 7) {
@@ -2417,9 +2427,9 @@ static void on_setlist_button(lv_event_t *e)
     } else if (action == 0 || action == 1) {
         lv_obj_set_hidden(s_setlist, true);
         if (action == 1 && s_on_text) {
-            char text[2 + 2 * UI_SETLIST_MAX + 1];
+            char text[2 + 3 * UI_SETLIST_MAX + 1];
             int n = snprintf(text, sizeof(text), "%c", s_sl_on ? '1' : '0');
-            for (int k = 0; k < s_sl_count; k++) n += snprintf(text + n, sizeof(text) - (size_t)n, "%02X", s_sl_list[k]);
+            for (int k = 0; k < s_sl_count; k++) n += snprintf(text + n, sizeof(text) - (size_t)n, "%02X%c", s_sl_list[k], '0' + s_sl_scenes[k]);
             s_on_text('T', text);
         }
         return;
@@ -2429,16 +2439,66 @@ static void on_setlist_button(lv_event_t *e)
     fill_setlist();
 }
 
+static void scene_names_of(int preset, char names[UI_SCENES][UI_SCENE_NAME])
+{
+    memset(names, 0, UI_SCENES * UI_SCENE_NAME);
+    if (s_scene_names) s_scene_names(preset, names);
+}
+
+static void on_setlist_scene(lv_event_t *e)
+{
+    int scene = (int)(intptr_t)lv_event_get_user_data(e);
+    if (s_sl_selected < 0) return;
+    char names[UI_SCENES][UI_SCENE_NAME];
+    scene_names_of(s_sl_list[s_sl_selected], names);
+    if (scene && !names[scene - 1][0]) {
+        ui_show_message("This scene of the preset is empty - set it up in scene mode first.");
+        return;
+    }
+    s_sl_scenes[s_sl_selected] = (uint8_t)scene;
+    fill_setlist();
+}
+
+// The row of start scenes, for the chosen song: None and the preset's six scenes (empty ones grey).
+static void style_setlist_scenes(void)
+{
+    char names[UI_SCENES][UI_SCENE_NAME];
+    bool song = s_sl_selected >= 0 && s_sl_selected < s_sl_count;
+    if (song) scene_names_of(s_sl_list[s_sl_selected], names);
+    lv_label_set_text(s_sl_scene_hint, song ? "START SCENE OF THE CHOSEN SONG" : "START SCENE: CHOOSE A SONG FIRST");
+    for (int i = 0; i <= UI_SCENES; i++) {
+        lv_obj_t *chip = s_sl_scene_chip[i];
+        bool filled = song && (i == 0 || names[i - 1][0]);
+        bool chosen = song && s_sl_scenes[s_sl_selected] == i;
+        char text[UI_SCENE_NAME + 4];
+        if (i == 0) snprintf(text, sizeof(text), "None");
+        else if (song && names[i - 1][0]) snprintf(text, sizeof(text), "%s", names[i - 1]);
+        else snprintf(text, sizeof(text), "%d", i);
+        lv_obj_t *l = lv_obj_get_child(chip, 0);
+        lv_label_set_text(l, text);
+        style_frame_button(chip, 0xECECEC, chosen, !filled);
+        lv_obj_set_style_text_color(l, lv_color_hex(chosen ? INK : filled ? TEXT : 0x5D6267), 0);
+    }
+}
+
 static void fill_setlist(void)
 {
     char text[80];
     style_tab(s_sl_tab[0], !s_sl_on);
     style_tab(s_sl_tab[1], s_sl_on);
+    style_setlist_scenes();
     lv_obj_clean(s_sl_songs);
     lv_obj_t *selected = NULL;
     for (int i = 0; i < s_sl_count; i++) {
         int preset = s_sl_list[i];
-        snprintf(text, sizeof(text), "%2d   %.40s", i + 1, s_preset_names[preset - 1][0] ? s_preset_names[preset - 1] : "-");
+        int n = snprintf(text, sizeof(text), "%2d   %.40s", i + 1, s_preset_names[preset - 1][0] ? s_preset_names[preset - 1] : "-");
+        if (s_sl_scenes[i] && n > 0 && n < (int)sizeof(text)) {   // " · scene"
+            char names[UI_SCENES][UI_SCENE_NAME];
+            scene_names_of(preset, names);
+            const char *scene = names[s_sl_scenes[i] - 1];
+            if (scene[0]) snprintf(text + n, sizeof(text) - (size_t)n, "  \xC2\xB7  %.15s", scene);
+            else snprintf(text + n, sizeof(text) - (size_t)n, "  \xC2\xB7  scene %d", s_sl_scenes[i]);
+        }
         lv_obj_t *entry = list_entry(s_sl_songs, text, i == s_sl_selected, 0xFFFFFF, on_setlist_song, i);
         if (i == s_sl_selected) selected = entry;
     }
@@ -2462,6 +2522,7 @@ static void open_setlist_at(int song)
 {
     s_sl_count = s_view.setlist_count <= UI_SETLIST_MAX ? s_view.setlist_count : 0;
     memcpy(s_sl_list, s_view.setlist_presets, sizeof(s_sl_list));
+    memcpy(s_sl_scenes, s_view.setlist_scenes, sizeof(s_sl_scenes));
     s_sl_on = s_view.setlist_on;
     s_sl_selected = song >= 0 && song < s_sl_count ? song : -1;
     lv_obj_clean(s_sl_presets);   // names may have changed
@@ -2490,8 +2551,23 @@ static void build_setlist(lv_obj_t *screen)
     lv_obj_set_style_text_letter_space(presets, 2, 0);
     lv_label_set_text(presets, "ADD A PRESET");
     lv_obj_set_pos(presets, 370, 106);
-    s_sl_songs = scroll_list(s_setlist, 10, 124, 340, 268);
-    s_sl_presets = scroll_list(s_setlist, 360, 124, 330, 268);
+    s_sl_songs = scroll_list(s_setlist, 10, 124, 340, 196);
+    s_sl_presets = scroll_list(s_setlist, 360, 124, 330, 196);
+    s_sl_scene_hint = label(s_setlist, &ui_font_12, MUTED);
+    lv_obj_set_style_text_letter_space(s_sl_scene_hint, 2, 0);
+    lv_obj_set_pos(s_sl_scene_hint, 20, 326);
+    for (int i = 0; i <= UI_SCENES; i++) {
+        lv_obj_t *chip = frame_button(s_setlist);
+        lv_obj_set_pos(chip, 18 + i * 96, 344);
+        lv_obj_set_size(chip, 88, 48);
+        lv_obj_add_event_cb(chip, on_setlist_scene, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        lv_obj_t *l = label(chip, &ui_font_14, TEXT);
+        lv_obj_set_width(l, 80);
+        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+        lv_obj_center(l);
+        s_sl_scene_chip[i] = chip;
+    }
     small_button(s_setlist, 18, 404, 64, 46, LV_SYMBOL_UP, on_setlist_button, 4);
     small_button(s_setlist, 90, 404, 64, 46, LV_SYMBOL_DOWN, on_setlist_button, 5);
     small_button(s_setlist, 162, 404, 110, 46, "Remove", on_setlist_button, 6);
@@ -2499,6 +2575,11 @@ static void build_setlist(lv_obj_t *screen)
     small_button(s_setlist, 410, 404, 130, 46, "Cancel", on_setlist_button, 0);
     primary(small_button(s_setlist, 550, 404, 140, 46, "Save", on_setlist_button, 1));
     lv_obj_set_hidden(s_setlist, true);
+}
+
+void ui_set_scene_names_source(ui_scene_names_cb cb)
+{
+    s_scene_names = cb;
 }
 
 void ui_set_layout(int count, const uint8_t order[TILES], int switch1)
@@ -3187,6 +3268,13 @@ static void show_preset_tiles(const nano_state_t *st, const ui_view_t *view)
         bool lit = setlist && view->setlist_song >= 0 ? song == view->setlist_song : preset == st->current_preset;
         set_tile(2 + i, caption, st->names_loaded && name[0] ? name : "-", color, lit, false,
                  icon >= 1 && icon <= PRESET_ICON_COUNT ? PRESET_ICONS[icon - 1].image : NULL, NULL);
+        int scene = setlist && song < UI_SETLIST_MAX ? view->setlist_scenes[song] : 0;
+        if (scene >= 1 && scene <= UI_SCENES) {   // under the caption: the scene the song starts with
+            if (view->setlist_scene_names[i][0]) snprintf(s_tile_note_text[2 + i], sizeof(s_tile_note_text[2 + i]), "%s", view->setlist_scene_names[i]);
+            else snprintf(s_tile_note_text[2 + i], sizeof(s_tile_note_text[2 + i]), "Scene %d", scene);
+            s_tile_note[2 + i] = s_tile_note_text[2 + i];
+            s_tile_note_icon[2 + i] = UI_ICONS[UI_ICON_SCENES];
+        }
     }
 }
 

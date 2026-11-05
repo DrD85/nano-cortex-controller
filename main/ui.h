@@ -75,7 +75,8 @@ typedef void (*ui_command_cb)(char command, int arg);
 // empty it. 'X' = the expression dialog's assignments, saved: one entry per sweep (NANO_EXP_RANGES, in their order),
 // "<0 / 1: on the pedal><heel, two hex digits><toe, two hex digits>", then one per on/off assignment
 // (NANO_EXP_SWITCHES), "<0 / 1: assigned><way 0-2><0 / 1: inverted><0 / 1: latch><delay in ms, four hex digits>".
-// 'T' = the set list from its dialog: "<0 / 1: on><preset, two hex digits>..." in the order of the songs. A scene's
+// 'T' = the set list from its dialog: "<0 / 1: on>", then per song in order "<preset, two hex digits><start scene
+// 0-6>" (0 = none). A scene's
 // text has its capture after the five FX: 'a' = as it is, 'b'-'z' = slot 1-25.
 typedef void (*ui_text_cb)(char kind, const char *text);
 
@@ -132,6 +133,8 @@ typedef struct {
     bool setlist_on;                                          // set list: footswitches 3-8 are its songs (preset mode);
     uint8_t setlist_count;                                    // then bank_presets / colours / symbols are those songs
     uint8_t setlist_presets[UI_SETLIST_MAX];                  // the songs in order (presets 1-64)
+    uint8_t setlist_scenes[UI_SETLIST_MAX];                   // their start scenes 1-6, 0 = none
+    char setlist_scene_names[6][UI_SCENE_NAME];               // names of the start scenes of the songs on the page
     uint8_t setlist_first;                                    // the song on footswitch 3 (0-based)
     int8_t setlist_song;                                      // the song that is on, -1 = none
 } ui_view_t;
@@ -139,6 +142,9 @@ typedef struct {
 #define UI_BANK_COLOR_COUNT 10
 
 void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text);
+// Where the set list dialog reads the scene names of any preset ("" = empty scene); called from the LVGL task.
+typedef void (*ui_scene_names_cb)(int preset, char names[UI_SCENES][UI_SCENE_NAME]);
+void ui_set_scene_names_source(ui_scene_names_cb cb);
 void ui_set_link(bool connected);
 void ui_show_state(const nano_state_t *state, const ui_view_t *view);
 void ui_show_tuner(bool open);
