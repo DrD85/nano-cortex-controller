@@ -2,7 +2,7 @@
 
 Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../README.de.md); wie die Firmware gebaut wird und wie sie mit dem Nano spricht, steht in [development.de.md](development.de.md).
 
-**Inhalt:** [Der Bildschirm](#der-bildschirm) · [Fußschalter und Kacheln](#fußschalter-und-kacheln) · [Lange drücken](#lange-drücken) · [Eigene Bänke](#eigene-bänke) · [Szenen](#szenen) · [Expression-Pedal](#expression-pedal) · [Capture und Cab/IR](#capture-und-cabir) · [FX-Editor](#fx-editor) · [Reverb-Schalter](#reverb-schalter-fußschalter-8) · [Zweiter Effekt auf Pre FX 1](#zweiter-effekt-auf-pre-fx-1-fußschalter-3) · [Einstellungs-Wechsel](#einstellungs-wechsel-fx-fußschalter-halten) · [Auto-Wah](#auto-wah) · [Stimmgerät](#stimmgerät) · [USB-Audio-Lautstärke](#usb-audio-lautstärke) · [Bluetooth-MIDI](#bluetooth-midi) · [Looper-Modus](#looper-modus-eine-looper-app-auf-dem-telefon) · [Editor über den Controller](#nano-cortex-editor-über-den-controller) · [Fußschalter-Learn](#fußschalter-learn) · [Fußschalter (Verkabelung)](#fußschalter) · [Was wo gespeichert ist](#was-wo-gespeichert-ist)
+**Inhalt:** [Der Bildschirm](#der-bildschirm) · [Fußschalter und Kacheln](#fußschalter-und-kacheln) · [Lange drücken](#lange-drücken) · [Eigene Bänke](#eigene-bänke) · [Setlist](#setlist) · [Szenen](#szenen) · [Expression-Pedal](#expression-pedal) · [Capture und Cab/IR](#capture-und-cabir) · [FX-Editor](#fx-editor) · [Reverb-Schalter](#reverb-schalter-fußschalter-8) · [Zweiter Effekt auf Pre FX 1](#zweiter-effekt-auf-pre-fx-1-fußschalter-3) · [Einstellungs-Wechsel](#einstellungs-wechsel-fx-fußschalter-halten) · [Auto-Wah](#auto-wah) · [Stimmgerät](#stimmgerät) · [USB-Audio-Lautstärke](#usb-audio-lautstärke) · [Bluetooth-MIDI](#bluetooth-midi) · [Looper-Modus](#looper-modus-eine-looper-app-auf-dem-telefon) · [Editor über den Controller](#nano-cortex-editor-über-den-controller) · [Fußschalter-Learn](#fußschalter-learn) · [Fußschalter (Verkabelung)](#fußschalter) · [Was wo gespeichert ist](#was-wo-gespeichert-ist)
 
 ## Der Bildschirm
 
@@ -69,6 +69,31 @@ Lange auf eine Preset-Kachel drücken, dann beliebiges Preset, eine von zehn Far
 Fuzz Wave, Guitarist, Rocket, Space, Swell).
 Die Bänke speichert der Controller, die Presets selbst bleiben auf dem Nano.
 
+## Setlist
+
+<img src="images/32-setlist-mode.png" alt="" width="49%"> <img src="images/33-setlist.png" alt="" width="49%">
+
+Die Songs eines Auftritts in ihrer Reihenfolge – bis zu 36, dasselbe Preset darf mehrmals vorkommen. **Auf die Zeile
+oben tippen** (*PRESET 8 · BANK 2*) öffnet die Setlist:
+
+- **Ein Preset rechts antippen** fügt es als Song nach dem gewählten ein (oder am Ende).
+- **Einen Song links antippen** wählt ihn; dann mit den Pfeilen nach oben oder unten schieben oder mit **Remove**
+  entfernen. **Clear** leert die Liste.
+- **On / Off** oben: Solange die Setlist an ist, sind die Fußschalter 3–8 im Preset-Modus ihre Songs statt der Presets
+  der Bank. **Save** speichert Liste und Wahl auf dem Controller.
+
+Solange sie an ist:
+
+- Die Kacheln 3–8 zeigen sechs Songs (*SONG 1* … *SONG 6*) in der Farbe und mit dem Symbol, die ihr Preset in den
+  Bänken hat; Kachel 1 sagt, welche Songs auf der Seite sind (*SET 1-6*), die Zeile oben, welcher Song an ist
+  (*SONG 4/8*).
+- **Wer den sechsten Song einer Seite wählt, kommt auf die nächste Seite** – so geht es allein mit den Fußschaltern
+  durch das ganze Set: 3, 4, 5, 6, 7, 8 – und Fußschalter 3 ist der nächste Song.
+- Die **Pfeil-Knöpfe** blättern die Seiten um, ein **Wischen** geht zum vorigen oder nächsten Song.
+- Lange auf eine Song-Kachel drücken öffnet die Setlist mit diesem Song gewählt.
+- Szenen und FX-Modus funktionieren wie bisher; Fußschalter 1 und der Szenen-Knopf kehren zur Seite der Setlist zurück.
+- MIDI: **CC 66** nächster Song, **CC 67** voriger Song (Wert 64–127), **CC 68** Setlist an (64–127) / aus.
+
 ## Szenen
 
 <img src="images/20-scene-mode.png" alt="" width="49%"> <img src="images/21-scene.png" alt="" width="49%">
@@ -86,6 +111,11 @@ Laden eines anderen Presets – zum Beispiel *Clean*, *Crunch* und *Lead* in ein
   dieser Szene an sind – gefüllt = an, umrandet = aus. Eine leere Szene beginnt mit dem, was gerade an ist; man kann
   die Effekte also auch vorher im FX-Modus einstellen. **Save** speichert die Szene und schaltet auf sie um,
   **Remove** leert den Schalter.
+- **Capture** (neben dem Namen): der Capture-Slot, den die Szene lädt – etwa ein Lead-Amp für die Solo-Szene.
+  *As it is* lässt das Capture, wie es ist (so wie eine Szene ohne Einstellungen einen Effekt lässt). Ein Capture zu
+  laden dauert beim Nano einen Moment; eine Szene mit Capture wechselt also nicht ohne Aussetzer.
+
+  <img src="images/34-scene-capture.png" alt="" width="440">
 - **Auf der Kachel** stehen fünf Quadrate für Pre FX 1–2 und Post FX 1–3 in den Farben ihrer Effekte: gefüllt = die
   Szene schaltet den Effekt an, umrandet = aus, ein Punkt = der Slot ist leer.
 - **Es leuchtet** die Szene, deren Effekte gerade an sind. Wird ein Effekt von Hand geschaltet (FX-Modus, Schalter
@@ -346,6 +376,8 @@ Nano (zum Beispiel aus dem MC6-Export des Nano Cortex Editors) funktionieren als
 | CC 1 | Expression: Reverb-Mix von Pos 1 (0) bis Pos 2 (127) |
 | CC 50–57, Wert 64–127 | Feld 1–8 der [Kachel-Anordnung](#kachel-anordnung-6-oder-8-felder) drücken (Modus, Stimmgerät, Presets oder FX, Reverb-Schalter) |
 | CC 58, Wert 64–127 | Fußschalter 3 halten: Pre FX 1 wechselt zum zweiten Effekt und zurück |
+| CC 66 / CC 67, Wert 64–127 | [Setlist](#setlist): nächster / voriger Song |
+| CC 68 | Setlist: Wert 64–127 an, 0–63 aus |
 | CC 61–65 | [Einstellungs-Wechsel](#einstellungs-wechsel-fx-fußschalter-halten) von FX-Slot 1–5: Wert 64–127 das FX-Preset, 0–63 die eigenen Einstellungen |
 | CC 59 | Looper-Modus: Wert 64–127 an, 0–63 aus |
 | CC 60 | Fußschalter 3–8: Wert 64–127 [Szenen](#szenen) des Presets, 0–63 Presets der Bank |
@@ -468,4 +500,4 @@ Ohne SX1509 funktioniert der Controller nur mit dem Touchscreen.
 
 | Auf dem Nano | Auf dem Controller |
 |---|---|
-| Presets, Namen, Captures, Cabs, FX und ihre Werte, Expression-Einstellungen, USB-Lautstärke | eigene Bänke (Preset, Farbe, Symbol), Szenen, Reverb-Mix Pos 1 / Pos 2, Fußschalter-Reihenfolge, Kachel-Anordnung, zweite Reverbs, Auto-Wah-Einstellungen, Einstellungs-Wechsel, das Bluetooth-MIDI-Gerät |
+| Presets, Namen, Captures, Cabs, FX und ihre Werte, Expression-Einstellungen, USB-Lautstärke | eigene Bänke (Preset, Farbe, Symbol), Szenen, Reverb-Mix Pos 1 / Pos 2, Fußschalter-Reihenfolge, Kachel-Anordnung, zweite Reverbs, Auto-Wah-Einstellungen, Einstellungs-Wechsel, die Setlist, die Captures der Szenen, das Bluetooth-MIDI-Gerät |

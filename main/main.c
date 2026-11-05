@@ -129,6 +129,7 @@ typedef struct {
     char name[UI_SCENE_NAME];   // "" = empty
     uint8_t color;              // BANK_COLORS index
     uint8_t fx;                 // bit n = FX slot n on
+    uint8_t capture;            // capture slot 1-25 the scene loads, 0 = it leaves the capture as it is
     scene_fx_t set[NANO_FX_SLOTS];
 } scene_t;
 static scene_t *s_scenes;       // UI_SCENES of them, in PSRAM (internal RAM is short)
@@ -137,6 +138,7 @@ static bool s_scene_mode;       // footswitches 3-8 are scenes instead of the ba
 static int s_scene_last = -1;   // recalled last: the lit one if two scenes are alike
 #define SCENE_STORE_KEY "scn%02d"
 #define SCENE_VALUES_KEY "scv%02d"    // the settings, apart from the names (stored as 1.8.0 did)
+#define SCENE_CAPTURE_KEY "scc%02d"   // the capture of each scene (UI_SCENES bytes, 0 = as it is; since 1.12.0)
 #define SCENE_VALUES_MAX (UI_SCENES * NANO_FX_SLOTS * (6 + 2 * NANO_MAX_PARAMS))
 #define SCENE_MODE_KEY "scenemode"
 #define LAYOUT_KEY "layout"   // { count, order[8] }
@@ -210,6 +212,19 @@ static int s_expect_preset;     // 0 = none
 static bool s_expect_ack;       // the Nano has not confirmed the change yet: a state reply is from before it
 static int64_t s_expect_us;
 static int s_bank;              // 0-15
+
+// Set list: songs in the order of the gig (presets; one may come more than once), stored on the controller. While it
+// is on, footswitches 3-8 in preset mode are six songs of it (a page) instead of the bank's presets; the arrow buttons
+// turn the pages, a swipe goes to the previous / next song. Choosing the last song of a page turns to the next page,
+// so the footswitches alone get through the whole set.
+#define SETLIST_KEY "setlist"   // { on, count, presets[count] }
+static struct {
+    bool on;
+    int count;
+    uint8_t presets[UI_SETLIST_MAX];
+    int page;                   // the first song shown is page * BANK_SLOTS
+    int song;                   // the song chosen last (0-based), -1 = none
+} s_setlist = { .song = -1 };
 static int s_last_preset;
 static volatile bool s_tuner_on;
 
@@ -923,6 +938,14 @@ static void scenes_load(int preset)
         }
     }
     heap_caps_free(values);
+    uint8_t captures[UI_SCENES];
+    snprintf(key, sizeof(key), SCENE_CAPTURE_KEY, preset);
+    size = sizeof(captures);
+    if (nvs_get_blob(nvs, key, captures, &size) == ESP_OK && size == sizeof(captures)) {
+        for (int i = 0; i < UI_SCENES; i++) {
+            if (s_scenes[i].name[0] && captures[i] <= NANO_CAPTURE_SLOTS) s_scenes[i].capture = captures[i];
+        }
+    }
     nvs_close(nvs);
 }
 
@@ -975,6 +998,11 @@ static void scenes_save(void)
         failed |= err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND;
     }
     heap_caps_free(values);
+    uint8_t captures[UI_SCENES], any = 0;
+    for (int i = 0; i < UI_SCENES; i++) any |= captures[i] = s_scenes[i].name[0] ? s_scenes[i].capture : 0;
+    snprintf(key, sizeof(key), SCENE_CAPTURE_KEY, s_scenes_preset);
+    err = any ? nvs_set_blob(nvs, key, captures, sizeof(captures)) : nvs_erase_key(nvs, key);
+    failed |= err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND;
     if (failed || nvs_commit(nvs) != ESP_OK) ui_show_message("Could not store the scene (memory full?).");
     nvs_close(nvs);
 }
@@ -1010,8 +1038,124 @@ static void banks_save(void)
 }
 
 // Keeps the current bank if it holds the preset, otherwise jumps to the first bank that does.
+static bool setlist_used(void)
+{
+    return s_setlist.on && s_setlist.count > 0;
+}
+
+// The song that is on: the one chosen last if its preset is the current one, otherwise the first with that preset.
+static int setlist_song_now(void)
+{
+    if (s_setlist.song >= 0 && s_setlist.song < s_setlist.count && s_setlist.presets[s_setlist.song] == s_state.current_preset) {
+        return s_setlist.song;
+    }
+    for (int i = 0; i < s_setlist.count; i++) if (s_setlist.presets[i] == s_state.current_preset) return i;
+    return -1;
+}
+
+// The page that shows a song: the next one after the last song of a page (if there is a next song).
+static int setlist_page_of(int song)
+{
+    if (song % BANK_SLOTS == BANK_SLOTS - 1 && song + 1 < s_setlist.count) return song / BANK_SLOTS + 1;
+    return song / BANK_SLOTS;
+}
+
+static int setlist_pages(void)
+{
+    return (s_setlist.count + BANK_SLOTS - 1) / BANK_SLOTS;
+}
+
+static void select_preset(int preset);
+
+static void setlist_choose(int song)
+{
+    if (song < 0 || song >= s_setlist.count) return;
+    s_setlist.song = song;
+    s_setlist.page = setlist_page_of(song);
+    ESP_LOGI(TAG, "Set list: song %d of %d, preset %d", song + 1, s_setlist.count, s_setlist.presets[song]);
+    select_preset(s_setlist.presets[song]);
+}
+
+// Swipe or MIDI: the previous / next song (from the song that is on, or the first).
+static void setlist_step(int step)
+{
+    int now = setlist_song_now();
+    int song = now < 0 ? 0 : now + (step < 0 ? -1 : 1);
+    if (song < 0 || song >= s_setlist.count) {
+        ui_show_message(song < 0 ? "This is the first song of the set list." : "This is the last song of the set list.");
+        return;
+    }
+    setlist_choose(song);
+}
+
+static void setlist_store(void)
+{
+    uint8_t stored[2 + UI_SETLIST_MAX] = { s_setlist.on, (uint8_t)s_setlist.count };
+    memcpy(stored + 2, s_setlist.presets, (size_t)s_setlist.count);
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
+    esp_err_t err = nvs_set_blob(nvs, SETLIST_KEY, stored, 2 + (size_t)s_setlist.count);
+    if (err != ESP_OK || nvs_commit(nvs) != ESP_OK) ui_show_message("Could not store the set list (memory full?).");
+    nvs_close(nvs);
+}
+
+static void setlist_load(void)
+{
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
+    uint8_t stored[2 + UI_SETLIST_MAX];
+    size_t size = sizeof(stored);
+    if (nvs_get_blob(nvs, SETLIST_KEY, stored, &size) == ESP_OK && size >= 2 && stored[1] <= UI_SETLIST_MAX && size == 2 + (size_t)stored[1]) {
+        s_setlist.on = stored[0] != 0;
+        s_setlist.count = 0;
+        for (int i = 0; i < stored[1]; i++) {
+            if (stored[2 + i] >= 1 && stored[2 + i] <= NANO_PRESETS) s_setlist.presets[s_setlist.count++] = stored[2 + i];
+        }
+    }
+    nvs_close(nvs);
+}
+
+static void show(void);
+
+static void setlist_set_on(bool on)
+{
+    if (on == s_setlist.on) return;
+    s_setlist.on = on;
+    setlist_store();
+    int now = setlist_song_now();
+    s_setlist.page = now >= 0 ? setlist_page_of(now) : 0;
+    ESP_LOGI(TAG, "Set list %s", on ? "on" : "off");
+    show();
+}
+
+// Text from the set list dialog: "<0 / 1: on><preset, two hex digits> ..." in the order of the songs.
+static void setlist_edit(const char *text)
+{
+    if (!text[0]) return;
+    int count = 0;
+    for (const char *c = text + 1; c[0] && c[1] && count < UI_SETLIST_MAX; c += 2) {
+        char hex[3] = { c[0], c[1], 0 };
+        int preset = (int)strtol(hex, NULL, 16);
+        if (preset >= 1 && preset <= NANO_PRESETS) s_setlist.presets[count++] = (uint8_t)preset;
+    }
+    s_setlist.on = text[0] == '1';
+    s_setlist.count = count;
+    if (s_setlist.song >= count) s_setlist.song = -1;
+    int now = setlist_song_now();
+    s_setlist.page = now >= 0 ? setlist_page_of(now) : 0;
+    setlist_store();
+    ESP_LOGI(TAG, "Set list: %d songs, %s", count, s_setlist.on ? "on" : "off");
+    ui_show_message(!count ? "Set list emptied." : s_setlist.on ? "Set list saved - footswitches 3-8 are its songs." : "Set list saved (off).");
+    show();
+}
+
 static void follow_preset_with_bank(int preset)
 {
+    if (setlist_used()) {   // the page with the song that is on
+        int now = setlist_song_now();
+        if (now >= 0 && now / BANK_SLOTS != s_setlist.page && setlist_page_of(now) != s_setlist.page) s_setlist.page = setlist_page_of(now);
+        return;
+    }
     for (int i = 0; i < BANK_SLOTS; i++) if (s_banks[s_bank][i].preset == preset) return;
     for (int bank = 0; bank < BANKS; bank++) {
         for (int i = 0; i < BANK_SLOTS; i++) {
@@ -1104,6 +1248,7 @@ static void show(void)
         strlcpy(view.scene_names[i], s_scenes[i].name, sizeof(view.scene_names[i]));
         view.scene_colors[i] = s_scenes[i].color;
         view.scene_fx[i] = s_scenes[i].fx;
+        view.scene_capture[i] = s_scenes[i].capture;
         for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {   // settings count while their model is in the slot
             const scene_fx_t *set = &s_scenes[i].set[slot];
             if (set->type && set->type == s_state.fx_type[slot]) view.scene_set[i] |= (uint8_t)(1u << slot);
@@ -1119,6 +1264,28 @@ static void show(void)
         view.bank_presets[i] = s_banks[s_bank][i].preset;
         view.bank_colors[i] = s_banks[s_bank][i].color;
         view.bank_icons[i] = s_banks[s_bank][i].icon;
+    }
+    view.setlist_on = s_setlist.on;
+    view.setlist_count = (uint8_t)s_setlist.count;
+    memcpy(view.setlist_presets, s_setlist.presets, sizeof(view.setlist_presets));
+    if (setlist_used()) {   // the songs of the page, in the colour and with the symbol of their preset's bank switch
+        if (s_setlist.page >= setlist_pages()) s_setlist.page = 0;
+        view.setlist_first = (uint8_t)(s_setlist.page * BANK_SLOTS);
+        view.setlist_song = (int8_t)setlist_song_now();
+        for (int i = 0; i < BANK_SLOTS; i++) {
+            int song = view.setlist_first + i;
+            int preset = song < s_setlist.count ? s_setlist.presets[song] : 0;
+            view.bank_presets[i] = (uint8_t)preset;
+            view.bank_colors[i] = view.bank_icons[i] = 0;
+            for (int bank = 0; bank < BANKS && preset; bank++) {
+                int slot = 0;
+                while (slot < BANK_SLOTS && s_banks[bank][slot].preset != preset) slot++;
+                if (slot == BANK_SLOTS) continue;
+                view.bank_colors[i] = s_banks[bank][slot].color;
+                view.bank_icons[i] = s_banks[bank][slot].icon;
+                break;
+            }
+        }
     }
     ui_show_state(&s_state, &view);
 }
@@ -1294,6 +1461,8 @@ static int scene_queue_values(const scene_t *scene, int slot)
     return queued;
 }
 
+static void select_capture(int slot);
+
 // Footswitch 3-8 in scene mode: the effects go on and off as the scene says and take the settings it carries -
 // only what differs is sent. Effects go off at once; one that comes on gets its settings first (if they are few
 // enough to go out at once), so it does not sound with the old ones for a moment.
@@ -1308,6 +1477,11 @@ static void scene_recall(int n)
     if (s_values_stale) {
         s_values_stale = false;
         values_forget();
+    }
+    // The scene's capture first: loading it takes the Nano a moment, the effects follow
+    if (scene->capture && scene->capture != s_state.capture_slot) {
+        ESP_LOGI(TAG, "Scene %d: capture slot %d", n + 1, scene->capture);
+        select_capture(scene->capture);
     }
     esp_timer_stop(s_scene_timer);
     s_scene_queued = s_scene_sent = 0;
@@ -1389,12 +1563,14 @@ static void scene_edit(const char *text)
     if (text[1] != '!') {
         memcpy(scene.set, s_scenes[n].set, sizeof(scene.set));   // name, colour and switches change, the settings stay
         int color = text[1] - 'a';
-        if (color < 0 || color >= UI_BANK_COLOR_COUNT || strlen(text) < 2 + NANO_FX_SLOTS) return;
+        if (color < 0 || color >= UI_BANK_COLOR_COUNT || strlen(text) < 3 + NANO_FX_SLOTS) return;
         scene.color = (uint8_t)color;
         for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
             if (text[2 + slot] == '1') scene.fx |= (uint8_t)(1u << slot);
         }
-        const char *name = text + 2 + NANO_FX_SLOTS;
+        int capture = text[2 + NANO_FX_SLOTS] - 'a';
+        scene.capture = capture >= 0 && capture <= NANO_CAPTURE_SLOTS ? (uint8_t)capture : 0;
+        const char *name = text + 3 + NANO_FX_SLOTS;
         while (*name == ' ') name++;
         if (*name) strlcpy(scene.name, name, sizeof(scene.name));
         else snprintf(scene.name, sizeof(scene.name), "Scene %d", n + 1);
@@ -2914,6 +3090,12 @@ static void set_bank_slot(int arg)
 
 static void step_bank(int step)
 {
+    if (setlist_used()) {   // the arrows turn the set list's pages
+        int pages = setlist_pages();
+        s_setlist.page = (s_setlist.page + pages + (step < 0 ? -1 : 1)) % pages;
+        show();
+        return;
+    }
     s_bank = (s_bank + BANKS + (step < 0 ? -1 : 1)) % BANKS;
     show();
 }
@@ -3119,6 +3301,10 @@ static void handle_switch(int number)
         else toggle_mix();
     } else if (number >= 3 && number <= 8 && s_scene_mode) {
         scene_recall(number - 3);
+    } else if (number >= 3 && number <= 8 && setlist_used()) {
+        int song = s_setlist.page * BANK_SLOTS + number - 3;
+        if (song < s_setlist.count) setlist_choose(song);
+        else ui_show_message("No song here - tap PRESET / SET LIST at the top to edit the set list.");
     } else if (number >= 3 && number <= 8) {
         int preset = s_banks[s_bank][number - 3].preset;
         if (preset) select_preset(preset);
@@ -3250,6 +3436,10 @@ static void handle_midi(int arg)
         ab_swap(AB_PRE1);
     } else if (type == 0xB0 && d1 >= 61 && d1 <= 65) {   // settings swap of FX slot 1-5: 64-127 B, 0-63 A
         hs_swap(d1 - 61, d2 >= 64);
+    } else if (type == 0xB0 && (d1 == 66 || d1 == 67) && d2 >= 64 && setlist_used()) {   // next / previous song
+        setlist_step(d1 == 66 ? 1 : -1);
+    } else if (type == 0xB0 && d1 == 68) {   // set list on (64-127) / off
+        setlist_set_on(d2 >= 64);
     }
 }
 
@@ -3309,8 +3499,14 @@ static void handle_command(char c, int arg)
         return;
     }
     switch (c) {
-    case 'n': select_preset(s_state.current_preset + 1); break;
-    case 'p': select_preset(s_state.current_preset - 1); break;
+    case 'n':
+        if (setlist_used()) setlist_step(1);
+        else select_preset(s_state.current_preset + 1);
+        break;
+    case 'p':
+        if (setlist_used()) setlist_step(-1);
+        else select_preset(s_state.current_preset - 1);
+        break;
     case 'g':
         if (arg >= 1 && arg <= NANO_PRESETS) select_preset(arg);
         else ESP_LOGW(TAG, "Presets are 1-64");
@@ -3820,6 +4016,7 @@ static void app_event(app_event_t ev)
         else if (ev.command >= '1' && ev.command < '1' + FXP_COUNT) fxp_save(ev.command - '0', (const char *)ev.data);
         else if (ev.command == 'L') looper_tile_edit((const char *)ev.data);
         else if (ev.command == 'S') scene_edit((const char *)ev.data);
+        else if (ev.command == 'T') setlist_edit((const char *)ev.data);
         else if (ev.command == 'X') exp_dialog_save((const char *)ev.data);
         free(ev.data);
         break;
@@ -3960,6 +4157,7 @@ void app_main(void)
     const esp_timer_create_args_t library_timer = { .callback = library_timer_cb, .name = "library" };
     ESP_ERROR_CHECK(esp_timer_create(&library_timer, &s_library_timer));
     banks_load();
+    setlist_load();
     looper_tiles_load();
     layout_load();
     s_scenes = heap_caps_calloc(UI_SCENES, sizeof(scene_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);

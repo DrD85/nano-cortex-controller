@@ -75,6 +75,8 @@ typedef void (*ui_command_cb)(char command, int arg);
 // empty it. 'X' = the expression dialog's assignments, saved: one entry per sweep (NANO_EXP_RANGES, in their order),
 // "<0 / 1: on the pedal><heel, two hex digits><toe, two hex digits>", then one per on/off assignment
 // (NANO_EXP_SWITCHES), "<0 / 1: assigned><way 0-2><0 / 1: inverted><0 / 1: latch><delay in ms, four hex digits>".
+// 'T' = the set list from its dialog: "<0 / 1: on><preset, two hex digits>..." in the order of the songs. A scene's
+// text has its capture after the five FX: 'a' = as it is, 'b'-'z' = slot 1-25.
 typedef void (*ui_text_cb)(char kind, const char *text);
 
 // FX editor: a parameter was moved. value = 0-1, as the Nano expects it.
@@ -87,6 +89,7 @@ typedef void (*ui_param_cb)(int slot, int param, float value);
 
 // Scenes of the current preset (footswitches 3-8 in scene mode).
 #define UI_SCENES 6
+#define UI_SETLIST_MAX 36      // songs in the set list (six pages)
 #define UI_SCENE_NAME 16       // with the terminating 0
 
 typedef struct {
@@ -119,12 +122,18 @@ typedef struct {
     uint8_t scene_colors[UI_SCENES];                          // colour index (UI_BANK_COLOR_COUNT)
     uint8_t scene_fx[UI_SCENES];                              // bit n = FX slot n on
     uint8_t scene_set[UI_SCENES];                             // bit n = the scene carries settings for the effect in slot n
+    uint8_t scene_capture[UI_SCENES];                         // capture slot 1-25 the scene loads, 0 = as it is
     uint8_t wah_mode[NANO_FX_SLOTS];                          // auto-wah of the wah in this slot (UI_WAH_OFF / ON / HELD)
     uint8_t wah_rate[NANO_FX_SLOTS];                          // its rate (index into the list of UI_WAH_RATES)
     uint8_t hold_fxp[NANO_FX_SLOTS];                          // settings swap: FX preset (1-4) that holding the slot's
                                                               // footswitch swaps to, 0 = none
     char hold_names[NANO_FX_SLOTS][16];                       // its name
     uint8_t hold_active;                                      // bit n: slot n has that FX preset now
+    bool setlist_on;                                          // set list: footswitches 3-8 are its songs (preset mode);
+    uint8_t setlist_count;                                    // then bank_presets / colours / symbols are those songs
+    uint8_t setlist_presets[UI_SETLIST_MAX];                  // the songs in order (presets 1-64)
+    uint8_t setlist_first;                                    // the song on footswitch 3 (0-based)
+    int8_t setlist_song;                                      // the song that is on, -1 = none
 } ui_view_t;
 
 #define UI_BANK_COLOR_COUNT 10

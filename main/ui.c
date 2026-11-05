@@ -134,6 +134,13 @@ static lv_obj_t *s_se_fx_set[NANO_FX_SLOTS];    // "with settings": the scene ca
 static int s_se_scene, s_se_color, s_se_preset;
 static uint8_t s_se_fx_on;                      // bit n = FX slot n on in the edited scene
 static char s_se_name[UI_SCENE_NAME];
+static int s_se_capture;                         // capture slot the edited scene loads, 0 = as it is
+static lv_obj_t *s_se_capture_label, *s_scene_cap, *s_scene_cap_list;   // the button and its list
+// Set list dialog (tap the preset / bank line at the top): the songs in order on the left, the presets on the right.
+static lv_obj_t *s_setlist, *s_sl_songs, *s_sl_presets, *s_sl_tab[2];
+static uint8_t s_sl_list[UI_SETLIST_MAX];
+static int s_sl_count, s_sl_selected = -1;
+static bool s_sl_on;
 static lv_obj_t *s_preset_card, *s_source_card[2];
 static lv_obj_t *s_midi_label, *s_midi, *s_midi_status, *s_midi_list;
 static ui_midi_t s_midi_state;
@@ -227,6 +234,7 @@ static void set_fullscreen(bool on);
 static void open_bank_editor(int tile);
 static void open_looper_editor(int tile);
 static void open_scene_editor(int scene);
+static void open_setlist_at(int song);
 static void open_mix_editor(void);
 static void open_learn(int number);
 static int tile_position(int i);
@@ -240,10 +248,16 @@ static void on_tile_long(lv_event_t *e)
     else if (s_fx_mode && tile < 2 + NANO_FX_SLOTS) send('O', tile - 2);
     else if (s_fx_mode && tile == 2 + NANO_FX_SLOTS) open_mix_editor();
     else if (!s_fx_mode && tile >= 2 && s_view.scenes) open_scene_editor(tile - 2);
+    else if (!s_fx_mode && tile >= 2 && s_view.setlist_on && s_view.setlist_count) open_setlist_at(s_view.setlist_first + tile - 2);
     else if (!s_fx_mode && tile >= 2) open_bank_editor(tile - 2);
 }
 
 static lv_obj_t *s_splash, *s_splash_status, *s_splash_version;
+
+static void on_status_tap(lv_event_t *e)
+{
+    if (!s_splash) open_setlist_at(-1);
+}
 
 static void on_gesture(lv_event_t *e)
 {
@@ -251,7 +265,8 @@ static void on_gesture(lv_event_t *e)
     if (s_splash) return;   // start screen
     // Swipes work only on the main screen, not in an open dialog.
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi, s_layout,
-                                   s_volume, s_cab_settings, s_amp, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel };
+                                   s_volume, s_cab_settings, s_amp, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
+                                   s_setlist, s_scene_cap };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
         if (overlays[i] && !lv_obj_is_hidden(overlays[i])) return;
     }
@@ -2321,6 +2336,171 @@ static void build_layout(lv_obj_t *screen)
     lv_obj_set_hidden(s_layout, true);
 }
 
+// A scrolling list of entries as the bank editor's presets (set list, capture of a scene).
+static lv_obj_t *list_entry(lv_obj_t *list, const char *text, bool selected, uint32_t frame, lv_event_cb_t cb, int data)
+{
+    lv_obj_t *btn = lv_button_create(list);
+    lv_obj_set_size(btn, LV_PCT(100), 46);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(selected ? 0x2A2E33 : 0x1A1D20), 0);
+    lv_obj_set_style_border_width(btn, selected ? 2 : 0, 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(frame), 0);
+    lv_obj_set_style_shadow_width(btn, 0, 0);
+    lv_obj_set_style_radius(btn, 9, 0);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, (void *)(intptr_t)data);
+    lv_obj_t *l = label(btn, &ui_font_20, selected ? 0xFFFFFF : 0xD8D8D8);
+    lv_label_set_text(l, text);
+    lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(l, LV_PCT(100));
+    lv_obj_align(l, LV_ALIGN_LEFT_MID, 0, 0);
+    return btn;
+}
+
+static lv_obj_t *scroll_list(lv_obj_t *parent, int x, int y, int w, int h)
+{
+    lv_obj_t *list = lv_obj_create(parent);
+    lv_obj_set_pos(list, x, y);
+    lv_obj_set_size(list, w, h);
+    lv_obj_set_style_bg_opa(list, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(list, 0, 0);
+    lv_obj_set_style_pad_all(list, 4, 0);
+    lv_obj_set_style_pad_row(list, 6, 0);
+    lv_obj_set_flex_flow(list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_scroll_dir(list, LV_DIR_VER);
+    return list;
+}
+
+// ---- set list: the songs in the order of the gig (tap the preset / bank line at the top) ----
+
+static void fill_setlist(void);
+
+static void on_setlist_song(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    s_sl_selected = i == s_sl_selected ? -1 : i;
+    fill_setlist();
+}
+
+// A preset tapped on the right: a new song after the chosen one (or at the end).
+static void on_setlist_preset(lv_event_t *e)
+{
+    int preset = (int)(intptr_t)lv_event_get_user_data(e);
+    if (s_sl_count >= UI_SETLIST_MAX) {
+        ui_show_message("The set list is full (36 songs).");
+        return;
+    }
+    int at = s_sl_selected >= 0 ? s_sl_selected + 1 : s_sl_count;
+    memmove(s_sl_list + at + 1, s_sl_list + at, (size_t)(s_sl_count - at));
+    s_sl_list[at] = (uint8_t)preset;
+    s_sl_count++;
+    s_sl_selected = at;
+    fill_setlist();
+}
+
+static void on_setlist_button(lv_event_t *e)
+{
+    int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 close, 1 save, 2 off, 3 on, 4 up, 5 down, 6 remove, 7 clear
+    int i = s_sl_selected;
+    if (action == 2 || action == 3) s_sl_on = action == 3;
+    else if ((action == 4 && i > 0) || (action == 5 && i >= 0 && i + 1 < s_sl_count)) {
+        int j = action == 4 ? i - 1 : i + 1;
+        uint8_t t = s_sl_list[i];
+        s_sl_list[i] = s_sl_list[j];
+        s_sl_list[j] = t;
+        s_sl_selected = j;
+    } else if (action == 6 && i >= 0) {
+        memmove(s_sl_list + i, s_sl_list + i + 1, (size_t)(s_sl_count - i - 1));
+        s_sl_count--;
+        s_sl_selected = i < s_sl_count ? i : s_sl_count - 1;
+    } else if (action == 7) {
+        s_sl_count = 0;
+        s_sl_selected = -1;
+    } else if (action == 0 || action == 1) {
+        lv_obj_set_hidden(s_setlist, true);
+        if (action == 1 && s_on_text) {
+            char text[2 + 2 * UI_SETLIST_MAX + 1];
+            int n = snprintf(text, sizeof(text), "%c", s_sl_on ? '1' : '0');
+            for (int k = 0; k < s_sl_count; k++) n += snprintf(text + n, sizeof(text) - (size_t)n, "%02X", s_sl_list[k]);
+            s_on_text('T', text);
+        }
+        return;
+    } else {
+        return;
+    }
+    fill_setlist();
+}
+
+static void fill_setlist(void)
+{
+    char text[80];
+    style_tab(s_sl_tab[0], !s_sl_on);
+    style_tab(s_sl_tab[1], s_sl_on);
+    lv_obj_clean(s_sl_songs);
+    lv_obj_t *selected = NULL;
+    for (int i = 0; i < s_sl_count; i++) {
+        int preset = s_sl_list[i];
+        snprintf(text, sizeof(text), "%2d   %.40s", i + 1, s_preset_names[preset - 1][0] ? s_preset_names[preset - 1] : "-");
+        lv_obj_t *entry = list_entry(s_sl_songs, text, i == s_sl_selected, 0xFFFFFF, on_setlist_song, i);
+        if (i == s_sl_selected) selected = entry;
+    }
+    if (!s_sl_count) {
+        lv_obj_t *l = label(s_sl_songs, &ui_font_16, MUTED);
+        lv_obj_set_width(l, LV_PCT(100));
+        lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+        lv_label_set_text(l, "No songs yet - tap presets on the right to add them in the order of the gig.");
+    }
+    lv_obj_update_layout(s_sl_songs);
+    if (selected) lv_obj_scroll_to_view(selected, LV_ANIM_OFF);
+    if (lv_obj_get_child_count(s_sl_presets)) return;   // the presets stay built while the dialog is open
+    for (int preset = 1; preset <= NANO_PRESETS; preset++) {
+        snprintf(text, sizeof(text), "%2d   %.40s", preset, s_preset_names[preset - 1][0] ? s_preset_names[preset - 1] : "-");
+        list_entry(s_sl_presets, text, false, 0, on_setlist_preset, preset);
+    }
+}
+
+// song: the song to choose in the list (a long press on its tile), -1 = none.
+static void open_setlist_at(int song)
+{
+    s_sl_count = s_view.setlist_count <= UI_SETLIST_MAX ? s_view.setlist_count : 0;
+    memcpy(s_sl_list, s_view.setlist_presets, sizeof(s_sl_list));
+    s_sl_on = s_view.setlist_on;
+    s_sl_selected = song >= 0 && song < s_sl_count ? song : -1;
+    lv_obj_clean(s_sl_presets);   // names may have changed
+    fill_setlist();
+    lv_obj_set_hidden(s_setlist, false);
+    lv_obj_move_foreground(s_setlist);
+}
+
+static void build_setlist(lv_obj_t *screen)
+{
+    s_setlist = panel(screen, 50, 12, 700, 462);
+    dialog_title(s_setlist, "Set list");
+    s_sl_tab[0] = small_button(s_setlist, 380, 12, 110, 44, "Off", on_setlist_button, 2);
+    s_sl_tab[1] = small_button(s_setlist, 498, 12, 110, 44, "On", on_setlist_button, 3);
+    close_button(s_setlist, 640, 12, on_setlist_button, 0);
+    lv_obj_t *hint = label(s_setlist, &ui_font_14, MUTED);
+    lv_obj_set_width(hint, 660);
+    lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(hint, "On: footswitches 3-8 are the songs, six per page. Tap a preset on the right to add it after the chosen song.");
+    lv_obj_set_pos(hint, 20, 62);
+    lv_obj_t *songs = label(s_setlist, &ui_font_12, MUTED);
+    lv_obj_set_style_text_letter_space(songs, 2, 0);
+    lv_label_set_text(songs, "SONGS");
+    lv_obj_set_pos(songs, 20, 106);
+    lv_obj_t *presets = label(s_setlist, &ui_font_12, MUTED);
+    lv_obj_set_style_text_letter_space(presets, 2, 0);
+    lv_label_set_text(presets, "ADD A PRESET");
+    lv_obj_set_pos(presets, 370, 106);
+    s_sl_songs = scroll_list(s_setlist, 10, 124, 340, 268);
+    s_sl_presets = scroll_list(s_setlist, 360, 124, 330, 268);
+    small_button(s_setlist, 18, 404, 64, 46, LV_SYMBOL_UP, on_setlist_button, 4);
+    small_button(s_setlist, 90, 404, 64, 46, LV_SYMBOL_DOWN, on_setlist_button, 5);
+    small_button(s_setlist, 162, 404, 110, 46, "Remove", on_setlist_button, 6);
+    small_button(s_setlist, 280, 404, 100, 46, "Clear", on_setlist_button, 7);
+    small_button(s_setlist, 410, 404, 130, 46, "Cancel", on_setlist_button, 0);
+    primary(small_button(s_setlist, 550, 404, 140, 46, "Save", on_setlist_button, 1));
+    lv_obj_set_hidden(s_setlist, true);
+}
+
 void ui_set_layout(int count, const uint8_t order[TILES], int switch1)
 {
     lvgl_port_lock(0);
@@ -2549,6 +2729,7 @@ static void build_tuner(lv_obj_t *screen)
 
 static void build_editor(lv_obj_t *screen);
 static void build_scene_editor(lv_obj_t *screen);
+static void build_scene_capture(lv_obj_t *screen);
 static void build_expression(lv_obj_t *screen);
 static void style_scene_editor(void);
 static void style_scene_chip(void);
@@ -2691,7 +2872,9 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_flex_flow(status_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(status_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(status_row, 10, 0);
-    lv_obj_set_clickable(status_row, false);
+    lv_obj_set_clickable(status_row, true);   // a tap: the set list
+    lv_obj_set_ext_click_area(status_row, 14);
+    lv_obj_add_event_cb(status_row, on_status_tap, LV_EVENT_CLICKED, NULL);
     lv_obj_align(status_row, LV_ALIGN_TOP_MID, 0, 18);
     s_status_dot = lv_obj_create(status_row);
     lv_obj_set_size(s_status_dot, 9, 9);
@@ -2817,6 +3000,8 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     build_learn(screen);
     build_midi(screen);
     build_layout(screen);
+    build_setlist(screen);
+    build_scene_capture(screen);
     build_toast(screen);
     build_splash(screen);
 
@@ -2899,6 +3084,10 @@ static void show_fixed_tiles(const ui_view_t *view)
     char caption[24];
     if (view->fx_mode) snprintf(caption, sizeof(caption), "MODE");
     else if (view->scenes) snprintf(caption, sizeof(caption), "PRESET %d", s_current_preset);
+    else if (view->setlist_on && view->setlist_count) {   // the songs on this page
+        int last = view->setlist_first + 6 < view->setlist_count ? view->setlist_first + 6 : view->setlist_count;
+        snprintf(caption, sizeof(caption), "SET %d-%d", view->setlist_first + 1, last);
+    }
     else snprintf(caption, sizeof(caption), "BANK %d", view->bank + 1);
     set_tile(0, caption, view->fx_mode ? "FX" : view->scenes ? "Scenes" : "Presets", 0x8A9099, false, false, NULL, LV_SYMBOL_LOOP);
     set_tile(1, "TUNER", "Tuner", 0xBDBDBD, false, false, NANO_ICONS[NANO_ICON_TUNER], NANO_ICONS[NANO_ICON_TUNER] ? NULL : LV_SYMBOL_AUDIO);
@@ -2983,16 +3172,20 @@ static void show_looper_tiles(const ui_view_t *view)
 // Preset tiles carry no caption, so the name gets the whole tile.
 static void show_preset_tiles(const nano_state_t *st, const ui_view_t *view)
 {
+    bool setlist = view->setlist_on && view->setlist_count;   // the songs of the set list: "SONG n" over the name
     for (int i = 0; i < 6; i++) {
-        int preset = view->bank_presets[i];
+        int preset = view->bank_presets[i], song = view->setlist_first + i;
+        char caption[16] = "";
+        if (setlist) snprintf(caption, sizeof(caption), "SONG %d", song + 1);
         if (preset < 1 || preset > NANO_PRESETS) {
-            set_tile(2 + i, "EMPTY", "Hold to set", 0x3A3A3A, false, true, NULL, NULL);
+            set_tile(2 + i, setlist ? "" : "EMPTY", setlist ? "-" : "Hold to set", 0x3A3A3A, false, true, NULL, NULL);
             continue;
         }
         const char *name = st->preset_names[preset - 1];
         uint32_t color = BANK_COLORS[view->bank_colors[i] < UI_BANK_COLOR_COUNT ? view->bank_colors[i] : 0];
         int icon = view->bank_icons[i];
-        set_tile(2 + i, "", st->names_loaded && name[0] ? name : "-", color, preset == st->current_preset, false,
+        bool lit = setlist && view->setlist_song >= 0 ? song == view->setlist_song : preset == st->current_preset;
+        set_tile(2 + i, caption, st->names_loaded && name[0] ? name : "-", color, lit, false,
                  icon >= 1 && icon <= PRESET_ICON_COUNT ? PRESET_ICONS[icon - 1].image : NULL, NULL);
     }
 }
@@ -3049,7 +3242,11 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
                  NANO_FX_SLOT_NAMES[view->mix_slot]);
     }
 
-    snprintf(text, sizeof(text), "PRESET %d  \xC2\xB7  BANK %d", st->current_preset, view->bank + 1);
+    char where[24];   // the bank, or the song of the set list
+    if (view->setlist_on && view->setlist_count && view->setlist_song >= 0) snprintf(where, sizeof(where), "SONG %d/%d", view->setlist_song + 1, view->setlist_count);
+    else if (view->setlist_on && view->setlist_count) snprintf(where, sizeof(where), "SET LIST");
+    else snprintf(where, sizeof(where), "BANK %d", view->bank + 1);
+    snprintf(text, sizeof(text), "PRESET %d  \xC2\xB7  %s", st->current_preset, where);
     set_text(s_preset_number, text);
     set_hidden(s_preset_number, false);
     set_hidden(s_status, true);    // the green dot says "connected"
@@ -3079,8 +3276,7 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     // Gig view bar
     snprintf(text, sizeof(text), "%d", st->current_preset);
     set_text(s_gig_number, text);
-    snprintf(text, sizeof(text), "BANK %d", view->bank + 1);
-    set_text(s_gig_bank, text);
+    set_text(s_gig_bank, where);
     set_text(s_gig_name, shown);
     lv_text_get_size(&name_size, shown, &ui_font_title_22, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
     half = (name_size.x < 440 ? name_size.x : 440) / 2;
@@ -4332,6 +4528,51 @@ static void style_scene_editor(void)
         lv_label_set_text(s_se_fx_set[slot], carries ? "WITH SETTINGS" : "");
     }
     lv_label_set_text(s_se_name_label, s_se_name);
+    char text[64];
+    if (s_se_capture) snprintf(text, sizeof(text), "%d  %.47s", s_se_capture, s_capture_names[s_se_capture - 1][0] ? s_capture_names[s_se_capture - 1] : "-");
+    else snprintf(text, sizeof(text), "As it is");
+    lv_label_set_text(s_se_capture_label, text);
+}
+
+// The capture list over the scene dialog: "As it is" and the Nano's 25 slots.
+static void on_scene_capture_choice(lv_event_t *e)
+{
+    s_se_capture = (int)(intptr_t)lv_event_get_user_data(e);
+    lv_obj_set_hidden(s_scene_cap, true);
+    style_scene_editor();
+}
+
+static void on_scene_capture(lv_event_t *e)
+{
+    char text[64];
+    lv_obj_clean(s_scene_cap_list);
+    lv_obj_t *current = list_entry(s_scene_cap_list, "As it is  (the scene leaves the capture)", s_se_capture == 0, TEXT, on_scene_capture_choice, 0);
+    for (int slot = 1; slot <= NANO_CAPTURE_SLOTS; slot++) {
+        snprintf(text, sizeof(text), "%2d   %.47s", slot, s_capture_names[slot - 1][0] ? s_capture_names[slot - 1] : "-");
+        lv_obj_t *entry = list_entry(s_scene_cap_list, text, slot == s_se_capture, TEXT, on_scene_capture_choice, slot);
+        if (slot == s_se_capture) current = entry;
+    }
+    lv_obj_set_hidden(s_scene_cap, false);
+    lv_obj_move_foreground(s_scene_cap);
+    lv_obj_update_layout(s_scene_cap_list);
+    lv_obj_scroll_to_view(current, LV_ANIM_OFF);
+}
+
+static void on_scene_cap_close(lv_event_t *e)
+{
+    lv_obj_set_hidden(s_scene_cap, true);
+}
+
+static void build_scene_capture(lv_obj_t *screen)
+{
+    s_scene_cap = panel(screen, 50, 26, 700, 428);
+    dialog_title(s_scene_cap, "Capture for this scene");
+    lv_obj_t *hint = label(s_scene_cap, &ui_font_14, MUTED);
+    lv_label_set_text(hint, "The scene loads this capture slot when its switch is pressed (a short gap in the sound).");
+    lv_obj_set_pos(hint, 20, 46);
+    close_button(s_scene_cap, 640, 12, on_scene_cap_close, 0);
+    s_scene_cap_list = scroll_list(s_scene_cap, 10, 76, 680, 340);
+    lv_obj_set_hidden(s_scene_cap, true);
 }
 
 static void on_scene_swatch(lv_event_t *e)
@@ -4372,6 +4613,7 @@ static void open_scene_editor(int scene)
     s_se_preset = s_current_preset;
     s_se_color = !stored ? COLORS[scene] : s_view.scene_colors[scene] < UI_BANK_COLOR_COUNT ? s_view.scene_colors[scene] : 0;
     s_se_fx_on = stored ? s_view.scene_fx[scene] : 0;
+    s_se_capture = stored && s_view.scene_capture[scene] <= NANO_CAPTURE_SLOTS ? s_view.scene_capture[scene] : 0;
     for (int slot = 0; slot < NANO_FX_SLOTS && !stored; slot++) s_se_fx_on |= (uint8_t)(s_slot_on[slot] << slot);
     if (stored) strlcpy(s_se_name, s_view.scene_names[scene], sizeof(s_se_name));
     else snprintf(s_se_name, sizeof(s_se_name), "Scene %d", scene + 1);
@@ -4388,11 +4630,13 @@ static void open_scene_editor(int scene)
 static void on_scene_editor_button(lv_event_t *e)
 {
     int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 cancel, 1 save, 2 remove the scene
-    char text[UI_SCENE_NAME + NANO_FX_SLOTS + 4];
+    char text[UI_SCENE_NAME + NANO_FX_SLOTS + 5];
     lv_obj_set_hidden(s_scene_editor, true);
+    lv_obj_set_hidden(s_scene_cap, true);
     if (action == 1) {
         int n = snprintf(text, sizeof(text), "%c%c", '3' + s_se_scene, 'a' + s_se_color);
         for (int slot = 0; slot < NANO_FX_SLOTS; slot++) text[n++] = (s_se_fx_on >> slot) & 1 ? '1' : '0';
+        text[n++] = (char)('a' + s_se_capture);
         snprintf(text + n, sizeof(text) - (size_t)n, "%s", s_se_name);
     } else if (action == 2) {
         snprintf(text, sizeof(text), "%c!", '3' + s_se_scene);
@@ -4402,6 +4646,8 @@ static void on_scene_editor_button(lv_event_t *e)
     if (s_on_text) s_on_text('S', text);
 }
 
+static void on_scene_capture(lv_event_t *e);
+
 static void build_scene_editor(lv_obj_t *screen)
 {
     s_scene_editor = panel(screen, 50, 26, 700, 428);
@@ -4409,12 +4655,22 @@ static void build_scene_editor(lv_obj_t *screen)
     s_se_hint = label(s_scene_editor, &ui_font_14, MUTED);
     lv_obj_set_pos(s_se_hint, 20, 46);
 
-    lv_obj_t *name = button(s_scene_editor, 18, 78, 662, 56, on_scene_name);   // tap: the keyboard
+    lv_obj_t *name = button(s_scene_editor, 18, 78, 400, 56, on_scene_name);   // tap: the keyboard
     s_se_name_label = label(name, &ui_font_title_22, TEXT);
     lv_obj_align(s_se_name_label, LV_ALIGN_LEFT_MID, 4, 0);
     lv_obj_t *hint = label(name, &ui_font_14, MUTED);
     lv_label_set_text(hint, "Rename");
     lv_obj_align(hint, LV_ALIGN_RIGHT_MID, -4, 0);
+    // Next to the name: the capture the scene loads (or none: it leaves the capture as it is)
+    lv_obj_t *cap = button(s_scene_editor, 428, 78, 252, 56, on_scene_capture);
+    lv_obj_t *cap_caption = label(cap, &ui_font_12, MUTED);
+    lv_obj_set_style_text_letter_space(cap_caption, 1, 0);
+    lv_label_set_text(cap_caption, "CAPTURE");
+    lv_obj_align(cap_caption, LV_ALIGN_TOP_LEFT, 0, -6);
+    s_se_capture_label = label(cap, &ui_font_16, TEXT);
+    lv_obj_set_width(s_se_capture_label, 228);
+    lv_label_set_long_mode(s_se_capture_label, LV_LABEL_LONG_DOT);
+    lv_obj_align(s_se_capture_label, LV_ALIGN_BOTTOM_LEFT, 0, 6);
 
     for (int i = 0; i < UI_BANK_COLOR_COUNT; i++) {
         lv_obj_t *sw = lv_obj_create(s_scene_editor);

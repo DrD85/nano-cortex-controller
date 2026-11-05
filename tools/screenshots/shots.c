@@ -142,7 +142,8 @@ static nano_library_t *example_library(void)
 static void close_all(void)
 {
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
-                                   s_layout, s_volume, s_cab_settings, s_amp, s_toast, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel };
+                                   s_layout, s_volume, s_cab_settings, s_amp, s_toast, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
+                                   s_setlist, s_scene_cap };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) lv_obj_set_hidden(overlays[i], true);
     update_main_hidden();
 }
@@ -225,8 +226,13 @@ int main(void)
     view.fx_mode = false;
     ui_show_state(&st, &view);
     shot("20-scene-mode");
+    view.scene_capture[1] = 3;   // scene 2 loads capture slot 3
+    ui_show_state(&st, &view);
     open_scene_editor(1);
     shot("21-scene");
+    on_scene_capture(NULL);
+    shot("34-scene-capture");
+    lv_obj_set_hidden(s_scene_cap, true);
     lv_obj_set_hidden(s_scene_editor, true);
     view.scenes = false;
     view.fx_mode = true;
@@ -383,5 +389,26 @@ int main(void)
     close_all();
     static const uint8_t eight[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
     ui_set_layout(8, eight, UI_SWITCH1_FX_PRESETS);
+
+    // Set list: eight songs, the fourth (preset 8) is on
+    static const uint8_t songs[] = { 7, 9, 12, 8, 10, 11, 7, 9 };
+    view.fx_mode = false;
+    view.scenes = false;
+    view.setlist_on = true;
+    view.setlist_count = sizeof(songs);
+    memcpy(view.setlist_presets, songs, sizeof(songs));
+    view.setlist_first = 0;
+    view.setlist_song = 3;
+    uint8_t banked[6];
+    memcpy(banked, view.bank_presets, sizeof(banked));
+    for (int i = 0; i < 6; i++) view.bank_presets[i] = songs[i];
+    ui_show_state(&st, &view);
+    shot("32-setlist-mode");
+    open_setlist_at(3);
+    shot("33-setlist");
+    close_all();
+    view.setlist_on = false;
+    memcpy(view.bank_presets, banked, sizeof(banked));
+    ui_show_state(&st, &view);
     return 0;
 }

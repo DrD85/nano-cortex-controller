@@ -2,7 +2,7 @@
 
 Every function in detail. The short illustrated guide is in the [README](../README.md); building the firmware and how it talks to the Nano are in [development.md](development.md).
 
-**Contents:** [The screen](#the-screen) · [Footswitches and tiles](#footswitches-and-tiles) · [Long presses](#long-presses) · [Own banks](#own-banks) · [Scenes](#scenes) · [Expression pedal](#expression-pedal) · [Capture and Cab/IR](#capture-and-cabir) · [FX editor](#fx-editor) · [Reverb switch](#reverb-switch-footswitch-8) · [Second effect on Pre FX 1](#second-effect-on-pre-fx-1-footswitch-3) · [Settings swap](#settings-swap-hold-an-fx-footswitch) · [Auto-wah](#auto-wah) · [Tuner](#tuner) · [USB audio volume](#usb-audio-volume) · [Bluetooth MIDI](#bluetooth-midi) · [Looper mode](#looper-mode-a-looper-app-on-a-phone) · [Editor through the controller](#nano-cortex-editor-through-the-controller) · [Footswitch learn](#footswitch-learn) · [Footswitches (wiring)](#footswitches) · [What is stored where](#what-is-stored-where)
+**Contents:** [The screen](#the-screen) · [Footswitches and tiles](#footswitches-and-tiles) · [Long presses](#long-presses) · [Own banks](#own-banks) · [Set list](#set-list) · [Scenes](#scenes) · [Expression pedal](#expression-pedal) · [Capture and Cab/IR](#capture-and-cabir) · [FX editor](#fx-editor) · [Reverb switch](#reverb-switch-footswitch-8) · [Second effect on Pre FX 1](#second-effect-on-pre-fx-1-footswitch-3) · [Settings swap](#settings-swap-hold-an-fx-footswitch) · [Auto-wah](#auto-wah) · [Tuner](#tuner) · [USB audio volume](#usb-audio-volume) · [Bluetooth MIDI](#bluetooth-midi) · [Looper mode](#looper-mode-a-looper-app-on-a-phone) · [Editor through the controller](#nano-cortex-editor-through-the-controller) · [Footswitch learn](#footswitch-learn) · [Footswitches (wiring)](#footswitches) · [What is stored where](#what-is-stored-where)
 
 ## The screen
 
@@ -68,6 +68,30 @@ A long press on a preset tile lets you choose any preset, one of ten colours and
 Fuzz Wave, Guitarist, Rocket, Space, Swell).
 The banks are stored on the controller, the presets themselves stay on the Nano.
 
+## Set list
+
+<img src="images/32-setlist-mode.png" alt="" width="49%"> <img src="images/33-setlist.png" alt="" width="49%">
+
+The songs of a gig in their order – up to 36, the same preset may come more than once. **Tap the line at the top**
+(*PRESET 8 · BANK 2*) to open the set list:
+
+- **Tap a preset on the right** to add it as a song after the chosen one (or at the end).
+- **Tap a song on the left** to choose it, then move it up or down with the arrows or **Remove** it. **Clear**
+  empties the list.
+- **On / Off** at the top: while the set list is on, footswitches 3–8 in preset mode are its songs instead of the
+  bank's presets. **Save** stores the list and the choice on the controller.
+
+While it is on:
+
+- Tiles 3–8 show six songs (*SONG 1* … *SONG 6*) in the colour and with the symbol their preset has in the banks;
+  tile 1 says which songs are on the page (*SET 1-6*), the top line which song is on (*SONG 4/8*).
+- **Choosing the sixth song of a page turns to the next page**, so the footswitches alone get through the whole set:
+  3, 4, 5, 6, 7, 8 – and footswitch 3 is the next song.
+- The **arrow buttons** turn the pages, a **swipe** goes to the previous or next song.
+- A long press on a song tile opens the set list with that song chosen.
+- Scenes and FX mode work as before; footswitch 1 and the scenes button go back to the set list's page.
+- MIDI: **CC 66** next song, **CC 67** previous song (value 64–127), **CC 68** set list on (64–127) / off.
+
 ## Scenes
 
 <img src="images/20-scene-mode.png" alt="" width="49%"> <img src="images/21-scene.png" alt="" width="49%">
@@ -83,6 +107,11 @@ several effects change with one press and the sound does not drop out as it does
 - **Set a scene up**: hold its tile. Give it a name (15 characters) and a colour and tap the effects that are on in
   this scene – filled = on, framed = off. An empty scene starts from what is on right now, so you can also set the
   effects in FX mode first. **Save** stores the scene and switches to it, **Remove** empties the switch.
+- **Capture** (next to the name): the capture slot the scene loads – for example a lead amp for the solo scene.
+  *As it is* leaves the capture alone (as a scene without settings leaves an effect alone). Loading a capture takes
+  the Nano a moment, so a scene with one does not change without a gap.
+
+  <img src="images/34-scene-capture.png" alt="" width="440">
 - **On a tile** five squares stand for Pre FX 1–2 and Post FX 1–3 in the colours of their effects: filled = the
   scene switches the effect on, outlined = off, a dot = the slot is empty.
 - **Lit** is the scene whose effects are on right now. Switch an effect by hand (FX mode, the Nano's own switches,
@@ -330,6 +359,8 @@ for the Nano (for example with the MC6 export of the Nano Cortex Editor) work ov
 | CC 1 | expression: reverb mix from Pos 1 (0) to Pos 2 (127) |
 | CC 50–57, value 64–127 | press field 1–8 of the [tile layout](#tile-layout-6-or-8-fields) (mode, tuner, presets or FX, reverb switch) |
 | CC 58, value 64–127 | hold footswitch 3: Pre FX 1 swaps to its second effect and back |
+| CC 66 / CC 67, value 64–127 | [set list](#set-list): next / previous song |
+| CC 68 | set list: value 64–127 on, 0–63 off |
 | CC 61–65 | [settings swap](#settings-swap-hold-an-fx-footswitch) of FX slot 1–5: value 64–127 the FX preset, 0–63 the preset's own settings |
 | CC 59 | looper mode: value 64–127 on, 0–63 off |
 | CC 60 | footswitches 3–8: value 64–127 [scenes](#scenes) of the preset, 0–63 presets of the bank |
@@ -448,4 +479,4 @@ Without an SX1509 the controller works with the touch screen only.
 
 | On the Nano | On the controller |
 |---|---|
-| presets, names, captures, cabs, FX and their values, expression settings, USB volume | own banks (preset, colour, symbol), scenes, reverb mix Pos 1 / Pos 2, footswitch order, tile layout, second reverbs, auto-wah settings, settings swaps, the Bluetooth MIDI device |
+| presets, names, captures, cabs, FX and their values, expression settings, USB volume | own banks (preset, colour, symbol), scenes, reverb mix Pos 1 / Pos 2, footswitch order, tile layout, second reverbs, auto-wah settings, settings swaps, the set list, the captures of the scenes, the Bluetooth MIDI device |
