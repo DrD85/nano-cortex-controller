@@ -285,11 +285,19 @@ int main(void)
     uint32_t pre1 = st.fx_type[0], rev_b = view.ab_b_type[4];
     st.fx_type[0] = view.ab_b_type[0];
     view.ab_a_type[0] = pre1;
-    view.ab_active = 1u << 0;
+    view.ab_active = 1u << 0 | 1u << 4;
     view.ab_b_type[4] = st.fx_type[4];
+    view.ab_a_type[4] = st.fx_type[4];
     view.ab_tap = 1u << 4;
+    view.rev_b_type = view.rev_b_stored = st.fx_type[4];   // (footswitch 8 swaps the same two)
+    view.rev_active = 1;
     ui_show_state(&st, &view);
     shot("29-second-effects");
+    view.ab_active = 1u << 0;
+    view.ab_a_type[4] = 0;
+    view.rev_b_type = view.rev_b_stored = rev_b;
+    view.rev_active = 0;
+    ui_show_state(&st, &view);
     ui_fx_editor_show(4, st.fx_type[4], true, values, 6);
     ui_fx_presets_show(fx_presets, -1, true);
     open_panel(PANEL_SECOND, 0);

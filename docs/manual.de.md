@@ -291,7 +291,8 @@ Schalter mit zweitem Effekt schaltet beim Loslassen.
 
 **Die Kachel** zeigt beide Symbole: A am linken Rand, B am rechten, das laufende gefüllt. Dazwischen stehen die
 Nummer des Fußschalters und der Slot in Kurzform (*PRE 1*, *POST 3*). Die Kachel hat Farbe und Namen des Effekts,
-der läuft.
+der läuft; B desselben Effekts – eine zweite Einstellung davon – erscheint in einem helleren Ton dieser Farbe. Die
+Kachel des Reverb-Schalters (Fußschalter 8) sieht genauso aus.
 
 - **Zwei verschiedene Effekte:** Der Nano hat ein Modell pro Slot; der Controller tauscht also das Modell und schickt
   die gespeicherten Werte: etwa eine halbe Sekunde mit kurzem Aussetzer. Ohne Aussetzer geht es, wenn der zweite

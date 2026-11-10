@@ -276,7 +276,8 @@ effect acts when you lift your foot.
 
 **The tile** shows both symbols: A at the left edge, B at the right, the one that runs filled. Between them are the
 footswitch number and the slot in short (*PRE 1*, *POST 3*). The tile has the colour and the name of the effect that
-runs.
+runs; B of the same effect – a second setting of it – shows in a lighter shade of that colour. The tile of the
+reverb switch (footswitch 8) looks the same.
 
 - **Two different effects:** the Nano has one model per slot, so the controller swaps the model and sends the stored
   values: about half a second with a short gap in the sound. For a gapless change put the second effect into a free
