@@ -111,7 +111,7 @@ static void example_state(void)
     view.mix_pos[0] = 0.10f;
     view.mix_pos[1] = 0.40f;
     view.mix_active = -1;
-    view.rev_b_type = type_of("Room");
+    view.rev_b_type = view.rev_b_stored = type_of("Room");
     view.rev_active = 0;
     view.ab_b_type[0] = type_of("Envelope Filter");   // Pre FX 1: the Green 808 (A) and an envelope filter (B)
     view.ab_b_type[4] = type_of("Room");              // the reverb: Mind Hall (A) and Room (B), also on footswitch 8

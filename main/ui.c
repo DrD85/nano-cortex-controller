@@ -535,7 +535,7 @@ static void place_tile(int i)
     lv_obj_set_size(s_tile[i], s_tile_w, h);
     lv_obj_set_pos(s_tile[i], 10 + (p % columns) * (s_tile_w + TILE_GAP), (s_fullscreen ? FULL_TILE_Y : TILE_Y) + (p / columns) * (h + 8));
     if (!s_tile_name[i]) return;   // (still being built)
-    lv_obj_set_width(s_tile_other[i], s_tile_w - 66);
+    lv_obj_set_width(s_tile_other[i], s_tile_w - 62);
     lv_obj_set_width(s_tile_name[i], s_tile_w - 24);
     lv_label_set_text_fmt(s_tile_number[i], "%d", p + 1);   // the footswitch that presses it
 }
@@ -561,8 +561,9 @@ static bool words_fit(const char *text, const lv_font_t *font, int width)
 // so the tiles read evenly - larger in the gig view.
 static void fit_names(void)
 {
-    static const lv_font_t *const gig[] = { &ui_font_title_40, &ui_font_title_34, &ui_font_title_30, &ui_font_title_26 };
-    static const lv_font_t *const normal[] = { &ui_font_title_26, &ui_font_24, &ui_font_20, &ui_font_16 };
+    static const lv_font_t *const gig[] = { &ui_font_title_46, &ui_font_title_40, &ui_font_title_34, &ui_font_title_30, &ui_font_title_26 };
+    static const lv_font_t *const normal[] = { &ui_font_title_30, &ui_font_title_26, &ui_font_24, &ui_font_20, &ui_font_16 };
+    enum { SIZES = 5 };
     // Measuring takes a while and the names rarely change: only when a name or the view (gig / normal) changed.
     static char measured[TILES][65];
     static int measured_view = -1, measured_w;
@@ -573,9 +574,9 @@ static void fit_names(void)
     measured_w = s_tile_w;
     for (int i = 0; i < TILES; i++) strlcpy(measured[i], lv_label_get_text(s_tile_name[i]), sizeof(measured[i]));
     const lv_font_t *const *fonts = s_fullscreen ? gig : normal;
-    int room = tile_height() - (s_fullscreen ? 66 : 56);
-    const lv_font_t *font = fonts[3];
-    for (int f = 0; f < 4; f++) {
+    int room = tile_height() - (s_fullscreen ? 66 : 58);
+    const lv_font_t *font = fonts[SIZES - 1];
+    for (int f = 0; f < SIZES; f++) {
         int line_space = -lv_font_get_line_height(fonts[f]) / 6;
         bool fits = true;
         for (int i = 0; i < TILES && fits; i++) {
@@ -643,7 +644,7 @@ static void on_tile_draw(lv_event_t *e)
     lv_area_t a;
     lv_obj_get_coords(lv_event_get_current_target_obj(e), &a);
     lv_area_t in = { a.x1 + 2, a.y1 + 2, a.x2 - 2, a.y2 - 2 };   // inside the border
-    if (s_tile_head[i]) draw_top(lv_event_get_layer(e), &in, 14, 46, blend(s_tile_head[i], TILE_OFF_BG, 0.24f));
+    if (s_tile_head[i]) draw_top(lv_event_get_layer(e), &in, 14, 50, blend(s_tile_head[i], TILE_OFF_BG, 0.24f));
     if (s_tile_marks[i]) draw_scene_marks(lv_event_get_layer(e), &a, i);
 }
 
@@ -679,28 +680,29 @@ static void build_tile(lv_obj_t *parent, int i)
     lv_obj_set_style_bg_opa(s_tile_square_b[i], LV_OPA_TRANSP, 0);
     lv_obj_set_hidden(s_tile_square_b[i], true);
 
-    s_tile_caption[i] = label(tile, &ui_font_12, TEXT);
-    lv_obj_set_style_text_letter_space(s_tile_caption[i], 2, 0);
+    // (14 px and light grey: the 12 px captions and notes could not be read from standing height)
+    s_tile_caption[i] = label(tile, &ui_font_14, TEXT);
+    lv_obj_set_style_text_letter_space(s_tile_caption[i], 1, 0);
     lv_obj_set_width(s_tile_caption[i], s_tile_w - 96);
     lv_label_set_long_mode(s_tile_caption[i], LV_LABEL_LONG_CLIP);
-    lv_obj_set_pos(s_tile_caption[i], 56, 14);
+    lv_obj_set_pos(s_tile_caption[i], 56, 10);
 
-    s_tile_other[i] = label(tile, &ui_font_12, TEXT);
-    lv_obj_set_size(s_tile_other[i], s_tile_w - 66, lv_font_get_line_height(&ui_font_12));   // one line
+    s_tile_other[i] = label(tile, &ui_font_14, TEXT);
+    lv_obj_set_size(s_tile_other[i], s_tile_w - 66, lv_font_get_line_height(&ui_font_14));   // one line
     lv_label_set_long_mode(s_tile_other[i], LV_LABEL_LONG_DOT);
-    lv_obj_set_pos(s_tile_other[i], 56, 32);
+    lv_obj_set_pos(s_tile_other[i], 56, 29);
     lv_obj_set_hidden(s_tile_other[i], true);
     s_tile_note_image[i] = lv_image_create(tile);   // a small symbol in front of that line
-    lv_image_set_scale(s_tile_note_image[i], 256 * 15 / 36);
-    lv_obj_set_size(s_tile_note_image[i], 15, 15);
+    lv_image_set_scale(s_tile_note_image[i], 256 * 17 / 36);
+    lv_obj_set_size(s_tile_note_image[i], 17, 17);
     lv_image_set_inner_align(s_tile_note_image[i], LV_IMAGE_ALIGN_CENTER);
     lv_obj_set_style_image_recolor_opa(s_tile_note_image[i], LV_OPA_COVER, 0);
-    lv_obj_set_pos(s_tile_note_image[i], 55, 32);
+    lv_obj_set_pos(s_tile_note_image[i], 55, 30);
     lv_obj_set_hidden(s_tile_note_image[i], true);
 
-    s_tile_number[i] = label(tile, &ui_font_20, TEXT);
+    s_tile_number[i] = label(tile, &ui_font_24, TEXT);
     lv_label_set_text_fmt(s_tile_number[i], "%d", i + 1);
-    lv_obj_align(s_tile_number[i], LV_ALIGN_TOP_RIGHT, -12, 8);
+    lv_obj_align(s_tile_number[i], LV_ALIGN_TOP_RIGHT, -12, 6);
 
     s_tile_name[i] = label(tile, &ui_font_title_26, TEXT);
     lv_obj_set_width(s_tile_name[i], s_tile_w - 24);
@@ -775,11 +777,11 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     set_text(sym, symbol ? symbol : "");
     set_color_prop(sym, LV_STYLE_TEXT_COLOR, mark);
     set_num_prop(s_tile_caption[i], LV_STYLE_X, (icon || symbol) ? 56 : 14);
-    set_num_prop(s_tile_caption[i], LV_STYLE_Y, 14);
-    set_num_prop(s_tile_caption[i], LV_STYLE_WIDTH, (icon || symbol) ? s_tile_w - 96 : s_tile_w - 54);
+    set_num_prop(s_tile_caption[i], LV_STYLE_Y, 10);
+    set_num_prop(s_tile_caption[i], LV_STYLE_WIDTH, (icon || symbol) ? s_tile_w - 98 : s_tile_w - 56);
     // (set_tile_ab changes these for a slot with a second effect)
     set_num_prop(s_tile_caption[i], LV_STYLE_TEXT_ALIGN, LV_TEXT_ALIGN_LEFT);
-    set_align_if(s_tile_number[i], LV_ALIGN_TOP_RIGHT, -12, 8);
+    set_align_if(s_tile_number[i], LV_ALIGN_TOP_RIGHT, -12, 6);
     set_hidden(s_tile_square_b[i], true);
     set_num_prop(sq, LV_STYLE_BG_OPA, LV_OPA_TRANSP);
     set_num_prop(sq, LV_STYLE_BORDER_WIDTH, 0);
@@ -790,10 +792,10 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     for (; caption[n] && n < sizeof(upper) - 1; n++) upper[n] = (char)((caption[n] >= 'a' && caption[n] <= 'z') ? caption[n] - 32 : caption[n]);
     upper[n] = 0;
     set_text(s_tile_caption[i], upper);
-    set_color_prop(s_tile_caption[i], LV_STYLE_TEXT_COLOR, active ? ink : MUTED);
-    set_num_prop(s_tile_caption[i], LV_STYLE_TEXT_OPA, active ? 210 : LV_OPA_COVER);
-    set_color_prop(s_tile_number[i], LV_STYLE_TEXT_COLOR, active ? ink : 0x5D6267);
-    set_num_prop(s_tile_number[i], LV_STYLE_TEXT_OPA, active ? 170 : LV_OPA_COVER);
+    set_color_prop(s_tile_caption[i], LV_STYLE_TEXT_COLOR, active ? ink : empty ? MUTED : 0xB9BDC2);
+    set_num_prop(s_tile_caption[i], LV_STYLE_TEXT_OPA, active ? 230 : LV_OPA_COVER);
+    set_color_prop(s_tile_number[i], LV_STYLE_TEXT_COLOR, active ? ink : empty ? 0x5D6267 : 0x9AA0A6);
+    set_num_prop(s_tile_number[i], LV_STYLE_TEXT_OPA, active ? 200 : LV_OPA_COVER);
 
     set_text(s_tile_name[i], name);
     set_color_prop(s_tile_name[i], LV_STYLE_TEXT_COLOR, ink);
@@ -831,10 +833,10 @@ static void set_tile_ab(int i, int slot, uint32_t a_type, uint32_t b_type, bool 
     style_ab_square(s_tile_square_b[i], nano_fx_model(b_type), "B", b_runs, mark, back);
     set_text(s_tile_caption[i], SHORT[slot]);
     set_num_prop(s_tile_caption[i], LV_STYLE_X, 52);
-    set_num_prop(s_tile_caption[i], LV_STYLE_Y, 32);
+    set_num_prop(s_tile_caption[i], LV_STYLE_Y, 31);
     set_num_prop(s_tile_caption[i], LV_STYLE_WIDTH, s_tile_w - 104 - 4);   // (- 4: the tile's border)
     set_num_prop(s_tile_caption[i], LV_STYLE_TEXT_ALIGN, LV_TEXT_ALIGN_CENTER);
-    set_align_if(s_tile_number[i], LV_ALIGN_TOP_MID, 0, 6);
+    set_align_if(s_tile_number[i], LV_ALIGN_TOP_MID, 0, 2);
 }
 
 // After the tiles are set: the pedal drawings (FX tiles), the A/B lines and the marks of the scenes.
@@ -868,7 +870,7 @@ static void show_tile_extras(void)
             uint32_t color = s_tile_ink[i] == TEXT ? 0xC8CCD1 : s_tile_ink[i];   // a little lighter than the caption: it is read
             set_color_prop(s_tile_other[i], LV_STYLE_TEXT_COLOR, color);
             set_num_prop(s_tile_other[i], LV_STYLE_TEXT_OPA, 230);
-            set_num_prop(s_tile_other[i], LV_STYLE_X, note_icon ? 75 : 56);
+            set_num_prop(s_tile_other[i], LV_STYLE_X, note_icon ? 77 : 56);
             if (note_icon) {
                 set_image(s_tile_note_image[i], note_icon);
                 set_color_prop(s_tile_note_image[i], LV_STYLE_IMAGE_RECOLOR, color);
@@ -2042,6 +2044,19 @@ static void on_rev_dropdown(lv_event_t *e)
     else lv_obj_add_state(s_rev_edit, LV_STATE_DISABLED);
 }
 
+// "Same reverb": B is the reverb that is in the slot - a second setting of it (set up with Edit B).
+static void on_rev_same(lv_event_t *e)
+{
+    uint32_t type = s_view.mix_slot >= 0 ? s_slot_type[s_view.mix_slot] : 0;
+    for (int i = 0; i < s_rev_type_count; i++) {
+        if (s_rev_types[i] != type) continue;
+        lv_dropdown_set_selected(s_rev_dropdown, (uint32_t)(i + 1));
+        on_rev_dropdown(NULL);
+        return;
+    }
+    ui_show_message("No reverb in this preset.");
+}
+
 // 0 cancel, 1 save, 2 edit reverb B, 3 save and take the reverb off the Nano's expression pedal.
 // The tab in front decides what footswitch 8 does from now on: saved on the mix tab it switches the mix (a second
 // reverb stays stored for later), saved on the 2nd reverb tab it swaps the two reverbs.
@@ -2092,7 +2107,7 @@ static void open_mix_editor(void)
     // The tab of what footswitch 8 does now is in front and carries a tick.
     int used = s_view.rev_b_type ? 1 : 0;
     lv_label_set_text(lv_obj_get_child(s_mix_tab[0], 0), used == 0 ? LV_SYMBOL_OK "  Mix Pos 1 / 2" : "Mix Pos 1 / 2");
-    lv_label_set_text(lv_obj_get_child(s_mix_tab[1], 0), used == 1 ? LV_SYMBOL_OK "  2nd reverb" : "2nd reverb");
+    lv_label_set_text(lv_obj_get_child(s_mix_tab[1], 0), used == 1 ? LV_SYMBOL_OK "  Reverb A / B" : "Reverb A / B");
     show_mix_tab(used);
     lv_obj_set_hidden(s_mix_editor, false);
     lv_obj_move_foreground(s_mix_editor);
@@ -2110,14 +2125,14 @@ static lv_obj_t *mix_panel(lv_obj_t *parent, int y, int h)
 
 static void build_mix_editor(lv_obj_t *screen)
 {
-    s_mix_editor = panel(screen, 120, 90, 560, 316);
-    dialog_title(s_mix_editor, "Reverb  \xC2\xB7  footswitch 8");
+    s_mix_editor = panel(screen, 120, 66, 560, 364);
+    dialog_title(s_mix_editor, "Reverb switch");
     s_mix_model_label = label(s_mix_editor, &ui_font_14, MUTED);
     lv_obj_align(s_mix_model_label, LV_ALIGN_TOP_RIGHT, -20, 20);
-    static const char *const tabs[2] = { "Mix Pos 1 / 2", "2nd reverb" };
+    static const char *const tabs[2] = { "Mix Pos 1 / 2", "Reverb A / B" };
     for (int i = 0; i < 2; i++) {
         s_mix_tab[i] = small_button(s_mix_editor, 20 + i * 210, 54, 200, 40, tabs[i], on_mix_tab, i);
-        s_mix_panel[i] = mix_panel(s_mix_editor, 106, 140);
+        s_mix_panel[i] = mix_panel(s_mix_editor, 106, 188);
     }
 
     // Tab 1: Pos 1 / Pos 2 of the expression assignment, played while moving
@@ -2151,8 +2166,8 @@ static void build_mix_editor(lv_obj_t *screen)
     lv_obj_t *info = label(rev, &ui_font_14, MUTED);
     lv_obj_set_width(info, 520);
     lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(info, "Save here: footswitch 8 switches between the preset's reverb (A) and a second one (B). "
-                            "B and its settings are stored on the controller; Edit B sets it up.");
+    lv_label_set_text(info, "Save here: the switch changes between two reverbs with all their settings, A (the preset's) "
+                            "and B. Edit B sets B up.");
     lv_obj_set_pos(info, 20, 0);
     static char options[512];
     size_t n = (size_t)snprintf(options, sizeof(options), "None (footswitch 8 = mix)");
@@ -2170,10 +2185,11 @@ static void build_mix_editor(lv_obj_t *screen)
     lv_obj_set_style_text_font(lv_dropdown_get_list(s_rev_dropdown), &ui_font_20, 0);
     lv_obj_add_event_cb(s_rev_dropdown, on_rev_dropdown, LV_EVENT_VALUE_CHANGED, NULL);
     s_rev_edit = small_button(rev, 360, 56, 180, 52, "Edit B", on_mix_button, 2);
+    small_button(rev, 20, 120, 320, 46, "Same reverb, second setting", on_rev_same, 0);
 
-    s_mix_free = small_button(s_mix_editor, 20, 254, 150, 46, "Free pedal", on_mix_button, 3);
-    small_button(s_mix_editor, 200, 254, 160, 46, "Cancel", on_mix_button, 0);
-    primary(small_button(s_mix_editor, 380, 254, 160, 46, "Save", on_mix_button, 1));
+    s_mix_free = small_button(s_mix_editor, 20, 302, 150, 46, "Free pedal", on_mix_button, 3);
+    small_button(s_mix_editor, 200, 302, 160, 46, "Cancel", on_mix_button, 0);
+    primary(small_button(s_mix_editor, 380, 302, 160, 46, "Save", on_mix_button, 1));
     lv_obj_set_hidden(s_mix_editor, true);
 }
 
@@ -2692,13 +2708,13 @@ static lv_obj_t *source_card(lv_obj_t *screen, int x, const char *title, int ico
     *square = icon_square(c, 36);
     lv_obj_set_pos(*square, 10, 9);
     set_icon_square(*square, TEXT, NANO_ICONS[icon], true);
-    lv_obj_t *t = label(c, &ui_font_12, MUTED);
-    lv_obj_set_style_text_letter_space(t, 2, 0);
+    lv_obj_t *t = label(c, &ui_font_14, 0xA8ADB3);
+    lv_obj_set_style_text_letter_space(t, 1, 0);
     lv_label_set_text(t, title);
-    lv_obj_set_pos(t, 56, 7);
+    lv_obj_set_pos(t, 56, 5);
     if (title_label) *title_label = t;
-    *slot = label(c, &ui_font_14, MUTED);
-    lv_obj_align(*slot, LV_ALIGN_TOP_RIGHT, -12, 7);
+    *slot = label(c, &ui_font_14, 0xA8ADB3);
+    lv_obj_align(*slot, LV_ALIGN_TOP_RIGHT, -12, 5);
     *name = label(c, &ui_font_20, TEXT);
     lv_obj_set_width(*name, 310);
     lv_label_set_long_mode(*name, LV_LABEL_LONG_DOT);
@@ -3006,9 +3022,9 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_size(s_status_dot, 9, 9);
     lv_obj_set_style_radius(s_status_dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_border_width(s_status_dot, 0, 0);
-    s_status = label(status_row, &ui_font_14, MUTED);
+    s_status = label(status_row, &ui_font_16, 0xB9BDC2);
     lv_obj_set_style_text_letter_space(s_status, 2, 0);
-    s_preset_number = label(status_row, &ui_font_14, MUTED);
+    s_preset_number = label(status_row, &ui_font_16, 0xB9BDC2);
     lv_obj_set_style_text_letter_space(s_preset_number, 2, 0);
     s_app = label(status_row, &ui_font_14, 0x3D8BFF);    // editor connected through the controller
     lv_obj_set_style_text_letter_space(s_app, 2, 0);
@@ -3075,8 +3091,8 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_align(badge, LV_ALIGN_LEFT_MID, 32, 0);
     s_gig_number = label(badge, &ui_font_16, TEXT);
     lv_obj_center(s_gig_number);
-    s_gig_bank = label(s_gig_bar, &ui_font_12, MUTED);
-    lv_obj_set_style_text_letter_space(s_gig_bank, 2, 0);
+    s_gig_bank = label(s_gig_bar, &ui_font_14, 0xB9BDC2);
+    lv_obj_set_style_text_letter_space(s_gig_bank, 1, 0);
     lv_obj_align_to(s_gig_bank, badge, LV_ALIGN_OUT_RIGHT_MID, 12, 0);
     s_gig_name = label(s_gig_bar, &ui_font_title_22, TEXT);
     lv_obj_set_width(s_gig_name, 440);
@@ -3089,8 +3105,8 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_style_border_width(s_gig_dirty, 0, 0);
     lv_obj_set_style_bg_color(s_gig_dirty, lv_color_hex(ORANGE), 0);
     lv_obj_set_hidden(s_gig_dirty, true);
-    s_gig_mode = label(s_gig_bar, &ui_font_12, TEXT);
-    lv_obj_set_style_text_letter_space(s_gig_mode, 2, 0);
+    s_gig_mode = label(s_gig_bar, &ui_font_14, TEXT);
+    lv_obj_set_style_text_letter_space(s_gig_mode, 1, 0);
     lv_obj_set_style_pad_hor(s_gig_mode, 11, 0);
     lv_obj_set_style_pad_ver(s_gig_mode, 5, 0);
     lv_obj_set_style_radius(s_gig_mode, LV_RADIUS_CIRCLE, 0);
@@ -3262,7 +3278,7 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
     } else if (!view->mix_known) {
         set_tile(7, "REV MIX", "No Pos 1/2", 0x00FFDD, false, true, icon, NULL);
     } else {
-        snprintf(caption, sizeof(caption), "MIX %d/%d%%", (int)lroundf(view->mix_pos[0] * 100), (int)lroundf(view->mix_pos[1] * 100));
+        snprintf(caption, sizeof(caption), "MIX %d/%d", (int)lroundf(view->mix_pos[0] * 100), (int)lroundf(view->mix_pos[1] * 100));
         set_tile(7, caption, view->mix_active == 1 ? "Pos 2" : view->mix_active == 0 ? "Pos 1" : "Rev Mix",
                  0x00FFDD, view->mix_active == 1, false, icon, NULL);
     }

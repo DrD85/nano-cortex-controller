@@ -55,7 +55,7 @@ say so under their caption: *Hold: Looper* and *Hold: Scenes* (or *Presets*).
 | Preset tile (3–8, preset mode) | **Bank editor**: colour, symbol and preset of this switch; `DEFAULT` restores the standard preset; `LEARN SWITCH` |
 | Scene tile (3–8, scenes) | **Scene**: name, colour and which effects are on; `Remove` empties the switch |
 | FX tile (3–7, FX mode) | **FX editor**: model (tap the header), on/off, all parameters and the [second effect](#second-effect-a-and-b-on-an-fx-slot) (A \| B) |
-| Tile 8 (FX mode) | **Reverb dialog** with the tabs *MIX POS 1 / 2* and *2ND REVERB* |
+| Tile 8 (FX mode) | **Reverb dialog** with the tabs *MIX POS 1 / 2* and *REVERB A / B* |
 | Preset name | **Rename** with on-screen keyboard (at least 4 characters, unique) |
 
 ## Own banks
@@ -241,7 +241,9 @@ switch does** from then on; the one in use carries a tick.
   preset. The setting itself is still in the Nano's preset, so an expression pedal would still move the reverb:
   **FREE PEDAL** in this dialog removes it from the preset (the other expression settings stay as they are, the
   switch keeps its positions). The button only shows while the reverb is on the pedal.
-- **2ND REVERB**: choose a second reverb (B) for this preset. Footswitch 8 then switches between the preset's
+- **REVERB A / B**: choose a second reverb (B) for this preset – another reverb, or with **Same reverb, second
+  setting** the same one again: then the switch changes between two complete settings of it (mix, decay, damping …)
+  without a gap in the sound. Footswitch 8 then switches between the preset's
   reverb (A) and B; the Nano has one reverb slot, so the controller swaps the model and sends the stored values
   (takes about half a second). Tile 8 shows reverb B and lights up while it runs; tile 7 shows the reverb in the slot. **EDIT B** loads B and opens the FX editor to set it up. Reverb B is stored on the
   controller, per preset. If you save the preset while B is active, B becomes the preset's reverb.
