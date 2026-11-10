@@ -64,10 +64,10 @@ static uint32_t s_tile_accent[TILES];   // colour of the pedal drawing on the ti
 static lv_obj_t *s_preset_number, *s_preset_name, *s_capture, *s_cab;
 static lv_obj_t *s_tile[TILES], *s_tile_caption[TILES], *s_tile_name[TILES], *s_tile_number[TILES];
 static lv_obj_t *s_tile_square[TILES], *s_tile_pedal[TILES];
+static lv_obj_t *s_tile_square_b[TILES];   // top right: the symbol of B, on the tile of a slot with a second effect
 static lv_obj_t *s_tile_other[TILES];   // second line under the caption: the other effect of an A/B slot
 static uint32_t s_tile_ink[TILES];
 static uint32_t s_tile_pedal_type[TILES], s_tile_other_type[TILES];   // shown by show_tile_extras
-static char s_tile_other_text[TILES][20];   // ... or this text after the swap symbol (a settings swap)
 static char s_tile_note_text[TILES][24];    // a note that is not a fixed text (the start scene of a song)
 static const char *s_tile_note[TILES];   // a line of text under the caption instead (looper mode, what holding does), NULL = none
 static const lv_image_dsc_t *s_tile_note_icon[TILES];   // ... with this symbol in front of it, NULL = none
@@ -188,7 +188,6 @@ static int s_panel_built_mode = -1, s_panel_built_slot;   // the entries in s_pa
 static intptr_t s_panel_current;                          // model or option drawn as the current one
 static lv_obj_t *s_fxp_bar, *s_fxp_chip[UI_FX_PRESETS + 1];   // FX presets above the parameters: 0 = ORIGINAL
 static lv_obj_t *s_fxp_scene, *s_fxp_scene_icon, *s_fxp_scene_count;   // at their end: this effect's settings for a scene
-static lv_obj_t *s_fxp_hold, *s_fxp_hold_label;   // before it: the settings swap (an FX preset for the footswitch held)
 static char s_fxp_names[UI_FX_PRESETS][16];
 static int s_fxp_active = -1;
 static bool s_fxp_usable;
@@ -675,6 +674,11 @@ static void build_tile(lv_obj_t *parent, int i)
     lv_obj_set_pos(s_tile_square[i], 8, 8);
     lv_obj_set_style_bg_opa(s_tile_square[i], LV_OPA_TRANSP, 0);
 
+    s_tile_square_b[i] = icon_square(tile, 40);
+    lv_obj_align(s_tile_square_b[i], LV_ALIGN_TOP_RIGHT, -8, 8);
+    lv_obj_set_style_bg_opa(s_tile_square_b[i], LV_OPA_TRANSP, 0);
+    lv_obj_set_hidden(s_tile_square_b[i], true);
+
     s_tile_caption[i] = label(tile, &ui_font_12, TEXT);
     lv_obj_set_style_text_letter_space(s_tile_caption[i], 2, 0);
     lv_obj_set_width(s_tile_caption[i], s_tile_w - 96);
@@ -744,7 +748,6 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     s_tile_accent[i] = mark;
     s_tile_pedal_type[i] = 0;   // set again by set_tile_pedal / set_tile_other, shown by show_tile_extras
     s_tile_other_type[i] = 0;
-    s_tile_other_text[i][0] = 0;
     s_tile_note[i] = NULL;
     s_tile_note_icon[i] = NULL;
     s_tile_marks[i] = 0;        // set again by show_scene_tiles
@@ -774,6 +777,13 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     set_num_prop(s_tile_caption[i], LV_STYLE_X, (icon || symbol) ? 56 : 14);
     set_num_prop(s_tile_caption[i], LV_STYLE_Y, 14);
     set_num_prop(s_tile_caption[i], LV_STYLE_WIDTH, (icon || symbol) ? s_tile_w - 96 : s_tile_w - 54);
+    // (set_tile_ab changes these for a slot with a second effect)
+    set_num_prop(s_tile_caption[i], LV_STYLE_TEXT_ALIGN, LV_TEXT_ALIGN_LEFT);
+    set_align_if(s_tile_number[i], LV_ALIGN_TOP_RIGHT, -12, 8);
+    set_hidden(s_tile_square_b[i], true);
+    set_num_prop(sq, LV_STYLE_BG_OPA, LV_OPA_TRANSP);
+    set_num_prop(sq, LV_STYLE_BORDER_WIDTH, 0);
+    set_num_prop(img, LV_STYLE_IMAGE_OPA, LV_OPA_COVER);
 
     char upper[40];   // captions in small capitals, as the editor's labels
     size_t n = 0;
@@ -789,10 +799,42 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     set_color_prop(s_tile_name[i], LV_STYLE_TEXT_COLOR, ink);
 }
 
-// The other effect of an A/B slot, under the caption (after set_tile): "⇄ name".
-static void set_tile_other(int i, uint32_t type)
+// One of the two symbols on the tile of a slot with a second effect: the one that runs on a filled square, the
+// other one framed and dimmed.
+static void style_ab_square(lv_obj_t *sq, const nano_fx_model_t *model, const char *letter, bool running, uint32_t mark, uint32_t back)
 {
-    s_tile_other_type[i] = type;
+    lv_obj_t *img = lv_obj_get_child(sq, 0), *sym = lv_obj_get_child(sq, 1);
+    const lv_image_dsc_t *icon = model ? NANO_ICONS[model->icon] : NULL;
+    set_hidden(sq, false);
+    set_color_prop(sq, LV_STYLE_BG_COLOR, mark);
+    set_num_prop(sq, LV_STYLE_BG_OPA, running ? LV_OPA_COVER : LV_OPA_TRANSP);
+    set_num_prop(sq, LV_STYLE_BORDER_WIDTH, running ? 0 : 2);
+    set_color_prop(sq, LV_STYLE_BORDER_COLOR, mark);
+    set_num_prop(sq, LV_STYLE_BORDER_OPA, 120);
+    set_hidden(img, icon == NULL);
+    if (icon) {
+        set_image(img, icon);
+        set_color_prop(img, LV_STYLE_IMAGE_RECOLOR, running ? back : mark);
+        set_num_prop(img, LV_STYLE_IMAGE_OPA, running ? LV_OPA_COVER : 150);
+    }
+    set_text(sym, icon ? "" : letter);   // (a model without a symbol, or A not read yet: its letter)
+    set_color_prop(sym, LV_STYLE_TEXT_COLOR, running ? back : mark);
+}
+
+// The tile of a slot with a second effect (after set_tile): A's symbol at the left edge, B's at the right, the one
+// that runs filled; between them the footswitch number and the slot in short ("PRE 1").
+static void set_tile_ab(int i, int slot, uint32_t a_type, uint32_t b_type, bool b_runs, bool active, uint32_t color)
+{
+    static const char *const SHORT[NANO_FX_SLOTS] = { "PRE 1", "PRE 2", "POST 1", "POST 2", "POST 3" };
+    uint32_t mark = s_tile_accent[i], back = active ? color : TILE_OFF_BG;
+    style_ab_square(s_tile_square[i], nano_fx_model(a_type), "A", !b_runs, mark, back);
+    style_ab_square(s_tile_square_b[i], nano_fx_model(b_type), "B", b_runs, mark, back);
+    set_text(s_tile_caption[i], SHORT[slot]);
+    set_num_prop(s_tile_caption[i], LV_STYLE_X, 52);
+    set_num_prop(s_tile_caption[i], LV_STYLE_Y, 32);
+    set_num_prop(s_tile_caption[i], LV_STYLE_WIDTH, s_tile_w - 104 - 4);   // (- 4: the tile's border)
+    set_num_prop(s_tile_caption[i], LV_STYLE_TEXT_ALIGN, LV_TEXT_ALIGN_CENTER);
+    set_align_if(s_tile_number[i], LV_ALIGN_TOP_MID, 0, 6);
 }
 
 // After the tiles are set: the pedal drawings (FX tiles), the A/B lines and the marks of the scenes.
@@ -815,14 +857,13 @@ static void show_tile_extras(void)
             set_color_prop(s_tile_pedal[i], LV_STYLE_IMAGE_RECOLOR, s_tile_accent[i]);
         }
         uint32_t other = s_tile_other_type[i];
-        const char *other_text = s_tile_other_text[i];
         const lv_image_dsc_t *note_icon = s_tile_note[i] ? s_tile_note_icon[i] : NULL;
-        bool line = other || other_text[0] || s_tile_note[i];
+        bool line = other || s_tile_note[i];
         set_hidden(s_tile_other[i], !line);
         set_hidden(s_tile_note_image[i], note_icon == NULL);
         if (line) {
             if (s_tile_note[i]) snprintf(text, sizeof(text), "%s", s_tile_note[i]);
-            else snprintf(text, sizeof(text), LV_SYMBOL_SHUFFLE " %.40s", other ? nano_fx_name(other) : other_text);
+            else snprintf(text, sizeof(text), LV_SYMBOL_SHUFFLE " %.40s", nano_fx_name(other));
             set_text(s_tile_other[i], text);
             uint32_t color = s_tile_ink[i] == TEXT ? 0xC8CCD1 : s_tile_ink[i];   // a little lighter than the caption: it is read
             set_color_prop(s_tile_other[i], LV_STYLE_TEXT_COLOR, color);
@@ -3194,19 +3235,14 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
         const nano_fx_model_t *model = nano_fx_model(st->fx_type[slot]);
         bool empty = !st->fx_known || !st->fx_type[slot];
         bool on = !empty && st->fx_on[slot];
-        char slot_caption[24];
-        if (slot == 0 && view->pre1_b_type) snprintf(slot_caption, sizeof(slot_caption), "%s %c", NANO_FX_SLOT_NAMES[0], view->pre1_active ? 'B' : 'A');
-        else snprintf(slot_caption, sizeof(slot_caption), "%s", NANO_FX_SLOT_NAMES[slot]);
-        // A settings swap: the name of what is on - the FX preset's, or the effect's for the preset's own settings -
-        // and under the caption the other one
-        bool swap = !empty && view->hold_fxp[slot], swapped = swap && ((view->hold_active >> slot) & 1);
-        set_tile(2 + slot, slot_caption, empty ? "Empty" : swapped ? view->hold_names[slot] : nano_fx_name(st->fx_type[slot]),
+        set_tile(2 + slot, NANO_FX_SLOT_NAMES[slot], empty ? "Empty" : nano_fx_name(st->fx_type[slot]),
                  model ? model->color : 0x6A6A6A, on, empty, model ? NANO_ICONS[model->icon] : NULL, NULL);
         if (!empty) set_tile_pedal(2 + slot, st->fx_type[slot]);
-        if (slot == 0 && view->pre1_b_type) set_tile_other(2, view->pre1_active ? view->pre1_a_type : view->pre1_b_type);
-        else if (swap) {
-            strlcpy(s_tile_other_text[2 + slot], swapped ? nano_fx_name(st->fx_type[slot]) : view->hold_names[slot],
-                    sizeof(s_tile_other_text[2 + slot]));
+        // A second effect: both symbols, A at the left and B at the right edge
+        if (!empty && view->ab_b_type[slot]) {
+            bool b_runs = (view->ab_active >> slot) & 1;
+            set_tile_ab(2 + slot, slot, b_runs ? view->ab_a_type[slot] : st->fx_type[slot], view->ab_b_type[slot], b_runs, on,
+                        model ? model->color : 0x6A6A6A);
         }
         // A wah with auto-wah: under the caption how it moves ("Hold": while its footswitch is held)
         else if (!empty && view->wah_mode[slot] && view->wah_rate[slot] < UI_WAH_RATES) {
@@ -3507,7 +3543,9 @@ void ui_show_tuner_reading(const nano_tuner_reading_t *reading)
 #define ED_DIM 0.42f          // frame of a field that is not active: effect colour mixed with the background
 #define ED_NEUTRAL 0x2E3237   // frame of an empty field or an unknown value
 
-enum { PANEL_MODEL, PANEL_SECOND, PANEL_OPTION, PANEL_SCENE, PANEL_HOLD };
+enum { PANEL_MODEL, PANEL_SECOND, PANEL_OPTION, PANEL_SCENE };
+#define PANEL_TAP_OFF (-1)   // entries of PANEL_SECOND that are not models: what the footswitch does
+#define PANEL_TAP_ON (-2)
 
 static float param_from_normalized(const nano_param_t *p, float n);
 static int option_index(const nano_param_t *p, float n);
@@ -3571,7 +3609,6 @@ static void row_changed(int idx, float n)
 
 static void on_fxp_chip(lv_event_t *e);
 static void on_fxp_chip_long(lv_event_t *e);
-static void on_hold_chip(lv_event_t *e);
 static void on_scene_chip(lv_event_t *e);
 
 static float param_from_normalized(const nano_param_t *p, float n)
@@ -3674,13 +3711,14 @@ static void on_model_button(lv_event_t *e)
     if (s_editor_slot_index >= 0) open_panel(PANEL_MODEL, 0);
 }
 
-// Pre FX 1, A | B: the other one swaps (as holding footswitch 3); the running one - or B while there is no second
-// effect - chooses the second effect.
+// A | B of the edited slot: the other one swaps (as its footswitch does); the running one - or B while there is no
+// second effect - chooses the second effect and what the footswitch does with it.
 static void on_ab(lv_event_t *e)
 {
-    int seg = (int)(intptr_t)lv_event_get_user_data(e);
-    int running = s_view.pre1_b_type && s_view.pre1_active ? 1 : 0;
-    if (s_view.pre1_b_type && seg != running) send('w', UI_SWITCH_HOLD | 3);
+    int seg = (int)(intptr_t)lv_event_get_user_data(e), slot = s_editor_slot_index;
+    if (slot < 0) return;
+    int running = s_view.ab_b_type[slot] && ((s_view.ab_active >> slot) & 1) ? 1 : 0;
+    if (s_view.ab_b_type[slot] && seg != running) send('[', slot);
     else open_panel(PANEL_SECOND, 0);
 }
 
@@ -3714,9 +3752,10 @@ static void panel_choice(intptr_t data)
     } else if (s_panel_mode == PANEL_MODEL) {
         if ((uint32_t)data != s_editor_model_type) send('M', (int)data);
     } else if (s_panel_mode == PANEL_SECOND) {
-        if ((uint32_t)data != s_view.pre1_b_type) send('A', 1 << 24 | (int)data);
-    } else if (s_panel_mode == PANEL_HOLD) {
-        if (data != s_panel_current) send('[', s_editor_slot_index << 8 | (int)data);
+        int slot = s_editor_slot_index;
+        if (slot < 0) return;
+        if (data == PANEL_TAP_OFF || data == PANEL_TAP_ON) send('>', slot << 8 | (data == PANEL_TAP_ON));
+        else if ((uint32_t)data != s_view.ab_b_type[slot]) send('A', (8 + slot) << 24 | (int)data);
     } else if (s_editor_model_def && s_panel_param < ed_param_count()) {
         set_enum(s_panel_param, (int)data);
     }
@@ -3745,10 +3784,12 @@ static void draw_entry(lv_obj_t *obj, lv_layer_t *layer, intptr_t data)
         draw_text(layer, state, false, &ui_font_12, carries ? ink : MUTED, a.x2 - 150, cy - 7, a.x2 - 14, LV_TEXT_ALIGN_RIGHT);
         return;
     }
-    bool option = s_panel_mode == PANEL_OPTION || s_panel_mode == PANEL_HOLD;
+    bool tap_choice = s_panel_mode == PANEL_SECOND && (data == PANEL_TAP_OFF || data == PANEL_TAP_ON);
+    bool option = s_panel_mode == PANEL_OPTION || tap_choice;
     const nano_fx_model_t *m = option || !data ? NULL : nano_fx_model((uint32_t)data);
     uint32_t color = option ? s_editor_color : m ? m->color : 0x9AA0A6;
     bool current = data == s_panel_current;
+    if (tap_choice) current = (data == PANEL_TAP_ON) == ((s_view.ab_tap >> s_editor_slot_index) & 1);
     // The current one filled in its colour, the others framed in the dimmed colour.
     if (current) draw_frame(layer, &a, color, color, 10);
     else {
@@ -3760,8 +3801,12 @@ static void draw_entry(lv_obj_t *obj, lv_layer_t *layer, intptr_t data)
     uint32_t ink = current ? ink_for(color) : TEXT;
     if (option) {
         char text[24];
-        if (s_panel_mode == PANEL_HOLD) strlcpy(text, data ? s_fxp_names[data - 1] : "None", sizeof(text));
-        else option_text(ed_param(s_panel_param), (int)data, text, sizeof(text));
+        if (tap_choice) {
+            draw_text(layer, data == PANEL_TAP_ON ? "Tap: A / B  \xC2\xB7  hold: on / off" : "Tap: on / off  \xC2\xB7  hold: A / B", false,
+                      &ui_font_16, ink, a.x1 + 4, cy - 11, a.x2 - 4, LV_TEXT_ALIGN_CENTER);
+            return;
+        }
+        option_text(ed_param(s_panel_param), (int)data, text, sizeof(text));
         draw_text(layer, text, true, &ui_font_20, ink, a.x1 + 4, cy - 13, a.x2 - 4, LV_TEXT_ALIGN_CENTER);
         return;
     }
@@ -3834,10 +3879,11 @@ static void open_panel(int mode, int param)
 {
     const nano_fx_model_t *cur = s_editor_model_def;
     if (mode == PANEL_OPTION && (!cur || param >= ed_param_count())) return;
-    int slot = mode == PANEL_SECOND ? 0 : s_editor_slot_index;
+    int slot = s_editor_slot_index;
+    if (slot < 0) return;
     char sub[120];
     // The model lists stay built while the editor shows this slot; an option list is built each time (it is short).
-    if (mode == PANEL_OPTION || mode == PANEL_SCENE || mode == PANEL_HOLD || mode != s_panel_built_mode || slot != s_panel_built_slot) {
+    if (mode == PANEL_OPTION || mode == PANEL_SCENE || mode == PANEL_SECOND || mode != s_panel_built_mode || slot != s_panel_built_slot) {
         lv_async_call_cancel(panel_clean_later, NULL);
         lv_obj_clean(s_panel_list);
         s_panel_built_mode = mode;
@@ -3848,10 +3894,13 @@ static void open_panel(int mode, int param)
             for (int i = 0; i < ed_param(param)->option_count; i++) panel_entry(ED_OPTION_W, i);
         } else if (mode == PANEL_SCENE) {
             for (int i = 0; i < UI_SCENES; i++) if (s_view.scene_names[i][0]) panel_entry(ED_ENTRY_W, i);
-        } else if (mode == PANEL_HOLD) {
-            panel_entry(ED_ENTRY_W, 0);   // None
-            for (int i = 0; i < UI_FX_PRESETS; i++) if (s_fxp_names[i][0]) panel_entry(ED_ENTRY_W, i + 1);
         } else {
+            if (mode == PANEL_SECOND && s_view.ab_b_type[slot]) {   // what the footswitch does with A and B
+                panel_heading("FOOTSWITCH");
+                panel_entry(ED_ENTRY_W, PANEL_TAP_OFF);
+                panel_entry(ED_ENTRY_W, PANEL_TAP_ON);
+                panel_heading("SECOND EFFECT");
+            }
             if (mode == PANEL_SECOND) panel_entry(ED_ENTRY_W, 0);   // None
             const char *group = NULL;
             for (int i = 0; i < NANO_SLOT_MODEL_COUNT[slot]; i++) {
@@ -3874,15 +3923,11 @@ static void open_panel(int mode, int param)
         lv_label_set_text(s_panel_title, "Settings for a scene");
         snprintf(sub, sizeof(sub), "Tap a scene: it sets %.24s as it is now  \xC2\xB7  hold: remove", cur ? cur->name : "this effect");
         s_panel_current = -1;
-    } else if (mode == PANEL_HOLD) {
-        lv_label_set_text(s_panel_title, "Settings swap");
-        snprintf(sub, sizeof(sub), "%.12s  \xC2\xB7  hold its footswitch: the preset's own settings " LV_SYMBOL_SHUFFLE " this FX preset",
-                 NANO_FX_SLOT_NAMES[slot]);
-        s_panel_current = s_view.hold_fxp[slot];
     } else if (mode == PANEL_SECOND) {
         lv_label_set_text(s_panel_title, "Second effect (B)");
-        snprintf(sub, sizeof(sub), "%s  \xC2\xB7  hold footswitch 3 to swap A and B", NANO_FX_SLOT_NAMES[0]);
-        s_panel_current = (intptr_t)s_view.pre1_b_type;
+        snprintf(sub, sizeof(sub), "%.12s  \xC2\xB7  its footswitch swaps A and B - the same effect again gives it two settings",
+                 NANO_FX_SLOT_NAMES[slot]);
+        s_panel_current = (intptr_t)s_view.ab_b_type[slot];
     } else {
         lv_label_set_text(s_panel_title, "Choose a model");
         snprintf(sub, sizeof(sub), "%s", NANO_FX_SLOT_NAMES[slot]);
@@ -3894,7 +3939,8 @@ static void open_panel(int mode, int param)
     set_hidden(s_panel, false);
     lv_obj_update_layout(s_panel_list);
     lv_obj_scroll_to_y(s_panel_list, 0, LV_ANIM_OFF);
-    for (uint32_t i = 0; i < lv_obj_get_child_count(s_panel_list); i++) {
+    // (the second effect's list stays at its top: what the footswitch does, and None)
+    for (uint32_t i = 0; mode != PANEL_SECOND && i < lv_obj_get_child_count(s_panel_list); i++) {
         lv_obj_t *c = lv_obj_get_child(s_panel_list, (int32_t)i);
         if (lv_obj_get_user_data(c) == (void *)s_panel_current && lv_obj_is_clickable(c)) {
             lv_obj_scroll_to_view(c, LV_ANIM_OFF);
@@ -4255,19 +4301,13 @@ static void build_editor(lv_obj_t *screen)
         lv_obj_add_event_cb(chip, on_fxp_chip, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)i);
         if (i) lv_obj_add_event_cb(chip, on_fxp_chip_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)i);
         lv_obj_t *l = label(chip, &ui_font_16, TEXT);
-        lv_obj_set_width(l, 104);
+        lv_obj_set_width(l, 120);
         lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
         lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(l);
         if (i) lv_obj_center(ui_icon(chip, UI_ICON_PLUS, 20, 0x5D6267));   // empty place
         s_fxp_chip[i] = chip;
     }
-    // Then: the settings swap - which FX preset holding the footswitch swaps in (and its number).
-    s_fxp_hold = frame_button(s_fxp_bar);
-    lv_obj_set_size(s_fxp_hold, 84, LV_PCT(100));
-    lv_obj_add_event_cb(s_fxp_hold, on_hold_chip, LV_EVENT_CLICKED, NULL);
-    s_fxp_hold_label = label(s_fxp_hold, &ui_font_20, TEXT);
-    lv_obj_center(s_fxp_hold_label);
     // At the end of the row: these settings for a scene of the preset (and how many scenes carry some).
     s_fxp_scene = frame_button(s_fxp_bar);
     lv_obj_set_size(s_fxp_scene, 84, LV_PCT(100));
@@ -4388,28 +4428,17 @@ static void style_fxp_chips(void)
     // Only when something changed (this runs with every state update of the Nano).
     static uint32_t shown_color;
     static char shown_names[UI_FX_PRESETS][16];
-    static int shown_active = -2, shown_hold = -1;
+    static int shown_active = -2;
     static bool shown_hidden;
     bool hidden = !s_fxp_usable || !lv_obj_is_hidden(s_editor_info);   // the info line is there then
     set_hidden(s_fxp_bar, hidden);
     style_scene_chip();
-    int slot = s_editor_slot_index;
-    // The settings swap: not for Pre FX 1 with a second effect (holding footswitch 3 swaps the effects then)
-    int hold = slot < 0 || (slot == 0 && s_view.pre1_b_type) ? -1 : s_view.hold_fxp[slot];
-    if (hidden == shown_hidden && shown_active == s_fxp_active && shown_color == s_editor_color && shown_hold == hold
+    if (hidden == shown_hidden && shown_active == s_fxp_active && shown_color == s_editor_color
         && !memcmp(shown_names, s_fxp_names, sizeof(shown_names))) return;
     shown_hidden = hidden;
     shown_active = s_fxp_active;
     shown_color = s_editor_color;
-    shown_hold = hold;
     memcpy(shown_names, s_fxp_names, sizeof(shown_names));
-    set_hidden(s_fxp_hold, hold < 0);
-    if (hold >= 0) {
-        style_frame_button(s_fxp_hold, s_editor_color, hold > 0, false);
-        if (hold) lv_label_set_text_fmt(s_fxp_hold_label, LV_SYMBOL_SHUFFLE " %d", hold);
-        else lv_label_set_text(s_fxp_hold_label, LV_SYMBOL_SHUFFLE);
-        lv_obj_set_style_text_color(s_fxp_hold_label, lv_color_hex(hold ? ink_for(s_editor_color) : TEXT), 0);
-    }
 
     uint32_t color = s_editor_color;
     for (int i = 0; i <= UI_FX_PRESETS; i++) {
@@ -4417,14 +4446,12 @@ static void style_fxp_chips(void)
         bool filled = i == 0 || s_fxp_names[i - 1][0];
         bool active = i == s_fxp_active && filled;
         lv_obj_t *l = lv_obj_get_child(chip, 0);
-        char swap_text[24];   // the FX preset of the settings swap carries its symbol
-        snprintf(swap_text, sizeof(swap_text), LV_SYMBOL_SHUFFLE " %.15s", i ? s_fxp_names[i - 1] : "");
-        const char *text = i == 0 ? "Original" : !filled ? "" : i == hold ? swap_text : s_fxp_names[i - 1];
+        const char *text = i == 0 ? "Original" : filled ? s_fxp_names[i - 1] : "";
         set_text(l, text);
         // The large font if the name fits, otherwise the small one (and dots if it is still too long).
         lv_point_t size;
         lv_text_get_size(&size, text, &ui_font_16, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-        lv_obj_set_style_text_font(l, size.x <= 100 ? &ui_font_16 : &ui_font_14, 0);
+        lv_obj_set_style_text_font(l, size.x <= 116 ? &ui_font_16 : &ui_font_14, 0);
         lv_obj_set_style_text_color(l, lv_color_hex(active ? ink_for(color) : i == 0 ? 0xC8CCD1 : 0xE6E8EA), 0);
         style_frame_button(chip, color, active, !filled);
         if (i) set_hidden(lv_obj_get_child(chip, 1), filled);
@@ -4462,17 +4489,6 @@ static void on_fxp_chip_long(lv_event_t *e)
     show_rename((char)('0' + i), title, "Save", name, 15);
 }
 
-// The swap button: choose the FX preset that holding the footswitch swaps in (or none).
-static void on_hold_chip(lv_event_t *e)
-{
-    for (int i = 0; i < UI_FX_PRESETS; i++) {
-        if (!s_fxp_names[i][0]) continue;
-        open_panel(PANEL_HOLD, 0);
-        return;
-    }
-    ui_show_message("Save an FX preset first (hold one of the places in this row) - holding the footswitch then swaps it in.");
-}
-
 // Header: symbol chip, slot, model, pedal picture, A | B, switch.
 static void show_editor_header(int slot, const nano_fx_model_t *m, bool on)
 {
@@ -4500,17 +4516,17 @@ static void show_editor_header(int slot, const nano_fx_model_t *m, bool on)
         lv_obj_set_style_image_recolor(s_editor_pedal, lv_color_hex(color), 0);
         lv_obj_set_style_image_opa(s_editor_pedal, on ? LV_OPA_90 : LV_OPA_40, 0);
     }
-    // Pre FX 1: A | B takes the right end of the header card.
-    bool ab = slot == 0;
+    // A | B takes the right end of the header card.
+    bool ab = slot >= 0 && m != NULL;
     int card_w = ab ? 472 : 596;
     lv_obj_set_width(s_editor_card, card_w);
     lv_obj_set_width(s_editor_model, card_w - 64 - (pedal ? 116 : 50));
     set_hidden(s_editor_ab, !ab);
     if (ab) {
-        int running = s_view.pre1_b_type && s_view.pre1_active ? 1 : 0;
+        int running = s_view.ab_b_type[slot] && ((s_view.ab_active >> slot) & 1) ? 1 : 0;
         for (int i = 0; i < 2; i++) {
             lv_obj_t *seg = s_editor_ab_seg[i];
-            bool none = i == 1 && !s_view.pre1_b_type;
+            bool none = i == 1 && !s_view.ab_b_type[slot];
             set_text(lv_obj_get_child(seg, 0), i == 0 ? "A" : none ? "+B" : "B");
             style_frame_button(seg, color, i == running, none);
             lv_obj_set_style_text_color(lv_obj_get_child(seg, 0), lv_color_hex(i == running ? ink_for(color) : none ? 0x8E9297 : TEXT), 0);
@@ -4533,14 +4549,16 @@ void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, i
     s_editor_color = m ? m->color : 0x5A5A5A;
     if (rebuild) build_param_rows();
 
-    if (rebuild || shown.slot != slot || shown.model != model || shown.on != on || shown.b_type != s_view.pre1_b_type
-        || shown.b_active != s_view.pre1_active) {
+    uint32_t b_type = slot >= 0 ? s_view.ab_b_type[slot] : 0;
+    int b_active = slot >= 0 ? (s_view.ab_active >> slot) & 1 : 0;
+    if (rebuild || shown.slot != slot || shown.model != model || shown.on != on || shown.b_type != b_type
+        || shown.b_active != b_active) {
         show_editor_header(slot, m, on);
         shown.slot = slot;
         shown.model = model;
         shown.on = on;
-        shown.b_type = s_view.pre1_b_type;
-        shown.b_active = s_view.pre1_active;
+        shown.b_type = b_type;
+        shown.b_active = b_active;
     }
     if (on) lv_obj_add_state(s_editor_switch, LV_STATE_CHECKED);
     else lv_obj_remove_state(s_editor_switch, LV_STATE_CHECKED);

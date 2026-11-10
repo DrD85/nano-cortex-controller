@@ -19,7 +19,7 @@ expression pedal's assignments, a tuner and a looper mode. It is the hardware co
 
 - **Presets and banks** – six presets per bank on footswitches 3–8, 16 banks with your own colours and symbols
 - **Scenes** – six per preset: one footswitch switches several effects at once, without the gap of a preset change
-- **FX mode** – switch the five FX slots with your feet, plus a reverb switch and a second effect on Pre FX 1
+- **FX mode** – switch the five FX slots with your feet, plus a reverb switch and a second effect (A / B) on any slot
 - **Auto-wah** – the controller moves a wah in the Nano's tempo: while the wah is on, or only while you hold its footswitch
 - **FX editor** – choose models and set every parameter on the touch screen, with named FX presets
 - **Capture and Cab/IR** – pick slots or load anything from the Nano's library; capture tone, volume, cab settings
@@ -225,7 +225,7 @@ Setup step by step: [manual](docs/manual.md#looper-mode-a-looper-app-on-a-phone)
 | **Swipe** up / down | anywhere | gig view on / off |
 | **Footswitch 1** | | short: presets or scenes ↔ FX · held: looper mode |
 | **Footswitch 2** | | short: tuner · held: scenes ↔ presets |
-| **Footswitch 3** held | FX mode | Pre FX 1 swaps to its second effect |
+| **Footswitch 3–7** held | FX mode | a slot with a second effect swaps A ↔ B (or switches on / off, if a tap swaps) |
 
 ## More
 

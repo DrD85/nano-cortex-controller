@@ -2,7 +2,7 @@
 
 Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../README.de.md); wie die Firmware gebaut wird und wie sie mit dem Nano spricht, steht in [development.de.md](development.de.md).
 
-**Inhalt:** [Der Bildschirm](#der-bildschirm) · [Fußschalter und Kacheln](#fußschalter-und-kacheln) · [Lange drücken](#lange-drücken) · [Eigene Bänke](#eigene-bänke) · [Setlist](#setlist) · [Szenen](#szenen) · [Expression-Pedal](#expression-pedal) · [Capture und Cab/IR](#capture-und-cabir) · [FX-Editor](#fx-editor) · [Reverb-Schalter](#reverb-schalter-fußschalter-8) · [Zweiter Effekt auf Pre FX 1](#zweiter-effekt-auf-pre-fx-1-fußschalter-3) · [Einstellungs-Wechsel](#einstellungs-wechsel-fx-fußschalter-halten) · [Auto-Wah](#auto-wah) · [Stimmgerät](#stimmgerät) · [USB-Audio-Lautstärke](#usb-audio-lautstärke) · [Bluetooth-MIDI](#bluetooth-midi) · [Looper-Modus](#looper-modus-eine-looper-app-auf-dem-telefon) · [Editor über den Controller](#nano-cortex-editor-über-den-controller) · [Fußschalter-Learn](#fußschalter-learn) · [Fußschalter (Verkabelung)](#fußschalter) · [Was wo gespeichert ist](#was-wo-gespeichert-ist)
+**Inhalt:** [Der Bildschirm](#der-bildschirm) · [Fußschalter und Kacheln](#fußschalter-und-kacheln) · [Lange drücken](#lange-drücken) · [Eigene Bänke](#eigene-bänke) · [Setlist](#setlist) · [Szenen](#szenen) · [Expression-Pedal](#expression-pedal) · [Capture und Cab/IR](#capture-und-cabir) · [FX-Editor](#fx-editor) · [Reverb-Schalter](#reverb-schalter-fußschalter-8) · [Zweiter Effekt (A / B)](#zweiter-effekt-a-und-b-auf-einem-fx-slot) · [Auto-Wah](#auto-wah) · [Stimmgerät](#stimmgerät) · [USB-Audio-Lautstärke](#usb-audio-lautstärke) · [Bluetooth-MIDI](#bluetooth-midi) · [Looper-Modus](#looper-modus-eine-looper-app-auf-dem-telefon) · [Editor über den Controller](#nano-cortex-editor-über-den-controller) · [Fußschalter-Learn](#fußschalter-learn) · [Fußschalter (Verkabelung)](#fußschalter) · [Was wo gespeichert ist](#was-wo-gespeichert-ist)
 
 ## Der Bildschirm
 
@@ -55,7 +55,7 @@ Die Nummern hier sind die Funktionen der Schalter; wo sie liegen, bestimmt die [
 | Kachel 2 | **Learn** für Fußschalter 2 – und mit *Switch 1* in diesem Fenster für Fußschalter 1 |
 | Preset-Kachel (3–8, Preset-Modus) | **Bank-Fenster**: Farbe, Symbol und Preset dieses Schalters; `DEFAULT` stellt das Standard-Preset her; `LEARN SWITCH` |
 | Szenen-Kachel (3–8, Szenen) | **Szene**: Name, Farbe und welche Effekte an sind; `Remove` leert den Schalter |
-| FX-Kachel (3–7, FX-Modus) | **FX-Editor**: Modell (auf den Kopf tippen), an/aus und alle Parameter |
+| FX-Kachel (3–7, FX-Modus) | **FX-Editor**: Modell (auf den Kopf tippen), an/aus, alle Parameter und der [zweite Effekt](#zweiter-effekt-a-und-b-auf-einem-fx-slot) (A \| B) |
 | Kachel 8 (FX-Modus) | **Reverb-Fenster** mit den Reitern *MIX POS 1 / 2* und *2ND REVERB* |
 | Preset-Name | **Umbenennen** mit Bildschirmtastatur (mindestens 4 Zeichen, eindeutig) |
 
@@ -234,9 +234,6 @@ gespeichert auf dem Controller und in jedem Preset und Slot mit diesem Modell nu
 
 Geladene Einstellungen zählen als Änderung am Nano-Preset: **SAVE** behält sie dort.
 
-Der **Wechsel-Knopf** (⇄) wählt das FX-Preset, das Halten des Fußschalters dieses Effekts hereinholt – siehe
-[Einstellungs-Wechsel](#einstellungs-wechsel-fx-fußschalter-halten).
-
 Der **Szenen-Knopf** am Ende der Leiste speichert die aktuellen Einstellungen für eine
 [Szene](#einstellungen-eines-effekts-pro-szene) des Presets.
 
@@ -266,60 +263,46 @@ vorne ist, bestimmt, was der Schalter ab dann tut**; der gerade verwendete träg
   Auf dem Reiter *MIX POS 1 / 2* gespeichert, ist Fußschalter 8 wieder der Mix-Schalter, und Reverb B bleibt mit
   seinen Einstellungen für später gespeichert; *None* in der Liste entfernt es.
 
-## Zweiter Effekt auf Pre FX 1 (Fußschalter 3)
+## Zweiter Effekt: A und B auf einem FX-Slot
 
-<img src="images/13-second-effect.png" alt="" width="440">
+<img src="images/29-second-effects.png" alt="" width="49%"> <img src="images/30-second-effect-choice.png" alt="" width="49%">
 
-Lange auf die Pre-FX-1-Kachel drücken, dann **+B** (neben dem Modell im FX-Editor): einen zweiten Effekt (B) für
-dieses Preset wählen, zum Beispiel das Envelope Filter als Auto-Wah neben einem Drive. **A | B** zeigt dann, welcher
-läuft: den anderen antippen tauscht sofort, den laufenden antippen wählt einen anderen zweiten Effekt oder *None*.
-Dann Fußschalter 3 im FX-Modus:
+Jeder FX-Slot kann neben dem Effekt des Presets (A) einen zweiten Effekt (B) haben, und sein Fußschalter wechselt
+zwischen beiden: ein Compressor und ein Drive auf Pre FX 1 – oder **derselbe Effekt zweimal mit anderen
+Einstellungen**, zum Beispiel ein Reverb mit einer kurzen und einer langen Einstellung (Mix, Decay, Damping …
+wechseln alle zusammen).
 
-- **kurz drücken**: den Effekt im Slot an / aus (schaltet beim Loslassen)
-- **halten** (0,6 s): A ↔ B wechseln – der Effekt bleibt an oder aus, wie er war
+**Einrichten:** die FX-Kachel halten, um den FX-Editor zu öffnen, und **+B** neben dem Modell antippen. Den zweiten
+Effekt aus der Liste wählen; *None* entfernt ihn. **A | B** im Kopf zeigt dann, welcher läuft: den anderen antippen
+wechselt sofort, den laufenden antippen öffnet die Liste wieder. B wird im FX-Editor eingestellt, während es läuft.
+Es wird auf dem Controller gespeichert, pro Preset; A bleibt der Effekt des Nano-Presets.
 
-Die Kachel zeigt *Pre FX 1 A* oder *Pre FX 1 B* und darunter den anderen Effekt (⇄ Name). Der Nano hat pro Slot ein Modell, deshalb tauscht der Controller
-das Modell und schickt die gespeicherten Werte des anderen Effekts: das dauert etwa eine halbe Sekunde mit einem
-kurzen Aussetzer. Ohne Aussetzer geht es, wenn der zweite Effekt in einem freien Slot liegt und nur an- und
-ausgeschaltet wird. B wird im FX-Editor eingestellt, während es läuft, und auf dem Controller pro Preset gespeichert
-(MIDI: CC 58). Die Einstellungen von A merkt sich der Controller ebenfalls, gelesen immer wenn A an ist. Nur wenn A
-seit dem Einrichten von B nie an war, schaltet der erste Wechsel A kurz an, um sie zu lesen.
+**Was der Fußschalter macht** (oben in derselben Liste, pro Slot):
 
-## Einstellungs-Wechsel (FX-Fußschalter halten)
+| Wahl | Kurz drücken | Halten (0,6 s) |
+|---|---|---|
+| *Tap: on / off · hold: A / B* | Effekt an / aus | A ↔ B wechseln |
+| *Tap: A / B · hold: on / off* | A ↔ B wechseln | Effekt an / aus |
 
-<img src="images/29-settings-swap.png" alt="" width="440">
+Das zweite ist für einen Effekt gedacht, der anbleibt und nur seinen Klang ändert – ein Reverb, ein Delay. Ein
+Schalter mit zweitem Effekt schaltet beim Loslassen.
 
-Derselbe Effekt mit anderen Einstellungen auf einen Tritt – ein kurzes und ein langes Delay, ein leichter und ein
-tiefer Chorus. Lange auf eine FX-Kachel (Fußschalter 3–7) drücken, um den FX-Editor zu öffnen, die anderen
-Einstellungen als [FX-Preset](#fx-editor) speichern (einen Platz in der Leiste über den Reglern halten), dann den
-**Wechsel-Knopf** (⇄) neben dem Szenen-Knopf antippen und dieses FX-Preset wählen. Das wird auf dem Controller für
-dieses Preset und diesen Slot gespeichert; *None* entfernt es. Der Knopf zeigt dann die Nummer des FX-Presets, und
-das FX-Preset trägt das ⇄-Symbol.
+**Die Kachel** zeigt beide Symbole: A am linken Rand, B am rechten, das laufende gefüllt. Dazwischen stehen die
+Nummer des Fußschalters und der Slot in Kurzform (*PRE 1*, *POST 3*). Die Kachel hat Farbe und Namen des Effekts,
+der läuft.
 
-<img src="images/30-settings-swap-editor.png" alt="" width="440">
-
-Im FX-Modus macht der Fußschalter dieses Effekts dann zweierlei:
-
-- **kurz drücken**: Effekt an / aus wie bisher (er schaltet beim Loslassen)
-- **halten** (0,6 s): zwischen den eigenen Einstellungen des Presets und dem FX-Preset wechseln – der Effekt bleibt
-  an oder aus
-
-**Die Kachel zeigt, was an ist**: den Namen des Effekts (*Tape Delay*) für die eigenen Einstellungen des Presets,
-den Namen des FX-Presets (*Ambient Wash*), wenn es drin ist; die Zeile unter der Überschrift nennt das andere
-(⇄ Name). Das Modell bleibt dasselbe, es werden nur Werte geschickt, der Klang setzt nicht aus.
-
-- Die eigenen Einstellungen des Presets werden direkt vor dem Wechsel vom Nano gelesen, Änderungen im FX-Editor
-  zählen also mit. Bei einem ausgeschalteten Effekt gelten die zuletzt gelesenen; war er in diesem Preset noch nie an,
-  schaltet ihn der erste Wechsel kurz an, um sie zu lesen.
-- Ein Preset laden – auch das, das gerade an ist – holt seine eigenen Einstellungen zurück. Wer **speichert**,
-  während das FX-Preset drin ist, macht dessen Einstellungen zu denen des Presets.
-- Eine Szene mit Einstellungen für diesen Effekt ersetzt sie, und die Kachel zeigt wieder den Effektnamen.
-- Wird das FX-Preset selbst geändert (Platz halten, unter demselben Namen speichern), schickt der Wechsel das Neue.
-- Nicht auf Pre FX 1, solange es einen [zweiten Effekt](#zweiter-effekt-auf-pre-fx-1-fußschalter-3) hat: Halten von
-  Fußschalter 3 wechselt dann die Effekte. Ein Wah mit Auto-Wah *Hold* behält seine Halte-Funktion.
-- MIDI: **CC 61–65** für FX-Slot 1–5 – Wert 64–127 das FX-Preset, 0–63 die eigenen Einstellungen des Presets.
-
-<img src="images/31-settings-swap-choice.png" alt="" width="440">
+- **Zwei verschiedene Effekte:** Der Nano hat ein Modell pro Slot; der Controller tauscht also das Modell und schickt
+  die gespeicherten Werte: etwa eine halbe Sekunde mit kurzem Aussetzer. Ohne Aussetzer geht es, wenn der zweite
+  Effekt in einem freien Slot liegt und nur an- und ausgeschaltet wird.
+- **Derselbe Effekt als A und B:** Es gehen nur die Werte raus – sofort, und der Ton reißt nicht ab.
+- Die Werte von A werden direkt vor einem Wechsel vom Nano gelesen, Änderungen zählen also mit. War A seit dem
+  Einrichten von B nie an, schaltet der erste Wechsel es kurz an, um sie zu lesen.
+- Ein Preset laden – auch das, das gerade an ist – holt A zurück. Wer das Preset speichert, während B läuft, macht B
+  zum Effekt des Presets.
+- Der zweite Effekt des Reverbs ist der, den Fußschalter 8 wechselt (der
+  [Reverb-Schalter](#reverb-schalter-fußschalter-8)); liegt der Wechsel auf der Kachel des Reverbs selbst, wird
+  Fußschalter 8 dafür nicht gebraucht – praktisch mit [6 Feldern](#kachel-anordnung-6-oder-8-felder).
+- MIDI: **CC 61–65** wählen A (Wert 0–63) oder B (64–127) von FX-Slot 1–5; CC 58 wechselt Pre FX 1.
 
 ## Auto-Wah
 
@@ -342,8 +325,8 @@ stehen die Einstellungen des Auto-Wah, gespeichert auf dem Controller für diese
 
 Die Kachel des Wah zeigt die Rate (*Auto: 1/4* oder *Hold: auto 1/4*), und der Balken des Wah im FX-Editor bewegt sich
 mit. Der Controller schickt etwa 40 Stellungen pro Sekunde per Bluetooth: Langsame Raten sind weich, bei 1/16 kann
-man Stufen hören. Bei offenem Stimmgerät bewegt sich nichts. Auf Pre FX 1 mit zweitem Effekt bleibt das Halten von
-Fußschalter 3 der Tausch A ↔ B – ein Wah auf *Hold* bewegt sich dort, solange es an ist. Die Bewegung verändert die
+man Stufen hören. Bei offenem Stimmgerät bewegt sich nichts. Auf einem Slot mit zweitem Effekt behält der
+Fußschalter, was er mit A und B macht – ein Wah auf *Hold* bewegt sich dort, solange es an ist. Die Bewegung verändert die
 Stellung des Wah im Preset des Nano, das Preset zeigt deshalb ungespeicherte Änderungen; das schadet nicht.
 
 ## Stimmgerät
@@ -380,10 +363,10 @@ Nano (zum Beispiel aus dem MC6-Export des Nano Cortex Editors) funktionieren als
 | CC 37–41 | FX-Slot 1–5 (Pre FX 1, Pre FX 2, Post FX 1–3): Wert 64–127 an, 0–63 aus |
 | CC 1 | Expression: Reverb-Mix von Pos 1 (0) bis Pos 2 (127) |
 | CC 50–57, Wert 64–127 | Feld 1–8 der [Kachel-Anordnung](#kachel-anordnung-6-oder-8-felder) drücken (Modus, Stimmgerät, Presets oder FX, Reverb-Schalter) |
-| CC 58, Wert 64–127 | Fußschalter 3 halten: Pre FX 1 wechselt zum zweiten Effekt und zurück |
+| CC 58, Wert 64–127 | Pre FX 1 wechselt zum [zweiten Effekt](#zweiter-effekt-a-und-b-auf-einem-fx-slot) und zurück |
 | CC 66 / CC 67, Wert 64–127 | [Setlist](#setlist): nächster / voriger Song |
 | CC 68 | Setlist: Wert 64–127 an, 0–63 aus |
-| CC 61–65 | [Einstellungs-Wechsel](#einstellungs-wechsel-fx-fußschalter-halten) von FX-Slot 1–5: Wert 64–127 das FX-Preset, 0–63 die eigenen Einstellungen |
+| CC 61–65 | [zweiter Effekt](#zweiter-effekt-a-und-b-auf-einem-fx-slot) von FX-Slot 1–5: Wert 64–127 B, 0–63 A |
 | CC 59 | Looper-Modus: Wert 64–127 an, 0–63 aus |
 | CC 60 | Fußschalter 3–8: Wert 64–127 [Szenen](#szenen) des Presets, 0–63 Presets der Bank |
 
@@ -505,4 +488,4 @@ Ohne SX1509 funktioniert der Controller nur mit dem Touchscreen.
 
 | Auf dem Nano | Auf dem Controller |
 |---|---|
-| Presets, Namen, Captures, Cabs, FX und ihre Werte, Expression-Einstellungen, USB-Lautstärke | eigene Bänke (Preset, Farbe, Symbol), Szenen, Reverb-Mix Pos 1 / Pos 2, Fußschalter-Reihenfolge, Kachel-Anordnung, zweite Reverbs, Auto-Wah-Einstellungen, Einstellungs-Wechsel, die Setlist, die Captures der Szenen, das Bluetooth-MIDI-Gerät |
+| Presets, Namen, Captures, Cabs, FX und ihre Werte, Expression-Einstellungen, USB-Lautstärke | eigene Bänke (Preset, Farbe, Symbol), Szenen, Reverb-Mix Pos 1 / Pos 2, Fußschalter-Reihenfolge, Kachel-Anordnung, zweite Effekte (B) der FX-Slots, Auto-Wah-Einstellungen, die Setlist, die Captures der Szenen, das Bluetooth-MIDI-Gerät |

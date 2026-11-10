@@ -2,7 +2,7 @@
 
 Every function in detail. The short illustrated guide is in the [README](../README.md); building the firmware and how it talks to the Nano are in [development.md](development.md).
 
-**Contents:** [The screen](#the-screen) · [Footswitches and tiles](#footswitches-and-tiles) · [Long presses](#long-presses) · [Own banks](#own-banks) · [Set list](#set-list) · [Scenes](#scenes) · [Expression pedal](#expression-pedal) · [Capture and Cab/IR](#capture-and-cabir) · [FX editor](#fx-editor) · [Reverb switch](#reverb-switch-footswitch-8) · [Second effect on Pre FX 1](#second-effect-on-pre-fx-1-footswitch-3) · [Settings swap](#settings-swap-hold-an-fx-footswitch) · [Auto-wah](#auto-wah) · [Tuner](#tuner) · [USB audio volume](#usb-audio-volume) · [Bluetooth MIDI](#bluetooth-midi) · [Looper mode](#looper-mode-a-looper-app-on-a-phone) · [Editor through the controller](#nano-cortex-editor-through-the-controller) · [Footswitch learn](#footswitch-learn) · [Footswitches (wiring)](#footswitches) · [What is stored where](#what-is-stored-where)
+**Contents:** [The screen](#the-screen) · [Footswitches and tiles](#footswitches-and-tiles) · [Long presses](#long-presses) · [Own banks](#own-banks) · [Set list](#set-list) · [Scenes](#scenes) · [Expression pedal](#expression-pedal) · [Capture and Cab/IR](#capture-and-cabir) · [FX editor](#fx-editor) · [Reverb switch](#reverb-switch-footswitch-8) · [Second effect (A / B)](#second-effect-a-and-b-on-an-fx-slot) · [Auto-wah](#auto-wah) · [Tuner](#tuner) · [USB audio volume](#usb-audio-volume) · [Bluetooth MIDI](#bluetooth-midi) · [Looper mode](#looper-mode-a-looper-app-on-a-phone) · [Editor through the controller](#nano-cortex-editor-through-the-controller) · [Footswitch learn](#footswitch-learn) · [Footswitches (wiring)](#footswitches) · [What is stored where](#what-is-stored-where)
 
 ## The screen
 
@@ -54,7 +54,7 @@ say so under their caption: *Hold: Looper* and *Hold: Scenes* (or *Presets*).
 | Tile 2 | **Learn** for footswitch 2 – and, with *Switch 1* in that dialog, for footswitch 1 |
 | Preset tile (3–8, preset mode) | **Bank editor**: colour, symbol and preset of this switch; `DEFAULT` restores the standard preset; `LEARN SWITCH` |
 | Scene tile (3–8, scenes) | **Scene**: name, colour and which effects are on; `Remove` empties the switch |
-| FX tile (3–7, FX mode) | **FX editor**: model (tap the header), on/off and all parameters |
+| FX tile (3–7, FX mode) | **FX editor**: model (tap the header), on/off, all parameters and the [second effect](#second-effect-a-and-b-on-an-fx-slot) (A \| B) |
 | Tile 8 (FX mode) | **Reverb dialog** with the tabs *MIX POS 1 / 2* and *2ND REVERB* |
 | Preset name | **Rename** with on-screen keyboard (at least 4 characters, unique) |
 
@@ -223,9 +223,6 @@ controller and usable in every preset and slot with that model; empty places sho
 
 Loaded settings count as changes to the Nano preset: **SAVE** keeps them there.
 
-The **swap button** (⇄) chooses the FX preset that holding the effect's footswitch swaps in – see
-[settings swap](#settings-swap-hold-an-fx-footswitch).
-
 The **scene button** at the end of the row saves the current settings for a [scene](#settings-of-an-effect-per-scene)
 of the preset.
 
@@ -252,58 +249,44 @@ switch does** from then on; the one in use carries a tick.
   Saved on the *MIX POS 1 / 2* tab, footswitch 8 is the mix switch again and reverb B stays stored with its settings
   for later; *None* in the list removes it.
 
-## Second effect on Pre FX 1 (footswitch 3)
+## Second effect: A and B on an FX slot
 
-<img src="images/13-second-effect.png" alt="" width="440">
+<img src="images/29-second-effects.png" alt="" width="49%"> <img src="images/30-second-effect-choice.png" alt="" width="49%">
 
-Long press on the Pre FX 1 tile, then **+B** (next to the model in the FX editor): choose a second effect (B) for
-this preset, for example the Envelope Filter as an auto-wah next to a drive. **A | B** then shows which one runs:
-tap the other one to swap at once, tap the running one to choose another second effect or *None*. Then footswitch 3
-in FX mode:
+Every FX slot can have a second effect (B) next to the preset's own (A), and its footswitch swaps them: a
+compressor and a drive on Pre FX 1 – or **the same effect twice with other settings**, for example one reverb with a
+short and a long setting (mix, decay, damping … all change together).
 
-- **short press**: the effect in the slot on / off (it acts when you lift your foot)
-- **hold** (0.6 s): swap A ↔ B – the effect stays on or off, as it was
+**Set it up:** hold the FX tile to open the FX editor and tap **+B** next to the model. Choose the second effect
+from the list; *None* removes it. **A | B** in the header then shows which one runs: tap the other one to swap at
+once, tap the running one to open the list again. B is edited in the FX editor while it runs. It is stored on the
+controller, per preset; A stays the effect of the Nano's preset.
 
-The tile shows *Pre FX 1 A* or *Pre FX 1 B* and, below it, the other effect (⇄ name). The Nano has one model per slot, so the controller swaps the model and
-sends the stored values of the other effect: this takes about half a second with a short gap in the sound.
-For a gapless change put the second effect into a free slot instead and switch it on and off.
-B is edited in the FX editor while it runs and is stored on the controller, per preset (MIDI: CC 58). The controller
-also keeps the settings of A, read whenever A is on. Only if A was never on since B was set up, the first swap
-switches A on for a moment to read them.
+**What the footswitch does** (at the top of the same list, per slot):
 
-## Settings swap (hold an FX footswitch)
+| Choice | Short press | Hold (0.6 s) |
+|---|---|---|
+| *Tap: on / off · hold: A / B* | effect on / off | swap A ↔ B |
+| *Tap: A / B · hold: on / off* | swap A ↔ B | effect on / off |
 
-<img src="images/29-settings-swap.png" alt="" width="440">
+The second is for an effect that stays on and only changes its sound – a reverb, a delay. A switch with a second
+effect acts when you lift your foot.
 
-The same effect with other settings at the press of a foot – a short and a long delay, a light and a deep chorus.
-Hold an FX tile (footswitch 3–7) to open the FX editor, save the other settings as an
-[FX preset](#fx-editor) (hold a place in the row above the parameters), then tap the **swap button** (⇄) next to
-the scene button and choose that FX preset. It is stored on the controller for this preset and slot; *None* removes
-it. The button then shows the number of the FX preset, and the FX preset carries the ⇄ symbol.
+**The tile** shows both symbols: A at the left edge, B at the right, the one that runs filled. Between them are the
+footswitch number and the slot in short (*PRE 1*, *POST 3*). The tile has the colour and the name of the effect that
+runs.
 
-<img src="images/30-settings-swap-editor.png" alt="" width="440">
-
-In FX mode the footswitch of that effect then does two things:
-
-- **short press**: the effect on / off, as before (it acts when you lift your foot)
-- **hold** (0.6 s): swap between the preset's own settings and the FX preset – the effect stays on or off
-
-**The tile says what is on**: the name of the effect (*Tape Delay*) for the preset's own settings, the name of the FX
-preset (*Ambient Wash*) when it is swapped in; the line under the caption names the other one (⇄ name). The model
-stays the same, so only values are sent and the sound does not break off.
-
-- The preset's own settings are read from the Nano just before the FX preset goes in, so edits made in the FX
-  editor count. For an effect that is off the ones read last are used; if it was never on in this preset, the first
-  swap switches it on for a moment to read them.
-- Loading a preset – also the one that is on – brings back its own settings. If you **save** while the FX preset is
-  in, its settings become the preset's own.
-- A scene that carries settings for this effect replaces them, and the tile shows the effect's name again.
-- Changing the FX preset itself (hold its place, save under the same name) changes what the swap sends.
-- Not on Pre FX 1 while it has a [second effect](#second-effect-on-pre-fx-1-footswitch-3): holding footswitch 3
-  swaps the effects then. A wah set to auto-wah *Hold* keeps its held function.
-- MIDI: **CC 61–65** for FX slot 1–5 – value 64–127 the FX preset, 0–63 the preset's own settings.
-
-<img src="images/31-settings-swap-choice.png" alt="" width="440">
+- **Two different effects:** the Nano has one model per slot, so the controller swaps the model and sends the stored
+  values: about half a second with a short gap in the sound. For a gapless change put the second effect into a free
+  slot instead and switch it on and off.
+- **The same effect as A and B:** only the values are sent – at once, and the sound does not break off.
+- The values of A are read from the Nano just before a swap, so edits count. If A was never on since B was set up,
+  the first swap switches it on for a moment to read them.
+- Loading a preset – also the one that is on – brings back A. If you save the preset while B runs, B becomes the
+  preset's effect.
+- The reverb's second effect is the one footswitch 8 swaps (the [reverb switch](#reverb-switch-footswitch-8)); with
+  it on the reverb's own tile, footswitch 8 is not needed for it – useful with [6 fields](#tile-layout-6-or-8-fields).
+- MIDI: **CC 61–65** choose A (value 0–63) or B (64–127) of FX slot 1–5; CC 58 swaps Pre FX 1.
 
 ## Auto-wah
 
@@ -324,8 +307,8 @@ stored on the controller for this preset.
 
 The tile of the wah shows the rate (*Auto: 1/4*, or *Hold: auto 1/4*), and the wah's bar in the FX editor moves along.
 The controller sends about 40 positions a second over Bluetooth: slow rates are smooth, at 1/16 you may hear steps.
-While the tuner is open nothing moves. On Pre FX 1 with a second effect, holding footswitch 3 stays the swap A ↔ B –
-a wah set to *Hold* there moves while it is on. The moving changes the wah's position in the Nano's preset, so the
+While the tuner is open nothing moves. On a slot with a second effect the footswitch keeps what it does with A and
+B – a wah set to *Hold* there moves while it is on. The moving changes the wah's position in the Nano's preset, so the
 preset shows unsaved changes; that does no harm.
 
 ## Tuner
@@ -362,10 +345,10 @@ for the Nano (for example with the MC6 export of the Nano Cortex Editor) work ov
 | CC 37–41 | FX slot 1–5 (Pre FX 1, Pre FX 2, Post FX 1–3): value 64–127 on, 0–63 off |
 | CC 1 | expression: reverb mix from Pos 1 (0) to Pos 2 (127) |
 | CC 50–57, value 64–127 | press field 1–8 of the [tile layout](#tile-layout-6-or-8-fields) (mode, tuner, presets or FX, reverb switch) |
-| CC 58, value 64–127 | hold footswitch 3: Pre FX 1 swaps to its second effect and back |
+| CC 58, value 64–127 | Pre FX 1 swaps to its [second effect](#second-effect-a-and-b-on-an-fx-slot) and back |
 | CC 66 / CC 67, value 64–127 | [set list](#set-list): next / previous song |
 | CC 68 | set list: value 64–127 on, 0–63 off |
-| CC 61–65 | [settings swap](#settings-swap-hold-an-fx-footswitch) of FX slot 1–5: value 64–127 the FX preset, 0–63 the preset's own settings |
+| CC 61–65 | [second effect](#second-effect-a-and-b-on-an-fx-slot) of FX slot 1–5: value 64–127 B, 0–63 A |
 | CC 59 | looper mode: value 64–127 on, 0–63 off |
 | CC 60 | footswitches 3–8: value 64–127 [scenes](#scenes) of the preset, 0–63 presets of the bank |
 
@@ -483,4 +466,4 @@ Without an SX1509 the controller works with the touch screen only.
 
 | On the Nano | On the controller |
 |---|---|
-| presets, names, captures, cabs, FX and their values, expression settings, USB volume | own banks (preset, colour, symbol), scenes, reverb mix Pos 1 / Pos 2, footswitch order, tile layout, second reverbs, auto-wah settings, settings swaps, the set list, the captures of the scenes, the Bluetooth MIDI device |
+| presets, names, captures, cabs, FX and their values, expression settings, USB volume | own banks (preset, colour, symbol), scenes, reverb mix Pos 1 / Pos 2, footswitch order, tile layout, second effects (B) of the FX slots, auto-wah settings, the set list, the captures of the scenes, the Bluetooth MIDI device |

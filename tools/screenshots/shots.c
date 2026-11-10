@@ -113,8 +113,8 @@ static void example_state(void)
     view.mix_active = -1;
     view.rev_b_type = type_of("Room");
     view.rev_active = 0;
-    view.pre1_b_type = type_of("Envelope Filter");
-    view.pre1_active = 0;
+    view.ab_b_type[0] = type_of("Envelope Filter");   // Pre FX 1: the Green 808 (A) and an envelope filter (B)
+    view.ab_b_type[4] = type_of("Room");              // the reverb: Mind Hall (A) and Room (B), also on footswitch 8
 }
 
 static nano_library_t *example_library(void)
@@ -279,25 +279,29 @@ int main(void)
     ui_fx_editor_close();
     close_all();
 
-    // Settings swap: Post FX 2 has the FX preset "Ambient Wash" in now (footswitch 6 held), the tile shows its name
+    // Second effects: Pre FX 1 runs its B (the envelope filter); the reverb has two settings of Mind Hall and a tap
+    // on its switch swaps them
     view.fx_mode = true;
-    view.hold_fxp[3] = 2;
-    snprintf(view.hold_names[3], sizeof(view.hold_names[3]), "Ambient Wash");
-    view.hold_active = 1u << 3;
+    uint32_t pre1 = st.fx_type[0], rev_b = view.ab_b_type[4];
+    st.fx_type[0] = view.ab_b_type[0];
+    view.ab_a_type[0] = pre1;
+    view.ab_active = 1u << 0;
+    view.ab_b_type[4] = st.fx_type[4];
+    view.ab_tap = 1u << 4;
     ui_show_state(&st, &view);
-    shot("29-settings-swap");
-    view.hold_active = 0;
-    ui_show_state(&st, &view);
-    ui_fx_editor_show(3, st.fx_type[3], true, values, 11);
+    shot("29-second-effects");
+    ui_fx_editor_show(4, st.fx_type[4], true, values, 6);
     ui_fx_presets_show(fx_presets, -1, true);
-    shot("30-settings-swap-editor");
-    open_panel(PANEL_HOLD, 0);
-    shot("31-settings-swap-choice");
+    open_panel(PANEL_SECOND, 0);
+    shot("30-second-effect-choice");
     close_panel();
     ui_fx_editor_close();
     close_all();
-    view.hold_fxp[3] = 0;
-    view.hold_names[3][0] = 0;
+    st.fx_type[0] = pre1;
+    view.ab_a_type[0] = 0;
+    view.ab_active = 0;
+    view.ab_b_type[4] = rev_b;
+    view.ab_tap = 0;
     ui_show_state(&st, &view);
 
     // Auto-wah: a wah on Pre FX 2 that the controller moves in tempo while its footswitch is held

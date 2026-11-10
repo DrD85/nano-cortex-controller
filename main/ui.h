@@ -4,8 +4,7 @@
 //   scene mode:  in place of them the six scenes of the current preset - which of its effects are on (the Scenes
 //                button next to Save goes there and back; long press on a tile: name, colour and effects)
 //   FX mode:     FX slots 1-5 on/off, reverb mix Pos 1 / Pos 2 (long press: set them); Pre FX 1 can have
-//                a second effect (2ND in its FX editor), swapped by holding footswitch 3; any FX slot can have a
-//                settings swap (an FX preset, swapped in by holding its footswitch: the tile shows its name)
+//                a second effect (A | B in its FX editor), swapped by holding - or tapping - its footswitch
 // VOL (top left): capture volume; long press on the capture card: its gain, bass, mid and treble; long press on the
 // cab card: cab output, high pass and low pass.
 #pragma once
@@ -47,8 +46,8 @@
 //                  2 = save what was seen, 0 = stop
 //   'K', 0         reverb mix editor closed
 //   'A', w<<24|t   second effect (B) of this preset: w 0 = reverb (0 = none: footswitch 8 is the mix switch),
-//                  w 1 = Pre FX 1 (footswitch 3 held swaps A/B), w 2 = reverb B kept for later while footswitch 8
-//                  is the mix switch; t = model, 0 = none
+//                  w 2 = reverb B kept for later while footswitch 8 is the mix switch, w 8 + n = FX slot n (its
+//                  switch swaps A / B); t = model, 0 = none
 //   'H', 0         edit reverb B: load it and open the FX editor
 //   'X', 1 / 0     Bluetooth MIDI dialog opened / closed (search for devices while open)
 //   'P', n         connect MIDI device n of the list (-1 = disconnect and forget)
@@ -60,8 +59,9 @@
 //                  from now on; 0x100 | n = the scene leaves this effect's settings alone again
 //   '|', r<<16|v   FX editor of a wah: auto-wah setting r (UI_WAH_*) of this preset changed to v (answer with
 //                  ui_set_autowah)
-//   '[', s<<8|n    FX editor, swap button: holding the footswitch of FX slot s (0-4) swaps between the preset's own
-//                  settings and FX preset n (1-UI_FX_PRESETS) of its model, for this preset; n = 0: no swap
+//   '[', slot      FX editor, A | B: swap to the other effect of this slot
+//   '>', s<<8|t    what the switch of FX slot s does with its second effect: t = 1 a tap swaps A / B and holding
+//                  switches on / off, t = 0 the other way round
 typedef void (*ui_command_cb)(char command, int arg);
 #define UI_SWITCH_HOLD 0x100
 #define UI_SWITCH_SENT 0x200   // looper mode: the footswitch's message went out already, only show the press
@@ -106,9 +106,10 @@ typedef struct {
     uint32_t rev_b_type; // second reverb of this preset (footswitch 8 swaps A/B), 0 = none: it is the mix switch
     uint32_t rev_b_stored; // the second reverb kept for this preset - also while footswitch 8 is the mix switch
     int rev_active;      // 0 = reverb A (the preset's), 1 = reverb B
-    uint32_t pre1_b_type; // second effect of Pre FX 1 (footswitch 3 held swaps A/B), 0 = none
-    int pre1_active;     // 0 = A (the preset's), 1 = B
-    uint32_t pre1_a_type; // the preset's effect in Pre FX 1 (known once read), shown while B runs
+    uint32_t ab_b_type[NANO_FX_SLOTS];   // second effect (B) of an FX slot, 0 = none: its switch swaps A / B
+    uint32_t ab_a_type[NANO_FX_SLOTS];   // the preset's own effect (A) of that slot (known once read), shown while B runs
+    uint8_t ab_active;   // bit n: B runs in slot n
+    uint8_t ab_tap;      // bit n: a tap on the switch swaps A / B and holding it switches on / off (otherwise the other way round)
     uint8_t bank_presets[6];   // own bank: preset per switch 3-8, 0 = empty
     uint8_t bank_colors[6];    // colour index (UI_BANK_COLOR_COUNT)
     uint8_t bank_icons[6];     // symbol: 0 = none, n = PRESET_ICONS[n - 1]
@@ -127,10 +128,6 @@ typedef struct {
     uint8_t scene_capture[UI_SCENES];                         // capture slot 1-25 the scene loads, 0 = as it is
     uint8_t wah_mode[NANO_FX_SLOTS];                          // auto-wah of the wah in this slot (UI_WAH_OFF / ON / HELD)
     uint8_t wah_rate[NANO_FX_SLOTS];                          // its rate (index into the list of UI_WAH_RATES)
-    uint8_t hold_fxp[NANO_FX_SLOTS];                          // settings swap: FX preset (1-4) that holding the slot's
-                                                              // footswitch swaps to, 0 = none
-    char hold_names[NANO_FX_SLOTS][16];                       // its name
-    uint8_t hold_active;                                      // bit n: slot n has that FX preset now
     bool setlist_on;                                          // set list: footswitches 3-8 are its songs (preset mode);
     uint8_t setlist_count;                                    // then bank_presets / colours / symbols are those songs
     uint8_t setlist_presets[UI_SETLIST_MAX];                  // the songs in order (presets 1-64)
