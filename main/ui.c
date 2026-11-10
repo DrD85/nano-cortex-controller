@@ -783,9 +783,14 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     set_num_prop(s_tile_caption[i], LV_STYLE_TEXT_ALIGN, LV_TEXT_ALIGN_LEFT);
     set_align_if(s_tile_number[i], LV_ALIGN_TOP_RIGHT, -12, 6);
     set_hidden(s_tile_square_b[i], true);
+    set_num_prop(sq, LV_STYLE_WIDTH, 40);
     set_num_prop(sq, LV_STYLE_BG_OPA, LV_OPA_TRANSP);
     set_num_prop(sq, LV_STYLE_BORDER_WIDTH, 0);
     set_num_prop(img, LV_STYLE_IMAGE_OPA, LV_OPA_COVER);
+    set_align_if(img, LV_ALIGN_CENTER, 0, 0);
+    if (lv_image_get_scale(img) != 256 * 32 / 36) lv_image_set_scale(img, 256 * 32 / 36);
+    set_align_if(sym, LV_ALIGN_CENTER, 0, 0);
+    set_ptr_prop(sym, LV_STYLE_TEXT_FONT, &ui_font_28);
 
     char upper[40];   // captions in small capitals, as the editor's labels
     size_t n = 0;
@@ -801,26 +806,35 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     set_color_prop(s_tile_name[i], LV_STYLE_TEXT_COLOR, ink);
 }
 
-// One of the two symbols on the tile of a slot with a second effect: the one that runs on a filled square, the
-// other one framed and dimmed.
-static void style_ab_square(lv_obj_t *sq, const nano_fx_model_t *model, const char *letter, bool running, uint32_t mark, uint32_t back)
+// One of the two chips on the tile of a slot with a second effect, as the A | B of a plugin: its letter and the
+// effect's symbol - the one that runs filled, the other one framed. The letter is what tells A from B when both are
+// the same effect with other settings.
+#define AB_CHIP_W 54
+static void style_ab_chip(lv_obj_t *sq, const nano_fx_model_t *model, bool is_b, bool running, uint32_t mark, uint32_t back)
 {
     lv_obj_t *img = lv_obj_get_child(sq, 0), *sym = lv_obj_get_child(sq, 1);
     const lv_image_dsc_t *icon = model ? NANO_ICONS[model->icon] : NULL;
+    uint32_t ink = running ? back : mark;
     set_hidden(sq, false);
+    set_num_prop(sq, LV_STYLE_WIDTH, AB_CHIP_W);
     set_color_prop(sq, LV_STYLE_BG_COLOR, mark);
     set_num_prop(sq, LV_STYLE_BG_OPA, running ? LV_OPA_COVER : LV_OPA_TRANSP);
     set_num_prop(sq, LV_STYLE_BORDER_WIDTH, running ? 0 : 2);
     set_color_prop(sq, LV_STYLE_BORDER_COLOR, mark);
-    set_num_prop(sq, LV_STYLE_BORDER_OPA, 120);
+    set_num_prop(sq, LV_STYLE_BORDER_OPA, 215);
+    // The letters at the outer ends: "A ~" at the left edge of the tile, "~ B" at the right
+    set_ptr_prop(sym, LV_STYLE_TEXT_FONT, &ui_font_title_22);
+    set_text(sym, is_b ? "B" : "A");
+    set_color_prop(sym, LV_STYLE_TEXT_COLOR, ink);
+    set_align_if(sym, icon ? (is_b ? LV_ALIGN_RIGHT_MID : LV_ALIGN_LEFT_MID) : LV_ALIGN_CENTER, icon ? (is_b ? -6 : 6) : 0, 0);
     set_hidden(img, icon == NULL);
     if (icon) {
         set_image(img, icon);
-        set_color_prop(img, LV_STYLE_IMAGE_RECOLOR, running ? back : mark);
-        set_num_prop(img, LV_STYLE_IMAGE_OPA, running ? LV_OPA_COVER : 150);
+        if (lv_image_get_scale(img) != 256 * 26 / 36) lv_image_set_scale(img, 256 * 26 / 36);
+        set_align_if(img, is_b ? LV_ALIGN_LEFT_MID : LV_ALIGN_RIGHT_MID, is_b ? -1 : 1, 0);
+        set_color_prop(img, LV_STYLE_IMAGE_RECOLOR, ink);
+        set_num_prop(img, LV_STYLE_IMAGE_OPA, running ? LV_OPA_COVER : 230);
     }
-    set_text(sym, icon ? "" : letter);   // (a model without a symbol, or A not read yet: its letter)
-    set_color_prop(sym, LV_STYLE_TEXT_COLOR, running ? back : mark);
 }
 
 // The tile of a slot with a second effect (after set_tile): A's symbol at the left edge, B's at the right, the one
@@ -829,12 +843,12 @@ static void set_tile_ab(int i, int slot, uint32_t a_type, uint32_t b_type, bool 
 {
     static const char *const SHORT[NANO_FX_SLOTS] = { "PRE 1", "PRE 2", "POST 1", "POST 2", "POST 3" };
     uint32_t mark = s_tile_accent[i], back = active ? color : TILE_OFF_BG;
-    style_ab_square(s_tile_square[i], nano_fx_model(a_type), "A", !b_runs, mark, back);
-    style_ab_square(s_tile_square_b[i], nano_fx_model(b_type), "B", b_runs, mark, back);
+    style_ab_chip(s_tile_square[i], nano_fx_model(a_type), false, !b_runs, mark, back);
+    style_ab_chip(s_tile_square_b[i], nano_fx_model(b_type), true, b_runs, mark, back);
     set_text(s_tile_caption[i], SHORT[slot]);
-    set_num_prop(s_tile_caption[i], LV_STYLE_X, 52);
+    set_num_prop(s_tile_caption[i], LV_STYLE_X, 8 + AB_CHIP_W + 2);
     set_num_prop(s_tile_caption[i], LV_STYLE_Y, 31);
-    set_num_prop(s_tile_caption[i], LV_STYLE_WIDTH, s_tile_w - 104 - 4);   // (- 4: the tile's border)
+    set_num_prop(s_tile_caption[i], LV_STYLE_WIDTH, s_tile_w - 2 * (8 + AB_CHIP_W + 2) - 4);   // (- 4: the tile's border)
     set_num_prop(s_tile_caption[i], LV_STYLE_TEXT_ALIGN, LV_TEXT_ALIGN_CENTER);
     set_align_if(s_tile_number[i], LV_ALIGN_TOP_MID, 0, 2);
 }
