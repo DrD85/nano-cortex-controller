@@ -367,7 +367,7 @@ static esp_timer_handle_t s_fxp_timer;
 // count (the Nano reports no values of effects that are off - if there are none yet, the effect is switched on for a
 // moment to read them).
 #define HS_STORE_KEY "hs%d"
-#define HS_SEND_CHUNK 4
+#define HS_SEND_CHUNK 8
 typedef struct {
     uint32_t type[NANO_FX_SLOTS];     // the model a choice is for: it counts while this model is in the slot
     uint8_t fxp[NANO_FX_SLOTS];       // FX preset 1-FXP_COUNT of that model, 0 = none
@@ -440,7 +440,7 @@ typedef struct {
 } fx_a_t;                             // A as last read, stored in NVS
 enum { AB_REVERB, AB_PRE1, AB_COUNT };
 enum { AB_IDLE, AB_TURNING_ON, AB_READING, AB_LOADING };
-#define AB_SEND_CHUNK 4               // parameter values per step (the BLE write queue holds 16)
+#define AB_SEND_CHUNK 8               // parameter values per step (the BLE write queue holds 32)
 typedef struct {
     int preset;                       // preset the data belongs to
     fx_b_t b;
@@ -2788,16 +2788,21 @@ static void ab_model_chosen(int slot, uint32_t type)
 static void ab_load_target(ab_t *ab)
 {
     uint32_t type = ab->target ? ab->b.type : ab->a_type;
-    uint8_t buf[16];
-    char label[64];
-    snprintf(label, sizeof(label), "%s %c: %s", AB_NAMES[ab - s_ab], ab->target ? 'B' : 'A', nano_fx_name(type));
-    send(label, NANO_MSG_FX_TYPE, buf, nano_fx_model_select(ab->slot, type, buf));
-    s_state.fx_type[ab->slot] = type;
+    // A and B of the same model (two settings of one reverb): the model stays where it is and only the values go
+    // out - at once, and the sound does not break off. Otherwise the model first; the Nano needs a moment for it.
+    bool same_model = type == s_state.fx_type[ab->slot];
+    if (!same_model) {
+        uint8_t buf[16];
+        char label[64];
+        snprintf(label, sizeof(label), "%s %c: %s", AB_NAMES[ab - s_ab], ab->target ? 'B' : 'A', nano_fx_name(type));
+        send(label, NANO_MSG_FX_TYPE, buf, nano_fx_model_select(ab->slot, type, buf));
+        s_state.fx_type[ab->slot] = type;
+        ab->swapped_us = esp_timer_get_time();
+    }
     ab->active = ab->target;
-    ab->swapped_us = esp_timer_get_time();
     ab->phase = AB_LOADING;
     ab->sent = 0;
-    ab_step_later(400);   // the Nano needs a moment for the model change
+    ab_step_later(same_model ? 1 : 400);
     show();
 }
 
@@ -4120,6 +4125,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
     }
     case NANO_MSG_SET_PRESET_SLOTS: {   // preset changed on the Nano itself
         ab_leave_preset();   // (before the number changes: edits belong to the preset that was on)
+        s_read_busy_until_us = esp_timer_get_time() + PARAM_BUSY_US;   // the Nano is loading: no value reads meanwhile
         nano_state_apply_preset_change(&s_state, payload, len);
         s_expect_preset = 0;
         s_expect_ack = false;

@@ -110,6 +110,29 @@ static esp_err_t read_pins(uint16_t *pins)
     return err;
 }
 
+// All pins as inputs with pull-ups (after a reset of the chip its pull-ups are off: open inputs, phantom presses).
+static void configure(void)
+{
+    write_reg(REG_INPUT_DISABLE_B, 0x00);
+    write_reg(REG_INPUT_DISABLE_B + 1, 0x00);
+    write_reg(REG_PULLDOWN_B, 0x00);
+    write_reg(REG_PULLDOWN_A, 0x00);
+    write_reg(REG_PULLUP_B, 0xFF);
+    write_reg(REG_PULLUP_A, 0xFF);
+    write_reg(REG_DIR_B, 0xFF);
+    write_reg(REG_DIR_A, 0xFF);
+}
+
+// True while the chip still has the pull-ups it was set up with (a supply dip or a discharge on stage resets it).
+static bool configured(void)
+{
+    uint8_t reg = REG_PULLUP_B, data[2];
+    return i2c_master_transmit_receive(s_dev, &reg, 1, data, sizeof(data), 50) == ESP_OK && data[0] == 0xFF && data[1] == 0xFF;
+}
+
+#define CHECK_POLLS 500    // the chip's setup is looked at once a second
+#define SETTLE_POLLS 25    // after setting it up again: 50 ms in which no press counts
+
 static void footswitch_task(void *arg)
 {
     uint16_t stable = 0xFFFF;          // debounced pins (bit set = released)
@@ -118,8 +141,17 @@ static void footswitch_task(void *arg)
     TickType_t learn_start = 0;
     TickType_t down_since[FOOTSWITCH_COUNT + 1] = { 0 };
     bool down[FOOTSWITCH_COUNT + 1] = { false };   // pressed and not held long enough yet
+    int check = 0, settle = 0, failed = 0;
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(POLL_MS));
+        if (++check >= CHECK_POLLS) {
+            check = 0;
+            if (!configured()) {
+                ESP_LOGW(TAG, "SX1509 lost its setup (reset?) - setting it up again");
+                configure();
+                settle = SETTLE_POLLS;
+            }
+        }
         if (s_reset) {
             s_reset = false;
             memcpy(s_pins, DEFAULT_PINS, sizeof(s_pins));
@@ -143,7 +175,20 @@ static void footswitch_task(void *arg)
             }
         }
         uint16_t pins;
-        if (read_pins(&pins) != ESP_OK) continue;
+        if (read_pins(&pins) != ESP_OK) {
+            if (++failed == 100) ESP_LOGW(TAG, "SX1509 does not answer");   // (said once per outage)
+            continue;
+        }
+        if (failed >= 100) ESP_LOGI(TAG, "SX1509 answers again");
+        failed = 0;
+        if (settle) {   // freshly set up: take the pins as they are, without presses
+            settle--;
+            stable = pins;
+            memset(down, 0, sizeof(down));
+            memset(low, 0, sizeof(low));
+            memset(high, 0, sizeof(high));
+            continue;
+        }
         uint16_t pressed = 0, released = 0;
         for (int pin = 0; pin < PINS; pin++) {
             bool is_low = !(pins & (1u << pin));
@@ -200,14 +245,7 @@ bool footswitches_start(i2c_master_bus_handle_t bus, footswitch_cb on_press, foo
         // Software reset, then all pins as inputs with pull-ups.
         write_reg(REG_RESET, 0x12);
         write_reg(REG_RESET, 0x34);
-        write_reg(REG_INPUT_DISABLE_B, 0x00);
-        write_reg(REG_INPUT_DISABLE_B + 1, 0x00);
-        write_reg(REG_PULLDOWN_B, 0x00);
-        write_reg(REG_PULLDOWN_A, 0x00);
-        write_reg(REG_PULLUP_B, 0xFF);
-        write_reg(REG_PULLUP_A, 0xFF);
-        write_reg(REG_DIR_B, 0xFF);
-        write_reg(REG_DIR_A, 0xFF);
+        configure();
 
         ESP_LOGI(TAG, "SX1509 found at 0x%02X - footswitches active", addresses[i]);
         log_pins();
