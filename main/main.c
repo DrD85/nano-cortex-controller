@@ -77,6 +77,13 @@ static nano_state_t s_state;
 static esp_timer_handle_t s_refresh_timer;
 static bool s_waiting_full_state;
 static int s_incomplete_retries;   // replies that arrived broken (lost packet) and were asked for again
+// A state request whose reply never comes is asked again; after STATE_RETRIES the link is set up afresh. Without
+// this a lost reply right after connecting left the start screen at "loading presets" for good.
+#define STATE_REPLY_US (4 * 1000 * 1000)
+#define STATE_REPLY_FULL_US (8 * 1000 * 1000)   // all preset names: a long reply
+#define STATE_RETRIES 2
+static esp_timer_handle_t s_state_timer;
+static int s_state_retries;
 static bool s_refresh_library;     // refresh button: read the library again after the presets
 static esp_timer_handle_t s_midi_gate_timer;   // MIDI waits while the Nano connects and loads its presets
 // App bridge: after the app changed something the controller reads the state; after the controller changed something
@@ -304,11 +311,29 @@ static struct {
     bool known;
     float values[NANO_MAX_PARAMS];
     int count;
-    int request_slot;                // slot of the outstanding parameter request, -1 = none
+    int read_tries;                  // reads of its values that got no reply in a row
     int pending_slot, pending_param; // value waiting for the throttle timer, pending_param -1 = none
     float pending_value;
     bool throttling;
-} s_edit = { .slot = -1, .request_slot = -1, .pending_param = -1 };
+} s_edit = { .slot = -1, .pending_param = -1 };
+
+// Reading an effect's parameter values. The Nano's reply (138) does not say which slot it is for; replies come in
+// the order of the requests. So only one read is open at a time - who wants to read meanwhile tries again a moment
+// later - and a reply counts only for the open read: in time, with the model still in the slot and with as many
+// values as that model has. No read goes out while the Nano loads a preset or a model (its reply would come late).
+// Before this, two reads open at once, or a late reply taken for the next read, put one effect's values into
+// another: a reverb's Mix into the Input of the compressor on Pre FX 1, kept there as the values of its "A".
+enum { READ_NONE, READ_EDITOR, READ_AB, READ_HS };
+#define PARAM_READ_US (2000 * 1000)   // a reply later than this is not waited for
+#define PARAM_BUSY_US (900 * 1000)    // no read this long after a preset or model change
+static struct {
+    int purpose, slot;                // the open read (READ_NONE = none)
+    uint32_t type;                    // model in the slot when it was asked
+    int64_t at_us;
+    uint32_t odd_type;                // a reply with another number of values than the model's table says:
+    int odd_count;                    // taken when it comes twice (then the table is off, not the reply)
+} s_read;
+static int64_t s_read_busy_until_us;
 static esp_timer_handle_t s_param_timer, s_read_timer;
 
 // FX presets: up to FXP_COUNT named settings per effect model, stored on the controller and shown above the
@@ -425,6 +450,7 @@ typedef struct {
     int active;                       // 0 = A, 1 = B
     int slot, target, phase, sent;    // slot -1 = not known yet (reverb)
     bool cache_only;                  // reading the values for later, no swap
+    int read_tries;                   // the read could not go out yet (another read open, the Nano busy)
     bool restore_off;                 // A was switched on only to read it: off again before the swap
     bool open_editor;                 // open the FX editor once B is loaded
     int64_t swapped_us;               // last model change by the controller (state replies may still be older)
@@ -505,9 +531,12 @@ static void on_message(uint32_t type, const uint8_t *payload, size_t len)
     post(ev);
 }
 
+// (From the Bluetooth host task. A lost event would leave the screen and the state on the wrong side of the link,
+// so this one waits for room in the queue.)
 static void on_link(bool ready)
 {
-    post((app_event_t){ .kind = ready ? EV_LINK_UP : EV_LINK_DOWN });
+    app_event_t ev = { .kind = ready ? EV_LINK_UP : EV_LINK_DOWN };
+    if (xQueueSend(s_events, &ev, pdMS_TO_TICKS(3000)) != pdTRUE) ESP_LOGE(TAG, "Event queue full - link event lost");
 }
 
 static void command(char c, int arg)
@@ -704,6 +733,11 @@ static void app_sync_later(void)
 static void ab_timer_cb(void *arg)
 {
     command('F', 0);
+}
+
+static void state_timer_cb(void *arg)
+{
+    command('{', 0);
 }
 
 static void hs_timer_cb(void *arg)
@@ -1396,6 +1430,7 @@ static bool send(const char *label, uint32_t type, const uint8_t *payload, size_
         break;   // reads change nothing
     case NANO_MSG_SET_PRESET_SLOTS: case NANO_MSG_FX_TYPE:
         values_forget();   // another preset, or a model with its own values
+        s_read_busy_until_us = esp_timer_get_time() + PARAM_BUSY_US;
         // fall through
     default:
         s_last_change_us = esp_timer_get_time();
@@ -1411,12 +1446,83 @@ static void request_full_state(void)
     uint8_t buf[8];
     s_waiting_full_state = true;
     send("Full state request", NANO_MSG_STATE_REQUEST, buf, nano_full_state_request(buf));
+    esp_timer_stop(s_state_timer);
+    esp_timer_start_once(s_state_timer, STATE_REPLY_FULL_US);
 }
 
 static void request_current_state(void)
 {
     uint8_t buf[16];
     send("Current state request", NANO_MSG_STATE_REQUEST, buf, nano_current_state_request(buf));
+    if (!s_waiting_full_state) {   // (the full state's own, longer wait goes on)
+        esp_timer_stop(s_state_timer);
+        esp_timer_start_once(s_state_timer, STATE_REPLY_US);
+    }
+}
+
+// No state reply in time: ask again, then connect afresh.
+static void state_overdue(void)
+{
+    if (!nano_link_ready()) return;
+    if (++s_state_retries > STATE_RETRIES) {
+        ESP_LOGE(TAG, "The Nano does not answer - connecting again");
+        s_state_retries = 0;
+        nano_link_restart();
+        return;
+    }
+    ESP_LOGW(TAG, "No %s state reply - asking again (%d)", s_waiting_full_state ? "full" : "current", s_state_retries);
+    if (s_waiting_full_state) request_full_state();
+    else request_current_state();
+}
+
+static bool param_read_open(void)
+{
+    return s_read.purpose != READ_NONE && esp_timer_get_time() - s_read.at_us < PARAM_READ_US;
+}
+
+// Asks for the values of the effect in a slot. False: not now (another read is open, the Nano is busy, or the
+// effect is off - the Nano only reports values of effects that are on) - try again a moment later.
+static bool param_read(int purpose, int slot)
+{
+    if (param_read_open() || esp_timer_get_time() < s_read_busy_until_us) return false;
+    if (slot < 0 || slot >= NANO_FX_SLOTS || !s_state.fx_type[slot] || !s_state.fx_on[slot]) return false;
+    uint8_t buf[8];
+    char label[48];
+    snprintf(label, sizeof(label), "%s values request", NANO_FX_SLOT_NAMES[slot]);
+    if (!send(label, NANO_MSG_FX_PARAMS_REQUEST, buf, nano_fx_params_request(slot, buf))) return false;
+    s_read.purpose = purpose;
+    s_read.slot = slot;
+    s_read.type = s_state.fx_type[slot];
+    s_read.at_us = esp_timer_get_time();
+    return true;
+}
+
+// The reply: whose read it answers (READ_NONE = nobody's), the slot and the values. count 0 = it does not fit the
+// read (the model changed meanwhile, or another number of values than the model has).
+static int param_read_reply(const uint8_t *payload, size_t len, int *slot, float *values, int *count)
+{
+    int purpose = param_read_open() ? s_read.purpose : READ_NONE;
+    s_read.purpose = READ_NONE;
+    *slot = s_read.slot;
+    *count = nano_fx_params_values(payload, len, values, NANO_MAX_PARAMS);
+    if (purpose == READ_NONE) {
+        ESP_LOGW(TAG, "FX values nobody waits for (%d values) - ignored", *count);
+        return READ_NONE;
+    }
+    const nano_fx_model_t *model = nano_fx_model(s_state.fx_type[*slot]);
+    int expected = !model ? 0 : model->param_count < NANO_MAX_PARAMS ? model->param_count : NANO_MAX_PARAMS;
+    if (s_state.fx_type[*slot] != s_read.type) {
+        ESP_LOGW(TAG, "%s: values of the model that was there before - ignored", NANO_FX_SLOT_NAMES[*slot]);
+        *count = 0;
+    } else if (*count != expected) {
+        bool again = s_read.odd_type == s_read.type && s_read.odd_count == *count;
+        ESP_LOGW(TAG, "%s: %d values, %s has %d - %s", NANO_FX_SLOT_NAMES[*slot], *count, nano_fx_name(s_read.type), expected,
+                 again ? "taken (the same as last time)" : "ignored");
+        s_read.odd_type = s_read.type;
+        s_read.odd_count = *count;
+        if (!again) *count = 0;
+    }
+    return purpose;
 }
 
 static void ab_cache(int slot, int delay_ms);
@@ -1653,13 +1759,39 @@ static void editor_read(void)
 {
     int slot = s_edit.slot;
     if (slot < 0 || !s_state.fx_type[slot] || !s_state.fx_on[slot]) return;
-    if (s_hs.phase == HS_READING) {   // one reply at a time: the settings swap's comes first
-        editor_read_later(200);
+    if (param_read_open() && s_read.purpose == READ_EDITOR && s_read.slot == slot) return;   // asked: its reply comes
+    if (!param_read(READ_EDITOR, slot)) {   // another read is open or the Nano is busy: a moment later
+        editor_read_later(250);
         return;
     }
-    uint8_t buf[8];
-    s_edit.request_slot = slot;
-    send("FX parameters request", NANO_MSG_FX_PARAMS_REQUEST, buf, nano_fx_params_request(slot, buf));
+    // No reply in time: asked again, three times (the timer is stopped when the reply comes).
+    if (++s_edit.read_tries <= 3) editor_read_later(PARAM_READ_US / 1000 + 100);
+    else ESP_LOGW(TAG, "%s: the Nano does not send the values", NANO_FX_SLOT_NAMES[slot]);
+}
+
+static void value_note(int slot, int param, float value);
+
+static bool editor_reading(void)
+{
+    return param_read_open() && s_read.purpose == READ_EDITOR;
+}
+
+// The values of the edited effect arrived (count 0: a reply that did not fit - read again).
+static void editor_values(int slot, const float *values, int count)
+{
+    if (slot != s_edit.slot) return;   // the editor closed or shows another slot meanwhile
+    if (count <= 0) {
+        editor_read_later(300);
+        return;
+    }
+    esp_timer_stop(s_read_timer);
+    s_edit.read_tries = 0;
+    memcpy(s_edit.values, values, sizeof(float) * (size_t)count);
+    s_edit.count = count;
+    s_edit.known = true;
+    for (int i = 0; i < count; i++) value_note(slot, i, values[i]);
+    ESP_LOGI(TAG, "%s: %d parameter values read", NANO_FX_SLOT_NAMES[slot], count);
+    editor_show();
 }
 
 // A value the effect in a slot has now (sent, or read from the Nano).
@@ -1681,6 +1813,19 @@ static bool send_param(int slot, int param, float value)
     snprintf(label, sizeof(label), "%s parameter %d", NANO_FX_SLOT_NAMES[slot], param);
     if (!send(label, NANO_MSG_FX_VALUE, buf, nano_fx_param(slot, param, value, buf))) return false;
     value_note(slot, param, value);
+    // The log names every value that goes to an effect (a moving control: twice a second) - what the controller
+    // set is then never a guess.
+    static int logged_slot = -1, logged_param = -1;
+    static int64_t logged_us;
+    int64_t now = esp_timer_get_time();
+    if (slot != logged_slot || param != logged_param || now - logged_us > 500 * 1000) {
+        const nano_fx_model_t *model = nano_fx_model(s_state.fx_type[slot]);
+        ESP_LOGI(TAG, "-> %s %s: %s = %.3f", NANO_FX_SLOT_NAMES[slot], model ? model->name : "?",
+                 model && param < model->param_count ? model->params[param].name : "?", (double)value);
+        logged_slot = slot;
+        logged_param = param;
+        logged_us = now;
+    }
     return true;
 }
 
@@ -2148,6 +2293,7 @@ static void editor_open(int slot)
     s_edit.slot = slot;
     s_edit.known = false;
     s_edit.count = 0;
+    s_edit.read_tries = 0;
     editor_show();
     editor_read();
 }
@@ -2168,10 +2314,11 @@ static void editor_choose_model(uint32_t type)
     send(label, NANO_MSG_FX_TYPE, buf, nano_fx_model_select(slot, type, buf));
     s_state.fx_type[slot] = type;
     s_edit.known = false;
+    s_edit.read_tries = 0;
     editor_show();
     show();
     schedule_refresh(300);
-    editor_read_later(500);
+    editor_read_later(PARAM_BUSY_US / 1000 + 50);   // once the Nano has loaded the model
 }
 
 // Forgets expression requests that got no reply in time, and a write or check that waited for one of them.
@@ -2654,29 +2801,43 @@ static void ab_load_target(ab_t *ab)
     show();
 }
 
+// The read of a swap (or of the values for later) came to nothing: nothing is switched.
+static void ab_read_failed(ab_t *ab, const char *message)
+{
+    ab->phase = AB_IDLE;
+    if (!ab->cache_only) ui_show_message(message);
+    ab->cache_only = false;
+    if (ab->restore_off) {
+        ab->restore_off = false;
+        if (s_state.fx_on[ab->slot]) toggle_fx(ab->slot);
+    }
+}
+
 static void ab_read(ab_t *ab)
 {
-    if (ab->cache_only && s_edit.request_slot >= 0) {   // the editor's reply comes first: try another time
-        ab->phase = AB_IDLE;
+    if (!param_read(READ_AB, ab->slot)) {   // another read is open or the Nano is busy
+        if (ab->cache_only || ++ab->read_tries > 12) {   // (a read for later: another time)
+            ab_read_failed(ab, "Not switched: the Nano is busy - try again.");
+        } else {
+            ab->phase = AB_TURNING_ON;
+            ab_step_later(150);
+        }
         return;
     }
-    uint8_t buf[8];
-    char label[48];
-    snprintf(label, sizeof(label), "%s values request", AB_NAMES[ab - s_ab]);
     ab->phase = AB_READING;
-    send(label, NANO_MSG_FX_PARAMS_REQUEST, buf, nano_fx_params_request(ab->slot, buf));
-    ab_step_later(1500);   // timeout
+    ab_step_later(PARAM_READ_US / 1000 + 100);   // timeout
 }
 
 // Reads the values of A while it is on (preset loaded, or switched on), so a later swap need not switch it on.
 static void ab_cache(int slot, int delay_ms)
 {
-    if (ab_running() || s_hs.phase != HS_IDLE || s_edit.request_slot >= 0 || slot < 0 || !s_state.fx_on[slot] || !s_state.fx_type[slot]) return;
+    if (ab_running() || s_hs.phase != HS_IDLE || slot < 0 || !s_state.fx_on[slot] || !s_state.fx_type[slot]) return;
     for (int i = 0; i < AB_COUNT; i++) {
         ab_t *ab = &s_ab[i];
         if (!ab->b.type || ab->active != 0 || ab_slot(ab) != slot) continue;
         ab->slot = slot;
         ab->cache_only = true;
+        ab->read_tries = 0;
         ab->phase = AB_TURNING_ON;
         ab_step_later(delay_ms);
         return;
@@ -2706,6 +2867,7 @@ static void ab_swap(int which)
     ab->slot = slot;
     ab->target = ab->active ? 0 : 1;
     ab->cache_only = false;
+    ab->read_tries = 0;
     ab_capture_editor();
     if (!s_state.fx_on[slot]) {
         if (ab->active == 1 || ab->a_count) {   // values known: swap while the effect stays off
@@ -2722,48 +2884,39 @@ static void ab_swap(int which)
     ab_read(ab);
 }
 
-// FX parameter values arrived: true if they were for an A/B (kept, then the swap goes on).
-static bool ab_values_read(const uint8_t *payload, size_t len)
+// The values an A/B asked for arrived (kept, then the swap goes on).
+static void ab_values_read(int slot, const float *values, int count)
 {
     ab_t *ab = ab_running();
-    if (!ab || ab->phase != AB_READING) return false;
+    if (!ab || ab->phase != AB_READING || ab->slot != slot) return;   // (a read that was given up meanwhile)
     esp_timer_stop(s_ab_timer);
-    float values[NANO_MAX_PARAMS];
-    int count = nano_fx_params_values(payload, len, values, NANO_MAX_PARAMS);
     if (count <= 0) {
-        ab->phase = AB_IDLE;
-        if (!ab->cache_only) ui_show_message("Not switched: the Nano sent no values.");
-        ab->cache_only = false;
-        if (ab->restore_off) {
-            ab->restore_off = false;
-            if (s_state.fx_on[ab->slot]) toggle_fx(ab->slot);
-        }
-        return true;
+        ab_read_failed(ab, "Not switched: the Nano sent no values.");
+        return;
     }
     if (ab->active == 0) {
         if (!ab->a_type) ab->a_type = s_state.fx_type[ab->slot];   // the preset's effect, kept from now on
         bool same = ab->a_count == count;   // stored only when changed (spares the flash)
         for (int i = 0; same && i < count; i++) same = lroundf(ab->a_values[i] * 65535) == lroundf(values[i] * 65535);
         ab->a_count = (uint8_t)count;
-        memcpy(ab->a_values, values, sizeof(values));
+        memcpy(ab->a_values, values, sizeof(float) * (size_t)count);
         if (!same) ab_store_a(ab);
     } else {   // values only: a state reply can still name the previous model
         ab->b.count = (uint8_t)count;
-        memcpy(ab->b.values, values, sizeof(values));
+        memcpy(ab->b.values, values, sizeof(float) * (size_t)count);
         ab_store(ab);
     }
     if (ab->cache_only) {
         ab->cache_only = false;
         ab->phase = AB_IDLE;
         ESP_LOGI(TAG, "%s A: %d values kept", AB_NAMES[ab - s_ab], count);
-        return true;
+        return;
     }
     if (ab->restore_off) {   // switched on only for reading
         ab->restore_off = false;
         if (s_state.fx_on[ab->slot]) toggle_fx(ab->slot);
     }
     ab_load_target(ab);
-    return true;
 }
 
 static void ab_step(void)
@@ -2775,13 +2928,7 @@ static void ab_step(void)
         ab_read(ab);
         break;
     case AB_READING:
-        ab->phase = AB_IDLE;
-        if (!ab->cache_only) ui_show_message("Not switched: the Nano did not send the effect's values.");
-        ab->cache_only = false;
-        if (ab->restore_off) {
-            ab->restore_off = false;
-            if (s_state.fx_on[ab->slot]) toggle_fx(ab->slot);
-        }
+        ab_read_failed(ab, "Not switched: the Nano did not send the effect's values.");
         break;
     case AB_LOADING: {
         int count = ab->target ? ab->b.count : ab->a_count;
@@ -2966,15 +3113,19 @@ static void hs_send(void)
 
 static void hs_read(void)
 {
-    if (s_edit.request_slot >= 0 && s_hs.tries++ < 10) {   // the editor's reply comes first: try again in a moment
-        s_hs.phase = HS_TURNING_ON;
-        hs_step_later(100);
+    if (!param_read(READ_HS, s_hs.slot)) {   // another read is open or the Nano is busy: again in a moment
+        if (++s_hs.tries > 12) {
+            s_hs.phase = HS_IDLE;
+            hs_restore_off();
+            ui_show_message("Not switched: the Nano is busy - try again.");
+        } else {
+            s_hs.phase = HS_TURNING_ON;
+            hs_step_later(150);
+        }
         return;
     }
-    uint8_t buf[8];
     s_hs.phase = HS_READING;
-    send("Settings swap: values request", NANO_MSG_FX_PARAMS_REQUEST, buf, nano_fx_params_request(s_hs.slot, buf));
-    hs_step_later(1500);   // timeout
+    hs_step_later(PARAM_READ_US / 1000 + 100);   // timeout
 }
 
 // Footswitch of the slot held (or MIDI): target 1 = B, 0 = A, -1 = the other one. The effect stays on or off.
@@ -3012,24 +3163,21 @@ static void hs_swap(int slot, int target)
     }
 }
 
-// FX parameter values arrived: true if they were for a settings swap (A is kept, then B goes out).
-static bool hs_values_read(const uint8_t *payload, size_t len)
+// The values the swap asked for arrived (A is kept, then B goes out).
+static void hs_values_read(int slot, const float *values, int count)
 {
-    if (s_hs.phase != HS_READING) return false;
+    if (s_hs.phase != HS_READING || s_hs.slot != slot) return;
     esp_timer_stop(s_hs_timer);
-    int slot = s_hs.slot;
-    int count = nano_fx_params_values(payload, len, s_hs.a_values[slot], NANO_MAX_PARAMS);
     hs_restore_off();
     if (count <= 0) {
         s_hs.phase = HS_IDLE;
-        s_hs.a_known &= (uint8_t)~(1u << slot);
         ui_show_message("Not switched: the Nano sent no values.");
-        return true;
+        return;
     }
+    memcpy(s_hs.a_values[slot], values, sizeof(float) * (size_t)count);
     s_hs.a_count[slot] = (uint8_t)count;
     s_hs.a_known |= (uint8_t)(1u << slot);
     hs_send();
-    return true;
 }
 
 static void hs_step(void)
@@ -3210,13 +3358,33 @@ static void rename_preset(const char *name)
 
 static void request_library(void)
 {
+    static int64_t asked_us = -100 * 1000 * 1000;
+    int64_t now = esp_timer_get_time();
+    if (now - asked_us < 8 * 1000 * 1000) return;   // asked a moment ago: its (long) reply is on the way
+    asked_us = now;
     uint8_t buf[16];
     send("Library request", NANO_MSG_LIBRARY_REQUEST, buf, nano_library_request(buf));
 }
 
 static void library_timer_cb(void *arg)
 {
-    command('Y', 0);
+    command('(', 0);
+}
+
+// The library is a long reply (220 captures: three seconds in which the Nano answers nothing else). It is read by
+// itself only in a quiet moment - not while footswitches, the screen or MIDI are in use - or when its list is opened.
+#define LIBRARY_QUIET_US (8 * 1000 * 1000)
+static int64_t s_last_action_us;
+
+static void library_when_quiet(void)
+{
+    if (s_library || !nano_link_ready()) return;
+    if (esp_timer_get_time() - s_last_action_us < LIBRARY_QUIET_US) {
+        esp_timer_stop(s_library_timer);
+        esp_timer_start_once(s_library_timer, 3000 * 1000);
+        return;
+    }
+    request_library();
 }
 
 // Loads library item `position` (alphabetical) into the active capture or cab slot. arg = kind << 16 | position.
@@ -3479,6 +3647,7 @@ static void handle_midi(int arg)
         return;
     }
     ESP_LOGI(TAG, "MIDI %02X %u %u", status, d1, d2);
+    s_last_action_us = esp_timer_get_time();
     if (midi_ble_chocolate() && chocolate_midi(type, d1, d2)) return;
     if (type == 0xB0 && d1 == 59) {   // looper mode on (64-127) / off
         if (d2 >= 64 && !s_looper && !nano_link_ready()) return;
@@ -3564,6 +3733,7 @@ static void handle_command(char c, int arg)
         ESP_LOGW(TAG, "Not connected yet");
         return;
     }
+    if (strchr("wnpgkabcdemtxCI$OMz", c)) s_last_action_us = esp_timer_get_time();   // somebody is playing or setting up
     switch (c) {
     case 'n':
         if (setlist_used()) setlist_step(1);
@@ -3626,6 +3796,8 @@ static void handle_command(char c, int arg)
     case 'H': ab_edit_b(arg); break;
     case 'F': ab_step(); break;
     case '>': hs_step(); break;
+    case '{': state_overdue(); break;
+    case '(': library_when_quiet(); break;
     case '[': hs_set(arg); break;
     case 'M': editor_choose_model((uint32_t)arg); break;
     case 'R': editor_read(); break;
@@ -3695,7 +3867,7 @@ static void external_change(uint32_t type)
     values_forget();
     esp_timer_stop(s_app_read_timer);
     esp_timer_start_once(s_app_read_timer, 400 * 1000);
-    if (type == NANO_MSG_FX_VALUE && s_edit.slot >= 0 && s_edit.request_slot < 0) editor_read_later(500);
+    if (type == NANO_MSG_FX_VALUE && s_edit.slot >= 0 && !editor_reading()) editor_read_later(500);
     if (type == NANO_MSG_CAB_SETTING) cab_settings_command(2);
 }
 
@@ -3712,6 +3884,8 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             break;
         }
         s_incomplete_retries = 0;
+        esp_timer_stop(s_state_timer);   // a complete reply: nothing overdue (the full state asks for the current one below)
+        s_state_retries = 0;
         if (!s_waiting_full_state && s_expect_preset) {
             int reply_preset = (int)nano_field_varint(payload, len, 13) + 1;
             if ((reply_preset != s_expect_preset || s_expect_ack) && esp_timer_get_time() - s_expect_us < 2000000) {
@@ -3786,7 +3960,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
                 if (!s_library_requested) {
                     // The library is a large reply: ask once, after the first preset has been read.
                     s_library_requested = true;
-                    esp_timer_start_once(s_library_timer, 1500 * 1000);
+                    esp_timer_start_once(s_library_timer, 4000 * 1000);
                     request_settings();   // the Nano's global settings, once (shown in the log)
                 }
                 ab_capture_editor();   // edits of a second effect in the previous preset
@@ -3804,7 +3978,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             }
             if (s_edit.slot >= 0) {
                 editor_show();
-                if (s_state.fx_on[s_edit.slot] && !s_edit.known && s_edit.request_slot < 0) editor_read_later(100);
+                if (s_state.fx_on[s_edit.slot] && !s_edit.known && !editor_reading()) editor_read_later(100);
             }
         }
         break;
@@ -3923,15 +4097,14 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         break;
     }
     case NANO_MSG_FX_PARAMS_RESPONSE: {
-        if (ab_values_read(payload, len) || hs_values_read(payload, len)) break;
-        int slot = s_edit.request_slot;
-        s_edit.request_slot = -1;
-        if (slot < 0 || slot != s_edit.slot) break;   // editor closed or another slot meanwhile
-        s_edit.count = nano_fx_params_values(payload, len, s_edit.values, NANO_MAX_PARAMS);
-        s_edit.known = s_edit.count > 0;
-        for (int i = 0; i < s_edit.count; i++) value_note(slot, i, s_edit.values[i]);
-        ESP_LOGI(TAG, "%s: %d parameter values read", NANO_FX_SLOT_NAMES[slot], s_edit.count);
-        editor_show();
+        float values[NANO_MAX_PARAMS];
+        int slot, count;
+        switch (param_read_reply(payload, len, &slot, values, &count)) {
+        case READ_AB: ab_values_read(slot, values, count); break;
+        case READ_HS: hs_values_read(slot, values, count); break;
+        case READ_EDITOR: editor_values(slot, values, count); break;
+        default: break;
+        }
         break;
     }
     case NANO_MSG_TUNER_METERING: {
@@ -4043,6 +4216,7 @@ static void app_event(app_event_t ev)
         ui_splash_status("Connected - loading presets ...", NULL);
         ui_set_link(true);
         s_incomplete_retries = 0;
+        s_state_retries = 0;
         request_full_state();
         break;
     case EV_LINK_DOWN:
@@ -4061,10 +4235,24 @@ static void app_event(app_event_t ev)
         s_usb.known = false;
         memset(&s_src, 0, sizeof(s_src));   // also a throttle whose timer command came while disconnected
         s_edit.slot = -1;
-        s_edit.request_slot = -1;
+        s_edit.pending_param = -1;
+        s_read.purpose = READ_NONE;
         s_scene_queued = s_scene_sent = 0;
         esp_timer_stop(s_wah_timer);
         s_sweep.slot = -1;
+        // Nothing that was under way goes on after the link comes back: swaps, value runs, reads, an expected preset
+        ab_leave_preset();
+        esp_timer_stop(s_state_timer);
+        esp_timer_stop(s_refresh_timer);
+        esp_timer_stop(s_read_timer);
+        esp_timer_stop(s_scene_timer);
+        esp_timer_stop(s_fxp_timer);
+        esp_timer_stop(s_app_read_timer);
+        s_fxp.sent = s_fxp.send_count = 0;
+        s_expect_preset = 0;
+        s_expect_ack = false;
+        s_save_pending = 0;
+        for (int i = 0; i < NANO_FX_SLOTS; i++) s_fx_switched[i] = -1;
         values_forget();
         ui_set_link(false);
         break;
@@ -4104,9 +4292,16 @@ void web_app_pump(void)
 static void app_task(void *arg)
 {
     app_event_t ev;
+    size_t low_logged = SIZE_MAX;
     for (;;) {
-        xQueueReceive(s_events, &ev, portMAX_DELAY);
-        app_event(ev);
+        if (xQueueReceive(s_events, &ev, pdMS_TO_TICKS(5000)) == pdTRUE) app_event(ev);
+        // Internal RAM is what Bluetooth lives on: say so when its lowest free amount goes down (by 4 KB or more)
+        size_t low = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
+        if (low + 4096 <= low_logged) {
+            low_logged = low;
+            ESP_LOGI(TAG, "Internal RAM: %u KB free, lowest so far %u KB", (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
+                     (unsigned)(low / 1024));
+        }
     }
 }
 
@@ -4191,7 +4386,7 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(err);
 
-    s_events = xQueueCreate(32, sizeof(app_event_t));
+    s_events = xQueueCreate(64, sizeof(app_event_t));
     s_state.tuner_base_hz = 440;
     const esp_timer_create_args_t timer = { .callback = refresh_cb, .name = "refresh" };
     ESP_ERROR_CHECK(esp_timer_create(&timer, &s_refresh_timer));
@@ -4215,6 +4410,8 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&ab_timer, &s_ab_timer));
     const esp_timer_create_args_t hs_timer = { .callback = hs_timer_cb, .name = "hs" };
     ESP_ERROR_CHECK(esp_timer_create(&hs_timer, &s_hs_timer));
+    const esp_timer_create_args_t state_timer = { .callback = state_timer_cb, .name = "state" };
+    ESP_ERROR_CHECK(esp_timer_create(&state_timer, &s_state_timer));
     const esp_timer_create_args_t gate_timer = { .callback = midi_gate_cb, .name = "midi_gate" };
     ESP_ERROR_CHECK(esp_timer_create(&gate_timer, &s_midi_gate_timer));
     const esp_timer_create_args_t app_read_timer = { .callback = app_read_cb, .name = "app_read" };

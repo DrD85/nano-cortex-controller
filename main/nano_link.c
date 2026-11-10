@@ -77,7 +77,7 @@ static const struct ble_gap_conn_params NANO_CONN_PARAMS = {
     .itvl_min = 0x000C,               // units of 1.25 ms
     .itvl_max = 0x000C,
     .latency = 0,
-    .supervision_timeout = 0x0100,    // units of 10 ms
+    .supervision_timeout = 0x0190,    // units of 10 ms: 4 s - a short radio dropout on stage is not a lost link
     .min_ce_len = 0,
     .max_ce_len = 0,
 };
@@ -112,6 +112,11 @@ static uint8_t *s_rx;
 static size_t s_rx_len;
 static bool s_rx_active;
 
+// From "connected" to "notifications on" the Nano has SETUP_US; a setup that hangs (an MTU exchange or a discovery
+// without an answer would only give up after 30 s) is cut off and tried again.
+#define SETUP_US (8 * 1000 * 1000)
+static esp_timer_handle_t s_setup_timer;
+
 static int gap_event(struct ble_gap_event *event, void *arg);
 static void discover_characteristics(void);
 static void scan_update(void);
@@ -137,6 +142,20 @@ static void log_hex(const char *prefix, const uint8_t *d, size_t n)
     for (size_t i = 0; i < shown; i++) pos += snprintf(line + pos, sizeof(line) - pos, "%02X ", d[i]);
     if (shown < n) snprintf(line + pos, sizeof(line) - pos, "...");
     ESP_LOGI(TAG, "%s (%u bytes): %s", prefix, (unsigned)n, line);
+}
+
+static void setup_overdue(void *arg)
+{
+    if (s_conn == BLE_HS_CONN_HANDLE_NONE || s_ready) return;
+    ESP_LOGE(TAG, "Link setup takes too long - disconnecting and trying again");
+    ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+}
+
+void nano_link_restart(void)
+{
+    if (s_conn == BLE_HS_CONN_HANDLE_NONE) return;
+    ESP_LOGW(TAG, "Disconnecting to connect afresh");
+    ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
 }
 
 static void fail_link(const char *why, int rc)
@@ -251,6 +270,7 @@ static int on_subscribed(uint16_t conn, const struct ble_gatt_error *err, struct
 {
     if (err->status == 0) {
         s_ready = true;
+        esp_timer_stop(s_setup_timer);
         ESP_LOGI(TAG, "Notifications on - link ready");
         if (s_on_link) s_on_link(true);
         scan_update();
@@ -653,7 +673,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
             ble_gap_disc_cancel();
             s_scan_mode = 0;
             s_connecting = true;
-            int rc = ble_gap_connect(s_own_addr_type, &event->disc.addr, 30000, &NANO_CONN_PARAMS, gap_event, NULL);
+            int rc = ble_gap_connect(s_own_addr_type, &event->disc.addr, 10000, &NANO_CONN_PARAMS, gap_event, NULL);
             if (rc != 0) {
                 ESP_LOGE(TAG, "Connect not started: %d", rc);
                 s_connecting = false;
@@ -680,12 +700,19 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         struct ble_gap_conn_desc desc;
         if (ble_gap_conn_find(s_conn, &desc) == 0) ESP_LOGI(TAG, "Connection interval %.2f ms", desc.conn_itvl * 1.25f);
         ESP_LOGI(TAG, "Connected - exchanging MTU");
-        ble_gattc_exchange_mtu(s_conn, on_mtu, NULL);
+        esp_timer_stop(s_setup_timer);
+        esp_timer_start_once(s_setup_timer, SETUP_US);
+        int rc = ble_gattc_exchange_mtu(s_conn, on_mtu, NULL);
+        if (rc != 0) fail_link("MTU exchange not started", rc);
         start_scan();   // continues only if another client needs it
         return 0;
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGW(TAG, "Disconnected (reason 0x%X)", event->disconnect.reason);
+        esp_timer_stop(s_setup_timer);
         reset_link();
+        xSemaphoreTake(s_pending_lock, portMAX_DELAY);   // no reply of the old link is waited for any more
+        s_pending_count = 0;
+        xSemaphoreGive(s_pending_lock);
         s_write_status = BLE_HS_ENOTCONN;
         xSemaphoreGive(s_write_done);
         if (s_on_link) s_on_link(false);
@@ -773,6 +800,8 @@ void nano_link_start(nano_message_cb on_message, nano_link_cb on_link)
     s_pending_lock = xSemaphoreCreateMutex();
     s_values_lock = xSemaphoreCreateMutex();
     configASSERT(s_rx && s_write_queue && s_app_queue && s_write_ready && s_write_done && s_pending_lock && s_values_lock);
+    const esp_timer_create_args_t setup_timer = { .callback = setup_overdue, .name = "nano_setup" };
+    ESP_ERROR_CHECK(esp_timer_create(&setup_timer, &s_setup_timer));
 
     ESP_ERROR_CHECK(nimble_port_init());
     ble_hs_cfg.reset_cb = on_reset;

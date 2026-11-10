@@ -273,6 +273,9 @@ static void on_gesture(lv_event_t *e)
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
         if (overlays[i] && !lv_obj_is_hidden(overlays[i])) return;
     }
+    // A swipe is not a tap: whatever is under the finger gets no click (nor a long press) when it lifts. Before, only
+    // the tiles ignored it, and only for 150 ms - a swipe up ended with a button going off.
+    lv_indev_wait_release(lv_indev_active());
     lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_active());
     if (dir == LV_DIR_LEFT) send('n', 0);
     else if (dir == LV_DIR_RIGHT) send('p', 0);
@@ -943,6 +946,7 @@ static void fill_picker(void)
     const lib_list_t *list = picker_library_list();
     if (!list) {
         picker_section("The library is still loading ...");
+        send('Y', 0);   // (it is read by itself only in a quiet moment: now it is wanted)
         lv_label_set_text(s_picker_page_label, "");
         return;
     }

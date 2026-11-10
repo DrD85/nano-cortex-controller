@@ -56,7 +56,8 @@ CONFIG_LV_DRAW_SW_CIRCLE_CACHE_SIZE=16
 CONFIG_LV_DRAW_SW_SHADOW_CACHE_SIZE=48
 
 # LVGL objects from the normal heap (internal RAM, then PSRAM) for long lists
-CONFIG_LV_USE_CLIB_MALLOC=y
+# LVGL takes its memory from main/ui_mem.c: internal RAM only while plenty is free, then PSRAM (Bluetooth needs the rest)
+CONFIG_LV_USE_CUSTOM_MALLOC=y
 # Two connections (Nano + Bluetooth MIDI) and long replies: more host buffers
 CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=24
 CONFIG_BT_NIMBLE_MSYS_2_BLOCK_COUNT=40

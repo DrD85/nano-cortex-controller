@@ -35,6 +35,7 @@
 //   'U', tenths    USB playback volume in tenths of a dB (-400 = off .. 0)
 //   'v', w<<16|v   capture volume (w 0: v = 0-255), cab setting (w 1-3 = output, high pass, low pass: v = 0-1000)
 //                  or capture amp knob (w 4-7 = gain, bass, mid, treble: v = 0-255)
+//   'Y', 0         the library list is shown but not read yet: read it now (answer with ui_set_library)
 //   'y', 1 / 0     cab settings opened (read them, answer with ui_set_cab_settings) / closed
 //   'z', n         FX editor: load FX preset n into the slot (0 = the original values, 1-UI_FX_PRESETS)
 //   'Q', w<<8|v    reverb mix editor: Pos w+1 (0/1) moved to v (0-255), play that mix
