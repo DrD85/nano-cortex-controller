@@ -152,6 +152,18 @@ static void setup_overdue(void *arg)
     ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
 }
 
+// Development: end the connection properly and stay away for a while - to see how long the Nano can still be found
+// after the controller has gone (it was not found any more after the controller had been away for half a minute
+// without saying goodbye).
+static int64_t s_hold_until_us;
+
+void nano_link_pause(int seconds)
+{
+    s_hold_until_us = esp_timer_get_time() + (int64_t)seconds * 1000000;
+    ESP_LOGW(TAG, "Disconnecting properly and staying away for %d s", seconds);
+    if (s_conn != BLE_HS_CONN_HANDLE_NONE) ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+}
+
 void nano_link_restart(void)
 {
     if (s_conn == BLE_HS_CONN_HANDLE_NONE) return;
@@ -676,6 +688,14 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         struct ble_hs_adv_fields fields;
         if (ble_hs_adv_parse_fields(&fields, event->disc.data, event->disc.length_data) != 0) return 0;
         log_seen(&fields, &event->disc.addr, event->disc.rssi);
+        if (s_conn == BLE_HS_CONN_HANDLE_NONE && !s_connecting && is_nano(&fields) && esp_timer_get_time() < s_hold_until_us) {
+            static int64_t said_us;   // (seen, but the pause is not over: the Nano is still advertising)
+            if (esp_timer_get_time() - said_us > 5000000) {
+                said_us = esp_timer_get_time();
+                ESP_LOGI(TAG, "Nano seen during the pause (%d s left)", (int)((s_hold_until_us - esp_timer_get_time()) / 1000000));
+            }
+            return 0;
+        }
         if (s_conn == BLE_HS_CONN_HANDLE_NONE && !s_connecting && is_nano(&fields)) {
             ESP_LOGI(TAG, "Nano Cortex found - connecting");
             ble_gap_disc_cancel();

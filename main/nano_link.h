@@ -22,6 +22,7 @@ void nano_link_start(nano_message_cb on_message, nano_link_cb on_link);
 bool nano_link_ready(void);
 // Drops the connection to the Nano; it is found and connected again (when it stopped answering).
 void nano_link_restart(void);
+void nano_link_pause(int seconds);   // development: disconnect properly and do not connect for this long
 
 // Queues a message for C304. Writes go out strictly one at a time (write with response).
 bool nano_link_send(const char *label, uint32_t type, const uint8_t *payload, size_t len);

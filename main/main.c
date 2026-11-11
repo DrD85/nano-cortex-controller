@@ -5140,6 +5140,15 @@ static void console_task(void *arg)
             on_text('!', line);
             continue;
         }
+        if (c == '~') {   // "~<seconds>" + Enter: disconnect properly, stay away, then connect again
+            char digits[6];
+            size_t n = 0;
+            uint8_t ch;
+            while (n < sizeof(digits) - 1 && console_read(&ch, pdMS_TO_TICKS(2000)) == 1 && isdigit(ch)) digits[n++] = (char)ch;
+            digits[n] = 0;
+            nano_link_pause(n ? atoi(digits) : 30);
+            continue;
+        }
         if (c == '`') {
             s_dbg_dump = !s_dbg_dump;
             ESP_LOGW(TAG, "Debug: messages from the Nano %s", s_dbg_dump ? "are logged" : "are no longer logged");
