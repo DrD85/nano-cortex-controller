@@ -19,12 +19,19 @@ expression pedal's assignments, a tuner and a looper mode. It is the hardware co
 
 - **Presets and banks** – six presets per bank on footswitches 3–8, 16 banks with your own colours and symbols
 - **Scenes** – six per preset: one footswitch switches several effects at once, without the gap of a preset change
-- **FX mode** – switch the five FX slots with your feet, plus a reverb switch and a second effect (A / B) on any slot
+- **FX mode** – switch the five FX slots with your feet, plus a reverb switch (two mix positions, two reverbs, or
+  two named settings of a reverb) and a second effect (A / B) on any slot
+- **Pedal view** – the five FX slots as pedals on a shelf instead of tiles, in the gig view
+- **NanOS 2.3.0** – its five new effects (Poly Octaver, Wham, Chief OC2, Blossom, Shimmer); older NanOS versions
+  work as before
 - **Auto-wah** – the controller moves a wah in the Nano's tempo: while the wah is on, or only while you hold its footswitch
 - **FX editor** – choose models and set every parameter on the touch screen, with named FX presets
 - **Capture and Cab/IR** – pick slots or load anything from the Nano's library; capture tone, volume, cab settings
 - **Expression pedal** – choose per preset what the Nano's pedal moves (a wah, a mix, the level …) and how far
-- **Tuner**, **gig view** with large tiles, **Bluetooth MIDI** for an extra controller (for example an M-VAVE Chocolate)
+- **Tuner**, **gig view** with large tiles, a **set list**, **Bluetooth MIDI** for an extra controller (for example
+  an M-VAVE Chocolate)
+- **Made for the stage** – it restarts itself after a hang, is back at once after a lost connection, and its
+  settings can be backed up as a file
 - **Looper mode** – the footswitches control a looper app on a phone (for example Loopy Pro)
 - The [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) can connect **through** the controller
 
@@ -35,7 +42,7 @@ expression pedal's assignments, a tuner and a looper mode. It is the hardware co
 | Part | Notes |
 |---|---|
 | [Waveshare ESP32-S3-Touch-LCD-4.3](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-4.3) | 800 × 480 touch screen, version with ONE USB-C port (**USB**) |
-| Neural DSP Nano Cortex | Bluetooth on; no pairing needed |
+| Neural DSP Nano Cortex | The Nano can be found for a few seconds after it is switched on; later press **EXIT + CAPTURE** on it (the controller says so) |
 | Optional: SX1509 breakout + up to 8 momentary footswitches | [wiring](docs/manual.md#footswitches) – the touch screen works on its own |
 
 **2. Install the firmware** – in the browser, no tools needed. The files are on the [Releases](../../releases) page.
@@ -139,6 +146,15 @@ the scene button at the end of the FX preset row, then the scene that should use
 
 **Swipe up**: the tiles fill the screen with large names, and a slim bar shows connection, preset, bank, unsaved
 changes and the mode. **Swipe down**: back.
+
+</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/39-pedal-view.png" alt="Pedal view"></td>
+<td>
+
+**PEDALS** in that bar: in FX mode the five slots stand on a shelf as pedals – light, name and footswitch under
+each, filled while the effect is on. Tap to switch, hold for the FX editor. Tap **PEDALS** again for the tiles.
 
 </td>
 </tr>
