@@ -150,7 +150,7 @@ static void close_all(void)
 {
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
                                    s_layout, s_volume, s_cab_settings, s_amp, s_toast, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
-                                   s_setlist, s_scene_cap };
+                                   s_setlist, s_scene_cap, s_system };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) lv_obj_set_hidden(overlays[i], true);
     update_main_hidden();
 }
@@ -288,7 +288,7 @@ int main(void)
     view.ab_active = 1u << 0 | 1u << 4;
     view.ab_b_type[4] = st.fx_type[4];
     view.ab_a_type[4] = st.fx_type[4];
-    view.ab_tap = 1u << 4;
+    view.ab_mode[4] = UI_AB_PRESS;
     view.rev_b_type = view.rev_b_stored = st.fx_type[4];   // (footswitch 8 swaps the same two)
     view.rev_active = 1;
     ui_show_state(&st, &view);
@@ -309,8 +309,21 @@ int main(void)
     view.ab_a_type[0] = 0;
     view.ab_active = 0;
     view.ab_b_type[4] = rev_b;
-    view.ab_tap = 0;
+    view.ab_mode[4] = UI_AB_HOLD;
     ui_show_state(&st, &view);
+
+    // The Nano's expression pedal has Pre FX 1 (its amount) and Post FX 2 (amount and on / off) in this preset
+    view.exp_amount = 1u << 0 | 1u << 3;
+    view.exp_switch = 1u << 3;
+    ui_show_state(&st, &view);
+    shot("35-pedal-marks");
+    view.exp_amount = view.exp_switch = 0;
+    ui_show_state(&st, &view);
+    ui_show_system("Firmware 1.13.0, running for 2 h 14 min\nStarted after: power-on\n\nNano: connected for 2 h 13 min\n"
+                   "Connection lost: never since the start\n\nInternal memory: 86 KB free, lowest 79 KB\n"
+                   "Settings memory: 63 % full (399 of 630 entries)");
+    shot("36-system");
+    close_all();
 
     // Auto-wah: a wah on Pre FX 2 that the controller moves in tempo while its footswitch is held
     uint32_t pre2 = st.fx_type[1];

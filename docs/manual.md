@@ -2,7 +2,7 @@
 
 Every function in detail. The short illustrated guide is in the [README](../README.md); building the firmware and how it talks to the Nano are in [development.md](development.md).
 
-**Contents:** [The screen](#the-screen) · [Footswitches and tiles](#footswitches-and-tiles) · [Long presses](#long-presses) · [Own banks](#own-banks) · [Set list](#set-list) · [Scenes](#scenes) · [Expression pedal](#expression-pedal) · [Capture and Cab/IR](#capture-and-cabir) · [FX editor](#fx-editor) · [Reverb switch](#reverb-switch-footswitch-8) · [Second effect (A / B)](#second-effect-a-and-b-on-an-fx-slot) · [Auto-wah](#auto-wah) · [Tuner](#tuner) · [USB audio volume](#usb-audio-volume) · [Bluetooth MIDI](#bluetooth-midi) · [Looper mode](#looper-mode-a-looper-app-on-a-phone) · [Editor through the controller](#nano-cortex-editor-through-the-controller) · [Footswitch learn](#footswitch-learn) · [Footswitches (wiring)](#footswitches) · [What is stored where](#what-is-stored-where)
+**Contents:** [The screen](#the-screen) · [Footswitches and tiles](#footswitches-and-tiles) · [Long presses](#long-presses) · [Own banks](#own-banks) · [Set list](#set-list) · [Scenes](#scenes) · [Expression pedal](#expression-pedal) · [Capture and Cab/IR](#capture-and-cabir) · [FX editor](#fx-editor) · [Reverb switch](#reverb-switch-footswitch-8) · [Second effect (A / B)](#second-effect-a-and-b-on-an-fx-slot) · [Auto-wah](#auto-wah) · [Tuner](#tuner) · [USB audio volume](#usb-audio-volume) · [Bluetooth MIDI](#bluetooth-midi) · [Looper mode](#looper-mode-a-looper-app-on-a-phone) · [Editor through the controller](#nano-cortex-editor-through-the-controller) · [Footswitch learn](#footswitch-learn) · [Footswitches (wiring)](#footswitches) · [System](#system-memory-backup-and-self-restart) · [What is stored where](#what-is-stored-where)
 
 ## The screen
 
@@ -155,6 +155,11 @@ The **pedal button** in the top bar opens what the Nano's expression pedal moves
 same assignments as in the Cortex Cloud app and in the editor's Expression panel: they belong to the Nano's preset.
 The button's symbol is green while the pedal does something in the preset.
 
+**In FX mode the tile of an effect on the pedal carries a small pedal symbol** (*Pedal*, *Pedal: on/off* or
+*Pedal, on/off*; on a tile with two symbols it sits next to the footswitch number). It is worth a look when a value
+keeps coming back: whatever you set by hand, the Nano puts the effect's Amount back to where the pedal stands as
+soon as it loads a model or the preset – for a compressor on the pedal that is its input level.
+
 - Eleven values can follow the pedal: the **Amount** of each of the five effects (the AMOUNT knob – the position of
   a wah, the mix of a reverb …), the capture's gain, bass, mid, treble and level, and the input gate. A field is
   **filled** while its value is on the pedal and shows its range.
@@ -270,9 +275,11 @@ controller, per preset; A stays the effect of the Nano's preset.
 |---|---|---|
 | *Tap: on / off · hold: A / B* | effect on / off | swap A ↔ B |
 | *Tap: A / B · hold: on / off* | swap A ↔ B | effect on / off |
+| *Press: A / B at once · no on / off* | swap A ↔ B the moment you step on it | – |
 
-The second is for an effect that stays on and only changes its sound – a reverb, a delay. A switch with a second
-effect acts when you lift your foot.
+The second is for an effect that stays on and only changes its sound – a reverb, a delay. With the first two the
+switch acts when you lift your foot (it has a held function); the third has none and acts at once – the fastest,
+if you never switch that effect off with your foot.
 
 **The tile** shows both symbols: A at the left edge, B at the right, the one that runs filled. Between them are the
 footswitch number and the slot in short (*PRE 1*, *POST 3*). The tile has the colour and the name of the effect that
@@ -464,6 +471,24 @@ The footswitches are read by an **SX1509** I/O expander (for example the SparkFu
   footswitch learn to assign them.
 
 Without an SX1509 the controller works with the touch screen only.
+
+## System: memory, backup and self-restart
+
+<img src="images/36-system.png" alt="" width="440">
+
+**System** in the Bluetooth MIDI dialog shows whether everything is well: how long the controller has been running
+and why it started, how long the Nano has been connected and how often (and why) the connection was lost, the free
+internal memory, and how full the settings memory is.
+
+- **Settings memory.** Everything the controller keeps – banks, scenes, second effects, the set list – is in one
+  small store. From 85 % on the controller says so after the start. Scenes with settings take most.
+- **Backup.** Connect the [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) (1.13 or later)
+  through the controller: the **…** menu has *Back up controller settings…* (a file with every entry) and *Restore
+  controller settings…* (writes such a file back; it replaces what the controller stores, and the controller restarts).
+- **Self-restart.** If the controller ever hangs, it restarts by itself after 8 seconds and is connected again a few
+  seconds later; after such a start it says so, and the System page names the reason.
+- After a lost connection the controller is back as soon as the Nano is: it reads the current preset at once and
+  the preset names again later, in a quiet moment.
 
 ## What is stored where
 

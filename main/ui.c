@@ -65,6 +65,8 @@ static lv_obj_t *s_preset_number, *s_preset_name, *s_capture, *s_cab;
 static lv_obj_t *s_tile[TILES], *s_tile_caption[TILES], *s_tile_name[TILES], *s_tile_number[TILES];
 static lv_obj_t *s_tile_square[TILES], *s_tile_pedal[TILES];
 static lv_obj_t *s_tile_square_b[TILES];   // top right: the symbol of B, on the tile of a slot with a second effect
+static bool s_tile_ab_pedal[TILES];        // ... and next to its number the pedal symbol: the Nano's pedal has this effect
+static lv_obj_t *s_system, *s_system_text; // the system page
 static lv_obj_t *s_tile_other[TILES];   // second line under the caption: the other effect of an A/B slot
 static uint32_t s_tile_ink[TILES];
 static uint32_t s_tile_pedal_type[TILES], s_tile_other_type[TILES];   // shown by show_tile_extras
@@ -268,7 +270,7 @@ static void on_gesture(lv_event_t *e)
     // Swipes work only on the main screen, not in an open dialog.
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi, s_layout,
                                    s_volume, s_cab_settings, s_amp, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
-                                   s_setlist, s_scene_cap };
+                                   s_setlist, s_scene_cap, s_system };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
         if (overlays[i] && !lv_obj_is_hidden(overlays[i])) return;
     }
@@ -750,6 +752,7 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     s_tile_accent[i] = mark;
     s_tile_pedal_type[i] = 0;   // set again by set_tile_pedal / set_tile_other, shown by show_tile_extras
     s_tile_other_type[i] = 0;
+    s_tile_ab_pedal[i] = false;
     s_tile_note[i] = NULL;
     s_tile_note_icon[i] = NULL;
     s_tile_marks[i] = 0;        // set again by show_scene_tiles
@@ -862,7 +865,13 @@ static void show_tile_extras(void)
         const lv_image_dsc_t *note_icon = s_tile_note[i] ? s_tile_note_icon[i] : NULL;
         bool line = other || s_tile_note[i];
         set_hidden(s_tile_other[i], !line);
-        set_hidden(s_tile_note_image[i], note_icon == NULL);
+        set_hidden(s_tile_note_image[i], note_icon == NULL && !s_tile_ab_pedal[i]);
+        set_num_prop(s_tile_note_image[i], LV_STYLE_X, s_tile_ab_pedal[i] ? s_tile_w / 2 + 6 : 55);
+        set_num_prop(s_tile_note_image[i], LV_STYLE_Y, s_tile_ab_pedal[i] ? 8 : 30);
+        if (s_tile_ab_pedal[i]) {   // (a tile with two symbols has no line under its caption)
+            set_image(s_tile_note_image[i], UI_ICONS[UI_ICON_EXP]);
+            set_color_prop(s_tile_note_image[i], LV_STYLE_IMAGE_RECOLOR, s_tile_ink[i] == TEXT ? 0xC8CCD1 : s_tile_ink[i]);
+        }
         if (line) {
             if (s_tile_note[i]) snprintf(text, sizeof(text), "%s", s_tile_note[i]);
             else snprintf(text, sizeof(text), LV_SYMBOL_SHUFFLE " %.40s", nano_fx_name(other));
@@ -2643,6 +2652,38 @@ void ui_set_scene_names_source(ui_scene_names_cb cb)
     s_scene_names = cb;
 }
 
+// ---- system page: is everything well (the System button of the MIDI dialog) ----
+
+static void on_system_button(lv_event_t *e)
+{
+    int action = (int)(intptr_t)lv_event_get_user_data(e);   // 1 open / refresh, 0 close
+    if (action) send(')', 0);
+    else lv_obj_set_hidden(s_system, true);
+}
+
+void ui_show_system(const char *text)
+{
+    lvgl_port_lock(0);
+    lv_label_set_text(s_system_text, text);
+    lv_obj_set_hidden(s_system, false);
+    lv_obj_move_foreground(s_system);
+    lvgl_port_unlock();
+}
+
+static void build_system(lv_obj_t *screen)
+{
+    s_system = panel(screen, 70, 40, 660, 400);
+    dialog_title(s_system, "System");
+    close_button(s_system, 600, 12, on_system_button, 0);
+    s_system_text = label(s_system, &ui_font_20, TEXT);
+    lv_obj_set_width(s_system_text, 620);
+    lv_label_set_long_mode(s_system_text, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_line_space(s_system_text, 6, 0);
+    lv_obj_set_pos(s_system_text, 20, 64);
+    small_button(s_system, 20, 338, 150, 46, "Refresh", on_system_button, 1);
+    lv_obj_set_hidden(s_system, true);
+}
+
 void ui_set_layout(int count, const uint8_t order[TILES], int switch1)
 {
     lvgl_port_lock(0);
@@ -2684,6 +2725,7 @@ static void build_midi(lv_obj_t *screen)
 
     small_button(s_midi, 20, 336, 180, 46, "Forget device", on_midi_button, -1);
     small_button(s_midi, 210, 336, 180, 46, "Tile layout", open_layout, 0);
+    small_button(s_midi, 400, 336, 160, 46, "System", on_system_button, 1);
     lv_obj_set_hidden(s_midi, true);
 }
 
@@ -3165,6 +3207,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     build_midi(screen);
     build_layout(screen);
     build_setlist(screen);
+    build_system(screen);
     build_scene_capture(screen);
     build_toast(screen);
     build_splash(screen);
@@ -3218,6 +3261,8 @@ void ui_set_link(bool connected)
         lv_obj_set_hidden(s_picker, true);
         lv_obj_set_hidden(s_bank_editor, true);
         lv_obj_set_hidden(s_scene_editor, true);
+        lv_obj_set_hidden(s_scene_cap, true);
+        lv_obj_set_hidden(s_setlist, true);
         lv_obj_set_hidden(s_exp_dialog, true);
         lv_obj_set_hidden(s_cal_panel, true);
         lv_obj_set_hidden(s_ask, true);
@@ -3282,13 +3327,23 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
                  color, on, empty, model ? NANO_ICONS[model->icon] : NULL, NULL);
         if (!empty) set_tile_pedal(2 + slot, st->fx_type[slot]);
         // ... and both symbols, A at the left and B at the right edge, the one that runs filled
+        // The Nano's expression pedal moves or switches this effect (an assignment of the preset): said on the tile,
+        // because what the pedal sets comes back whenever the Nano loads a model - whatever was set by hand
+        bool pedal_amount = !empty && ((view->exp_amount >> slot) & 1), pedal_switch = !empty && ((view->exp_switch >> slot) & 1);
         if (has_b) {
             static const char *const SHORT[NANO_FX_SLOTS] = { "PRE 1", "PRE 2", "POST 1", "POST 2", "POST 3" };
             set_tile_ab(2 + slot, SHORT[slot], b_runs ? view->ab_a_type[slot] : st->fx_type[slot], view->ab_b_type[slot], b_runs, on, color);
+            if (pedal_amount || pedal_switch) {
+                s_tile_ab_pedal[2 + slot] = true;
+                set_align_if(s_tile_number[2 + slot], LV_ALIGN_TOP_MID, -11, 2);
+            }
         }
         // A wah with auto-wah: under the caption how it moves ("Hold": while its footswitch is held)
         else if (!empty && view->wah_mode[slot] && view->wah_rate[slot] < UI_WAH_RATES) {
             s_tile_note[2 + slot] = WAH_NOTES[view->wah_mode[slot] == UI_WAH_HELD][view->wah_rate[slot]];
+        } else if (pedal_amount || pedal_switch) {
+            s_tile_note[2 + slot] = pedal_amount && pedal_switch ? "Pedal, on/off" : pedal_amount ? "Pedal" : "Pedal: on/off";
+            s_tile_note_icon[2 + slot] = UI_ICONS[UI_ICON_EXP];
         }
     }
 
@@ -3597,8 +3652,8 @@ void ui_show_tuner_reading(const nano_tuner_reading_t *reading)
 #define ED_NEUTRAL 0x2E3237   // frame of an empty field or an unknown value
 
 enum { PANEL_MODEL, PANEL_SECOND, PANEL_OPTION, PANEL_SCENE };
-#define PANEL_TAP_OFF (-1)   // entries of PANEL_SECOND that are not models: what the footswitch does
-#define PANEL_TAP_ON (-2)
+#define PANEL_AB_MODE(m) (-1 - (m))   // entries of PANEL_SECOND that are not models: what the footswitch does (UI_AB_*)
+#define PANEL_IS_AB_MODE(data) ((data) < 0 && (data) >= PANEL_AB_MODE(UI_AB_PRESS))
 
 static float param_from_normalized(const nano_param_t *p, float n);
 static int option_index(const nano_param_t *p, float n);
@@ -3807,7 +3862,7 @@ static void panel_choice(intptr_t data)
     } else if (s_panel_mode == PANEL_SECOND) {
         int slot = s_editor_slot_index;
         if (slot < 0) return;
-        if (data == PANEL_TAP_OFF || data == PANEL_TAP_ON) send('>', slot << 8 | (data == PANEL_TAP_ON));
+        if (PANEL_IS_AB_MODE(data)) send('>', slot << 8 | (int)(-1 - data));
         else if ((uint32_t)data != s_view.ab_b_type[slot]) send('A', (8 + slot) << 24 | (int)data);
     } else if (s_editor_model_def && s_panel_param < ed_param_count()) {
         set_enum(s_panel_param, (int)data);
@@ -3837,12 +3892,12 @@ static void draw_entry(lv_obj_t *obj, lv_layer_t *layer, intptr_t data)
         draw_text(layer, state, false, &ui_font_12, carries ? ink : MUTED, a.x2 - 150, cy - 7, a.x2 - 14, LV_TEXT_ALIGN_RIGHT);
         return;
     }
-    bool tap_choice = s_panel_mode == PANEL_SECOND && (data == PANEL_TAP_OFF || data == PANEL_TAP_ON);
+    bool tap_choice = s_panel_mode == PANEL_SECOND && PANEL_IS_AB_MODE(data);
     bool option = s_panel_mode == PANEL_OPTION || tap_choice;
     const nano_fx_model_t *m = option || !data ? NULL : nano_fx_model((uint32_t)data);
     uint32_t color = option ? s_editor_color : m ? m->color : 0x9AA0A6;
     bool current = data == s_panel_current;
-    if (tap_choice) current = (data == PANEL_TAP_ON) == ((s_view.ab_tap >> s_editor_slot_index) & 1);
+    if (tap_choice) current = (int)(-1 - data) == s_view.ab_mode[s_editor_slot_index];
     // The current one filled in its colour, the others framed in the dimmed colour.
     if (current) draw_frame(layer, &a, color, color, 10);
     else {
@@ -3855,8 +3910,9 @@ static void draw_entry(lv_obj_t *obj, lv_layer_t *layer, intptr_t data)
     if (option) {
         char text[24];
         if (tap_choice) {
-            draw_text(layer, data == PANEL_TAP_ON ? "Tap: A / B  \xC2\xB7  hold: on / off" : "Tap: on / off  \xC2\xB7  hold: A / B", false,
-                      &ui_font_16, ink, a.x1 + 4, cy - 11, a.x2 - 4, LV_TEXT_ALIGN_CENTER);
+            static const char *const CHOICES[] = { "Tap: on / off  \xC2\xB7  hold: A / B", "Tap: A / B  \xC2\xB7  hold: on / off",
+                                                   "Press: A / B at once  \xC2\xB7  no on / off" };
+            draw_text(layer, CHOICES[-1 - data], false, &ui_font_16, ink, a.x1 + 4, cy - 11, a.x2 - 4, LV_TEXT_ALIGN_CENTER);
             return;
         }
         option_text(ed_param(s_panel_param), (int)data, text, sizeof(text));
@@ -3950,8 +4006,7 @@ static void open_panel(int mode, int param)
         } else {
             if (mode == PANEL_SECOND && s_view.ab_b_type[slot]) {   // what the footswitch does with A and B
                 panel_heading("FOOTSWITCH");
-                panel_entry(ED_ENTRY_W, PANEL_TAP_OFF);
-                panel_entry(ED_ENTRY_W, PANEL_TAP_ON);
+                for (int m = UI_AB_HOLD; m <= UI_AB_PRESS; m++) panel_entry(ED_ENTRY_W, PANEL_AB_MODE(m));
                 panel_heading("SECOND EFFECT");
             }
             if (mode == PANEL_SECOND) panel_entry(ED_ENTRY_W, 0);   // None

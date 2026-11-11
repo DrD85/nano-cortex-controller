@@ -60,9 +60,12 @@
 //   '|', r<<16|v   FX editor of a wah: auto-wah setting r (UI_WAH_*) of this preset changed to v (answer with
 //                  ui_set_autowah)
 //   '[', slot      FX editor, A | B: swap to the other effect of this slot
-//   '>', s<<8|t    what the switch of FX slot s does with its second effect: t = 1 a tap swaps A / B and holding
-//                  switches on / off, t = 0 the other way round
+//   ')', 0         the system page was opened or asks again: answer with ui_show_system
+//   '>', s<<8|m    what the switch of FX slot s does with its second effect (m = UI_AB_*)
 typedef void (*ui_command_cb)(char command, int arg);
+// The switch of a slot with a second effect: a tap switches on / off and holding swaps A / B; a tap swaps and holding
+// switches on / off; or the press itself swaps, at once - without a held function there is no wait for the release.
+enum { UI_AB_HOLD, UI_AB_TAP, UI_AB_PRESS };
 #define UI_SWITCH_HOLD 0x100
 #define UI_SWITCH_SENT 0x200   // looper mode: the footswitch's message went out already, only show the press
 #define UI_SWITCH_LOST 0x400   // ... but it could not be sent (no phone)
@@ -109,7 +112,9 @@ typedef struct {
     uint32_t ab_b_type[NANO_FX_SLOTS];   // second effect (B) of an FX slot, 0 = none: its switch swaps A / B
     uint32_t ab_a_type[NANO_FX_SLOTS];   // the preset's own effect (A) of that slot (known once read), shown while B runs
     uint8_t ab_active;   // bit n: B runs in slot n
-    uint8_t ab_tap;      // bit n: a tap on the switch swaps A / B and holding it switches on / off (otherwise the other way round)
+    uint8_t ab_mode[NANO_FX_SLOTS];      // what the slot's switch does with A and B (UI_AB_*)
+    uint8_t exp_amount;  // bit n: the Nano's expression pedal moves the Amount of the effect in slot n in this preset
+    uint8_t exp_switch;  // bit n: ... and switches it on / off
     uint8_t bank_presets[6];   // own bank: preset per switch 3-8, 0 = empty
     uint8_t bank_colors[6];    // colour index (UI_BANK_COLOR_COUNT)
     uint8_t bank_icons[6];     // symbol: 0 = none, n = PRESET_ICONS[n - 1]
@@ -237,6 +242,8 @@ void ui_splash_done(void);
 
 // Short message at the top of the screen.
 void ui_show_message(const char *text);
+// The system page (the System button of the MIDI dialog sent ')'): these lines.
+void ui_show_system(const char *text);
 // Footswitch tile 0-7 lights up for a moment (the press arrived).
 void ui_flash_tile(int tile);
 

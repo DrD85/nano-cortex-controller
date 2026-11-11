@@ -116,6 +116,7 @@ static bool s_rx_active;
 // without an answer would only give up after 30 s) is cut off and tried again.
 #define SETUP_US (8 * 1000 * 1000)
 static esp_timer_handle_t s_setup_timer;
+static nano_link_stats_t s_stats;   // (written by the host task, read by the app task: plain numbers for a status page)
 
 static int gap_event(struct ble_gap_event *event, void *arg);
 static void discover_characteristics(void);
@@ -270,6 +271,7 @@ static int on_subscribed(uint16_t conn, const struct ble_gatt_error *err, struct
 {
     if (err->status == 0) {
         s_ready = true;
+        s_stats.ready_us = esp_timer_get_time();
         esp_timer_stop(s_setup_timer);
         ESP_LOGI(TAG, "Notifications on - link ready");
         if (s_on_link) s_on_link(true);
@@ -492,8 +494,14 @@ static void write_frame(const char *label, const uint8_t *data, size_t len, uint
     }
     xSemaphoreTake(s_write_done, 0);
     if (log) log_hex(label, data, len);
-    note_request(frame_type(data, len), owner);
-    int rc = ble_gattc_write_flat(s_conn, s_c304, data, len, on_written, NULL);
+    // The host can be out of buffers for a moment (a long reply is coming in, or going on to the app): the write is
+    // tried again for up to half a second. Before, such a write was dropped - a footswitch press that never arrived.
+    int rc, tries = 0;
+    while ((rc = ble_gattc_write_flat(s_conn, s_c304, data, len, on_written, NULL)) == BLE_HS_ENOMEM && ++tries < 100 && s_ready) {
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+    if (tries) ESP_LOGW(TAG, "%s: sent after %d ms (the host was out of buffers)", label, tries * 5);
+    if (rc == 0) note_request(frame_type(data, len), owner);   // (only a request that went out waits for a reply)
     if (rc != 0) ESP_LOGE(TAG, "Write not started (%d): %s", rc, label);
     else if (xSemaphoreTake(s_write_done, pdMS_TO_TICKS(3000)) != pdTRUE) ESP_LOGW(TAG, "No write response: %s", label);
     else if (s_write_status != 0) ESP_LOGW(TAG, "Write failed (%d): %s", s_write_status, label);
@@ -708,6 +716,12 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         return 0;
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGW(TAG, "Disconnected (reason 0x%X)", event->disconnect.reason);
+        if (s_ready) {   // a link that was up (not a setup that failed)
+            s_stats.drops++;
+            s_stats.last_reason = event->disconnect.reason;
+            s_stats.last_drop_us = esp_timer_get_time();
+        }
+        s_stats.ready_us = 0;
         esp_timer_stop(s_setup_timer);
         reset_link();
         xSemaphoreTake(s_pending_lock, portMAX_DELAY);   // no reply of the old link is waited for any more
@@ -768,6 +782,11 @@ static void on_sync(void)
     s_synced = true;
     ESP_LOGI(TAG, "Bluetooth ready");
     start_scan();
+}
+
+void nano_link_stats(nano_link_stats_t *out)
+{
+    *out = s_stats;
 }
 
 void nano_link_log_status(void)

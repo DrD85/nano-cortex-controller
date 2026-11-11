@@ -85,6 +85,9 @@ static int s_incomplete_retries;   // replies that arrived broken (lost packet) 
 #define STATE_RETRIES 2
 static esp_timer_handle_t s_state_timer;
 static int s_state_retries;
+// Back after a lost link: the preset names are still known, so only the current preset is read (a fifth of a second
+// instead of more than two) and the names are read again later, in a quiet moment.
+static bool s_reconnected, s_names_due;
 static bool s_refresh_library;     // refresh button: read the library again after the presets
 static esp_timer_handle_t s_midi_gate_timer;   // MIDI waits while the Nano connects and loads its presets
 // App bridge: after the app changed something the controller reads the state; after the controller changed something
@@ -403,8 +406,8 @@ typedef struct {
     uint32_t type;                    // model of B, 0 = none
     uint8_t count;                    // stored values, 0 = model defaults
     uint8_t parked;                   // reverb B: kept, but footswitch 8 is the mix switch (0 in data stored before 1.8)
-    uint8_t tap;                      // a tap on the slot's switch swaps A / B and holding it switches on / off
-    uint8_t reserved;                 // (0 in data stored before 1.12: holding swaps)
+    uint8_t tap;                      // what the slot's switch does (UI_AB_*): 0 = a tap switches on / off and holding
+    uint8_t reserved;                 // swaps (also data stored before 1.12), 1 = the other way round, 2 = a press swaps
     float values[NANO_MAX_PARAMS];
 } fx_b_t;                             // stored in NVS as it is
 _Static_assert(sizeof(fx_b_t) == 8 + 4 * NANO_MAX_PARAMS, "fx_b_t is stored as it is: its size must not change");
@@ -1285,8 +1288,9 @@ static void looper_switches(void)
     // second effect: that keeps the held function, and the wah moves while it is on.
     uint32_t momentary = 0;
     for (int slot = 0; slot < NANO_FX_SLOTS && s_fx_mode && !s_looper; slot++) {
-        if (ab_used(slot)) hold |= 1u << (slot + 3);
-        else if (wah_mode(slot) == UI_WAH_HELD) momentary |= 1u << (slot + 3);
+        if (ab_used(slot)) {
+            if (s_ab[slot].b.tap != UI_AB_PRESS) hold |= 1u << (slot + 3);   // (a press that only swaps acts at once)
+        } else if (wah_mode(slot) == UI_WAH_HELD) momentary |= 1u << (slot + 3);
     }
     s_hold_switches = hold;
     s_momentary_switches = momentary;
@@ -1320,7 +1324,11 @@ static void show(void)
         view.ab_b_type[slot] = s_ab[slot].b.type;
         view.ab_a_type[slot] = s_ab[slot].a_type;
         if (s_ab[slot].active) view.ab_active |= (uint8_t)(1u << slot);
-        if (s_ab[slot].b.tap == 1) view.ab_tap |= (uint8_t)(1u << slot);
+        view.ab_mode[slot] = s_ab[slot].b.tap <= UI_AB_PRESS ? s_ab[slot].b.tap : UI_AB_HOLD;
+    }
+    for (int slot = 0; slot < NANO_FX_SLOTS && s_exp.known; slot++) {   // effects the Nano's pedal moves or switches
+        if (s_exp.ranges[NANO_EXP_PRE1 + slot].on) view.exp_amount |= (uint8_t)(1u << slot);
+        if (s_exp.switches[NANO_EXP_SW_PRE1 + slot].on) view.exp_switch |= (uint8_t)(1u << slot);
     }
     for (int i = 0; i < NANO_EXP_RANGES && s_exp.known; i++) view.exp_used |= s_exp.ranges[i].on;
     for (int i = 0; i < NANO_EXP_SWITCHES && s_exp.known; i++) view.exp_used |= s_exp.switches[i].on;
@@ -1545,7 +1553,7 @@ static void select_preset(int preset)
     s_expect_ack = true;
     s_expect_us = esp_timer_get_time();
     show();
-    schedule_refresh(450);
+    schedule_refresh(1200);   // (the fallback: the Nano's confirmation reads the preset at once, see there)
 }
 
 // Switches the effect of a slot on or off (the caller shows the state and reads it again).
@@ -2693,7 +2701,8 @@ static void ab_load(int preset)
         if (!open || nvs_get_blob(nvs, key, &ab->b, &size) != ESP_OK || size != sizeof(ab->b) || !nano_fx_model(ab->b.type)) {
             memset(&ab->b, 0, sizeof(ab->b));
         }
-        if (ab->b.type) ESP_LOGI(TAG, "%s B of preset %d: %s%s", ab_name(ab), preset, nano_fx_name(ab->b.type), ab->b.tap ? " (a tap swaps)" : "");
+        if (ab->b.type) ESP_LOGI(TAG, "%s B of preset %d: %s%s", ab_name(ab), preset, nano_fx_name(ab->b.type),
+                                 ab->b.tap == UI_AB_TAP ? " (a tap swaps)" : ab->b.tap == UI_AB_PRESS ? " (a press swaps)" : "");
         fx_a_t a;
         size = sizeof(a);
         int slot = i;
@@ -2994,13 +3003,15 @@ static void ab_set_b(int arg)
 
 // The FX editor's choice of what the slot's switch does: a tap swaps A / B and holding switches on / off, or the
 // other way round.
-static void ab_set_tap(int slot, bool tap)
+static void ab_set_tap(int slot, int mode)
 {
+    static const char *const SAID[] = { "Tap: on / off  -  hold: A / B.", "Tap: A / B  -  hold: on / off.", "Press: A / B at once (no on / off)." };
     if (slot < 0 || slot >= AB_COUNT || !s_ab[slot].b.type || s_ab[slot].preset != s_state.current_preset) return;
-    s_ab[slot].b.tap = tap;
+    if (mode < UI_AB_HOLD || mode > UI_AB_PRESS) return;
+    s_ab[slot].b.tap = (uint8_t)mode;
     ab_store(&s_ab[slot]);
-    ESP_LOGI(TAG, "%s: %s", ab_name(&s_ab[slot]), tap ? "a tap swaps A / B, holding switches on / off" : "a tap switches on / off, holding swaps A / B");
-    ui_show_message(tap ? "Tap: A / B  -  hold: on / off." : "Tap: on / off  -  hold: A / B.");
+    ESP_LOGI(TAG, "%s: %s", ab_name(&s_ab[slot]), SAID[mode]);
+    ui_show_message(SAID[mode]);
     show();
     if (s_edit.slot == slot) editor_show();
 }
@@ -3159,10 +3170,17 @@ static int64_t s_last_action_us;
 
 static void library_when_quiet(void)
 {
-    if (s_library || !nano_link_ready()) return;
+    if (!nano_link_ready() || (s_library && !s_names_due)) return;
     if (esp_timer_get_time() - s_last_action_us < LIBRARY_QUIET_US) {
         esp_timer_stop(s_library_timer);
         esp_timer_start_once(s_library_timer, 3000 * 1000);
+        return;
+    }
+    if (s_names_due) {   // after a reconnect: the preset names once more (they may have changed meanwhile)
+        s_names_due = false;
+        s_incomplete_retries = 0;
+        request_full_state();
+        if (!s_library) esp_timer_start_once(s_library_timer, 6000 * 1000);
         return;
     }
     request_library();
@@ -3311,7 +3329,9 @@ static void handle_switch(int number)
     } else if (number == 2) {
         set_tuner(!s_tuner_on);
     } else if (s_fx_mode) {
-        if (number <= 7 && ab_used(number - 3) && s_ab[number - 3].b.tap == 1) ab_swap(number - 3);   // a tap swaps A / B
+        if (number <= 7 && ab_used(number - 3) && (s_ab[number - 3].b.tap == UI_AB_TAP || s_ab[number - 3].b.tap == UI_AB_PRESS)) {
+            ab_swap(number - 3);   // a tap (or the press itself) swaps A / B
+        }
         else if (number <= 7) toggle_fx(number - 3);
         else if (reverb_b_used()) ab_swap(s_mix.slot);
         else toggle_mix();
@@ -3461,6 +3481,8 @@ static void handle_midi(int arg)
     }
 }
 
+static void system_page(void);
+
 static void handle_command(char c, int arg)
 {
     if (c == ':') {                                    // the pedal's position (see on_message)
@@ -3476,6 +3498,7 @@ static void handle_command(char c, int arg)
         return;
     }
 #endif
+    if (c == ')') { system_page(); return; }           // (also without the Nano: that is when it is looked at)
     if (c == 'h') { print_help(); return; }
     if (c == 'l') { print_presets(); return; }
     if (c == 'D' || c == 'Z') { footswitch_learn(c, arg); return; }   // works without the Nano
@@ -3554,8 +3577,8 @@ static void handle_command(char c, int arg)
             else if (arg & UI_SWITCH_DOWN) handle_switch(number);   // the mode changed meanwhile: an ordinary press
         } else if ((arg & UI_SWITCH_HOLD) && s_fx_mode && number >= 3 && number <= 7 && ab_used(number - 3)) {
             ui_flash_tile(number - 1);   // held: A <-> B - or on / off, if a tap swaps
-            if (s_ab[number - 3].b.tap == 1) toggle_fx(number - 3);
-            else ab_swap(number - 3);
+            if (s_ab[number - 3].b.tap == UI_AB_TAP) toggle_fx(number - 3);
+            else if (s_ab[number - 3].b.tap != UI_AB_PRESS) ab_swap(number - 3);
         } else if ((arg & UI_SWITCH_HOLD) && number == 2) {   // held: scenes <-> presets, as the scenes button
             if (!s_tuner_on) {
                 ui_flash_tile(1);
@@ -3588,7 +3611,7 @@ static void handle_command(char c, int arg)
 
     case '(': library_when_quiet(); break;
     case '[': ab_swap(arg); break;   // FX editor, A | B: the other one
-    case '>': ab_set_tap(arg >> 8, arg & 1); break;
+    case '>': ab_set_tap(arg >> 8, arg & 0xFF); break;
     case 'M': editor_choose_model((uint32_t)arg); break;
     case 'R': editor_read(); break;
     case 'C': select_capture(arg); break;
@@ -3653,12 +3676,29 @@ static void handle_command(char c, int arg)
 // MC6): read the preset again shortly after (once for a burst), and the values of the open FX editor.
 static void store_warn(void);
 
+// The presets are in: MIDI may scan and connect now, and the app may connect through the controller.
+static void link_usable(void)
+{
+    esp_timer_stop(s_midi_gate_timer);
+    midi_ble_allow(true);
+    app_link_allow_phone(true);
+    app_link_enable(true);
+    ui_splash_done();
+}
+
 static void external_change(uint32_t type)
 {
     if (esp_timer_get_time() - s_last_change_us < 700 * 1000) return;   // the echo of our own change: nothing new
     values_forget();
+    // One read for a burst of such notices, and at most one every 1.5 s: a pedal that keeps reporting must not have
+    // the whole preset read again and again.
+    static int64_t read_at_us;
+    int64_t now = esp_timer_get_time(), at = now + 400 * 1000;
+    if (at < read_at_us + 1500 * 1000 && now < read_at_us) at = read_at_us;                 // one is on its way: that one
+    else if (at < read_at_us + 1500 * 1000) at = read_at_us + 1500 * 1000;                  // the last one was a moment ago
+    read_at_us = at;
     esp_timer_stop(s_app_read_timer);
-    esp_timer_start_once(s_app_read_timer, 400 * 1000);
+    esp_timer_start_once(s_app_read_timer, (uint64_t)(at - now));
     if (type == NANO_MSG_FX_VALUE && s_edit.slot >= 0 && !editor_reading()) editor_read_later(500);
     if (type == NANO_MSG_CAB_SETTING) cab_settings_command(2);
 }
@@ -3726,19 +3766,25 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             if (names) print_presets();
             print_help();
             request_current_state();
-            // Presets are in: MIDI may scan and connect now, and the app may connect through the controller.
-            esp_timer_stop(s_midi_gate_timer);
-            midi_ble_allow(true);
-            app_link_allow_phone(true);
-            app_link_enable(true);
-            ui_splash_done();
-            store_warn();
+            link_usable();
+            static bool warned;
+            if (!warned) {
+                warned = true;
+                store_warn();
+            }
             if (s_refresh_library) {
                 s_refresh_library = false;
                 esp_timer_start_once(s_library_timer, 1500 * 1000);
             }
         } else {
             print_summary();
+            if (s_reconnected) {   // the first preset after a lost link: everything else may come back too
+                s_reconnected = false;
+                link_usable();
+                s_names_due = true;
+                esp_timer_stop(s_library_timer);
+                esp_timer_start_once(s_library_timer, 8000 * 1000);
+            }
             if (s_save_pending && s_save_pending == s_state.current_preset) {
                 ui_show_message(s_state.dirty ? "Save not confirmed - the preset still has unsaved changes."
                                               : "Preset saved.");
@@ -3994,7 +4040,13 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
     case NANO_MSG_CAB_SETTING:
     case NANO_MSG_FX_VALUE:
     case NANO_MSG_FX_TYPE:
-        ESP_LOGI(TAG, "Message type %lu (%u bytes) - changed elsewhere, reading again", (unsigned long)type, (unsigned)len);
+        if (len <= 8) {   // (with its bytes: what the Nano says by itself is not all known yet)
+            char bytes[3 * 8 + 1] = "";
+            for (size_t i = 0; i < len; i++) snprintf(bytes + 3 * i, 4, "%02X ", payload[i]);
+            ESP_LOGI(TAG, "Message type %lu: %s- changed elsewhere, reading again", (unsigned long)type, bytes);
+        } else {
+            ESP_LOGI(TAG, "Message type %lu (%u bytes) - changed elsewhere, reading again", (unsigned long)type, (unsigned)len);
+        }
         external_change(type);
         break;
     default:
@@ -4212,6 +4264,42 @@ static void backup_message(uint32_t type, const uint8_t *payload, size_t len)
 }
 #endif
 
+// ---- system page ----
+static char s_start_reason[48] = "?";   // why the controller started (set in app_main)
+
+static void put_duration(char *out, size_t size, int64_t us)
+{
+    long minutes = (long)(us / 60000000);
+    if (minutes >= 60) snprintf(out, size, "%ld h %02ld min", minutes / 60, minutes % 60);
+    else if (minutes >= 1) snprintf(out, size, "%ld min", minutes);
+    else snprintf(out, size, "%ld s", (long)(us / 1000000));
+}
+
+// What the System button of the MIDI dialog shows: is everything well, and if not, since when.
+static void system_page(void)
+{
+    char text[520], up[24], link[24], ago[24];
+    int64_t now = esp_timer_get_time();
+    nano_link_stats_t st;
+    nano_link_stats(&st);
+    put_duration(up, sizeof(up), now);
+    put_duration(link, sizeof(link), st.ready_us ? now - st.ready_us : 0);
+    put_duration(ago, sizeof(ago), now - st.last_drop_us);
+    int used = 0, capacity = 0, percent = store_percent(&used, &capacity);
+    int n = snprintf(text, sizeof(text), "Firmware %s, running for %s\nStarted after: %s\n\n", esp_app_get_description()->version, up, s_start_reason);
+    n += snprintf(text + n, sizeof(text) - (size_t)n, st.ready_us ? "Nano: connected for %s\n" : "Nano: not connected\n", link);
+    if (!st.drops) n += snprintf(text + n, sizeof(text) - (size_t)n, "Connection lost: never since the start\n\n");
+    else n += snprintf(text + n, sizeof(text) - (size_t)n, "Connection lost: %d time%s, last %s ago (reason 0x%X)\n\n", st.drops, st.drops == 1 ? "" : "s",
+                       ago, (unsigned)st.last_reason);
+#ifndef NANO_WEB
+    n += snprintf(text + n, sizeof(text) - (size_t)n, "Internal memory: %u KB free, lowest %u KB\n",
+                  (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024), (unsigned)(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024));
+#endif
+    if (percent >= 0) snprintf(text + n, sizeof(text) - (size_t)n, "Settings memory: %d %% full (%d of %d entries)%s", percent, used, capacity,
+                               percent >= STORE_WARN_PERCENT ? " - back it up and make room" : "");
+    ui_show_system(text);
+}
+
 // ---- watchdog ----
 // On stage a controller that hangs has to come back by itself. Twice a second the task that handles everything (app)
 // and the task that draws the screen give a sign of life; if one of them is silent for WATCHDOG_MS the controller
@@ -4248,11 +4336,18 @@ static void app_event(app_event_t ev)
 {
     switch (ev.kind) {
     case EV_LINK_UP:
-        ESP_LOGI(TAG, "Connected to the Nano Cortex - reading presets");
-        ui_splash_status("Connected - loading presets ...", NULL);
-        ui_set_link(true);
         s_incomplete_retries = 0;
         s_state_retries = 0;
+        ui_set_link(true);
+        if (s_state.names_loaded) {   // back after a lost link: the current preset is enough for now
+            ESP_LOGI(TAG, "Connected to the Nano Cortex again - reading the current preset");
+            s_waiting_full_state = false;
+            s_reconnected = true;
+            request_current_state();
+            break;
+        }
+        ESP_LOGI(TAG, "Connected to the Nano Cortex - reading presets");
+        ui_splash_status("Connected - loading presets ...", NULL);
         request_full_state();
         break;
     case EV_LINK_DOWN:
@@ -4288,6 +4383,7 @@ static void app_event(app_event_t ev)
         s_expect_preset = 0;
         s_expect_ack = false;
         s_save_pending = 0;
+        s_reconnected = false;
         for (int i = 0; i < NANO_FX_SLOTS; i++) s_fx_switched[i] = -1;
         values_forget();
         ui_set_link(false);
@@ -4490,8 +4586,8 @@ void app_main(void)
                                            "brownout (supply voltage too low)", "SDIO", "USB", "JTAG", "eFuse",
                                            "power glitch", "CPU lockup" };
     esp_reset_reason_t reason = esp_reset_reason();
-    printf("\nNano Cortex Controller %s - started after: %s\n", esp_app_get_description()->version,
-           reason < sizeof(reasons) / sizeof(reasons[0]) ? reasons[reason] : "?");
+    strlcpy(s_start_reason, reason < sizeof(reasons) / sizeof(reasons[0]) ? reasons[reason] : "?", sizeof(s_start_reason));
+    printf("\nNano Cortex Controller %s - started after: %s\n", esp_app_get_description()->version, s_start_reason);
     // Bluetooth first: its host task and buffers need internal RAM, which the screen's many small objects would
     // otherwise take (they move to PSRAM when internal RAM runs short). Its events wait in the queue until the
     // app task runs, after the screen is built.
@@ -4525,6 +4621,7 @@ void app_main(void)
     int hung = watchdog_restarted();
     if (hung) {
         ESP_LOGW(TAG, "The controller restarted itself: its %s task had hung", hung == 1 ? "app" : "screen");
+        snprintf(s_start_reason, sizeof(s_start_reason), "a hang (%s) - restarted by itself", hung == 1 ? "app" : "screen");
         ui_show_message(hung == 1 ? "The controller restarted itself after a hang (app)." : "The controller restarted itself after a hang (screen).");
     }
 #endif

@@ -2,7 +2,7 @@
 
 Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../README.de.md); wie die Firmware gebaut wird und wie sie mit dem Nano spricht, steht in [development.de.md](development.de.md).
 
-**Inhalt:** [Der Bildschirm](#der-bildschirm) · [Fußschalter und Kacheln](#fußschalter-und-kacheln) · [Lange drücken](#lange-drücken) · [Eigene Bänke](#eigene-bänke) · [Setlist](#setlist) · [Szenen](#szenen) · [Expression-Pedal](#expression-pedal) · [Capture und Cab/IR](#capture-und-cabir) · [FX-Editor](#fx-editor) · [Reverb-Schalter](#reverb-schalter-fußschalter-8) · [Zweiter Effekt (A / B)](#zweiter-effekt-a-und-b-auf-einem-fx-slot) · [Auto-Wah](#auto-wah) · [Stimmgerät](#stimmgerät) · [USB-Audio-Lautstärke](#usb-audio-lautstärke) · [Bluetooth-MIDI](#bluetooth-midi) · [Looper-Modus](#looper-modus-eine-looper-app-auf-dem-telefon) · [Editor über den Controller](#nano-cortex-editor-über-den-controller) · [Fußschalter-Learn](#fußschalter-learn) · [Fußschalter (Verkabelung)](#fußschalter) · [Was wo gespeichert ist](#was-wo-gespeichert-ist)
+**Inhalt:** [Der Bildschirm](#der-bildschirm) · [Fußschalter und Kacheln](#fußschalter-und-kacheln) · [Lange drücken](#lange-drücken) · [Eigene Bänke](#eigene-bänke) · [Setlist](#setlist) · [Szenen](#szenen) · [Expression-Pedal](#expression-pedal) · [Capture und Cab/IR](#capture-und-cabir) · [FX-Editor](#fx-editor) · [Reverb-Schalter](#reverb-schalter-fußschalter-8) · [Zweiter Effekt (A / B)](#zweiter-effekt-a-und-b-auf-einem-fx-slot) · [Auto-Wah](#auto-wah) · [Stimmgerät](#stimmgerät) · [USB-Audio-Lautstärke](#usb-audio-lautstärke) · [Bluetooth-MIDI](#bluetooth-midi) · [Looper-Modus](#looper-modus-eine-looper-app-auf-dem-telefon) · [Editor über den Controller](#nano-cortex-editor-über-den-controller) · [Fußschalter-Learn](#fußschalter-learn) · [Fußschalter (Verkabelung)](#fußschalter) · [System](#system-speicher-sicherung-und-selbst-neustart) · [Was wo gespeichert ist](#was-wo-gespeichert-ist)
 
 ## Der Bildschirm
 
@@ -164,6 +164,12 @@ Der **Pedal-Knopf** in der oberen Leiste öffnet, was das Expression-Pedal des N
 sind dieselben Zuweisungen wie in der Cortex-Cloud-App und im Expression-Fenster des Editors: Sie gehören zum Preset
 des Nano. Das Symbol des Knopfs ist grün, solange das Pedal im Preset etwas tut.
 
+**Im FX-Modus trägt die Kachel eines Effekts auf dem Pedal ein kleines Pedal-Symbol** (*Pedal*, *Pedal: on/off* oder
+*Pedal, on/off*; auf einer Kachel mit zwei Symbolen sitzt es neben der Fußschalter-Nummer). Ein Blick darauf lohnt
+sich, wenn ein Wert immer wieder zurückspringt: Egal, was man von Hand einstellt – der Nano setzt den Amount des
+Effekts auf die Stellung des Pedals zurück, sobald er ein Modell oder das Preset lädt. Bei einem Compressor auf dem
+Pedal ist das sein Eingangspegel.
+
 - Elf Werte können dem Pedal folgen: der **Amount** jedes der fünf Effekte (der AMOUNT-Regler – die Stellung eines
   Wah, der Mix eines Reverbs …), Gain, Bass, Mid, Treble und Level des Captures und das Input-Gate. Ein Feld ist
   **gefüllt**, solange sein Wert auf dem Pedal liegt, und zeigt seinen Bereich.
@@ -285,9 +291,11 @@ Es wird auf dem Controller gespeichert, pro Preset; A bleibt der Effekt des Nano
 |---|---|---|
 | *Tap: on / off · hold: A / B* | Effekt an / aus | A ↔ B wechseln |
 | *Tap: A / B · hold: on / off* | A ↔ B wechseln | Effekt an / aus |
+| *Press: A / B at once · no on / off* | A ↔ B wechseln, sofort beim Treten | – |
 
-Das zweite ist für einen Effekt gedacht, der anbleibt und nur seinen Klang ändert – ein Reverb, ein Delay. Ein
-Schalter mit zweitem Effekt schaltet beim Loslassen.
+Das zweite ist für einen Effekt gedacht, der anbleibt und nur seinen Klang ändert – ein Reverb, ein Delay. Bei den
+ersten beiden schaltet der Schalter beim Loslassen (er hat eine Halte-Funktion); das dritte hat keine und schaltet
+sofort – am schnellsten, wenn man den Effekt nie mit dem Fuß ausschaltet.
 
 **Die Kachel** zeigt beide Symbole: A am linken Rand, B am rechten, das laufende gefüllt. Dazwischen stehen die
 Nummer des Fußschalters und der Slot in Kurzform (*PRE 1*, *POST 3*). Die Kachel hat Farbe und Namen des Effekts,
@@ -486,6 +494,26 @@ Die Fußschalter liest ein **SX1509**-I/O-Expander (zum Beispiel die SparkFun-Pl
   einfach per Fußschalter-Learn zuordnen.
 
 Ohne SX1509 funktioniert der Controller nur mit dem Touchscreen.
+
+## System: Speicher, Sicherung und Selbst-Neustart
+
+<img src="images/36-system.png" alt="" width="440">
+
+**System** im Bluetooth-MIDI-Fenster zeigt, ob alles in Ordnung ist: wie lange der Controller läuft und warum er
+gestartet ist, wie lange der Nano verbunden ist und wie oft (und warum) die Verbindung abgerissen ist, den freien
+internen Speicher und wie voll der Einstellungsspeicher ist.
+
+- **Einstellungsspeicher.** Alles, was der Controller behält – Bänke, Szenen, zweite Effekte, die Setlist – liegt in
+  einem kleinen Speicher. Ab 85 % meldet der Controller das nach dem Start. Szenen mit Einstellungen brauchen am
+  meisten.
+- **Sicherung.** Den [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) (ab 1.13) über den
+  Controller verbinden: Im **…**-Menü stehen *Back up controller settings…* (eine Datei mit allen Einträgen) und
+  *Restore controller settings…* (schreibt eine solche Datei zurück; sie ersetzt, was der Controller gespeichert hat,
+  und der Controller startet neu).
+- **Selbst-Neustart.** Sollte der Controller einmal hängen, startet er nach 8 Sekunden von selbst neu und ist ein
+  paar Sekunden später wieder verbunden; nach so einem Start meldet er das, und die System-Seite nennt den Grund.
+- Nach einem Verbindungsabriss ist der Controller wieder da, sobald der Nano es ist: Er liest sofort das aktuelle
+  Preset und die Preset-Namen später, in einem ruhigen Moment.
 
 ## Was wo gespeichert ist
 

@@ -54,5 +54,13 @@ void nano_link_scan_request(bool on, bool fast);
 bool nano_link_connect_other(const ble_addr_t *addr, ble_gap_event_fn *cb, void *arg);
 void nano_link_other_connect_done(void);
 
+// For the controller's system page: how often the link to the Nano was lost since the start, why and when last
+// (Bluetooth reason code, esp_timer time; 0 = never), and since when it is up (0 = it is down).
+typedef struct {
+    int drops, last_reason;
+    int64_t last_drop_us, ready_us;
+} nano_link_stats_t;
+void nano_link_stats(nano_link_stats_t *out);
+
 // Logs whether Bluetooth is ready, scanning and connected (for the serial monitor).
 void nano_link_log_status(void);

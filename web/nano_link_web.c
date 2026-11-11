@@ -211,6 +211,11 @@ void nano_link_restart(void)
     ESP_LOGW(TAG, "The Nano does not answer - reload the page to connect again");
 }
 
+void nano_link_stats(nano_link_stats_t *out)
+{
+    *out = (nano_link_stats_t){ .ready_us = s_ready ? 1 : 0 };
+}
+
 void nano_link_log_status(void)
 {
     ESP_LOGI(TAG, "Web Bluetooth: %s, %d writes waiting", s_ready ? "connected" : "not connected", s_count);
