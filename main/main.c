@@ -226,6 +226,8 @@ static esp_timer_handle_t s_library_timer;
 // After a preset change, state replies of the previous preset can still be on their way; they are ignored
 // until the new preset is confirmed (otherwise the display jumps back and forth).
 static int s_expect_preset;     // 0 = none
+static int s_preset_tries;       // requests sent for the preset change under way
+static int s_preset_refused;     // preset the Nano refused to load, 0 = none (shown until a change succeeds)
 static bool s_expect_ack;       // the Nano has not confirmed the change yet: a state reply is from before it
 static int64_t s_expect_us;
 static int s_bank;              // 0-15
@@ -1428,6 +1430,7 @@ static void show(void)
         view.ab_mode[slot] = s_ab[slot].b.tap <= UI_AB_PRESS ? s_ab[slot].b.tap : UI_AB_HOLD;
     }
     view.rp_used = rp_used();
+    view.not_loaded = s_preset_refused && s_preset_refused == s_state.current_preset;
     int rp = rp_pair();
     view.rp_active = rp >= 0 ? s_rp_active[rp] : 0;
     for (int n = 0; n < 2; n++) {
@@ -1646,16 +1649,30 @@ static int param_read_reply(const uint8_t *payload, size_t len, int *slot, float
 static void ab_cache(int slot, int delay_ms);
 static void ab_leave_preset(void);
 
+// The Nano can refuse a preset change (its reply says so): it then reports the new number and name, but capture and
+// effects stay those of the preset before. Seen in a 30-minute run: from one moment on every change was refused.
+// The change is asked for once more; if that is refused too the player is told - the screen would otherwise show a
+// preset that is not the one that sounds.
+
+static void preset_request(int preset)
+{
+    uint8_t buf[64];
+    char label[32];
+    size_t n = nano_preset_change(&s_state, preset, buf);
+    snprintf(label, sizeof(label), "Preset change %d", preset);
+    send(label, NANO_MSG_SET_PRESET_SLOTS, buf, n);
+    ESP_LOGI(TAG, "Preset change %d: slot field %d, the Nano's slots %d %d %d %d", preset, buf[n - 1], s_state.slot_preset[0] + 1,
+             s_state.slot_preset[1] + 1, s_state.slot_preset[2] + 1, s_state.slot_preset[3] + 1);
+}
+
 static void select_preset(int preset)
 {
     app_sync_later();
     if (preset < 1) preset = NANO_PRESETS;
     if (preset > NANO_PRESETS) preset = 1;
-    uint8_t buf[64];
-    char label[32];
     ab_leave_preset();   // also for the preset that is on: the Nano reads it from its memory again
-    snprintf(label, sizeof(label), "Preset change %d", preset);
-    send(label, NANO_MSG_SET_PRESET_SLOTS, buf, nano_preset_change(&s_state, preset, buf));
+    s_preset_tries = 1;
+    preset_request(preset);
     s_state.current_preset = preset;
     s_expect_preset = preset;
     s_expect_ack = true;
@@ -4248,21 +4265,38 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
                     request_settings();   // the Nano's global settings, once (shown in the log)
                 }
                 ab_capture_editor();   // edits of a second effect in the previous preset
-                ab_load(s_state.current_preset);
                 editor_close();
-                mix_load();
-                rp_load(s_state.current_preset);
-                int cached = -1;
-                for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {   // values of an A for a later swap, if it is on
-                    if (ab_used(slot) && s_state.fx_on[slot]) {
-                        ab_cache(slot, 700);
-                        cached = slot;
-                        break;   // (one read at a time: the others when they are switched, or at the swap)
+                if (s_preset_refused == s_state.current_preset) {
+                    // The Nano names this preset but still plays the one before (it refused to load it): nothing the
+                    // controller keeps for this preset belongs to what is in the slots. No second effects, reverb
+                    // settings or mix positions - and above all nothing is read from the slots and stored for it.
+                    // (In the run that showed this, the values of the preset that stuck were stored as the "A" and
+                    // "B" of ten other presets.)
+                    ESP_LOGW(TAG, "Preset %d is not loaded on the Nano: its stored extras stay out", s_state.current_preset);
+                    for (int i = 0; i < AB_COUNT; i++) {
+                        memset(&s_ab[i], 0, sizeof(s_ab[i]));
+                        s_ab[i].slot = i;
                     }
+                    memset(s_rp, 0, sizeof(s_rp));
+                    s_rp_preset = 0;
+                    s_mix.known = s_mix.own = s_mix.exp = false;
+                    s_mix.active = -1;
+                } else {
+                    ab_load(s_state.current_preset);
+                    mix_load();
+                    rp_load(s_state.current_preset);
+                    int cached = -1;
+                    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {   // values of an A for a later swap, if it is on
+                        if (ab_used(slot) && s_state.fx_on[slot]) {
+                            ab_cache(slot, 700);
+                            cached = slot;
+                            break;   // (one read at a time: the others when they are switched, or at the swap)
+                        }
+                    }
+                    // Which of the reverb's two settings the preset was stored with: from its values (that read above
+                    // tells too, if it is the reverb's).
+                    if (rp_used() && cached != s_mix.slot) rp_check_later(cached >= 0 ? 1300 : 700);
                 }
-                // Which of the reverb's two settings the preset was stored with: from its values (that read above
-                // tells too, if it is the reverb's).
-                if (rp_used() && cached != s_mix.slot) rp_check_later(cached >= 0 ? 1300 : 700);
             }
             show();
             setlist_start_scene();
@@ -4420,17 +4454,36 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         nano_state_apply_preset_change(&s_state, payload, len);
         s_expect_preset = 0;
         s_expect_ack = false;
+        s_preset_refused = 0;
         ESP_LOGI(TAG, "Preset changed on the Nano: %d", s_state.current_preset);
         uint8_t buf[4];
         send("Preset change ack", NANO_MSG_SET_PRESET_SLOTS_RESPONSE, buf, nano_preset_change_ack(buf));
         schedule_refresh(150);
         break;
     }
-    case NANO_MSG_SET_PRESET_SLOTS_RESPONSE:
-        ESP_LOGI(TAG, "Preset change %s", nano_field_varint(payload, len, 4) == 1 ? "confirmed" : "FAILED");
+    case NANO_MSG_SET_PRESET_SLOTS_RESPONSE: {
+        bool ok = nano_field_varint(payload, len, 4) == 1;
+        if (ok) {
+            ESP_LOGI(TAG, "Preset change confirmed");
+            s_preset_refused = 0;
+        } else {
+            ESP_LOGW(TAG, "Preset change FAILED - the Nano's reply (%u bytes):", (unsigned)len);
+            ESP_LOG_BUFFER_HEX(TAG, payload, len < 64 ? len : 64);
+            if (s_expect_preset && s_preset_tries < 2) {   // once more
+                s_preset_tries++;
+                preset_request(s_expect_preset);
+                s_expect_us = esp_timer_get_time();
+                break;
+            }
+            s_preset_refused = s_expect_preset ? s_expect_preset : s_state.current_preset;
+            char text[80];
+            snprintf(text, sizeof(text), "The Nano did not load preset %d - the sound is still the one before.", s_preset_refused);
+            ui_show_message(text);
+        }
         s_expect_ack = false;
         if (s_expect_preset) schedule_refresh(40);   // the new preset is ready: read it now (not after a fixed wait)
         break;
+    }
     case NANO_MSG_SETTINGS_RESPONSE: {
         // The whole reply in the log: the Nano's global settings (only the USB volume is used so far).
         ESP_LOGI(TAG, "Settings reply (%u bytes):", (unsigned)len);
@@ -4887,6 +4940,7 @@ static void app_event(app_event_t ev)
         esp_timer_stop(s_rp_timer);
         esp_timer_stop(s_app_read_timer);
         s_fxp.sent = s_fxp.send_count = 0;
+        s_preset_refused = 0;
         s_expect_preset = 0;
         s_expect_ack = false;
         s_save_pending = 0;

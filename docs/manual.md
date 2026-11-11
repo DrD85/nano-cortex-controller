@@ -73,7 +73,7 @@ The banks are stored on the controller, the presets themselves stay on the Nano.
 <img src="images/32-setlist-mode.png" alt="" width="49%"> <img src="images/33-setlist.png" alt="" width="49%">
 
 The songs of a gig in their order – up to 36, the same preset may come more than once. **Tap the line at the top**
-(*PRESET 8 · BANK 2*) to open the set list:
+(the preset number and *BANK 2*) to open the set list:
 
 - **Tap a preset on the right** to add it as a song after the chosen one (or at the end).
 - **Tap a song on the left** to choose it, then move it up or down with the arrows or **Remove** it. **Clear**
@@ -506,6 +506,13 @@ internal memory, and how full the settings memory is.
   `esptool write-flash 0x9000 store.bin`. The controller says so after such a start.
 - What an earlier firmware on the same board left in the store (Wi-Fi settings and the like) is removed once: on a
   board that ran another controller firmware before, that frees about a fifth of the store.
+- From 1.15 second effects and mix positions take less room. What an earlier version stored is rewritten once at
+  the start (a copy of the store as it was is kept first, as above); on a board in use that freed another quarter.
+- **A preset the Nano does not load.** The Nano can refuse a preset change: it then shows the new number and name
+  but keeps playing the preset before. The controller asks once more; if the Nano refuses again it says so, the
+  status line shows **NOT LOADED** in orange, and nothing the controller keeps for that preset (second effects,
+  reverb settings, mix positions) is used or stored until a preset change succeeds. It was seen once, in a long test
+  run; what brings the Nano into this state is not known yet.
 - **Self-restart.** If the controller ever hangs, it restarts by itself after 8 seconds and is connected again a few
   seconds later; after such a start it says so, and the System page names the reason.
 - After a lost connection the controller is back as soon as the Nano is: it reads the current preset at once and

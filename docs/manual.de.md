@@ -74,7 +74,7 @@ Die Bänke speichert der Controller, die Presets selbst bleiben auf dem Nano.
 <img src="images/32-setlist-mode.png" alt="" width="49%"> <img src="images/33-setlist.png" alt="" width="49%">
 
 Die Songs eines Auftritts in ihrer Reihenfolge – bis zu 36, dasselbe Preset darf mehrmals vorkommen. **Auf die Zeile
-oben tippen** (*PRESET 8 · BANK 2*) öffnet die Setlist:
+oben tippen** (die Preset-Nummer und *BANK 2*) öffnet die Setlist:
 
 - **Ein Preset rechts antippen** fügt es als Song nach dem gewählten ein (oder am Ende).
 - **Einen Song links antippen** wählt ihn; dann mit den Pfeilen nach oben oder unten schieben oder mit **Remove**
@@ -534,6 +534,15 @@ internen Speicher und wie voll der Einstellungsspeicher ist.
 - Was eine frühere Firmware auf demselben Board im Speicher hinterlassen hat (WLAN-Einstellungen und Ähnliches), wird
   einmalig entfernt: Auf einem Board, auf dem vorher eine andere Controller-Firmware lief, macht das etwa ein Fünftel
   des Speichers frei.
+- Ab 1.15 brauchen zweite Effekte und Mix-Positionen weniger Platz. Was eine frühere Version gespeichert hat, wird
+  beim Start einmalig umgeschrieben (vorher wird eine Kopie des Speichers aufbewahrt, wie oben); auf einem Board im
+  Einsatz machte das ein weiteres Viertel frei.
+- **Ein Preset, das der Nano nicht lädt.** Der Nano kann einen Presetwechsel verweigern: Er zeigt dann die neue
+  Nummer und den neuen Namen, spielt aber weiter das Preset davor. Der Controller fragt ein zweites Mal; verweigert
+  der Nano wieder, meldet er das, in der Statuszeile steht orange **NOT LOADED**, und nichts, was der Controller für
+  dieses Preset gespeichert hat (zweite Effekte, Reverb-Einstellungen, Mix-Positionen), wird benutzt oder
+  gespeichert, bis ein Presetwechsel wieder klappt. Das trat einmal auf, in einem langen Testlauf; was den Nano in
+  diesen Zustand bringt, ist noch nicht bekannt.
 - **Selbst-Neustart.** Sollte der Controller einmal hängen, startet er nach 8 Sekunden von selbst neu und ist ein
   paar Sekunden später wieder verbunden; nach so einem Start meldet er das, und die System-Seite nennt den Grund.
 - Nach einem Verbindungsabriss ist der Controller wieder da, sobald der Nano es ist: Er liest sofort das aktuelle

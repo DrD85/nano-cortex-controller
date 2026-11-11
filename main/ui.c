@@ -3679,7 +3679,9 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     snprintf(text, sizeof(text), "%d", st->current_preset);
     set_text(s_preset_chip_text, text);
     set_hidden(s_preset_chip, false);
-    snprintf(text, sizeof(text), "%s", where);
+    snprintf(text, sizeof(text), "%s", view->not_loaded ? "NOT LOADED" : where);
+    set_color_prop(s_preset_number, LV_STYLE_TEXT_COLOR, view->not_loaded ? ORANGE : 0xB9BDC2);
+    set_color_prop(s_preset_chip, LV_STYLE_BG_COLOR, view->not_loaded ? 0x6A4410 : 0x24282D);
     set_text(s_preset_number, text);
     set_hidden(s_preset_number, false);
     set_hidden(s_status, true);    // the green dot says "connected"
