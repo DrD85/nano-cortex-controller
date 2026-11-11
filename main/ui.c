@@ -879,16 +879,18 @@ static void show_pedals(const nano_state_t *st, const ui_view_t *view)
     for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
         uint32_t type = st->fx_known ? st->fx_type[slot] : 0;
         const nano_fx_model_t *model = nano_fx_model(type);
-        bool on = model && st->fx_on[slot];
-        uint32_t color = model ? model->color : 0x5D6267;
-        const lv_image_dsc_t *picture = model ? pedal_asset(type) : NULL;
+        // (a model this firmware does not know yet - a newer NanOS - is a pedal too: grey, by the name nano_fx_name gives)
+        bool on = type && st->fx_on[slot];
+        uint32_t color = model ? model->color : type ? 0x8E9297 : 0x5D6267;
+        const lv_image_dsc_t *picture = type ? pedal_asset(type) : NULL;
         set_hidden(s_pv_image[slot], picture == NULL);
-        set_hidden(s_pv_drawn[slot], picture != NULL || !model);
+        set_hidden(s_pv_drawn[slot], picture != NULL || !type);
         if (picture) {
             set_image(s_pv_image[slot], picture);
             set_num_prop(s_pv_image[slot], LV_STYLE_IMAGE_OPA, on ? LV_OPA_COVER : 82);   // off: in the dark
-        } else if (model) {
-            set_image(s_pv_icon[slot], NANO_ICONS[model->icon]);
+        } else if (type) {
+            set_hidden(s_pv_icon[slot], model == NULL);
+            if (model) set_image(s_pv_icon[slot], NANO_ICONS[model->icon]);
             set_color_prop(s_pv_icon[slot], LV_STYLE_IMAGE_RECOLOR, color);
             set_color_prop(s_pv_drawn[slot], LV_STYLE_BORDER_COLOR, color);
             set_num_prop(s_pv_drawn[slot], LV_STYLE_OPA, on ? LV_OPA_COVER : 100);
@@ -896,7 +898,7 @@ static void show_pedals(const nano_state_t *st, const ui_view_t *view)
         set_color_prop(s_pv_led[slot], LV_STYLE_BG_COLOR, color);
         set_num_prop(s_pv_led[slot], LV_STYLE_BG_OPA, on ? LV_OPA_COVER : LV_OPA_TRANSP);
         set_color_prop(s_pv_led[slot], LV_STYLE_BORDER_COLOR, on ? color : 0x5D6267);
-        const char *name = model ? nano_fx_name(type) : "Empty";
+        const char *name = type ? nano_fx_name(type) : "Empty";
         lv_point_t size;   // a long name in the smaller size rather than cut off
         lv_text_get_size(&size, name, &ui_font_16, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
         set_ptr_prop(s_pv_name[slot], LV_STYLE_TEXT_FONT, size.x > PV_SLOT_W - 34 ? &ui_font_14 : &ui_font_16);
