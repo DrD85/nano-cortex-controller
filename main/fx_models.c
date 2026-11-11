@@ -191,6 +191,26 @@ static const nano_param_t m18001_params[] = {
     { "High Pass", NANO_PARAM_RANGE, 20.0f, 2000.0f, 1.0f, "Hz", 0, 0, NULL },
     { "Low Pass", NANO_PARAM_RANGE, 200.0f, 19900.0f, 1.0f, "Hz", 0, 0, NULL },
 };
+static const nano_param_t m18004_params[] = {
+    { "Dry", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+    { "Oct", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+    { "Sub", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+};
+static const nano_param_t m18006_params[] = {
+    { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+    { "Pedal", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+    { "Heel Pitch 1", NANO_PARAM_RANGE, -24.0f, 24.0f, 1.0f, "Sem", 0, 0, NULL },
+    { "Toe Pitch 1", NANO_PARAM_RANGE, -24.0f, 24.0f, 1.0f, "Sem", 0, 0, NULL },
+    { "Heel Pitch 2", NANO_PARAM_RANGE, -24.0f, 24.0f, 1.0f, "Sem", 0, 0, NULL },
+    { "Toe Pitch 2", NANO_PARAM_RANGE, -24.0f, 24.0f, 1.0f, "Sem", 0, 0, NULL },
+    { "Blend", NANO_PARAM_RANGE, 0.0f, 100.0f, 1.0f, "%", 0, 0, NULL },
+};
+static const nano_param_t m18014_params[] = {
+    { "Output", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, "dB", 1, 0, NULL },
+    { "Dry", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+    { "Oct 1", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+    { "Oct 2", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+};
 static const nano_param_t m16011_params[] = {
     { "Spread", NANO_PARAM_RANGE, 3.0f, 60.0f, 0.01f, "ms", 2, 0, NULL },
     { "Dry Level", NANO_PARAM_RANGE, -40.0f, 12.0f, 0.1f, "dB", 1, 0, NULL },
@@ -474,6 +494,34 @@ static const nano_param_t m8000_params[] = {
     { "High Pass", NANO_PARAM_RANGE, 20.0f, 800.0f, 1.0f, "Hz", 0, 0, NULL },
     { "Low Pass", NANO_PARAM_RANGE, 800.0f, 12000.0f, 1.0f, "Hz", 0, 0, NULL },
 };
+static const nano_param_t m8030_params[] = {
+    { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+    { "Decay", NANO_PARAM_RANGE, 0.5f, 20.0f, 0.01f, "s", 2, 0, NULL },
+    { "Pre Delay", NANO_PARAM_RANGE, 0.0f, 500.0f, 1.0f, "ms", 0, 0, NULL },
+    { "High Pass", NANO_PARAM_RANGE, 30.0f, 800.0f, 1.0f, "Hz", 0, 0, NULL },
+    { "Low Pass", NANO_PARAM_RANGE, 1000.0f, 20000.0f, 1.0f, "Hz", 0, 0, NULL },
+    { "Extra E.R.", NANO_PARAM_ENUM, 0, 0, 0, "", 0, 2, "Off\nOn" },
+    { "E.R. Length", NANO_PARAM_RANGE, 0.0f, 100.0f, 1.0f, "%", 0, 0, NULL },
+    { "Diffusion", NANO_PARAM_RANGE, 0.0f, 100.0f, 1.0f, "%", 0, 0, NULL },
+    { "Bass", NANO_PARAM_RANGE, -18.0f, 6.0f, 0.1f, "dB", 1, 0, NULL },
+    { "Treble", NANO_PARAM_RANGE, -18.0f, 6.0f, 0.1f, "dB", 1, 0, NULL },
+    { "Ducking", NANO_PARAM_RANGE, 0.0f, 100.0f, 1.0f, "%", 0, 0, NULL },
+    { "Modulation", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+};
+static const nano_param_t m8010_params[] = {
+    { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+    { "Decay", NANO_PARAM_RANGE, 4.0f, 20.0f, 0.1f, "s", 1, 0, NULL },
+    { "Brightness", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+    { "Feedback", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+    { "Pitch", NANO_PARAM_RANGE, -24.0f, 24.0f, 1.0f, "Sem", 0, 0, NULL },
+    { "Pre Delay", NANO_PARAM_RANGE, 1.0f, 200.0f, 1.0f, "ms", 0, 0, NULL },
+    { "Damping", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+    { "High Pass", NANO_PARAM_RANGE, 20.0f, 800.0f, 1.0f, "Hz", 0, 0, NULL },
+    { "Rand Pitch", NANO_PARAM_RANGE, 2.0f, 33.0f, 1.0f, "Cent", 0, 0, NULL },
+    { "Mod Speed", NANO_PARAM_RANGE, 0.1f, 5.0f, 0.01f, "Hz", 2, 0, NULL },
+    { "Mod Depth", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, "%", 1, 0, NULL },
+    { "Wet Level", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, "dB", 1, 0, NULL },
+};
 
 const nano_fx_model_t NANO_FX_MODELS[] = {
     { 18, "Chief BD2", NANO_ICON_OVERDRIVE, 0xFF7000, -1, 3, m18_params, NULL },
@@ -504,6 +552,9 @@ const nano_fx_model_t NANO_FX_MODELS[] = {
     { 5004, "Solid State Comp (M)", NANO_ICON_COMPRESSOR, 0x45F862, 5, 6, m5004_params, NULL },
     { 5005, "VCA Comp (M)", NANO_ICON_COMPRESSOR, 0x45F862, 5, 6, m5005_params, NULL },
     { 18001, "Transpose", NANO_ICON_PITCH, 0xFFD236, 0, 5, m18001_params, NULL },
+    { 18004, "Poly Octaver", NANO_ICON_PITCH, 0xFFD236, -1, 3, m18004_params, NULL },
+    { 18006, "Wham", NANO_ICON_PITCH, 0xFFD236, 0, 7, m18006_params, NULL },
+    { 18014, "Chief OC2", NANO_ICON_PITCH, 0xFFD236, -1, 4, m18014_params, NULL },
     { 16011, "Doubler", NANO_ICON_DOUBLER, 0xE6E6E6, -1, 3, m16011_params, NULL },
     { 5012, "Legendary 87 (ST)", NANO_ICON_COMPRESSOR, 0x45F862, 5, 6, m5012_params, NULL },
     { 5015, "Opto Comp (ST)", NANO_ICON_COMPRESSOR, 0x45F862, 5, 6, m5015_params, NULL },
@@ -529,13 +580,15 @@ const nano_fx_model_t NANO_FX_MODELS[] = {
     { 8011, "Mind Hall", NANO_ICON_REVERB, 0x00FFDD, 0, 6, m8011_params, NULL },
     { 8007, "Modulated", NANO_ICON_REVERB, 0x00FFDD, 0, 7, m8007_params, NULL },
     { 8000, "Room", NANO_ICON_REVERB, 0x00FFDD, 0, 5, m8000_params, NULL },
+    { 8030, "Blossom (ST)", NANO_ICON_REVERB, 0x00FFDD, 0, 12, m8030_params, NULL },
+    { 8010, "Shimmer", NANO_ICON_REVERB, 0x00FFDD, 0, 12, m8010_params, NULL },
 };
 const unsigned NANO_FX_MODEL_COUNT = sizeof(NANO_FX_MODELS) / sizeof(NANO_FX_MODELS[0]);
 
-static const uint32_t NANO_SLOT0_MODELS[] = { 18, 13, 6, 3007, 23, 22, 27, 3000, 3, 2, 4, 16001, 4005, 4003, 4001, 16002, 16006, 9012, 9010, 9014, 9013, 24006, 24001, 5001, 5007, 5004, 5005, 18001 };
-static const uint32_t NANO_SLOT1_MODELS[] = { 18, 13, 6, 3007, 23, 22, 27, 3000, 3, 2, 4, 16001, 4005, 4003, 4001, 16002, 16006, 9012, 9010, 9014, 9013, 24006, 24001, 5001, 5007, 5004, 5005, 18001 };
+static const uint32_t NANO_SLOT0_MODELS[] = { 18, 13, 6, 3007, 23, 22, 27, 3000, 3, 2, 4, 16001, 4005, 4003, 4001, 16002, 16006, 9012, 9010, 9014, 9013, 24006, 24001, 5001, 5007, 5004, 5005, 18001, 18004, 18006, 18014 };
+static const uint32_t NANO_SLOT1_MODELS[] = { 18, 13, 6, 3007, 23, 22, 27, 3000, 3, 2, 4, 16001, 4005, 4003, 4001, 16002, 16006, 9012, 9010, 9014, 9013, 24006, 24001, 5001, 5007, 5004, 5005, 18001, 18004, 18006, 18014 };
 static const uint32_t NANO_SLOT2_MODELS[] = { 16011, 4005, 4003, 4001, 5012, 5015, 5013, 5014, 7024, 7027, 7023, 7022, 7021, 7028, 7029, 7004 };
 static const uint32_t NANO_SLOT3_MODELS[] = { 4005, 4003, 4001, 5012, 5015, 5013, 5014, 6010, 6015, 6011, 6012, 6014, 6004 };
-static const uint32_t NANO_SLOT4_MODELS[] = { 4005, 4003, 4001, 5012, 5015, 5013, 5014, 8008, 8009, 8003, 8011, 8007, 8000 };
+static const uint32_t NANO_SLOT4_MODELS[] = { 4005, 4003, 4001, 5012, 5015, 5013, 5014, 8008, 8030, 8009, 8003, 8011, 8007, 8000, 8010 };
 const uint32_t *const NANO_SLOT_MODELS[5] = { NANO_SLOT0_MODELS, NANO_SLOT1_MODELS, NANO_SLOT2_MODELS, NANO_SLOT3_MODELS, NANO_SLOT4_MODELS };
-const uint8_t NANO_SLOT_MODEL_COUNT[5] = { 28, 28, 16, 13, 13 };
+const uint8_t NANO_SLOT_MODEL_COUNT[5] = { 31, 31, 16, 13, 15 };
