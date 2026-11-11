@@ -2494,8 +2494,9 @@ static void mix_exp_request(const char *label, int purpose)
 }
 
 // The mix positions of all presets from the store. Entries of firmware before 1.15 (one per preset) are taken over
-// and removed - also after a backup of such a firmware was written back. Returns how many were taken over.
-static int mixes_load(void)
+// and - if `convert` - removed, also after a backup of such a firmware was written back. Returns how many such
+// entries there are (store_compact() asks first, keeps a copy of the store, then converts).
+static int mixes_load(bool convert)
 {
     memset(&s_mixes, 0, sizeof(s_mixes));
     nvs_handle_t nvs;
@@ -2514,14 +2515,12 @@ static int mixes_load(void)
         old++;
     }
     // The new entry first, and only when it is safely there the old ones go.
-    if (old && nvs_set_blob(nvs, MIX_ALL_KEY, &s_mixes, sizeof(s_mixes)) == ESP_OK && nvs_commit(nvs) == ESP_OK) {
+    if (old && convert && nvs_set_blob(nvs, MIX_ALL_KEY, &s_mixes, sizeof(s_mixes)) == ESP_OK && nvs_commit(nvs) == ESP_OK) {
         for (int preset = 1; preset <= NANO_PRESETS; preset++) {
             snprintf(key, sizeof(key), MIX_STORE_KEY, preset);
             nvs_erase_key(nvs, key);
         }
         nvs_commit(nvs);
-    } else {
-        old = 0;
     }
     nvs_close(nvs);
     return old;
@@ -2536,6 +2535,9 @@ static void mix_store(void)
     s_mixes.set[i / 8] |= (uint8_t)(1u << (i % 8));
     nvs_handle_t nvs;
     if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
+    char old[16];   // an entry of before 1.15 for this preset (if the store could not be rewritten at the start) must
+    snprintf(old, sizeof(old), MIX_STORE_KEY, s_state.current_preset);   // not win over the new values at the next start
+    nvs_erase_key(nvs, old);
     if (nvs_set_blob(nvs, MIX_ALL_KEY, &s_mixes, sizeof(s_mixes)) != ESP_OK || nvs_commit(nvs) != ESP_OK) {
         ui_show_message("Could not store Pos 1 / Pos 2 (memory full?).");
     }
@@ -5097,8 +5099,10 @@ static void console_task(void *arg)
 // firmware was written back); a copy of the store as it was is kept first (store_rescue).
 static void store_compact(void)
 {
-    int rewritten = mixes_load();
-#ifndef NANO_WEB
+    int old_mixes = mixes_load(false), rewritten = 0;   // (read, nothing written yet)
+#ifdef NANO_WEB
+    if (old_mixes) rewritten = mixes_load(true);
+#else
     enum { OLD_B = sizeof(fx_b_t), OLD_A = sizeof(fx_a_t), OLD_RP = sizeof(rp_t), MAX_KEYS = 320 };
     static const struct { const char *prefix; int digits; size_t old; } FAMILIES[] = {
         { "rvb", 2, OLD_B }, { "pf1", 2, OLD_B }, { "ab", 3, OLD_B },
@@ -5137,7 +5141,8 @@ static void store_compact(void)
         if (nvs_get_blob(nvs, keys[i], NULL, &size) == ESP_OK && size == FAMILIES[family[i]].old) old++;
         else family[i] = 0xFF;   // as it should be already
     }
-    if (old || rewritten) store_rescue();
+    if (old || old_mixes) store_rescue();   // the store as it was, before anything is rewritten
+    if (old_mixes) rewritten = mixes_load(true);
     for (int i = 0; i < count; i++) {
         if (family[i] == 0xFF) continue;
         uint8_t in[sizeof(rp_t)], out[sizeof(rp_t)];   // (the largest of the three)
