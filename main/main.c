@@ -4740,17 +4740,20 @@ static void system_page(void)
     put_duration(link, sizeof(link), st.ready_us ? now - st.ready_us : 0);
     put_duration(ago, sizeof(ago), now - st.last_drop_us);
     int used = 0, capacity = 0, percent = store_percent(&used, &capacity);
-    int n = snprintf(text, sizeof(text), "Firmware %s, running for %s\nStarted after: %s\n\n", esp_app_get_description()->version, up, s_start_reason);
-    n += snprintf(text + n, sizeof(text) - (size_t)n, st.ready_us ? "Nano: connected for %s\n" : "Nano: not connected\n", link);
+    // One line per row "what: value", a blank line between groups, '!' in front of what deserves a look (ui_show_system)
+    bool hang = strstr(s_start_reason, "hang") != NULL;
+    int n = snprintf(text, sizeof(text), "Firmware: %s\nRunning for: %s\n%sStarted after: %s\n\n", esp_app_get_description()->version, up,
+                     hang ? "!" : "", s_start_reason);
+    n += snprintf(text + n, sizeof(text) - (size_t)n, st.ready_us ? "Nano: connected for %s\n" : "!Nano: not connected\n", link);
     if (!st.drops) n += snprintf(text + n, sizeof(text) - (size_t)n, "Connection lost: never since the start\n\n");
-    else n += snprintf(text + n, sizeof(text) - (size_t)n, "Connection lost: %d time%s, last %s ago (reason 0x%X)\n\n", st.drops, st.drops == 1 ? "" : "s",
+    else n += snprintf(text + n, sizeof(text) - (size_t)n, "!Connection lost: %d time%s\nLast time: %s ago (reason 0x%X)\n\n", st.drops, st.drops == 1 ? "" : "s",
                        ago, (unsigned)st.last_reason);
 #ifndef NANO_WEB
     n += snprintf(text + n, sizeof(text) - (size_t)n, "Internal memory: %u KB free, lowest %u KB\n",
                   (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024), (unsigned)(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024));
 #endif
-    if (percent >= 0) snprintf(text + n, sizeof(text) - (size_t)n, "Settings memory: %d %% full (%d of %d entries)%s", percent, used, capacity,
-                               percent >= STORE_WARN_PERCENT ? " - back it up and make room" : "");
+    if (percent >= 0) snprintf(text + n, sizeof(text) - (size_t)n, "%sSettings memory: %d %% full (%d of %d)%s", percent >= STORE_WARN_PERCENT ? "!" : "",
+                               percent, used, capacity, percent >= STORE_WARN_PERCENT ? " - back up" : "");
     ui_show_system(text);
 }
 

@@ -339,9 +339,9 @@ int main(void)
     shot("35-pedal-marks");
     view.exp_amount = view.exp_switch = 0;
     ui_show_state(&st, &view);
-    ui_show_system("Firmware 1.13.0, running for 2 h 14 min\nStarted after: power-on\n\nNano: connected for 2 h 13 min\n"
+    ui_show_system("Firmware: 1.15.0\nRunning for: 2 h 14 min\nStarted after: power-on\n\nNano: connected for 2 h 13 min\n"
                    "Connection lost: never since the start\n\nInternal memory: 86 KB free, lowest 79 KB\n"
-                   "Settings memory: 63 % full (399 of 630 entries)");
+                   "Settings memory: 49 % full (309 of 630)");
     shot("36-system");
     close_all();
 
