@@ -485,6 +485,12 @@ internal memory, and how full the settings memory is.
 - **Backup.** Connect the [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) (1.13 or later)
   through the controller: the **…** menu has *Back up controller settings…* (a file with every entry) and *Restore
   controller settings…* (writes such a file back; it replaces what the controller stores, and the controller restarts).
+- **If the store itself is damaged.** Should the controller find its settings memory unusable at the start, it has
+  to empty it – and first copies it, as it is, into a part of the flash memory nothing else uses. A computer reads
+  that copy with `esptool read-flash 0xF00000 0x6000 store.bin` and writes it back with
+  `esptool write-flash 0x9000 store.bin`. The controller says so after such a start.
+- What an earlier firmware on the same board left in the store (Wi-Fi settings and the like) is removed once: on a
+  board that ran another controller firmware before, that frees about a fifth of the store.
 - **Self-restart.** If the controller ever hangs, it restarts by itself after 8 seconds and is connected again a few
   seconds later; after such a start it says so, and the System page names the reason.
 - After a lost connection the controller is back as soon as the Nano is: it reads the current preset at once and

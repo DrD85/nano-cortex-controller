@@ -41,6 +41,10 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
+#ifndef NANO_WEB
+#include "esp_flash.h"
+#include "esp_partition.h"
+#endif
 
 #include "board.h"
 #include "app_link.h"
@@ -4302,6 +4306,55 @@ static void system_page(void)
     ui_show_system(text);
 }
 
+#ifdef NANO_WEB
+static void store_rescue(void) { }
+static void store_cleanup(void) { }
+#else
+// A raw copy of the settings store in flash memory that nothing else uses (the board has 16 MB, the firmware ends at
+// 0x610000). Made only before the store has to be emptied; a computer reads it back with
+// "esptool read-flash 0xF00000 0x6000 store.bin" and can write it to 0x9000 again.
+#define STORE_RESCUE_ADDRESS 0xF00000
+static void store_rescue(void)
+{
+    const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);
+    uint32_t chip = 0;
+    if (!part || esp_flash_get_size(NULL, &chip) != ESP_OK || chip < STORE_RESCUE_ADDRESS + part->size) return;
+    uint8_t *page = heap_caps_malloc(4096, MALLOC_CAP_DEFAULT);
+    if (!page) return;
+    bool ok = esp_flash_erase_region(NULL, STORE_RESCUE_ADDRESS, (part->size + 4095) & ~4095u) == ESP_OK;
+    for (size_t off = 0; ok && off < part->size; off += 4096) {
+        size_t n = part->size - off < 4096 ? part->size - off : 4096;
+        ok = esp_partition_read_raw(part, off, page, n) == ESP_OK && esp_flash_write(NULL, page, STORE_RESCUE_ADDRESS + off, n) == ESP_OK;
+    }
+    heap_caps_free(page);
+    ESP_LOGW(TAG, "Copy of the settings store at 0x%X: %s", STORE_RESCUE_ADDRESS, ok ? "written" : "FAILED");
+}
+
+// What an earlier firmware on this board left in the store (Wi-Fi and Bluetooth settings of another controller
+// firmware): a fifth of the store on the board this was written on, and nothing here reads it. Removed once.
+static void store_cleanup(void)
+{
+    static const char *const LEFTOVERS[] = { "nvs.net80211", "storage", "bt_config.conf" };
+    nvs_stats_t before, after;
+    bool removed = false;
+    if (nvs_get_stats(NULL, &before) != ESP_OK) return;
+    for (size_t i = 0; i < sizeof(LEFTOVERS) / sizeof(LEFTOVERS[0]); i++) {
+        nvs_handle_t nvs;
+        if (nvs_open(LEFTOVERS[i], NVS_READONLY, &nvs) != ESP_OK) continue;   // not there (opening it for writing would make it)
+        nvs_close(nvs);
+        if (nvs_open(LEFTOVERS[i], NVS_READWRITE, &nvs) != ESP_OK) continue;
+        size_t used = 0;
+        nvs_get_used_entry_count(nvs, &used);
+        if (used && nvs_erase_all(nvs) == ESP_OK && nvs_commit(nvs) == ESP_OK) removed = true;
+        nvs_close(nvs);
+    }
+    if (removed && nvs_get_stats(NULL, &after) == ESP_OK) {
+        ESP_LOGW(TAG, "Settings store: leftovers of an earlier firmware removed - %u entries free again",
+                 (unsigned)(before.used_entries - after.used_entries));
+    }
+}
+#endif
+
 // ---- watchdog ----
 // On stage a controller that hangs has to come back by itself. Twice a second the task that handles everything (app)
 // and the task that draws the screen give a sign of life; if one of them is silent for WATCHDOG_MS the controller
@@ -4525,11 +4578,21 @@ static void console_task(void *arg)
 void app_main(void)
 {
     esp_err_t err = nvs_flash_init();
+    bool store_reset = false;
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        // The store cannot be used as it is and has to be emptied - everything the controller kept. Its contents are
+        // copied aside first (store_rescue), so they are not gone for good.
+        ESP_LOGE(TAG, "Settings store not usable (0x%X) - it is emptied", err);
+        store_rescue();
         ESP_ERROR_CHECK(nvs_flash_erase());
         err = nvs_flash_init();
+        store_reset = true;
     }
     ESP_ERROR_CHECK(err);
+    store_cleanup();
+#ifdef NANO_WDTEST
+    store_rescue();   // development: write the copy now, to read it back and compare
+#endif
 
     s_events = xQueueCreate(64, sizeof(app_event_t));
     s_state.tuner_base_hz = 440;
@@ -4620,6 +4683,7 @@ void app_main(void)
     const esp_timer_create_args_t watchdog_timer = { .callback = watchdog_cb, .name = "watchdog" };
     ESP_ERROR_CHECK(esp_timer_create(&watchdog_timer, &s_watchdog_timer));
     esp_timer_start_periodic(s_watchdog_timer, 1000 * 1000);
+    if (store_reset) ui_show_message("The settings memory could not be read and was emptied. A copy of the old one is kept - see the manual.");
     int hung = watchdog_restarted();
     if (hung) {
         ESP_LOGW(TAG, "The controller restarted itself: its %s task had hung", hung == 1 ? "app" : "screen");

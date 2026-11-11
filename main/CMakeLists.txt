@@ -13,7 +13,7 @@ endforeach()
 
 idf_component_register(SRCS ${srcs}
                        INCLUDE_DIRS "."
-                       REQUIRES bt nvs_flash esp_app_format esp_driver_uart esp_driver_usb_serial_jtag esp_driver_gpio esp_driver_i2c esp_lcd esp_timer)
+                       REQUIRES bt nvs_flash esp_app_format esp_driver_uart esp_driver_usb_serial_jtag esp_driver_gpio esp_driver_i2c esp_lcd esp_timer esp_partition spi_flash)
 
 # LVGL's memory functions are in ui_mem.c (CONFIG_LV_USE_CUSTOM_MALLOC): LVGL's library comes after this one when
 # linking, so the linker is told to take them from here.

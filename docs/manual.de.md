@@ -510,6 +510,13 @@ internen Speicher und wie voll der Einstellungsspeicher ist.
   Controller verbinden: Im **…**-Menü stehen *Back up controller settings…* (eine Datei mit allen Einträgen) und
   *Restore controller settings…* (schreibt eine solche Datei zurück; sie ersetzt, was der Controller gespeichert hat,
   und der Controller startet neu).
+- **Wenn der Speicher selbst beschädigt ist.** Findet der Controller seinen Einstellungsspeicher beim Start
+  unbrauchbar, muss er ihn leeren – und kopiert ihn vorher, so wie er ist, in einen Teil des Flash-Speichers, den
+  sonst nichts benutzt. Ein Computer liest diese Kopie mit `esptool read-flash 0xF00000 0x6000 store.bin` und
+  schreibt sie mit `esptool write-flash 0x9000 store.bin` zurück. Der Controller meldet das nach so einem Start.
+- Was eine frühere Firmware auf demselben Board im Speicher hinterlassen hat (WLAN-Einstellungen und Ähnliches), wird
+  einmalig entfernt: Auf einem Board, auf dem vorher eine andere Controller-Firmware lief, macht das etwa ein Fünftel
+  des Speichers frei.
 - **Selbst-Neustart.** Sollte der Controller einmal hängen, startet er nach 8 Sekunden von selbst neu und ist ein
   paar Sekunden später wieder verbunden; nach so einem Start meldet er das, und die System-Seite nennt den Grund.
 - Nach einem Verbindungsabriss ist der Controller wieder da, sobald der Nano es ist: Er liest sofort das aktuelle
