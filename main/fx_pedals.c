@@ -21,3 +21,15 @@ const lv_image_dsc_t *nano_fx_pedal_tile(uint32_t type)
     }
     return NULL;
 }
+
+static const struct { uint32_t type; const char *name; } REAL_NAMES[] = {
+    { 0, NULL },
+};
+
+const char *nano_fx_real_name(uint32_t type)
+{
+    for (size_t i = 0; type && i < sizeof(REAL_NAMES) / sizeof(REAL_NAMES[0]); i++) {
+        if (REAL_NAMES[i].type == type) return REAL_NAMES[i].name;
+    }
+    return NULL;
+}

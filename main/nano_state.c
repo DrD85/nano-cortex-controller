@@ -746,8 +746,11 @@ const nano_fx_model_t *nano_fx_model(uint32_t type)
     return NULL;
 }
 
+const char *nano_fx_real_name(uint32_t type);   // fx_pedals.c: the own build's name for a model, NULL in the published one
+
 const char *nano_fx_name(uint32_t type)
 {
     const nano_fx_model_t *model = nano_fx_model(type);
-    return model ? model->name : type ? "Unknown model" : "Empty";
+    const char *real = model ? nano_fx_real_name(type) : NULL;   // (the own build: the modelled device)
+    return real ? real : model ? model->name : type ? "Unknown model" : "Empty";
 }

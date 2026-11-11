@@ -712,7 +712,7 @@ static void build_tile(lv_obj_t *parent, int i)
     // Line drawing of the pedal at the right edge, behind everything else (FX tiles only)
     s_tile_pedal[i] = lv_image_create(tile);
     lv_obj_set_style_image_recolor_opa(s_tile_pedal[i], LV_OPA_COVER, 0);
-    lv_obj_set_style_image_opa(s_tile_pedal[i], 64, 0);   // 25 %
+    lv_obj_set_style_image_opa(s_tile_pedal[i], 72, 0);   // 28 %: there, but the name on top of it stays easy to read
     lv_obj_align(s_tile_pedal[i], LV_ALIGN_RIGHT_MID, 0, 0);
     lv_obj_set_hidden(s_tile_pedal[i], true);
 
@@ -2294,9 +2294,9 @@ static void build_mix_editor(lv_obj_t *screen)
     size_t n = (size_t)snprintf(options, sizeof(options), "None (footswitch 8 = mix)");
     for (unsigned i = 0; i < NANO_SLOT_MODEL_COUNT[4] && s_rev_type_count < 16; i++) {
         const nano_fx_model_t *m = nano_fx_model(NANO_SLOT_MODELS[4][i]);
-        if (!m || m->icon != NANO_ICON_REVERB || n + strlen(m->name) + 2 > sizeof(options)) continue;
+        if (!m || m->icon != NANO_ICON_REVERB || n + strlen(nano_fx_name(m->type)) + 2 > sizeof(options)) continue;
         s_rev_types[s_rev_type_count++] = m->type;
-        n += (size_t)snprintf(options + n, sizeof(options) - n, "\n%s", m->name);
+        n += (size_t)snprintf(options + n, sizeof(options) - n, "\n%s", nano_fx_name(m->type));
     }
     s_rev_dropdown = lv_dropdown_create(rev);
     lv_dropdown_set_options_static(s_rev_dropdown, options);
@@ -4127,7 +4127,7 @@ static void draw_entry(lv_obj_t *obj, lv_layer_t *layer, intptr_t data)
         lv_draw_image(layer, &d, &ia);
         x = a.x1 + 48;
     }
-    draw_text(layer, m ? m->name : "None", false, &ui_font_16, ink, x, cy - 11, a.x2 - 10, LV_TEXT_ALIGN_LEFT);
+    draw_text(layer, m ? nano_fx_name(m->type) : "None", false, &ui_font_16, ink, x, cy - 11, a.x2 - 10, LV_TEXT_ALIGN_LEFT);
 }
 
 static void on_entry_event(lv_event_t *e)
@@ -4222,7 +4222,7 @@ static void open_panel(int mode, int param)
     if (mode == PANEL_OPTION) {
         const nano_param_t *p = ed_param(param);
         lv_label_set_text(s_panel_title, p->name);
-        snprintf(sub, sizeof(sub), "%s  \xC2\xB7  %s", cur->name, NANO_FX_SLOT_NAMES[s_editor_slot_index]);
+        snprintf(sub, sizeof(sub), "%s  \xC2\xB7  %s", nano_fx_name(cur->type), NANO_FX_SLOT_NAMES[s_editor_slot_index]);
         s_panel_current = option_index(p, s_param_norm[param]);
     } else if (mode == PANEL_SCENE) {
         lv_label_set_text(s_panel_title, "Settings for a scene");
@@ -4813,13 +4813,15 @@ static void show_editor_header(int slot, const nano_fx_model_t *m, bool on)
     for (const char *c = NANO_FX_SLOT_NAMES[slot]; *c && n + 1 < sizeof(caption); c++) caption[n++] = (char)toupper((unsigned char)*c);
     caption[n] = 0;
     set_text(s_editor_slot, caption);
-    set_text(s_editor_model, m ? m->name : "Choose a model");
+    set_text(s_editor_model, m ? nano_fx_name(m->type) : "Choose a model");
     const lv_image_dsc_t *pedal = m ? nano_fx_pedal(m->type) : NULL;
     set_hidden(s_editor_pedal, pedal == NULL);
     if (pedal) {
         lv_image_set_src(s_editor_pedal, pedal);
+        bool mask = pedal->header.cf == LV_COLOR_FORMAT_A8;   // (a picture in colour is shown as it is)
         lv_obj_set_style_image_recolor(s_editor_pedal, lv_color_hex(color), 0);
-        lv_obj_set_style_image_opa(s_editor_pedal, on ? LV_OPA_90 : LV_OPA_40, 0);
+        lv_obj_set_style_image_recolor_opa(s_editor_pedal, mask ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+        lv_obj_set_style_image_opa(s_editor_pedal, on ? (mask ? LV_OPA_90 : LV_OPA_COVER) : LV_OPA_40, 0);
     }
     // A | B takes the right end of the header card.
     bool ab = slot >= 0 && m != NULL;
