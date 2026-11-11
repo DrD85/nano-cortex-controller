@@ -58,6 +58,8 @@ def gen_models():
            '    const char *name;',
            '    uint8_t kind;',
            '    float min, max, step;      // range parameters',
+           '    float skew;                // range parameters: the Nano\'s value 0-1 = ((value - min) / (max - min)) ^ skew',
+           '                               // (1 = linear; frequencies and times are mostly not)',
            '    const char *unit;',
            '    int8_t decimals;',
            '    uint8_t option_count;      // enum parameters',
@@ -92,10 +94,11 @@ def gen_models():
         for p in params:
             if p[1] == 'e':
                 opts = p[2]
-                rows.append('    { %s, NANO_PARAM_ENUM, 0, 0, 0, "", 0, %d, %s },' % (c_str(p[0]), len(opts), c_str('\n'.join(opts)).replace('\n', '\\n')))
+                rows.append('    { %s, NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, %d, %s },' % (c_str(p[0]), len(opts), c_str('\n'.join(opts)).replace('\n', '\\n')))
             else:
-                _, _, mn, mx, step, unit, dec = p
-                rows.append('    { %s, NANO_PARAM_RANGE, %sf, %sf, %sf, %s, %d, 0, NULL },' % (c_str(p[0]), float(mn), float(mx), float(step), c_str(unit), int(dec)))
+                _, _, mn, mx, step, unit, dec = p[:7]
+                skew = float(p[7]) if len(p) > 7 else 1.0   # (from the Quad Cortex's definition of the same parameter)
+                rows.append('    { %s, NANO_PARAM_RANGE, %sf, %sf, %sf, %sf, %s, %d, 0, NULL },' % (c_str(p[0]), float(mn), float(mx), float(step), skew, c_str(unit), int(dec)))
         out.append('static const nano_param_t %s_params[] = {' % ident)
         out += rows
         out.append('};')

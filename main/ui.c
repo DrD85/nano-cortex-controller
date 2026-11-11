@@ -4118,13 +4118,13 @@ static int option_index(const nano_param_t *p, float n);
 // The rows of the editor are the model's parameters; a wah gets the auto-wah settings of the preset after them
 // (rows as parameters: the same bars and switches, but their values go to the controller, not to the Nano).
 static const nano_param_t WAH_ROWS[UI_WAH_ROWS] = {
-    [UI_WAH_MODE] = { "Auto-wah", NANO_PARAM_ENUM, 0, 0, 0, "", 0, 3, "Off\nOn\nHold" },
-    [UI_WAH_RATE] = { "Rate", NANO_PARAM_ENUM, 0, 0, 0, "", 0, UI_WAH_RATES, "2 bars\n1 bar\n1/2\n1/4\n1/8\n1/16" },
-    [UI_WAH_SHAPE] = { "Shape", NANO_PARAM_ENUM, 0, 0, 0, "", 0, UI_WAH_SHAPES, "Triangle\nSine\nUp" },
-    [UI_WAH_HEEL] = { "Heel", NANO_PARAM_RANGE, 0, 100, 1, "%", 0, 0, NULL },
-    [UI_WAH_TOE] = { "Toe", NANO_PARAM_RANGE, 0, 100, 1, "%", 0, 0, NULL },
-    [UI_WAH_TEMPO] = { "Tempo", NANO_PARAM_ENUM, 0, 0, 0, "", 0, 2, "Nano\nOwn" },
-    [UI_WAH_BPM] = { "BPM", NANO_PARAM_RANGE, UI_WAH_BPM_MIN, UI_WAH_BPM_MAX, 1, "", 0, 0, NULL },
+    [UI_WAH_MODE] = { "Auto-wah", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 3, "Off\nOn\nHold" },
+    [UI_WAH_RATE] = { "Rate", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, UI_WAH_RATES, "2 bars\n1 bar\n1/2\n1/4\n1/8\n1/16" },
+    [UI_WAH_SHAPE] = { "Shape", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, UI_WAH_SHAPES, "Triangle\nSine\nUp" },
+    [UI_WAH_HEEL] = { "Heel", NANO_PARAM_RANGE, 0, 100, 1, 1, "%", 0, 0, NULL },
+    [UI_WAH_TOE] = { "Toe", NANO_PARAM_RANGE, 0, 100, 1, 1, "%", 0, 0, NULL },
+    [UI_WAH_TEMPO] = { "Tempo", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Nano\nOwn" },
+    [UI_WAH_BPM] = { "BPM", NANO_PARAM_RANGE, UI_WAH_BPM_MIN, UI_WAH_BPM_MAX, 1, 1, "", 0, 0, NULL },
 };
 static ui_autowah_t s_wah = { .rate = 3, .toe = 100, .bpm = 120 };
 
@@ -4176,8 +4176,12 @@ static void on_fxp_chip(lv_event_t *e);
 static void on_fxp_chip_long(lv_event_t *e);
 static void on_scene_chip(lv_event_t *e);
 
+// The Nano's values run 0-1 along a parameter's control; many controls are not linear (frequencies, times): the
+// Nano's value is the share of the range to the power of the parameter's skew. Shown linearly, a high pass at its
+// default of 200 Hz read 394 Hz.
 static float param_from_normalized(const nano_param_t *p, float n)
 {
+    if (p->skew > 0 && p->skew != 1) n = powf(n < 0 ? 0 : n, 1.0f / p->skew);
     float v = p->min + n * (p->max - p->min);
     if (p->step > 0) v = roundf(v / p->step) * p->step;
     return v < p->min ? p->min : v > p->max ? p->max : v;
@@ -4637,6 +4641,7 @@ static void set_bar_value(int idx, float n)
     const nano_param_t *p = ed_param(idx);
     float v = param_from_normalized(p, n < 0 ? 0 : n > 1 ? 1 : n);   // snap to the parameter's step
     n = p->max > p->min ? (v - p->min) / (p->max - p->min) : 0;
+    if (p->skew > 0 && p->skew != 1) n = powf(n < 0 ? 0 : n, p->skew);   // (back to the Nano's 0-1)
     if (fabsf(n - s_param_norm[idx]) < 0.0001f) return;
     set_param_norm(idx, n);
     row_changed(idx, n);

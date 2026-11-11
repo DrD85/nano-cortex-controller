@@ -10,6 +10,8 @@ typedef struct {
     const char *name;
     uint8_t kind;
     float min, max, step;      // range parameters
+    float skew;                // range parameters: the Nano's value 0-1 = ((value - min) / (max - min)) ^ skew
+                               // (1 = linear; frequencies and times are mostly not)
     const char *unit;
     int8_t decimals;
     uint8_t option_count;      // enum parameters
