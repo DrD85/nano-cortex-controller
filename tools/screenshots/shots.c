@@ -269,9 +269,18 @@ int main(void)
     ui_show_state(&st, &view);
     shot("39-pedal-view");
     st.fx_on[2] = !st.fx_on[2];
+    view.rp_used = true;   // the reverb switch changes between two settings: the one that is on, above the reverb
+    view.rp_set = 3;
+    view.rp_active = 1;
+    snprintf(view.rp_names[0], sizeof(view.rp_names[0]), "Room");
+    snprintf(view.rp_names[1], sizeof(view.rp_names[1]), "Atmos");
     ui_show_state(&st, &view);
     shot("40-pedal-view-off");
     st.fx_on[2] = !st.fx_on[2];
+    view.rp_used = false;
+    view.rp_set = 0;
+    view.rp_active = 0;
+    view.rp_names[0][0] = view.rp_names[1][0] = 0;
     ui_set_pedal_view(false);
     view.fx_mode = false;
     ui_show_state(&st, &view);

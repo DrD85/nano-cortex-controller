@@ -68,7 +68,8 @@ static lv_obj_t *s_gig_bar, *s_gig_dot, *s_gig_number, *s_gig_bank, *s_gig_name,
 // field of its bar). A pedal's picture comes from the picture file in the flash memory (pedal_assets.h); a model
 // without one - and every model in the published firmware - is drawn: colour, symbol, name.
 static lv_obj_t *s_pedals, *s_pv_slot[NANO_FX_SLOTS], *s_pv_image[NANO_FX_SLOTS], *s_pv_drawn[NANO_FX_SLOTS], *s_pv_icon[NANO_FX_SLOTS],
-                *s_pv_led[NANO_FX_SLOTS], *s_pv_name[NANO_FX_SLOTS], *s_pv_key[NANO_FX_SLOTS], *s_pv_cap[NANO_FX_SLOTS], *s_pv_num[NANO_FX_SLOTS];
+                *s_pv_led[NANO_FX_SLOTS], *s_pv_name[NANO_FX_SLOTS], *s_pv_key[NANO_FX_SLOTS], *s_pv_cap[NANO_FX_SLOTS], *s_pv_num[NANO_FX_SLOTS],
+                *s_pv_rp, *s_pv_rp_name, *s_pv_rp_num;   // above the reverb's pedal: the setting the reverb switch is on
 static bool s_pedal_view;     // chosen (kept by the controller)
 static bool s_pedals_shown;   // on the screen now: chosen, full screen, FX mode
 static lv_obj_t *s_capture_title;
@@ -827,13 +828,54 @@ static void build_pedals(lv_obj_t *parent)
         s_pv_num[slot] = label(s_pv_key[slot], &ui_font_24, TEXT);
         lv_obj_align(s_pv_num[slot], LV_ALIGN_RIGHT_MID, -10, 0);
     }
+    // The reverb switch with two settings: the one that is on, above the reverb's pedal - a field like the pedals'
+    // footswitches (filled while the reverb is on), with the switch's number. A tap is a press of that switch.
+    s_pv_rp = lv_obj_create(s_pedals);
+    lv_obj_remove_style_all(s_pv_rp);
+    lv_obj_set_size(s_pv_rp, PV_SLOT_W - 20, 34);
+    lv_obj_set_style_radius(s_pv_rp, 9, 0);
+    lv_obj_set_style_border_width(s_pv_rp, 2, 0);
+    lv_obj_set_scrollable(s_pv_rp, false);
+    lv_obj_set_clickable(s_pv_rp, true);
+    lv_obj_set_ext_click_area(s_pv_rp, 8);
+    lv_obj_set_style_opa(s_pv_rp, 190, LV_STATE_PRESSED);
+    lv_obj_add_event_cb(s_pv_rp, on_tile, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)7);
+    lv_obj_add_event_cb(s_pv_rp, on_tile_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)7);
+    s_pv_rp_name = label(s_pv_rp, &ui_font_title_22, TEXT);
+    lv_obj_set_size(s_pv_rp_name, PV_SLOT_W - 20 - 44, lv_font_get_line_height(&ui_font_title_22));
+    lv_label_set_long_mode(s_pv_rp_name, LV_LABEL_LONG_DOT);
+    lv_obj_align(s_pv_rp_name, LV_ALIGN_LEFT_MID, 10, 0);
+    s_pv_rp_num = label(s_pv_rp, &ui_font_24, TEXT);
+    lv_obj_align(s_pv_rp_num, LV_ALIGN_RIGHT_MID, -10, 0);
+    lv_obj_set_hidden(s_pv_rp, true);
     lv_obj_set_hidden(s_pedals, true);
 }
 
 // The five slots as they are now (called with every state while the pedals are shown, and when they come up).
-static void show_pedals(const nano_state_t *st)
+static void show_pedals(const nano_state_t *st, const ui_view_t *view)
 {
     char text[8];
+    // The reverb's setting (see s_pv_rp)
+    int rslot = view->mix_slot;
+    bool rp = view->rp_used && rslot >= 0 && rslot < NANO_FX_SLOTS && nano_fx_model(st->fx_known ? st->fx_type[rslot] : 0);
+    set_hidden(s_pv_rp, !rp);
+    if (rp) {
+        const nano_fx_model_t *model = nano_fx_model(st->fx_type[rslot]);
+        bool on = st->fx_on[rslot], neither = view->rp_active > 1;
+        int n = view->rp_active == 1 ? 1 : 0;
+        uint32_t ink = on ? ink_for(model->color) : 0xC8CCD1;
+        lv_obj_set_pos(s_pv_rp, rslot * PV_SLOT_W + 10, 36);
+        set_color_prop(s_pv_rp, LV_STYLE_BG_COLOR, model->color);
+        set_num_prop(s_pv_rp, LV_STYLE_BG_OPA, on && !neither ? LV_OPA_COVER : LV_OPA_TRANSP);
+        set_color_prop(s_pv_rp, LV_STYLE_BORDER_COLOR, on ? model->color : blend(model->color, PANEL_BG, 0.45f));
+        if (neither) ink = on ? model->color : 0xC8CCD1;   // set to neither: outlined, the name of the one the next press brings
+        set_text(s_pv_rp_name, view->rp_names[n][0] ? view->rp_names[n] : n ? "Setting 2" : "Setting 1");
+        set_color_prop(s_pv_rp_name, LV_STYLE_TEXT_COLOR, ink);
+        int p = tile_position(7);
+        snprintf(text, sizeof(text), "%d", p + 1);
+        set_text(s_pv_rp_num, p >= 0 ? text : "");
+        set_color_prop(s_pv_rp_num, LV_STYLE_TEXT_COLOR, ink);
+    }
     for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
         uint32_t type = st->fx_known ? st->fx_type[slot] : 0;
         const nano_fx_model_t *model = nano_fx_model(type);
@@ -952,7 +994,8 @@ void ui_flash_tile(int i)
 {
     if (i < 0 || i >= TILES) return;
     lvgl_port_lock(0);
-    lv_obj_t *t = s_pedals_shown && i >= 2 && i < 2 + NANO_FX_SLOTS ? s_pv_key[i - 2] : s_tile[i];
+    lv_obj_t *t = s_pedals_shown && i >= 2 && i < 2 + NANO_FX_SLOTS ? s_pv_key[i - 2]
+                  : s_pedals_shown && i == 7 && !lv_obj_is_hidden(s_pv_rp) ? s_pv_rp : s_tile[i];
     lv_obj_set_style_outline_width(t, 4, 0);
     lv_obj_set_style_outline_pad(t, 2, 0);
     lv_obj_set_style_outline_color(t, lv_color_white(), 0);
@@ -3988,7 +4031,7 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     set_num_prop(s_gig_view, LV_STYLE_BG_OPA, s_pedal_view ? LV_OPA_COVER : LV_OPA_TRANSP);
     set_color_prop(s_gig_view, LV_STYLE_TEXT_COLOR, s_pedal_view ? INK : TEXT);
     bool pedals = s_pedal_view && s_fullscreen && view->fx_mode && !view->looper;
-    if (pedals) show_pedals(st);
+    if (pedals) show_pedals(st, view);
     pedals_show(pedals);
 
     lvgl_port_unlock();
