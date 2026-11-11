@@ -87,7 +87,8 @@ static int s_capture_volume = NANO_CAPTURE_VOLUME_0DB;
 static int s_amp_values[NANO_AMP_KNOBS];
 static uint32_t s_volume_tick, s_amp_tick;
 static lv_obj_t *s_mix_editor, *s_mix_model_label, *s_mix_info, *s_mix_slider[2], *s_mix_value[2];
-static lv_obj_t *s_mix_tab[2], *s_mix_panel[2], *s_rev_dropdown, *s_rev_edit, *s_mix_free;
+static lv_obj_t *s_mix_tab[3], *s_mix_panel[3], *s_rev_dropdown, *s_rev_edit, *s_mix_free;   // tabs: mix, A / B, two settings
+static lv_obj_t *s_rp_name[2], *s_rp_state[2];   // the two settings of the reverb: name (tap = keyboard) and "set" / "not set"
 static char s_mix_model[48];
 static bool s_mix_touched;                 // Pos 1 / Pos 2 moved: SAVE writes them
 static int s_mix_tab_shown;                // the tab in front: saved, it is what footswitch 8 does
@@ -1519,6 +1520,11 @@ static void submit_rename(void)
     }
     if (s_rename_kind == 'L') looper_editor_named(text);   // into the looper tile's dialog, sent with its Save
     else if (s_rename_kind == 'S') scene_editor_named(text);   // the same for a scene
+    else if (s_rename_kind == 'R' || s_rename_kind == 'r') {   // a reverb setting: "<1 / 2>name"
+        char named[20];
+        snprintf(named, sizeof(named), "%c%.15s", s_rename_kind == 'R' ? '1' : '2', text);
+        if (s_on_text) s_on_text('R', named);
+    }
     else if (s_on_text) s_on_text(s_rename_kind, text);
     close_rename();
 }
@@ -2029,11 +2035,40 @@ static void on_mix_slider(lv_event_t *e)
 static void show_mix_tab(int tab)
 {
     s_mix_tab_shown = tab;
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
         style_tab(s_mix_tab[i], i == tab);
         lv_obj_set_hidden(s_mix_panel[i], i != tab);
     }
     lv_obj_set_hidden(s_mix_free, tab != 0 || !s_view.mix_exp);
+}
+
+// The two settings of the reverb in the dialog: their names, and whether they are set.
+static void show_rp_rows(void)
+{
+    for (int n = 0; n < 2; n++) {
+        bool set = (s_view.rp_set >> n) & 1;
+        char text[24];
+        if (s_view.rp_names[n][0]) snprintf(text, sizeof(text), "%s", s_view.rp_names[n]);
+        else snprintf(text, sizeof(text), "Setting %d", n + 1);
+        lv_label_set_text(s_rp_name[n], text);
+        lv_label_set_text(s_rp_state[n], set ? LV_SYMBOL_OK " set" : "not set yet");
+        lv_obj_set_style_text_color(s_rp_state[n], lv_color_hex(set ? GREEN : MUTED), 0);
+    }
+}
+
+static void on_rp_name(lv_event_t *e)
+{
+    int n = (int)(intptr_t)lv_event_get_user_data(e);
+    char title[40], name[16];
+    snprintf(title, sizeof(title), "Name of reverb setting %d", n + 1);
+    if (s_view.rp_names[n][0]) strlcpy(name, s_view.rp_names[n], sizeof(name));
+    else snprintf(name, sizeof(name), n ? "Atmos" : "Room");
+    show_rename(n ? 'r' : 'R', title, "OK", name, 15);
+}
+
+static void on_rp_capture(lv_event_t *e)
+{
+    send('-', 1 + (int)(intptr_t)lv_event_get_user_data(e));
 }
 
 static void on_mix_tab(lv_event_t *e)
@@ -2072,6 +2107,11 @@ static void on_rev_same(lv_event_t *e)
 static void on_mix_button(lv_event_t *e)
 {
     int action = (int)(intptr_t)lv_event_get_user_data(e);
+    bool settings = s_mix_tab_shown == 2;
+    if (action == 1 && settings && s_view.rp_set != 3) {   // (the dialog stays open)
+        ui_show_message("Set both settings first: set the reverb up, then tap Set from the reverb.");
+        return;
+    }
     lv_obj_set_hidden(s_mix_editor, true);
     bool decide = action == 1 || action == 2;   // (Free pedal leaves the switch as it is)
     bool mix = s_mix_tab_shown == 0;
@@ -2083,6 +2123,7 @@ static void on_mix_button(lv_event_t *e)
         uint32_t chosen = chosen_rev_b();
         bool parked = mix && chosen, was_parked = s_view.rev_b_stored && !s_view.rev_b_type;
         if (chosen != s_view.rev_b_stored || parked != was_parked) send('A', (parked ? 2 : 0) << 24 | (int)chosen);
+        send('-', settings ? 17 : 16);   // the two settings are what the switch does - or not
     }
     send('K', 0);
     if (action == 2) send('H', 0);
@@ -2114,9 +2155,11 @@ static void open_mix_editor(void)
     lv_dropdown_set_selected(s_rev_dropdown, (uint32_t)selected);
     on_rev_dropdown(NULL);
     // The tab of what footswitch 8 does now is in front and carries a tick.
-    int used = s_view.rev_b_type ? 1 : 0;
-    lv_label_set_text(lv_obj_get_child(s_mix_tab[0], 0), used == 0 ? LV_SYMBOL_OK "  Mix Pos 1 / 2" : "Mix Pos 1 / 2");
-    lv_label_set_text(lv_obj_get_child(s_mix_tab[1], 0), used == 1 ? LV_SYMBOL_OK "  Reverb A / B" : "Reverb A / B");
+    int used = s_view.rp_used ? 2 : s_view.rev_b_type ? 1 : 0;
+    lv_label_set_text(lv_obj_get_child(s_mix_tab[0], 0), used == 0 ? LV_SYMBOL_OK " Mix" : "Mix");
+    lv_label_set_text(lv_obj_get_child(s_mix_tab[1], 0), used == 1 ? LV_SYMBOL_OK " Reverb A / B" : "Reverb A / B");
+    lv_label_set_text(lv_obj_get_child(s_mix_tab[2], 0), used == 2 ? LV_SYMBOL_OK " 2 settings" : "2 settings");
+    show_rp_rows();
     show_mix_tab(used);
     lv_obj_set_hidden(s_mix_editor, false);
     lv_obj_move_foreground(s_mix_editor);
@@ -2138,10 +2181,33 @@ static void build_mix_editor(lv_obj_t *screen)
     dialog_title(s_mix_editor, "Reverb switch");
     s_mix_model_label = label(s_mix_editor, &ui_font_14, MUTED);
     lv_obj_align(s_mix_model_label, LV_ALIGN_TOP_RIGHT, -20, 20);
-    static const char *const tabs[2] = { "Mix Pos 1 / 2", "Reverb A / B" };
-    for (int i = 0; i < 2; i++) {
-        s_mix_tab[i] = small_button(s_mix_editor, 20 + i * 210, 54, 200, 40, tabs[i], on_mix_tab, i);
+    static const char *const tabs[3] = { "Mix", "Reverb A / B", "2 settings" };
+    static const int tab_x[3] = { 20, 136, 348 }, tab_w[3] = { 108, 204, 192 };
+    for (int i = 0; i < 3; i++) {
+        s_mix_tab[i] = small_button(s_mix_editor, tab_x[i], 54, tab_w[i], 40, tabs[i], on_mix_tab, i);
         s_mix_panel[i] = mix_panel(s_mix_editor, 106, 188);
+    }
+
+    // Tab 3: two named settings of the reverb, every parameter - the switch changes between them
+    lv_obj_t *two = s_mix_panel[2];
+    lv_obj_t *two_info = label(two, &ui_font_14, MUTED);
+    lv_obj_set_width(two_info, 520);
+    lv_label_set_long_mode(two_info, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(two_info, "Save here: the switch changes between two settings of this reverb, all its controls. "
+                                "Set the reverb up, tap Set from the reverb; tap a name to change it.");
+    lv_obj_set_pos(two_info, 20, 0);
+    for (int n = 0; n < 2; n++) {
+        int y = 46 + n * 62;
+        lv_obj_t *name = button(two, 20, y, 250, 52, on_rp_name);
+        lv_obj_remove_event_cb(name, on_rp_name);
+        lv_obj_add_event_cb(name, on_rp_name, LV_EVENT_CLICKED, (void *)(intptr_t)n);
+        s_rp_name[n] = label(name, &ui_font_20, TEXT);
+        lv_obj_set_width(s_rp_name[n], 150);
+        lv_label_set_long_mode(s_rp_name[n], LV_LABEL_LONG_DOT);
+        lv_obj_align(s_rp_name[n], LV_ALIGN_LEFT_MID, 0, 0);
+        s_rp_state[n] = label(name, &ui_font_14, MUTED);
+        lv_obj_align(s_rp_state[n], LV_ALIGN_RIGHT_MID, 0, 0);
+        small_button(two, 280, y, 260, 52, "Set from the reverb", on_rp_capture, n);
     }
 
     // Tab 1: Pos 1 / Pos 2 of the expression assignment, played while moving
@@ -3350,7 +3416,20 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
     // Footswitch 8: reverb A/B, or the reverb mix between Pos 1 and Pos 2 of the expression assignment.
     char caption[32];
     const lv_image_dsc_t *icon = NANO_ICONS[NANO_ICON_REVERB];
-    if (view->rev_b_type && view->mix_slot >= 0) {
+    if (view->rp_used && view->mix_slot >= 0) {
+        // The switch between two settings of the reverb: the tile carries the name of the one that is in, in the
+        // reverb's colour - the second one in the lighter shade
+        int slot = view->mix_slot, n = view->rp_active == 1 ? 1 : 0;
+        const nano_fx_model_t *model = nano_fx_model(st->fx_type[slot]);
+        uint32_t color = model ? model->color : 0x00FFDD;
+        if (n) color = blend(color, 0xFFFFFF, 0.5f);
+        set_tile(7, n ? "REVERB 2" : "REVERB 1", view->rp_names[n][0] ? view->rp_names[n] : n ? "Setting 2" : "Setting 1", color,
+                 st->fx_on[slot], false, model ? NANO_ICONS[model->icon] : icon, NULL);
+        set_tile_pedal(7, st->fx_type[slot]);
+        // (under the caption: the other one, which the next press brings)
+        snprintf(s_tile_note_text[7], sizeof(s_tile_note_text[7]), LV_SYMBOL_SHUFFLE " %.15s", view->rp_names[!n][0] ? view->rp_names[!n] : n ? "Setting 1" : "Setting 2");
+        s_tile_note[7] = s_tile_note_text[7];
+    } else if (view->rev_b_type && view->mix_slot >= 0) {
         // The switch between the two reverbs: as the tile of a slot with a second effect - both symbols, and the
         // colour says which one runs (B of the same reverb, a second setting of it: the lighter shade).
         int slot = view->mix_slot;
@@ -3465,6 +3544,11 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
         else if (slots_changed) style_scene_editor();
     }
     if (!lv_obj_is_hidden(s_exp_dialog) && st->current_preset != s_ex_preset) close_expression();   // it is the other preset's
+    if (!lv_obj_is_hidden(s_mix_editor)) {   // the reverb dialog shows the two settings: one may just have been set or named
+        s_view.rp_set = view->rp_set;
+        memcpy(s_view.rp_names, view->rp_names, sizeof(s_view.rp_names));
+        show_rp_rows();
+    }
     if (!lv_obj_is_hidden(s_editor)) {   // the FX editor's scene button and list say which scenes carry settings
         bool scenes_changed = memcmp(s_view.scene_set, view->scene_set, sizeof(s_view.scene_set)) || s_view.scene_active != view->scene_active
                            || memcmp(s_view.scene_names, view->scene_names, sizeof(s_view.scene_names));

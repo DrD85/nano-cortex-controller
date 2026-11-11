@@ -60,6 +60,8 @@
 //   '|', r<<16|v   FX editor of a wah: auto-wah setting r (UI_WAH_*) of this preset changed to v (answer with
 //                  ui_set_autowah)
 //   '[', slot      FX editor, A | B: swap to the other effect of this slot
+//   '-', n         reverb dialog, its two settings: 1 / 2 = set that one from the reverb as it is now; 16 / 17 = the
+//                  reverb switch does not / does change between the two (the dialog was saved on another / that tab)
 //   ')', 0         the system page was opened or asks again: answer with ui_show_system
 //   '>', s<<8|m    what the switch of FX slot s does with its second effect (m = UI_AB_*)
 typedef void (*ui_command_cb)(char command, int arg);
@@ -79,7 +81,7 @@ enum { UI_AB_HOLD, UI_AB_TAP, UI_AB_PRESS };
 // empty it. 'X' = the expression dialog's assignments, saved: one entry per sweep (NANO_EXP_RANGES, in their order),
 // "<0 / 1: on the pedal><heel, two hex digits><toe, two hex digits>", then one per on/off assignment
 // (NANO_EXP_SWITCHES), "<0 / 1: assigned><way 0-2><0 / 1: inverted><0 / 1: latch><delay in ms, four hex digits>".
-// 'T' = the set list from its dialog: "<0 / 1: on>", then per song in order "<preset, two hex digits><start scene
+// 'R' = the name of a reverb setting: "<1 / 2>name". 'T' = the set list from its dialog: "<0 / 1: on>", then per song in order "<preset, two hex digits><start scene
 // 0-6>" (0 = none). A scene's
 // text has its capture after the five FX: 'a' = as it is, 'b'-'z' = slot 1-25.
 typedef void (*ui_text_cb)(char kind, const char *text);
@@ -113,6 +115,10 @@ typedef struct {
     uint32_t ab_a_type[NANO_FX_SLOTS];   // the preset's own effect (A) of that slot (known once read), shown while B runs
     uint8_t ab_active;   // bit n: B runs in slot n
     uint8_t ab_mode[NANO_FX_SLOTS];      // what the slot's switch does with A and B (UI_AB_*)
+    bool rp_used;        // the reverb switch changes between two named settings of the reverb (not A / B, not the mix)
+    uint8_t rp_active;   // 0 / 1: the setting the switch went to last
+    uint8_t rp_set;      // bit n: setting n + 1 is set (for the reverb that is in the slot)
+    char rp_names[2][16];
     uint8_t exp_amount;  // bit n: the Nano's expression pedal moves the Amount of the effect in slot n in this preset
     uint8_t exp_switch;  // bit n: ... and switches it on / off
     uint8_t bank_presets[6];   // own bank: preset per switch 3-8, 0 = empty

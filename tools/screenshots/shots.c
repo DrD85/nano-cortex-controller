@@ -312,6 +312,26 @@ int main(void)
     view.ab_mode[4] = UI_AB_HOLD;
     ui_show_state(&st, &view);
 
+    // The reverb switch changes between two settings of the reverb: "Atmos" is in, "Room" comes with the next press
+    uint32_t rev_was = view.rev_b_type;
+    view.rev_b_type = 0;
+    view.rp_used = true;
+    view.rp_set = 3;
+    view.rp_active = 1;
+    snprintf(view.rp_names[0], sizeof(view.rp_names[0]), "Room");
+    snprintf(view.rp_names[1], sizeof(view.rp_names[1]), "Atmos");
+    ui_show_state(&st, &view);
+    shot("37-reverb-settings-tile");
+    open_mix_editor();
+    shot("38-reverb-settings");
+    close_all();
+    view.rp_used = false;
+    view.rp_set = 0;
+    view.rp_active = 0;
+    view.rp_names[0][0] = view.rp_names[1][0] = 0;
+    view.rev_b_type = rev_was;
+    ui_show_state(&st, &view);
+
     // The Nano's expression pedal has Pre FX 1 (its amount) and Post FX 2 (amount and on / off) in this preset
     view.exp_amount = 1u << 0 | 1u << 3;
     view.exp_switch = 1u << 3;

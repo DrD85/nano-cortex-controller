@@ -55,7 +55,7 @@ say so under their caption: *Hold: Looper* and *Hold: Scenes* (or *Presets*).
 | Preset tile (3–8, preset mode) | **Bank editor**: colour, symbol and preset of this switch; `DEFAULT` restores the standard preset; `LEARN SWITCH` |
 | Scene tile (3–8, scenes) | **Scene**: name, colour and which effects are on; `Remove` empties the switch |
 | FX tile (3–7, FX mode) | **FX editor**: model (tap the header), on/off, all parameters and the [second effect](#second-effect-a-and-b-on-an-fx-slot) (A \| B) |
-| Tile 8 (FX mode) | **Reverb dialog** with the tabs *MIX POS 1 / 2* and *REVERB A / B* |
+| Tile 8 (FX mode) | **Reverb dialog** with the tabs *MIX*, *REVERB A / B* and *2 SETTINGS* |
 | Preset name | **Rename** with on-screen keyboard (at least 4 characters, unique) |
 
 ## Own banks
@@ -233,12 +233,12 @@ of the preset.
 
 ## Reverb switch (footswitch 8)
 
-<img src="images/07-reverb.png" alt="" width="440">
+<img src="images/38-reverb-settings.png" alt="" width="49%"> <img src="images/37-reverb-settings-tile.png" alt="" width="49%">
 
-The dialog has two tabs, one for each thing footswitch 8 can do. **The tab in front when you tap SAVE is what the
+The dialog has three tabs, one for each thing footswitch 8 can do. **The tab in front when you tap SAVE is what the
 switch does** from then on; the one in use carries a tick.
 
-- **MIX POS 1 / 2**: footswitch 8 sets the reverb's Mix to Pos 1 or Pos 2. Moving a slider plays that mix;
+- **MIX**: footswitch 8 sets the reverb's Mix to Pos 1 or Pos 2. Moving a slider plays that mix;
   **SAVE** stores both values on the controller, for this preset. The Nano's expression pedal has no part in it and
   stays free for a wah or anything else.
 - **Presets set up before 1.8** kept Pos 1 and Pos 2 as the heel and toe values of the preset's expression setting
@@ -253,8 +253,19 @@ switch does** from then on; the one in use carries a tick.
   (takes about half a second). Tile 8 shows reverb B and lights up while it runs; tile 7 shows the reverb in the slot. **EDIT B** loads B and opens the FX editor to set it up. Reverb B is stored on the
   controller, per preset. If you save the preset while B is active, B becomes the preset's reverb.
   Loading a preset – also the one that is on, once more – always brings back its own reverb (A); B stays stored.
-  Saved on the *MIX POS 1 / 2* tab, footswitch 8 is the mix switch again and reverb B stays stored with its settings
+  Saved on the *MIX* tab, footswitch 8 is the mix switch again and reverb B stays stored with its settings
   for later; *None* in the list removes it.
+- **2 SETTINGS**: footswitch 8 changes between two named settings of the preset's reverb – for example *Room* and
+  *Atmos* – with all its controls (mix, decay, damping …). The reverb stays the same, so there is no gap in the
+  sound. To set one up: set the reverb the way you want it (in the FX editor of tile 7 or on the Nano), then tap
+  **Set from the reverb** in that row; do the same for the other one. Tap a name to change it. **SAVE** needs both
+  settings. Tile 8 then shows the name of the setting that is on and, small, the one the next press goes to; with
+  setting 2 on the tile is a lighter shade. A press also switches the reverb on if it was off.
+  The two settings are stored on the controller, per preset, and are **their own thing**: they have nothing to do
+  with the A and B of the reverb's own tile (tile 7), which keeps its second effect and its tap or hold as before.
+  They belong to the reverb model they were set from. While another reverb is in the slot the switch falls back to
+  reverb A / B or the mix, and the tile shows that. After a preset is loaded the tile shows setting 1 – best store
+  the preset on the Nano with setting 1 on.
 
 ## Second effect: A and B on an FX slot
 

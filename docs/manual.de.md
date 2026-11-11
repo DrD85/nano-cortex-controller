@@ -56,7 +56,7 @@ Die Nummern hier sind die Funktionen der Schalter; wo sie liegen, bestimmt die [
 | Preset-Kachel (3–8, Preset-Modus) | **Bank-Fenster**: Farbe, Symbol und Preset dieses Schalters; `DEFAULT` stellt das Standard-Preset her; `LEARN SWITCH` |
 | Szenen-Kachel (3–8, Szenen) | **Szene**: Name, Farbe und welche Effekte an sind; `Remove` leert den Schalter |
 | FX-Kachel (3–7, FX-Modus) | **FX-Editor**: Modell (auf den Kopf tippen), an/aus, alle Parameter und der [zweite Effekt](#zweiter-effekt-a-und-b-auf-einem-fx-slot) (A \| B) |
-| Kachel 8 (FX-Modus) | **Reverb-Fenster** mit den Reitern *MIX POS 1 / 2* und *REVERB A / B* |
+| Kachel 8 (FX-Modus) | **Reverb-Fenster** mit den Reitern *MIX*, *REVERB A / B* und *2 SETTINGS* |
 | Preset-Name | **Umbenennen** mit Bildschirmtastatur (mindestens 4 Zeichen, eindeutig) |
 
 ## Eigene Bänke
@@ -245,12 +245,12 @@ Der **Szenen-Knopf** am Ende der Leiste speichert die aktuellen Einstellungen f�
 
 ## Reverb-Schalter (Fußschalter 8)
 
-<img src="images/07-reverb.png" alt="" width="440">
+<img src="images/38-reverb-settings.png" alt="" width="49%"> <img src="images/37-reverb-settings-tile.png" alt="" width="49%">
 
-Das Fenster hat zwei Reiter, einen für jede Funktion von Fußschalter 8. **Der Reiter, der beim Tippen auf SAVE
+Das Fenster hat drei Reiter, einen für jede Funktion von Fußschalter 8. **Der Reiter, der beim Tippen auf SAVE
 vorne ist, bestimmt, was der Schalter ab dann tut**; der gerade verwendete trägt einen Haken.
 
-- **MIX POS 1 / 2**: Fußschalter 8 setzt den Mix des Reverbs auf Pos 1 oder Pos 2. Beim Bewegen eines Reglers
+- **MIX**: Fußschalter 8 setzt den Mix des Reverbs auf Pos 1 oder Pos 2. Beim Bewegen eines Reglers
   hörst du den Mix; **SAVE** speichert beide Werte auf dem Controller, für dieses Preset. Das Expression-Pedal des
   Nano ist daran nicht beteiligt und bleibt frei für ein Wah oder anderes.
 - **Presets, die vor 1.8 eingerichtet wurden**, hatten Pos 1 und Pos 2 als Fersen- und Spitzenwert der
@@ -268,8 +268,20 @@ vorne ist, bestimmt, was der Schalter ab dann tut**; der gerade verwendete träg
   zum Einstellen. Reverb B speichert der Controller, pro Preset. Wird das Preset gespeichert, während B läuft,
   wird B zum Reverb des Presets. Ein Preset laden – auch dasselbe noch einmal – bringt immer sein eigenes Reverb (A)
   zurück; B bleibt gespeichert.
-  Auf dem Reiter *MIX POS 1 / 2* gespeichert, ist Fußschalter 8 wieder der Mix-Schalter, und Reverb B bleibt mit
+  Auf dem Reiter *MIX* gespeichert, ist Fußschalter 8 wieder der Mix-Schalter, und Reverb B bleibt mit
   seinen Einstellungen für später gespeichert; *None* in der Liste entfernt es.
+- **2 SETTINGS**: Fußschalter 8 wechselt zwischen zwei benannten Einstellungen des Reverbs im Preset – zum Beispiel
+  *Room* und *Atmos* – mit allen Reglern (Mix, Decay, Damping …). Das Reverb bleibt dasselbe, es gibt also keinen
+  Aussetzer. Einrichten: das Reverb so einstellen, wie es klingen soll (im FX-Editor von Kachel 7 oder am Nano),
+  dann in der Zeile auf **Set from the reverb** tippen; für die andere Einstellung genauso. Ein Tipp auf den Namen
+  ändert ihn. **SAVE** braucht beide Einstellungen. Kachel 8 zeigt dann den Namen der Einstellung, die an ist, und
+  klein die, zu der der nächste Druck wechselt; bei Einstellung 2 ist die Kachel heller. Ein Druck schaltet das
+  Reverb auch ein, falls es aus war.
+  Die zwei Einstellungen speichert der Controller, pro Preset, und sie sind **etwas Eigenes**: Mit dem A und B der
+  Reverb-Kachel selbst (Kachel 7) haben sie nichts zu tun – die behält ihren zweiten Effekt und ihr Tippen oder
+  Halten wie bisher. Sie gehören zu dem Reverb-Modell, von dem sie genommen wurden. Solange ein anderes Reverb im
+  Slot ist, fällt der Schalter auf Reverb A / B oder den Mix zurück, und die Kachel zeigt das. Nach dem Laden eines
+  Presets zeigt die Kachel Einstellung 1 – das Preset am besten mit Einstellung 1 auf dem Nano speichern.
 
 ## Zweiter Effekt: A und B auf einem FX-Slot
 

@@ -333,7 +333,7 @@ static struct {
 // values as that model has. No read goes out while the Nano loads a preset or a model (its reply would come late).
 // Before this, two reads open at once, or a late reply taken for the next read, put one effect's values into
 // another: a reverb's Mix into the Input of the compressor on Pre FX 1, kept there as the values of its "A".
-enum { READ_NONE, READ_EDITOR, READ_AB };
+enum { READ_NONE, READ_EDITOR, READ_AB, READ_RP };
 #define PARAM_READ_US (2000 * 1000)   // a reply later than this is not waited for
 #define PARAM_BUSY_US (900 * 1000)    // no read this long after a preset or model change
 static struct {
@@ -351,7 +351,7 @@ static esp_timer_handle_t s_param_timer, s_read_timer;
 // a long press saves the current values under a name. ORIGINAL goes back to the values the effect had when the
 // editor opened (or when its model was chosen: the model's defaults).
 #define FXP_COUNT 4
-#define FXP_SEND_CHUNK 4
+#define FXP_SEND_CHUNK 8
 typedef struct {
     char name[16];                    // "" = empty
     uint8_t count, reserved;
@@ -369,6 +369,25 @@ static struct {
     float send_values[NANO_MAX_PARAMS];
 } s_fxp = { .active = -1 };
 static esp_timer_handle_t s_fxp_timer;
+
+// Reverb switch, third way (next to the mix positions and the second reverb): two named settings of the preset's
+// reverb - "Room" and "Atmos", every parameter - that the switch changes between. Each is what the reverb was set to
+// when "Set from the reverb" was tapped in the reverb dialog; stored on the controller, per preset. They are their
+// own thing: the second effect (A / B) of the reverb's slot is not touched and stays on the reverb's own tile.
+#define RP_STORE_KEY "rvp%02d"
+typedef struct {
+    uint32_t type;                       // the reverb model the settings are for: they count while it is in the slot
+    uint8_t used;                        // 1 = the reverb switch changes between them
+    uint8_t count[2];                    // values of setting 1 / 2, 0 = not set yet
+    uint8_t reserved;
+    char name[2][16];
+    uint16_t values[2][NANO_MAX_PARAMS]; // 0-65535 = 0-1
+} rp_t;                                  // stored in NVS as it is
+_Static_assert(sizeof(rp_t) == 40 + 4 * NANO_MAX_PARAMS, "rp_t is stored as it is: its size must not change");
+static rp_t s_rp;
+static int s_rp_preset;                  // the preset they were read for, 0 = none yet
+static int s_rp_active;                  // 0 / 1: the setting the switch went to last (after loading a preset: 0)
+static int s_rp_capture = -1;            // the setting that waits for the reverb's values, -1 = none
 
 // USB playback volume (dB) from the Nano's settings; the slider sends at most one value per PARAM_SEND_MS.
 static struct {
@@ -1285,6 +1304,8 @@ static bool reverb_b_used(void)
 // at once.
 static int wah_mode(int slot);
 static bool ab_used(int slot);
+static bool rp_used(void);
+static bool rp_set(int n);
 
 static void looper_switches(void)
 {
@@ -1331,6 +1352,12 @@ static void show(void)
         view.ab_a_type[slot] = s_ab[slot].a_type;
         if (s_ab[slot].active) view.ab_active |= (uint8_t)(1u << slot);
         view.ab_mode[slot] = s_ab[slot].b.tap <= UI_AB_PRESS ? s_ab[slot].b.tap : UI_AB_HOLD;
+    }
+    view.rp_used = rp_used();
+    view.rp_active = (uint8_t)s_rp_active;
+    for (int n = 0; n < 2; n++) {
+        if (rp_set(n)) view.rp_set |= (uint8_t)(1u << n);
+        if (s_rp_preset == s_state.current_preset) strlcpy(view.rp_names[n], s_rp.name[n], sizeof(view.rp_names[n]));
     }
     for (int slot = 0; slot < NANO_FX_SLOTS && s_exp.known; slot++) {   // effects the Nano's pedal moves or switches
         if (s_exp.ranges[NANO_EXP_PRE1 + slot].on) view.exp_amount |= (uint8_t)(1u << slot);
@@ -2225,6 +2252,12 @@ static void fxp_send_step(void)
     if (s_fxp.sent < s_fxp.send_count) esp_timer_start_once(s_fxp_timer, 60 * 1000);
 }
 
+// A value run (an FX preset or a reverb setting going out in steps) is under way.
+static bool fxp_sending(void)
+{
+    return s_fxp.sent < s_fxp.send_count;
+}
+
 // 'z', n: load FX preset n into the edited slot (0 = the original values).
 static void fxp_load(int n)
 {
@@ -2246,6 +2279,10 @@ static void fxp_load(int n)
     }
     if (count > model->param_count) count = model->param_count;
     if (count > NANO_MAX_PARAMS) count = NANO_MAX_PARAMS;
+    if (fxp_sending() && s_fxp.send_slot != slot) {   // (a reverb setting is still going out to another slot)
+        ui_show_message("Still switching - try again in a moment.");
+        return;
+    }
     ESP_LOGI(TAG, "%s: FX preset %s (%d values)", NANO_FX_SLOT_NAMES[slot], n ? s_fxp.list[n - 1].name : "original", count);
     esp_timer_stop(s_fxp_timer);
     s_fxp.send_slot = slot;
@@ -2735,6 +2772,8 @@ static void ab_leave_preset(void)
 {
     ab_capture_editor();
     esp_timer_stop(s_ab_timer);
+    esp_timer_stop(s_fxp_timer);   // a value run (FX preset, reverb setting) belongs to the preset that was on
+    s_fxp.sent = s_fxp.send_count = 0;
     for (int i = 0; i < AB_COUNT; i++) {
         ab_t *ab = &s_ab[i];
         ab->phase = AB_IDLE;
@@ -2873,6 +2912,10 @@ static void ab_swap(int which)
     int slot = ab->slot;
     if (!s_state.fx_type[slot]) {
         ui_show_message("This slot is empty in this preset.");
+        return;
+    }
+    if (fxp_sending() && s_fxp.send_slot == slot) {   // its values are still going out: a read now would see half of them
+        ui_show_message("Still switching - try again in a moment.");
         return;
     }
     ab->target = ab->active ? 0 : 1;
@@ -3034,6 +3077,152 @@ static void ab_edit_b(int which)
         ab->open_editor = true;
         ab_swap(which);
     }
+}
+
+// ---- reverb switch: two settings of the reverb (see s_rp) ----
+
+static bool rp_set(int n)
+{
+    return s_rp_preset == s_state.current_preset && s_mix.slot >= 0 && s_rp.type && s_rp.type == s_state.fx_type[s_mix.slot] && s_rp.count[n] > 0;
+}
+
+// The reverb switch changes between the two settings: chosen in the reverb dialog, and both are set for the reverb
+// that is in the slot.
+static bool rp_used(void)
+{
+    return s_rp.used && rp_set(0) && rp_set(1);
+}
+
+static void rp_load(int preset)
+{
+    memset(&s_rp, 0, sizeof(s_rp));
+    s_rp_preset = preset;
+    s_rp_active = 0;
+    s_rp_capture = -1;
+    nvs_handle_t nvs;
+    char key[16];
+    snprintf(key, sizeof(key), RP_STORE_KEY, preset);
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
+    size_t size = sizeof(s_rp);
+    if (nvs_get_blob(nvs, key, &s_rp, &size) != ESP_OK || size != sizeof(s_rp) || s_rp.count[0] > NANO_MAX_PARAMS || s_rp.count[1] > NANO_MAX_PARAMS) {
+        memset(&s_rp, 0, sizeof(s_rp));
+    }
+    s_rp.name[0][sizeof(s_rp.name[0]) - 1] = s_rp.name[1][sizeof(s_rp.name[1]) - 1] = 0;
+    nvs_close(nvs);
+    if (s_rp.type) ESP_LOGI(TAG, "Reverb settings of preset %d: \"%s\" / \"%s\"%s", preset, s_rp.name[0], s_rp.name[1], s_rp.used ? " (on the reverb switch)" : "");
+}
+
+static void rp_store(void)
+{
+    nvs_handle_t nvs;
+    char key[16];
+    snprintf(key, sizeof(key), RP_STORE_KEY, s_rp_preset);
+    if (!s_rp_preset || nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
+    bool empty = !s_rp.count[0] && !s_rp.count[1];
+    esp_err_t err = empty ? nvs_erase_key(nvs, key) : nvs_set_blob(nvs, key, &s_rp, sizeof(s_rp));
+    if ((err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) || nvs_commit(nvs) != ESP_OK) ui_show_message("Could not store the reverb settings (memory full?).");
+    nvs_close(nvs);
+}
+
+// The reverb switch: the other setting - all its values go out, the reverb comes on if it was off.
+static void rp_toggle(void)
+{
+    int slot = s_mix.slot;
+    if (!rp_used()) return;
+    const ab_t *running = ab_running();
+    if ((running && !running->cache_only) || (fxp_sending() && s_fxp.send_slot != slot)) {
+        ui_show_message("Still switching - try again in a moment.");
+        return;
+    }
+    if (!s_state.fx_on[slot]) toggle_fx(slot);
+    int next = s_rp_active == 1 ? 0 : 1;
+    esp_timer_stop(s_fxp_timer);
+    s_fxp.send_slot = slot;
+    s_fxp.send_count = s_rp.count[next];
+    s_fxp.sent = 0;
+    for (int i = 0; i < s_rp.count[next]; i++) s_fxp.send_values[i] = s_rp.values[next][i] / 65535.0f;
+    s_rp_active = next;
+    ESP_LOGI(TAG, "Reverb setting %d \"%s\" (%d values)", next + 1, s_rp.name[next], s_rp.count[next]);
+    fxp_send_step();
+    app_sync_later();
+    show();
+    if (slot == s_edit.slot) {   // the open FX editor shows the reverb: its values are others now
+        s_edit.known = false;
+        s_fxp.active = -1;
+        editor_show();
+        editor_read_later(400);
+    }
+    schedule_refresh(600);
+}
+
+// Reverb dialog, "Set from the reverb": setting n (0 / 1) becomes what the reverb is set to right now.
+static void rp_capture(int n)
+{
+    int slot = s_mix.slot;
+    if (n < 0 || n > 1 || slot < 0) return;
+    if (!s_state.fx_on[slot]) {
+        ui_show_message("Switch the reverb on first - its values are read only while it is on.");
+        return;
+    }
+    if (!param_read(READ_RP, slot)) {
+        ui_show_message("The Nano is busy - tap again in a moment.");
+        return;
+    }
+    s_rp_capture = n;
+}
+
+// The values the capture asked for arrived.
+static void rp_values(int slot, const float *values, int count)
+{
+    int n = s_rp_capture;
+    s_rp_capture = -1;
+    if (n < 0 || slot != s_mix.slot) return;
+    if (count <= 0) {
+        ui_show_message("Not set: the Nano sent no values - tap again.");
+        return;
+    }
+    if (s_rp_preset != s_state.current_preset) rp_load(s_state.current_preset);
+    if (s_rp.type != s_state.fx_type[slot]) {   // another reverb than the stored settings are for: they start afresh
+        bool used = s_rp.used;
+        memset(&s_rp, 0, sizeof(s_rp));
+        s_rp.used = used;
+        s_rp.type = s_state.fx_type[slot];
+    }
+    s_rp.count[n] = (uint8_t)count;
+    for (int i = 0; i < count; i++) s_rp.values[n][i] = value_u16(values[i]);
+    if (!s_rp.name[n][0]) strlcpy(s_rp.name[n], n ? "Setting 2" : "Setting 1", sizeof(s_rp.name[n]));
+    rp_store();
+    s_rp_active = n;
+    ESP_LOGI(TAG, "Reverb setting %d \"%s\": %d values of %s kept", n + 1, s_rp.name[n], count, nano_fx_name(s_rp.type));
+    char text[64];
+    snprintf(text, sizeof(text), "\"%s\" set from the reverb.", s_rp.name[n]);
+    ui_show_message(text);
+    show();
+}
+
+// Text from the keyboard: "<1 / 2><name>" - the name of a setting.
+static void rp_name(const char *text)
+{
+    int n = text[0] - '1';
+    if (n < 0 || n > 1) return;
+    if (s_rp_preset != s_state.current_preset) rp_load(s_state.current_preset);
+    const char *name = text + 1;
+    while (*name == ' ') name++;
+    if (*name) strlcpy(s_rp.name[n], name, sizeof(s_rp.name[n]));
+    else strlcpy(s_rp.name[n], n ? "Setting 2" : "Setting 1", sizeof(s_rp.name[n]));
+    if (s_rp.count[0] || s_rp.count[1]) rp_store();   // (a name alone is kept once a setting exists)
+    show();
+}
+
+// Reverb dialog saved: the switch changes between the two settings (or not: the tab in front was another one).
+static void rp_use(bool use)
+{
+    if (s_rp_preset != s_state.current_preset) rp_load(s_state.current_preset);
+    if ((s_rp.used != 0) == use) return;
+    s_rp.used = use;
+    rp_store();
+    ESP_LOGI(TAG, "Reverb switch: %s", use ? "the two settings" : "not the two settings");
+    show();
 }
 
 static void set_tuner(bool on)
@@ -3339,6 +3528,7 @@ static void handle_switch(int number)
             ab_swap(number - 3);   // a tap (or the press itself) swaps A / B
         }
         else if (number <= 7) toggle_fx(number - 3);
+        else if (rp_used()) rp_toggle();
         else if (reverb_b_used()) ab_swap(s_mix.slot);
         else toggle_mix();
     } else if (number >= 3 && number <= 8 && s_scene_mode) {
@@ -3572,8 +3762,21 @@ static void handle_command(char c, int arg)
     case 'm': handle_switch(1); break;
     case 't': handle_switch(2); break;
     case 'x':   // as footswitch 8 in FX mode
-        if (reverb_b_used()) ab_swap(s_mix.slot);
+        if (rp_used()) rp_toggle();
+        else if (reverb_b_used()) ab_swap(s_mix.slot);
         else toggle_mix();
+        break;
+    case '-':   // reverb dialog: 1 / 2 = set that setting from the reverb, 16 / 17 = the switch uses the settings: no / yes
+        if (arg == 1 || arg == 2) rp_capture(arg - 1);
+        else if (arg == 16 || arg == 17) rp_use(arg == 17);
+#ifdef NANO_RPTEST
+        else if (arg == 32 && s_rp_preset == s_state.current_preset) {   // forget both settings of this preset
+            memset(&s_rp, 0, sizeof(s_rp));
+            rp_store();
+            ESP_LOGI(TAG, "Reverb settings of preset %d removed", s_rp_preset);
+            show();
+        }
+#endif
         break;
     case 'w': {
         int number = arg & 0xFF;
@@ -3812,6 +4015,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
                 ab_load(s_state.current_preset);
                 editor_close();
                 mix_load();
+                rp_load(s_state.current_preset);
                 for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {   // values of an A for a later swap, if it is on
                     if (ab_used(slot) && s_state.fx_on[slot]) {
                         ab_cache(slot, 700);
@@ -3950,6 +4154,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         int slot, count;
         switch (param_read_reply(payload, len, &slot, values, &count)) {
         case READ_AB: ab_values_read(slot, values, count); break;
+        case READ_RP: rp_values(slot, values, count); break;
         case READ_EDITOR: editor_values(slot, values, count); break;
         default: break;
         }
@@ -4459,6 +4664,7 @@ static void app_event(app_event_t ev)
         else if (ev.command == 'L') looper_tile_edit((const char *)ev.data);
         else if (ev.command == 'S') scene_edit((const char *)ev.data);
         else if (ev.command == 'T') setlist_edit((const char *)ev.data);
+        else if (ev.command == 'R') rp_name((const char *)ev.data);
         else if (ev.command == 'X') exp_dialog_save((const char *)ev.data);
         free(ev.data);
         break;
@@ -4560,6 +4766,12 @@ static void console_task(void *arg)
 #ifdef NANO_BENCH
         if (c == '%') {
             ui_bench();
+            continue;
+        }
+#endif
+#ifdef NANO_RPTEST
+        if (c == '_' || c == '+' || c == '=' || c == '\\') {   // reverb settings: set 1 / set 2 / on the switch / forget
+            command('-', c == '_' ? 1 : c == '+' ? 2 : c == '=' ? 17 : 32);
             continue;
         }
 #endif
