@@ -24,6 +24,12 @@ target_link_libraries(${COMPONENT_LIB} INTERFACE "-u lv_malloc_core")
 target_add_binary_data(${COMPONENT_LIB} "fonts/IBMPlexSans-SemiBold.ttf" BINARY)
 
 # Development: -DNANO_BENCH=1 adds the console command '%' that times the FX editor's lists on the board (ui_bench).
+# Development: -DNANO_WDTEST=1 adds the console commands 'W' and 'U' that hang the app task / the screen, to see the
+# watchdog restart the controller.
+if(NANO_WDTEST)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_WDTEST=1)
+endif()
+
 if(NANO_BENCH)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_BENCH=1)
 endif()

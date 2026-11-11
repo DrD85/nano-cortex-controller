@@ -2971,12 +2971,34 @@ void ui_splash_done(void)
     lvgl_port_unlock();
 }
 
+// A sign of life of the task that runs the screen (see ui_stalled_ms).
+static volatile uint32_t s_alive_tick;
+
+static void alive_cb(lv_timer_t *timer)
+{
+    s_alive_tick = lv_tick_get();
+}
+
+uint32_t ui_stalled_ms(void)
+{
+    return lv_tick_elaps(s_alive_tick);
+}
+
+#ifdef NANO_WDTEST
+void ui_test_hang(void)
+{
+    lvgl_port_lock(0);   // never given back: the screen's task waits for it
+}
+#endif
+
 void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
 {
     s_on_command = on_command;
     s_on_param = on_param;
     s_on_text = on_text;
     lvgl_port_lock(0);
+    s_alive_tick = lv_tick_get();
+    lv_timer_create(alive_cb, 500, NULL);
 
     lv_obj_t *screen = lv_screen_active();
     lv_obj_set_style_bg_color(screen, lv_color_black(), 0);

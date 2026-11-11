@@ -14,6 +14,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Message types from this number on are for the controller itself (the backup of its settings): they are not sent
+// on to the Nano.
+#define APP_LINK_CONTROLLER_TYPE 60000
+
 // A framed message arrived from the app (type = its message type, payload = what is between the frame header and
 // the type). Called from the NimBLE host task.
 typedef void (*app_write_cb)(uint32_t type, const uint8_t *payload, size_t len);

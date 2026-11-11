@@ -140,6 +140,12 @@ typedef struct {
 #define UI_BANK_COLOR_COUNT 10
 
 void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text);
+// Milliseconds since the screen's task last ran its timers (it does so twice a second): the controller's watchdog
+// restarts the controller when the screen has stood still for too long.
+uint32_t ui_stalled_ms(void);
+#ifdef NANO_WDTEST
+void ui_test_hang(void);   // development: takes the screen's lock for good
+#endif
 // Where the set list dialog reads the scene names of any preset ("" = empty scene); called from the LVGL task.
 typedef void (*ui_scene_names_cb)(int preset, char names[UI_SCENES][UI_SCENE_NAME]);
 void ui_set_scene_names_source(ui_scene_names_cb cb);

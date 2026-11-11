@@ -61,6 +61,10 @@ static int chr_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt 
     if (n < 6 || frame[1] != 0xC0) return 0;
     uint32_t type = frame[n - 4] | (frame[n - 3] << 8) | (frame[n - 2] << 16) | ((uint32_t)frame[n - 1] << 24);
     if (type == 30) return 0;   // preset change acknowledgement: the controller answers the Nano itself
+    if (type >= APP_LINK_CONTROLLER_TYPE) {   // for the controller itself: the Nano never sees it
+        if (s_on_write) s_on_write(type, frame + 2, n - 6);
+        return 0;
+    }
     if (type != 99) ESP_LOGD(TAG, "App -> Nano: type %lu (%u bytes)", (unsigned long)type, n);
     nano_link_send_frame(frame, n);
     if (s_on_write) s_on_write(type, frame + 2, n - 6);

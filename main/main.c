@@ -30,6 +30,7 @@
 #endif
 #include "sdkconfig.h"
 #include "esp_app_desc.h"
+#include "esp_attr.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -53,12 +54,12 @@ static const char *TAG = "nano_ctrl";
 
 #define CONSOLE_UART UART_NUM_0  // "UART" USB-C port (CH343), used when the console is set to UART
 
-typedef enum { EV_LINK_UP, EV_LINK_DOWN, EV_MESSAGE, EV_COMMAND, EV_PARAM, EV_TEXT, EV_MIDI } event_kind_t;
+typedef enum { EV_LINK_UP, EV_LINK_DOWN, EV_MESSAGE, EV_COMMAND, EV_PARAM, EV_TEXT, EV_MIDI, EV_APP_MESSAGE } event_kind_t;
 
 typedef struct {
     event_kind_t kind;
-    uint32_t type;   // EV_MESSAGE
-    uint8_t *data;   // EV_MESSAGE / EV_TEXT, owned by the event
+    uint32_t type;   // EV_MESSAGE, EV_APP_MESSAGE
+    uint8_t *data;   // EV_MESSAGE / EV_APP_MESSAGE / EV_TEXT, owned by the event
     size_t len;
     char command;    // EV_COMMAND
     int arg;         // EV_COMMAND; EV_PARAM: slot; EV_MIDI: status << 16 | data1 << 8 | data2
@@ -687,6 +688,14 @@ static void app_notify_cb(void *arg)
 // From the NimBLE host task: the app sent a message (type) / the app connected or left.
 static void on_app_write(uint32_t type, const uint8_t *payload, size_t len)
 {
+    if (type >= APP_LINK_CONTROLLER_TYPE) {   // for the controller itself (settings backup): handled in the app task
+        app_event_t ev = { .kind = EV_APP_MESSAGE, .type = type, .len = len };
+        ev.data = malloc(len ? len : 1);
+        if (!ev.data) return;
+        memcpy(ev.data, payload, len);
+        post(ev);
+        return;
+    }
     s_values_stale = true;   // it may have set an effect's values
     if (type == NANO_MSG_BYPASS) {   // BypassControl { 3: slot 4-8, 4: 0 = on }: the editor switched an effect
         int slot = (int)nano_field_varint(payload, len, 3) - 4;
@@ -3459,6 +3468,14 @@ static void handle_command(char c, int arg)
         pedal_moved();
         return;
     }
+#ifdef NANO_WDTEST
+    if (c == '}') {
+        ESP_LOGW(TAG, "Test: hanging the %s on purpose", arg ? "screen" : "app task");
+        if (arg) ui_test_hang();
+        else for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
+        return;
+    }
+#endif
     if (c == 'h') { print_help(); return; }
     if (c == 'l') { print_presets(); return; }
     if (c == 'D' || c == 'Z') { footswitch_learn(c, arg); return; }   // works without the Nano
@@ -3568,6 +3585,7 @@ static void handle_command(char c, int arg)
     case 'H': ab_edit_b(arg); break;
     case 'F': ab_step(); break;
     case '{': state_overdue(); break;
+
     case '(': library_when_quiet(); break;
     case '[': ab_swap(arg); break;   // FX editor, A | B: the other one
     case '>': ab_set_tap(arg >> 8, arg & 1); break;
@@ -3633,6 +3651,8 @@ static void handle_command(char c, int arg)
 
 // The Nano reports a change made elsewhere (its own knobs, the editor connected to it directly, USB MIDI from an
 // MC6): read the preset again shortly after (once for a burst), and the values of the open FX editor.
+static void store_warn(void);
+
 static void external_change(uint32_t type)
 {
     if (esp_timer_get_time() - s_last_change_us < 700 * 1000) return;   // the echo of our own change: nothing new
@@ -3712,6 +3732,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             app_link_allow_phone(true);
             app_link_enable(true);
             ui_splash_done();
+            store_warn();
             if (s_refresh_library) {
                 s_refresh_library = false;
                 esp_timer_start_once(s_library_timer, 1500 * 1000);
@@ -3982,6 +4003,245 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
     }
 }
 
+// ---- the settings store: how full it is, and its backup through the editor ----
+// Everything the controller keeps (banks, scenes, second effects, the set list ...) is in one small store: 756
+// entries, and a scene with settings alone takes dozens. When it is full nothing can be saved any more, so the
+// controller says how full it is - and the editor can read every entry into a file and write such a file back
+// (messages of APP_LINK_CONTROLLER_TYPE on, which stay between the app and the controller):
+//   60000 app: entry request { index u16 }      -> 60001 { index u16, count u16, key length u8, key, value }
+//                                                  or, past the last one, 60002 (see backup_info)
+//   60003 app: restore begins { entries u16 }   -> 60004 { ok u8 }   (the store is emptied)
+//   60005 app: { key length u8, key, total u16, offset u16, bytes } -> 60006 { ok u8 }   (a value in pieces)
+//   60007 app: restore done                     -> 60008 { ok u8, entries written u16 }, then the controller restarts
+//   60009 app: info request                     -> 60002 { entries u16, used u16, capacity u16, version }
+#define STORE_WARN_PERCENT 85
+#define BACKUP_VALUE_MAX 4000
+
+// Used share of the settings store in per cent (of what can be written), -1 = not known.
+static int store_percent(int *used, int *capacity)
+{
+#ifdef NANO_WEB
+    return -1;
+#else
+    nvs_stats_t stats;
+    if (nvs_get_stats(NULL, &stats) != ESP_OK) return -1;
+    int cap = (int)(stats.used_entries + stats.available_entries);
+    if (used) *used = (int)stats.used_entries;
+    if (capacity) *capacity = cap;
+    return cap ? (int)(stats.used_entries * 100 / cap) : -1;
+#endif
+}
+
+// Said once after the start, while there is still room to act.
+static void store_warn(void)
+{
+    int percent = store_percent(NULL, NULL);
+    ESP_LOGI(TAG, "Settings store %d %% full", percent);
+    if (percent < STORE_WARN_PERCENT) return;
+    char text[120];
+    snprintf(text, sizeof(text), "Settings memory %d %% full - back it up with the editor and remove scenes or second effects you do not need.", percent);
+    ui_show_message(text);
+}
+
+#ifdef NANO_WEB
+static void backup_message(uint32_t type, const uint8_t *payload, size_t len) { }
+#else
+static void backup_reply(uint32_t type, const uint8_t *payload, size_t len)
+{
+    uint8_t *message = heap_caps_malloc(len + 4, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!message) return;
+    memcpy(message, payload, len);
+    for (int i = 0; i < 4; i++) message[len + i] = (uint8_t)(type >> (8 * i));
+    app_link_send_message(message, len + 4);   // (copies it)
+    heap_caps_free(message);
+}
+
+static int backup_count(void)
+{
+    int count = 0;
+    nvs_iterator_t it = NULL;
+    for (esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, BANK_STORE_NAMESPACE, NVS_TYPE_BLOB, &it); err == ESP_OK; err = nvs_entry_next(&it)) count++;
+    nvs_release_iterator(it);
+    return count;
+}
+
+static void backup_info(void)
+{
+    int used = 0, capacity = 0;
+    store_percent(&used, &capacity);
+    uint8_t reply[6 + 32];
+    int count = backup_count();
+    reply[0] = (uint8_t)count; reply[1] = (uint8_t)(count >> 8);
+    reply[2] = (uint8_t)used; reply[3] = (uint8_t)(used >> 8);
+    reply[4] = (uint8_t)capacity; reply[5] = (uint8_t)(capacity >> 8);
+    size_t n = strlcpy((char *)reply + 6, esp_app_get_description()->version, 32);
+    backup_reply(60002, reply, 6 + (n < 31 ? n : 31));
+}
+
+// Entry `index` of the store, in the order the store lists them (the app asks for one after the other).
+static void backup_entry(int index)
+{
+    static nvs_iterator_t it;
+    static int at = -1;   // the entry `it` stands on
+    if (index == 0 || index != at + 1 || !it) {   // from the start (the usual case is the next one)
+        nvs_release_iterator(it);
+        it = NULL;
+        at = -1;
+        if (nvs_entry_find(NVS_DEFAULT_PART_NAME, BANK_STORE_NAMESPACE, NVS_TYPE_BLOB, &it) == ESP_OK) at = 0;
+        while (it && at < index && nvs_entry_next(&it) == ESP_OK) at++;
+    } else if (nvs_entry_next(&it) == ESP_OK) {
+        at++;
+    } else {
+        it = NULL;
+    }
+    if (!it || at != index) {   // past the end
+        nvs_release_iterator(it);
+        it = NULL;
+        at = -1;
+        backup_info();
+        return;
+    }
+    nvs_entry_info_t info;
+    nvs_entry_info(it, &info);
+    size_t key_len = strlen(info.key), size = 0;
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
+    uint8_t *reply = NULL;
+    if (nvs_get_blob(nvs, info.key, NULL, &size) == ESP_OK && size <= BACKUP_VALUE_MAX
+        && (reply = heap_caps_malloc(5 + key_len + size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)) != NULL) {
+        int count = backup_count();
+        reply[0] = (uint8_t)index; reply[1] = (uint8_t)(index >> 8);
+        reply[2] = (uint8_t)count; reply[3] = (uint8_t)(count >> 8);
+        reply[4] = (uint8_t)key_len;
+        memcpy(reply + 5, info.key, key_len);
+        if (nvs_get_blob(nvs, info.key, reply + 5 + key_len, &size) == ESP_OK) backup_reply(60001, reply, 5 + key_len + size);
+    } else {
+        ESP_LOGW(TAG, "Backup: entry %s not readable", info.key);
+        uint8_t skip[5] = { (uint8_t)index, (uint8_t)(index >> 8), 0, 0, 0 };   // (an entry without a key: skipped by the app)
+        backup_reply(60001, skip, sizeof(skip));
+    }
+    heap_caps_free(reply);
+    nvs_close(nvs);
+}
+
+static void backup_message(uint32_t type, const uint8_t *payload, size_t len)
+{
+    static uint8_t *value;        // the value being put together (PSRAM)
+    static char key[NVS_KEY_NAME_MAX_SIZE];
+    static size_t got, total;
+    static int written;
+    static bool restoring;
+    uint8_t ok = 0;
+    nvs_handle_t nvs;
+    switch (type) {
+    case 60000:
+        if (len >= 2) backup_entry(payload[0] | payload[1] << 8);
+        break;
+    case 60009:
+        backup_info();
+        break;
+    case 60003:   // restore: everything stored goes, the file's entries follow
+        if (!value) value = heap_caps_malloc(BACKUP_VALUE_MAX, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (value && nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
+            ok = nvs_erase_all(nvs) == ESP_OK && nvs_commit(nvs) == ESP_OK;
+            nvs_close(nvs);
+        }
+        restoring = ok;
+        written = 0;
+        got = total = 0;
+        key[0] = 0;
+        ESP_LOGW(TAG, "Restore of the settings begins: %s", ok ? "store emptied" : "FAILED");
+        if (ok) ui_show_message("Restoring the settings from the editor ...");
+        backup_reply(60004, &ok, 1);
+        break;
+    case 60005: {   // a piece of a value
+        size_t key_len = len ? payload[0] : 0;
+        if (!restoring || !key_len || key_len >= sizeof(key) || len < 1 + key_len + 4) {
+            backup_reply(60006, &ok, 1);
+            break;
+        }
+        const uint8_t *p = payload + 1 + key_len;
+        size_t all = p[0] | p[1] << 8, offset = p[2] | p[3] << 8, n = len - (1 + key_len + 4);
+        if (offset == 0) {
+            memcpy(key, payload + 1, key_len);
+            key[key_len] = 0;
+            total = all;
+            got = 0;
+        }
+        if (strncmp(key, (const char *)payload + 1, key_len) || key[key_len] || offset != got || all != total || got + n > total
+            || total > BACKUP_VALUE_MAX) {
+            ESP_LOGW(TAG, "Restore: piece out of order for %s", key);
+            backup_reply(60006, &ok, 1);
+            break;
+        }
+        memcpy(value + got, p + 4, n);
+        got += n;
+        ok = 1;
+        if (got == total) {   // complete: into the store
+            ok = 0;
+            if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
+                ok = nvs_set_blob(nvs, key, value, total) == ESP_OK;
+                nvs_close(nvs);
+            }
+            if (ok) written++;
+            else ESP_LOGW(TAG, "Restore: %s not written", key);
+            key[0] = 0;
+            got = total = 0;
+        }
+        backup_reply(60006, &ok, 1);
+        break;
+    }
+    case 60007: {
+        if (!restoring) break;
+        restoring = false;
+        if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
+            ok = nvs_commit(nvs) == ESP_OK;
+            nvs_close(nvs);
+        }
+        uint8_t reply[3] = { ok, (uint8_t)written, (uint8_t)(written >> 8) };
+        backup_reply(60008, reply, sizeof(reply));
+        ESP_LOGW(TAG, "Restore done: %d entries written - restarting", written);
+        ui_show_message("Settings restored - restarting ...");
+        vTaskDelay(pdMS_TO_TICKS(1500));   // the reply goes out, the message is read
+        esp_restart();
+        break;
+    }
+    default:
+        break;
+    }
+}
+#endif
+
+// ---- watchdog ----
+// On stage a controller that hangs has to come back by itself. Twice a second the task that handles everything (app)
+// and the task that draws the screen give a sign of life; if one of them is silent for WATCHDOG_MS the controller
+// restarts - it is connected again a few seconds later - and says so after the start.
+#ifndef NANO_WEB
+#define WATCHDOG_MS 8000
+#define WATCHDOG_MAGIC 0x57444F47u
+static RTC_NOINIT_ATTR uint32_t s_watchdog_magic, s_watchdog_cause;   // survive the restart: 1 = app task, 2 = screen
+static volatile uint32_t s_app_beat;   // tick of the app task's last round
+static esp_timer_handle_t s_watchdog_timer;
+
+static void watchdog_cb(void *arg)
+{
+    uint32_t cause = (uint32_t)(xTaskGetTickCount() - s_app_beat) > pdMS_TO_TICKS(WATCHDOG_MS) ? 1 : ui_stalled_ms() > WATCHDOG_MS ? 2 : 0;
+    if (!cause) return;
+    ESP_LOGE(TAG, "Watchdog: the %s task has not answered for %d s - restarting", cause == 1 ? "app" : "screen", WATCHDOG_MS / 1000);
+    s_watchdog_magic = WATCHDOG_MAGIC;
+    s_watchdog_cause = cause;
+    esp_restart();
+}
+
+// After the start: 1 / 2 if the watchdog restarted the controller (which task hung), 0 otherwise.
+static int watchdog_restarted(void)
+{
+    int cause = esp_reset_reason() == ESP_RST_SW && s_watchdog_magic == WATCHDOG_MAGIC ? (int)s_watchdog_cause : 0;
+    s_watchdog_magic = 0;
+    return cause;
+}
+#endif
+
 // ---- tasks ----
 
 static void app_event(app_event_t ev)
@@ -4054,6 +4314,10 @@ static void app_event(app_event_t ev)
     case EV_MIDI:
         handle_midi(ev.arg);
         break;
+    case EV_APP_MESSAGE:
+        backup_message(ev.type, ev.data, ev.len);
+        free(ev.data);
+        break;
     }
 }
 
@@ -4070,7 +4334,8 @@ static void app_task(void *arg)
     app_event_t ev;
     size_t low_logged = SIZE_MAX;
     for (;;) {
-        if (xQueueReceive(s_events, &ev, pdMS_TO_TICKS(5000)) == pdTRUE) app_event(ev);
+        s_app_beat = xTaskGetTickCount();
+        if (xQueueReceive(s_events, &ev, pdMS_TO_TICKS(2000)) == pdTRUE) app_event(ev);
         // Internal RAM is what Bluetooth lives on: say so when its lowest free amount goes down (by 4 KB or more)
         size_t low = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
         if (low + 4096 <= low_logged) {
@@ -4144,6 +4409,12 @@ static void console_task(void *arg)
 #ifdef NANO_BENCH
         if (c == '%') {
             ui_bench();
+            continue;
+        }
+#endif
+#ifdef NANO_WDTEST
+        if (c == 'W' || c == 'U') {   // hang the app task / the screen on purpose
+            command('}', c == 'U');
             continue;
         }
 #endif
@@ -4247,6 +4518,15 @@ void app_main(void)
 #ifndef NANO_WEB
     xTaskCreate(app_task, "app", 6144, NULL, 4, NULL);
     xTaskCreate(console_task, "console", 3072, NULL, 3, NULL);
+    s_app_beat = xTaskGetTickCount();
+    const esp_timer_create_args_t watchdog_timer = { .callback = watchdog_cb, .name = "watchdog" };
+    ESP_ERROR_CHECK(esp_timer_create(&watchdog_timer, &s_watchdog_timer));
+    esp_timer_start_periodic(s_watchdog_timer, 1000 * 1000);
+    int hung = watchdog_restarted();
+    if (hung) {
+        ESP_LOGW(TAG, "The controller restarted itself: its %s task had hung", hung == 1 ? "app" : "screen");
+        ui_show_message(hung == 1 ? "The controller restarted itself after a hang (app)." : "The controller restarted itself after a hang (screen).");
+    }
 #endif
     ESP_LOGI(TAG, "Free internal RAM %u KB (largest block %u KB), PSRAM %u KB",
              (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
@@ -4255,7 +4535,8 @@ void app_main(void)
 #ifndef NANO_WEB
     nvs_stats_t stats;   // banks, FX presets, second effects and scenes share this store
     if (nvs_get_stats(NULL, &stats) == ESP_OK) {
-        ESP_LOGI(TAG, "Settings store: %u of %u entries used", (unsigned)stats.used_entries, (unsigned)stats.total_entries);
+        ESP_LOGI(TAG, "Settings store: %u entries used, room for %u more (%d %% full)", (unsigned)stats.used_entries,
+                 (unsigned)stats.available_entries, store_percent(NULL, NULL));
     }
 #endif
 }
