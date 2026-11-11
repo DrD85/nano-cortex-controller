@@ -116,7 +116,7 @@ typedef struct {
     uint8_t ab_active;   // bit n: B runs in slot n
     uint8_t ab_mode[NANO_FX_SLOTS];      // what the slot's switch does with A and B (UI_AB_*)
     bool rp_used;        // the reverb switch changes between two named settings of the reverb (not A / B, not the mix)
-    uint8_t rp_active;   // 0 / 1: the setting the switch went to last
+    uint8_t rp_active;   // 0 / 1: the setting that is on, 2: the reverb is set to neither (the next press: setting 1)
     uint8_t rp_set;      // bit n: setting n + 1 is set (for the reverb that is in the slot)
     char rp_names[2][16];
     uint8_t exp_amount;  // bit n: the Nano's expression pedal moves the Amount of the effect in slot n in this preset

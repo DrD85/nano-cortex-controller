@@ -3422,12 +3422,15 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
         int slot = view->mix_slot, n = view->rp_active == 1 ? 1 : 0;
         const nano_fx_model_t *model = nano_fx_model(st->fx_type[slot]);
         uint32_t color = model ? model->color : 0x00FFDD;
+        bool neither = view->rp_active > 1;   // the reverb is set to something else: its own name, the next press = setting 1
         if (n) color = blend(color, 0xFFFFFF, 0.5f);
-        set_tile(7, n ? "REVERB 2" : "REVERB 1", view->rp_names[n][0] ? view->rp_names[n] : n ? "Setting 2" : "Setting 1", color,
+        int next = neither ? 0 : !n;
+        set_tile(7, neither ? "REVERB" : n ? "REVERB 2" : "REVERB 1",
+                 neither ? nano_fx_name(st->fx_type[slot]) : view->rp_names[n][0] ? view->rp_names[n] : n ? "Setting 2" : "Setting 1", color,
                  st->fx_on[slot], false, model ? NANO_ICONS[model->icon] : icon, NULL);
         set_tile_pedal(7, st->fx_type[slot]);
-        // (under the caption: the other one, which the next press brings)
-        snprintf(s_tile_note_text[7], sizeof(s_tile_note_text[7]), LV_SYMBOL_SHUFFLE " %.15s", view->rp_names[!n][0] ? view->rp_names[!n] : n ? "Setting 1" : "Setting 2");
+        // (under the caption: the one the next press brings)
+        snprintf(s_tile_note_text[7], sizeof(s_tile_note_text[7]), LV_SYMBOL_SHUFFLE " %.15s", view->rp_names[next][0] ? view->rp_names[next] : next ? "Setting 2" : "Setting 1");
         s_tile_note[7] = s_tile_note_text[7];
     } else if (view->rev_b_type && view->mix_slot >= 0) {
         // The switch between the two reverbs: as the tile of a slot with a second effect - both symbols, and the

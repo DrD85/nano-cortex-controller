@@ -264,7 +264,12 @@ static struct {
     bool exp;          // the Nano preset has the reverb's Amount on the expression pedal
     bool touched;          // mix changed while editing: set back to the active position when closed
 } s_mix = { .slot = -1, .active = -1 };
-#define MIX_STORE_KEY "mix%02d"       // Pos 1, Pos 2 (0-255)
+#define MIX_STORE_KEY "mix%02d"       // before 1.15: Pos 1, Pos 2 (0-255), an entry per preset
+#define MIX_ALL_KEY "mixes"           // all presets in one entry (an entry per preset took three places in the store each)
+static struct {
+    uint8_t pos[NANO_PRESETS][2];     // Pos 1, Pos 2 (0-255)
+    uint8_t set[(NANO_PRESETS + 7) / 8];   // one bit per preset: it has its own positions
+} s_mixes;
 
 // Expression pedal of the Nano: what it moves in the current preset, from its heel to its toe position, and what
 // it switches on and off. Read with every new preset and edited in the expression dialog (the pedal button of the
@@ -390,7 +395,12 @@ typedef struct {
 _Static_assert(RP_HEAD == 40 && sizeof(rp_t) == 40 + 4 * NANO_MAX_PARAMS, "rp_t's head is stored as it is: it must not change");
 static rp_t s_rp[RP_PAIRS];
 static int s_rp_preset;                  // the preset they were read for, 0 = none yet
-static uint8_t s_rp_active[RP_PAIRS];    // 0 / 1: the setting the switch went to last (after loading a preset: 0)
+#define RP_NEITHER 2
+#define RP_MATCH 0.004f                  // values count as the same within this (0-1)
+static uint8_t s_rp_active[RP_PAIRS];    // 0 / 1: the setting that is on, RP_NEITHER: the reverb is set to something else.
+                                         // After loading a preset 0 until its values were read (rp_match).
+static esp_timer_handle_t s_rp_timer;    // reads the reverb's values after a preset change
+static int s_rp_check_tries;
 static int s_rp_capture = -1;            // the setting that waits for the reverb's values, -1 = none
 
 // USB playback volume (dB) from the Nano's settings; the slider sends at most one value per PARAM_SEND_MS.
@@ -438,13 +448,65 @@ typedef struct {
     uint8_t tap;                      // what the slot's switch does (UI_AB_*): 0 = a tap switches on / off and holding
     uint8_t reserved;                 // swaps (also data stored before 1.12), 1 = the other way round, 2 = a press swaps
     float values[NANO_MAX_PARAMS];
-} fx_b_t;                             // stored in NVS as it is
-_Static_assert(sizeof(fx_b_t) == 8 + 4 * NANO_MAX_PARAMS, "fx_b_t is stored as it is: its size must not change");
+} fx_b_t;                             // in NVS: its first FX_B_HEAD bytes, then the values that are set, 16 bits each
+#define FX_B_HEAD 8
+_Static_assert(sizeof(fx_b_t) == FX_B_HEAD + 4 * NANO_MAX_PARAMS && offsetof(fx_b_t, values) == FX_B_HEAD,
+               "fx_b_t's head is stored as it is, and firmware before 1.15 stored all of it: it must not change");
 typedef struct {
     uint32_t type;                    // model of A the values belong to
     uint8_t count, reserved;
     uint16_t values[NANO_MAX_PARAMS]; // 0-65535 = 0-1
-} fx_a_t;                             // A as last read, stored in NVS
+} fx_a_t;                             // A as last read; in NVS: its first FX_A_HEAD bytes, then the values that are set
+#define FX_A_HEAD 6
+_Static_assert(sizeof(fx_a_t) == 56 && offsetof(fx_a_t, values) == FX_A_HEAD,
+               "fx_a_t is stored from its start, and firmware before 1.15 stored all of it: it must not change");
+
+// A second effect in the store takes what it needs: the head and the values that are set, as 16-bit numbers.
+// Firmware before 1.15 stored the whole struct (B with floats); both are read, and store_compact() rewrites the old
+// entries once. The functions return the stored size / whether the entry could be read.
+static size_t fx_b_pack(const fx_b_t *b, uint8_t buf[FX_B_HEAD + 2 * NANO_MAX_PARAMS])
+{
+    size_t count = b->count > NANO_MAX_PARAMS ? NANO_MAX_PARAMS : b->count;
+    memcpy(buf, b, FX_B_HEAD);
+    buf[offsetof(fx_b_t, count)] = (uint8_t)count;
+    for (size_t i = 0; i < count; i++) {
+        uint16_t v = value_u16(b->values[i]);
+        memcpy(buf + FX_B_HEAD + 2 * i, &v, 2);
+    }
+    return FX_B_HEAD + 2 * count;
+}
+
+static bool fx_b_unpack(const uint8_t *buf, size_t size, fx_b_t *b)
+{
+    memset(b, 0, sizeof(*b));
+    if (size == sizeof(*b)) {   // as before 1.15
+        memcpy(b, buf, sizeof(*b));
+    } else if (size >= FX_B_HEAD && size == FX_B_HEAD + 2 * (size_t)buf[offsetof(fx_b_t, count)]) {
+        memcpy(b, buf, FX_B_HEAD);
+        for (size_t i = 0; i < b->count && i < NANO_MAX_PARAMS; i++) {
+            uint16_t v;
+            memcpy(&v, buf + FX_B_HEAD + 2 * i, 2);
+            b->values[i] = v / 65535.0f;
+        }
+    }
+    if (!b->type || b->count > NANO_MAX_PARAMS) memset(b, 0, sizeof(*b));
+    return b->type != 0;
+}
+
+static size_t fx_a_pack(const fx_a_t *a, uint8_t buf[sizeof(fx_a_t)])
+{
+    size_t count = a->count > NANO_MAX_PARAMS ? NANO_MAX_PARAMS : a->count;
+    memcpy(buf, a, FX_A_HEAD + 2 * count);
+    return FX_A_HEAD + 2 * count;
+}
+
+static bool fx_a_unpack(const uint8_t *buf, size_t size, fx_a_t *a)
+{
+    memset(a, 0, sizeof(*a));
+    if (size == sizeof(*a) || (size >= FX_A_HEAD && size == FX_A_HEAD + 2 * (size_t)buf[offsetof(fx_a_t, count)])) memcpy(a, buf, size);
+    if (!a->type || a->count > NANO_MAX_PARAMS) memset(a, 0, sizeof(*a));
+    return a->type != 0;
+}
 #define AB_COUNT NANO_FX_SLOTS         // one per FX slot (before 1.12: the reverb and Pre FX 1 only)
 enum { AB_IDLE, AB_TURNING_ON, AB_READING, AB_LOADING };
 #define AB_SEND_CHUNK 8               // parameter values per step (the BLE write queue holds 32)
@@ -680,6 +742,11 @@ static void usb_timer_cb(void *arg)
 static void fxp_timer_cb(void *arg)
 {
     command('#', 0);
+}
+
+static void rp_timer_cb(void *arg)
+{
+    command('-', 48);
 }
 
 static void scene_timer_cb(void *arg)
@@ -1311,6 +1378,8 @@ static bool ab_used(int slot);
 static bool rp_used(void);
 static bool rp_set(int n);
 static int rp_pair(void);
+static void rp_match(int slot, const float *values, int count);
+static void rp_check_later(int ms);
 
 static void looper_switches(void)
 {
@@ -1645,6 +1714,7 @@ static void toggle_fx(int slot)
         return;
     }
     set_fx(slot, !s_state.fx_on[slot]);
+    if (slot == s_mix.slot && s_state.fx_on[slot] && rp_used()) rp_check_later(500);   // on again: which setting is it?
     show();
     schedule_refresh(300);
 }
@@ -1900,6 +1970,7 @@ static void editor_param(int slot, int param, float value)
 {
     if (slot != s_edit.slot || param < 0 || param >= NANO_MAX_PARAMS) return;
     s_edit.values[param] = value;
+    if (s_edit.known) rp_match(slot, s_edit.values, s_edit.count);   // the reverb set by hand: is it still a setting?
     if (s_fxp.active >= 0) {   // changed by hand: no FX preset is current any more
         s_fxp.active = -1;
         fxp_show();
@@ -2405,14 +2476,50 @@ static void mix_exp_request(const char *label, int purpose)
     s_exp_asked[s_exp_asked_count++].at_us = esp_timer_get_time();
 }
 
+// The mix positions of all presets from the store. Entries of firmware before 1.15 (one per preset) are taken over
+// and removed - also after a backup of such a firmware was written back. Returns how many were taken over.
+static int mixes_load(void)
+{
+    memset(&s_mixes, 0, sizeof(s_mixes));
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return 0;
+    size_t size = sizeof(s_mixes);
+    if (nvs_get_blob(nvs, MIX_ALL_KEY, &s_mixes, &size) != ESP_OK || size != sizeof(s_mixes)) memset(&s_mixes, 0, sizeof(s_mixes));
+    int old = 0;
+    char key[16];
+    for (int preset = 1; preset <= NANO_PRESETS; preset++) {
+        uint8_t stored[2];
+        size = sizeof(stored);
+        snprintf(key, sizeof(key), MIX_STORE_KEY, preset);
+        if (nvs_get_blob(nvs, key, stored, &size) != ESP_OK || size != sizeof(stored)) continue;
+        memcpy(s_mixes.pos[preset - 1], stored, 2);
+        s_mixes.set[(preset - 1) / 8] |= (uint8_t)(1u << ((preset - 1) % 8));
+        old++;
+    }
+    // The new entry first, and only when it is safely there the old ones go.
+    if (old && nvs_set_blob(nvs, MIX_ALL_KEY, &s_mixes, sizeof(s_mixes)) == ESP_OK && nvs_commit(nvs) == ESP_OK) {
+        for (int preset = 1; preset <= NANO_PRESETS; preset++) {
+            snprintf(key, sizeof(key), MIX_STORE_KEY, preset);
+            nvs_erase_key(nvs, key);
+        }
+        nvs_commit(nvs);
+    } else {
+        old = 0;
+    }
+    nvs_close(nvs);
+    return old;
+}
+
 static void mix_store(void)
 {
-    char key[16];
-    snprintf(key, sizeof(key), MIX_STORE_KEY, s_state.current_preset);
-    uint8_t stored[2] = { (uint8_t)lroundf(s_mix.pos[0] * 255), (uint8_t)lroundf(s_mix.pos[1] * 255) };
+    int i = s_state.current_preset - 1;
+    if (i < 0 || i >= NANO_PRESETS) return;
+    s_mixes.pos[i][0] = (uint8_t)lroundf(s_mix.pos[0] * 255);
+    s_mixes.pos[i][1] = (uint8_t)lroundf(s_mix.pos[1] * 255);
+    s_mixes.set[i / 8] |= (uint8_t)(1u << (i % 8));
     nvs_handle_t nvs;
     if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
-    if (nvs_set_blob(nvs, key, stored, sizeof(stored)) != ESP_OK || nvs_commit(nvs) != ESP_OK) {
+    if (nvs_set_blob(nvs, MIX_ALL_KEY, &s_mixes, sizeof(s_mixes)) != ESP_OK || nvs_commit(nvs) != ESP_OK) {
         ui_show_message("Could not store Pos 1 / Pos 2 (memory full?).");
     }
     nvs_close(nvs);
@@ -2430,18 +2537,11 @@ static void mix_load(void)
     s_mix.touched = false;
     s_exp.known = false;
     s_exp.write = s_exp.verify = EXP_WRITE_NONE;
-    char key[16];
-    snprintf(key, sizeof(key), MIX_STORE_KEY, s_state.current_preset);
-    nvs_handle_t nvs;
-    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) == ESP_OK) {
-        uint8_t stored[2];
-        size_t size = sizeof(stored);
-        if (nvs_get_blob(nvs, key, stored, &size) == ESP_OK && size == sizeof(stored)) {
-            s_mix.pos[0] = stored[0] / 255.0f;
-            s_mix.pos[1] = stored[1] / 255.0f;
-            s_mix.known = s_mix.own = true;
-        }
-        nvs_close(nvs);
+    int i = s_state.current_preset - 1;
+    if (i >= 0 && i < NANO_PRESETS && (s_mixes.set[i / 8] >> (i % 8) & 1)) {
+        s_mix.pos[0] = s_mixes.pos[i][0] / 255.0f;
+        s_mix.pos[1] = s_mixes.pos[i][1] / 255.0f;
+        s_mix.known = s_mix.own = true;
     }
     mix_exp_request("Expression request", EXP_ASK_READ);
 }
@@ -2706,7 +2806,8 @@ static void ab_store(ab_t *ab)
     nvs_handle_t nvs;
     if (!ab->preset || nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
     ab_key(ab, false, key);
-    esp_err_t err = ab->b.type ? nvs_set_blob(nvs, key, &ab->b, sizeof(ab->b)) : nvs_erase_key(nvs, key);
+    uint8_t buf[FX_B_HEAD + 2 * NANO_MAX_PARAMS];
+    esp_err_t err = ab->b.type ? nvs_set_blob(nvs, key, buf, fx_b_pack(&ab->b, buf)) : nvs_erase_key(nvs, key);
     if ((err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) || nvs_commit(nvs) != ESP_OK) {
         ESP_LOGW(TAG, "Could not store the second effect of %s", ab_name(ab));
     }
@@ -2725,7 +2826,8 @@ static void ab_store_a(ab_t *ab)
         float v = ab->a_values[i] < 0 ? 0 : ab->a_values[i] > 1 ? 1 : ab->a_values[i];
         a.values[i] = (uint16_t)lroundf(v * 65535);
     }
-    esp_err_t err = ab->a_count && ab->b.type ? nvs_set_blob(nvs, key, &a, sizeof(a)) : nvs_erase_key(nvs, key);
+    uint8_t buf[sizeof(fx_a_t)];
+    esp_err_t err = ab->a_count && ab->b.type ? nvs_set_blob(nvs, key, buf, fx_a_pack(&a, buf)) : nvs_erase_key(nvs, key);
     if ((err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) || nvs_commit(nvs) != ESP_OK) {
         ESP_LOGW(TAG, "Could not store the A values of %s", ab_name(ab));
     }
@@ -2746,18 +2848,19 @@ static void ab_load(int preset)
         ab->reverb = i > 0 && i == s_mix.slot;   // (the state reply set s_mix.slot just before: the preset's reverb)
         char key[16];
         ab_key(ab, false, key);
-        size_t size = sizeof(ab->b);
-        if (!open || nvs_get_blob(nvs, key, &ab->b, &size) != ESP_OK || size != sizeof(ab->b) || !nano_fx_model(ab->b.type)) {
+        uint8_t buf[sizeof(fx_b_t)];
+        size_t size = sizeof(buf);
+        if (!open || nvs_get_blob(nvs, key, buf, &size) != ESP_OK || !fx_b_unpack(buf, size, &ab->b) || !nano_fx_model(ab->b.type)) {
             memset(&ab->b, 0, sizeof(ab->b));
         }
         if (ab->b.type) ESP_LOGI(TAG, "%s B of preset %d: %s%s", ab_name(ab), preset, nano_fx_name(ab->b.type),
                                  ab->b.tap == UI_AB_TAP ? " (a tap swaps)" : ab->b.tap == UI_AB_PRESS ? " (a press swaps)" : "");
         fx_a_t a;
-        size = sizeof(a);
+        size = sizeof(buf);
         int slot = i;
         ab_key(ab, true, key);
-        if (open && ab->b.type && nvs_get_blob(nvs, key, &a, &size) == ESP_OK && size == sizeof(a) &&
-            a.type == s_state.fx_type[slot] && a.count <= NANO_MAX_PARAMS) {
+        if (open && ab->b.type && nvs_get_blob(nvs, key, buf, &size) == ESP_OK && fx_a_unpack(buf, size, &a) &&
+            a.type == s_state.fx_type[slot]) {
             ab->a_type = a.type;
             ab->a_count = a.count;
             for (int n = 0; n < a.count; n++) ab->a_values[n] = a.values[n] / 65535.0f;
@@ -2779,6 +2882,7 @@ static void ab_leave_preset(void)
     ab_capture_editor();
     esp_timer_stop(s_ab_timer);
     esp_timer_stop(s_fxp_timer);   // a value run (FX preset, reverb setting) belongs to the preset that was on
+    esp_timer_stop(s_rp_timer);
     s_fxp.sent = s_fxp.send_count = 0;
     for (int i = 0; i < AB_COUNT; i++) {
         ab_t *ab = &s_ab[i];
@@ -2961,9 +3065,11 @@ static void ab_values_read(int slot, const float *values, int count)
         memcpy(ab->a_values, values, sizeof(float) * (size_t)count);
         if (!same) ab_store_a(ab);
     } else {   // values only: a state reply can still name the previous model
+        bool same = ab->b.count == count;   // (as for A: stored only when changed)
+        for (int i = 0; same && i < count; i++) same = value_u16(ab->b.values[i]) == value_u16(values[i]);
         ab->b.count = (uint8_t)count;
         memcpy(ab->b.values, values, sizeof(float) * (size_t)count);
-        ab_store(ab);
+        if (!same) ab_store(ab);
     }
     if (ab->cache_only) {
         ab->cache_only = false;
@@ -3000,6 +3106,7 @@ static void ab_step(void)
         ab->phase = AB_IDLE;
         app_sync_later();
         ESP_LOGI(TAG, "%s %c active (%d values)", ab_name(ab), ab->active ? 'B' : 'A', count);
+        rp_match(ab->slot, values, count);
         schedule_refresh(300);
         if (ab->open_editor) {
             ab->open_editor = false;
@@ -3112,6 +3219,36 @@ static bool rp_used(void)
     return p >= 0 && s_rp[p].used && s_rp[p].count[0] > 0 && s_rp[p].count[1] > 0;
 }
 
+// In the store: the head, then the values that are set. (The first 1.14 build stored both rows in full.)
+static size_t rp_pack(const rp_t *rp, uint8_t buf[sizeof(rp_t)])
+{
+    size_t c0 = rp->count[0], c1 = rp->count[1];
+    memcpy(buf, rp, RP_HEAD);
+    memcpy(buf + RP_HEAD, rp->values[0], 2 * c0);
+    memcpy(buf + RP_HEAD + 2 * c0, rp->values[1], 2 * c1);
+    return RP_HEAD + 2 * (c0 + c1);
+}
+
+static bool rp_unpack(const uint8_t *buf, size_t size, rp_t *rp)
+{
+    memset(rp, 0, sizeof(*rp));
+    if (size < RP_HEAD) return false;
+    memcpy(rp, buf, RP_HEAD);
+    size_t c0 = rp->count[0], c1 = rp->count[1];
+    if (!rp->type || c0 > NANO_MAX_PARAMS || c1 > NANO_MAX_PARAMS) {
+        memset(rp, 0, sizeof(*rp));
+    } else if (size == sizeof(rp_t)) {
+        memcpy(rp, buf, sizeof(rp_t));
+    } else if (size == RP_HEAD + 2 * (c0 + c1)) {
+        memcpy(rp->values[0], buf + RP_HEAD, 2 * c0);
+        memcpy(rp->values[1], buf + RP_HEAD + 2 * c0, 2 * c1);
+    } else {
+        memset(rp, 0, sizeof(*rp));
+    }
+    rp->name[0][sizeof(rp->name[0]) - 1] = rp->name[1][sizeof(rp->name[1]) - 1] = 0;
+    return rp->type != 0;
+}
+
 static void rp_load(int preset)
 {
     memset(s_rp, 0, sizeof(s_rp));
@@ -3126,21 +3263,8 @@ static void rp_load(int preset)
         char key[16];
         snprintf(key, sizeof(key), RP_STORE_KEYS[p], preset);
         size_t size = sizeof(buf);
-        if (nvs_get_blob(nvs, key, buf, &size) != ESP_OK || size < RP_HEAD) continue;
-        memcpy(rp, buf, RP_HEAD);
-        size_t c0 = rp->count[0], c1 = rp->count[1];
-        if (!rp->type || c0 > NANO_MAX_PARAMS || c1 > NANO_MAX_PARAMS) {
-            memset(rp, 0, sizeof(*rp));
-        } else if (size == sizeof(rp_t)) {   // as the first 1.14 builds stored it: both rows in full
-            memcpy(rp, buf, sizeof(rp_t));
-        } else if (size == RP_HEAD + 2 * (c0 + c1)) {
-            memcpy(rp->values[0], buf + RP_HEAD, 2 * c0);
-            memcpy(rp->values[1], buf + RP_HEAD + 2 * c0, 2 * c1);
-        } else {
-            memset(rp, 0, sizeof(*rp));
-        }
-        rp->name[0][sizeof(rp->name[0]) - 1] = rp->name[1][sizeof(rp->name[1]) - 1] = 0;
-        if (rp->type) {
+        if (nvs_get_blob(nvs, key, buf, &size) != ESP_OK) continue;
+        if (rp_unpack(buf, size, rp)) {
             ESP_LOGI(TAG, "Reverb settings of preset %d for %s: \"%s\" / \"%s\"%s", preset, nano_fx_name(rp->type), rp->name[0], rp->name[1],
                      rp->used ? " (on the reverb switch)" : "");
         }
@@ -3156,11 +3280,7 @@ static void rp_store(int p)
     uint8_t buf[sizeof(rp_t)];
     snprintf(key, sizeof(key), RP_STORE_KEYS[p], s_rp_preset);
     if (!s_rp_preset || nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
-    size_t c0 = rp->count[0], c1 = rp->count[1];
-    memcpy(buf, rp, RP_HEAD);
-    memcpy(buf + RP_HEAD, rp->values[0], 2 * c0);
-    memcpy(buf + RP_HEAD + 2 * c0, rp->values[1], 2 * c1);
-    esp_err_t err = !c0 && !c1 ? nvs_erase_key(nvs, key) : nvs_set_blob(nvs, key, buf, RP_HEAD + 2 * (c0 + c1));
+    esp_err_t err = !rp->count[0] && !rp->count[1] ? nvs_erase_key(nvs, key) : nvs_set_blob(nvs, key, buf, rp_pack(rp, buf));
     if ((err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) || nvs_commit(nvs) != ESP_OK) ui_show_message("Could not store the reverb settings (memory full?).");
     nvs_close(nvs);
 }
@@ -3192,6 +3312,44 @@ static int rp_pair_make(void)
     return p;
 }
 
+// Values of the reverb in the slot, just read or sent: which of its two settings is that? The tile and the switch
+// go by it, so a preset stored with setting 2, or a reverb set by hand, is shown as what it is.
+static void rp_match(int slot, const float *values, int count)
+{
+    int p = rp_pair();
+    if (slot != s_mix.slot || p < 0 || count <= 0) return;
+    const rp_t *rp = &s_rp[p];
+    uint8_t found = RP_NEITHER;
+    for (int n = 1; n >= 0; n--) {   // (both the same: setting 1)
+        bool same = rp->count[n] == count;
+        for (int i = 0; same && i < count; i++) same = fabsf(values[i] - rp->values[n][i] / 65535.0f) < RP_MATCH;
+        if (same) found = (uint8_t)n;
+    }
+    if (found == s_rp_active[p]) return;
+    ESP_LOGI(TAG, "Reverb: %s", found == RP_NEITHER ? "set to neither of its two settings" : rp->name[found]);
+    s_rp_active[p] = found;
+    show();
+}
+
+// After a preset change, or when the reverb comes on: read its values, to know which setting is on.
+static void rp_check_later(int ms)
+{
+    s_rp_check_tries = 0;
+    esp_timer_stop(s_rp_timer);
+    esp_timer_start_once(s_rp_timer, (uint64_t)ms * 1000);
+}
+
+static void rp_check(void)
+{
+    int slot = s_mix.slot;
+    if (!rp_used() || !s_state.fx_on[slot]) return;
+    if (param_read(READ_RP, slot)) return;   // (its reply goes to rp_match, as every reply for the reverb does)
+    if (++s_rp_check_tries <= 10) {          // another read is open, or the Nano is busy with the new preset
+        esp_timer_stop(s_rp_timer);
+        esp_timer_start_once(s_rp_timer, 300 * 1000);
+    }
+}
+
 // The reverb switch: the other setting - all its values go out, the reverb comes on if it was off.
 static void rp_toggle(void)
 {
@@ -3205,7 +3363,8 @@ static void rp_toggle(void)
         return;
     }
     if (!s_state.fx_on[slot]) toggle_fx(slot);
-    int next = s_rp_active[p] == 1 ? 0 : 1;
+    int next = s_rp_active[p] == 0 ? 1 : 0;   // (from neither: setting 1)
+    esp_timer_stop(s_rp_timer);   // (what is on is known from here)
     esp_timer_stop(s_fxp_timer);
     s_fxp.send_slot = slot;
     s_fxp.send_count = rp->count[next];
@@ -3234,6 +3393,7 @@ static void rp_capture(int n)
         ui_show_message("Switch the reverb on first - its values are read only while it is on.");
         return;
     }
+    esp_timer_stop(s_rp_timer);
     if (!param_read(READ_RP, slot)) {
         ui_show_message("The Nano is busy - tap again in a moment.");
         return;
@@ -3843,6 +4003,7 @@ static void handle_command(char c, int arg)
     case '-':   // reverb dialog: 1 / 2 = set that setting from the reverb, 16 / 17 = the switch uses the settings: no / yes
         if (arg == 1 || arg == 2) rp_capture(arg - 1);
         else if (arg == 16 || arg == 17) rp_use(arg == 17);
+        else if (arg == 48) rp_check();
 #ifdef NANO_RPTEST
         else if (arg == 32 && rp_pair() >= 0) {   // forget both settings of the reverb in the slot
             int p = rp_pair();
@@ -4091,12 +4252,17 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
                 editor_close();
                 mix_load();
                 rp_load(s_state.current_preset);
+                int cached = -1;
                 for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {   // values of an A for a later swap, if it is on
                     if (ab_used(slot) && s_state.fx_on[slot]) {
                         ab_cache(slot, 700);
+                        cached = slot;
                         break;   // (one read at a time: the others when they are switched, or at the swap)
                     }
                 }
+                // Which of the reverb's two settings the preset was stored with: from its values (that read above
+                // tells too, if it is the reverb's).
+                if (rp_used() && cached != s_mix.slot) rp_check_later(cached >= 0 ? 1300 : 700);
             }
             show();
             setlist_start_scene();
@@ -4227,7 +4393,9 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
     case NANO_MSG_FX_PARAMS_RESPONSE: {
         float values[NANO_MAX_PARAMS];
         int slot, count;
-        switch (param_read_reply(payload, len, &slot, values, &count)) {
+        int purpose = param_read_reply(payload, len, &slot, values, &count);
+        if (purpose != READ_NONE) rp_match(slot, values, count);
+        switch (purpose) {
         case READ_AB: ab_values_read(slot, values, count); break;
         case READ_RP: rp_values(slot, values, count); break;
         case READ_EDITOR: editor_values(slot, values, count); break;
@@ -4713,6 +4881,7 @@ static void app_event(app_event_t ev)
         esp_timer_stop(s_read_timer);
         esp_timer_stop(s_scene_timer);
         esp_timer_stop(s_fxp_timer);
+        esp_timer_stop(s_rp_timer);
         esp_timer_stop(s_app_read_timer);
         s_fxp.sent = s_fxp.send_count = 0;
         s_expect_preset = 0;
@@ -4866,6 +5035,78 @@ static void console_task(void *arg)
 }
 #endif
 
+// Entries of firmware before 1.15 take more room in the store than they need: second effects were stored with all
+// 24 values, the mix positions as an entry per preset. They are rewritten once (and again after a backup of such a
+// firmware was written back); a copy of the store as it was is kept first (store_rescue).
+static void store_compact(void)
+{
+    int rewritten = mixes_load();
+#ifndef NANO_WEB
+    enum { OLD_B = sizeof(fx_b_t), OLD_A = sizeof(fx_a_t), OLD_RP = sizeof(rp_t), MAX_KEYS = 320 };
+    static const struct { const char *prefix; int digits; size_t old; } FAMILIES[] = {
+        { "rvb", 2, OLD_B }, { "pf1", 2, OLD_B }, { "ab", 3, OLD_B },
+        { "rva", 2, OLD_A }, { "pfa", 2, OLD_A }, { "aa", 3, OLD_A },
+        { "rvp", 2, OLD_RP }, { "rvq", 2, OLD_RP },
+    };
+    char (*keys)[NVS_KEY_NAME_MAX_SIZE] = malloc(MAX_KEYS * sizeof(*keys));
+    uint8_t *family = malloc(MAX_KEYS);
+    nvs_handle_t nvs;
+    if (!keys || !family || nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) {
+        free(keys);
+        free(family);
+        return;
+    }
+    int count = 0;   // (the keys first: the store must not change while it is listed)
+    nvs_iterator_t it = NULL;
+    for (esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, BANK_STORE_NAMESPACE, NVS_TYPE_BLOB, &it);
+         err == ESP_OK && count < MAX_KEYS; err = nvs_entry_next(&it)) {
+        nvs_entry_info_t info;
+        if (nvs_entry_info(it, &info) != ESP_OK) continue;
+        for (size_t f = 0; f < sizeof(FAMILIES) / sizeof(FAMILIES[0]); f++) {
+            size_t n = strlen(FAMILIES[f].prefix);
+            if (strncmp(info.key, FAMILIES[f].prefix, n) != 0 || strlen(info.key) != n + (size_t)FAMILIES[f].digits) continue;
+            bool digits = true;
+            for (const char *c = info.key + n; *c; c++) digits = digits && isdigit((unsigned char)*c);
+            if (!digits) continue;
+            strlcpy(keys[count], info.key, sizeof(keys[count]));
+            family[count++] = (uint8_t)f;
+            break;
+        }
+    }
+    nvs_release_iterator(it);
+    int old = 0;
+    for (int i = 0; i < count; i++) {
+        size_t size = 0;
+        if (nvs_get_blob(nvs, keys[i], NULL, &size) == ESP_OK && size == FAMILIES[family[i]].old) old++;
+        else family[i] = 0xFF;   // as it should be already
+    }
+    if (old || rewritten) store_rescue();
+    for (int i = 0; i < count; i++) {
+        if (family[i] == 0xFF) continue;
+        uint8_t in[sizeof(rp_t)], out[sizeof(rp_t)];   // (the largest of the three)
+        size_t size = sizeof(in), packed = 0;
+        if (nvs_get_blob(nvs, keys[i], in, &size) != ESP_OK) continue;
+        if (size == OLD_B) {
+            fx_b_t b;
+            if (fx_b_unpack(in, size, &b)) packed = fx_b_pack(&b, out);
+        } else if (size == OLD_A) {
+            fx_a_t a;
+            if (fx_a_unpack(in, size, &a)) packed = fx_a_pack(&a, out);
+        } else if (size == OLD_RP) {
+            rp_t rp;
+            if (rp_unpack(in, size, &rp)) packed = rp_pack(&rp, out);
+        }
+        if (!packed || packed >= size) continue;   // (not readable: left as it is)
+        if (nvs_set_blob(nvs, keys[i], out, packed) == ESP_OK) rewritten++;
+    }
+    nvs_commit(nvs);
+    nvs_close(nvs);
+    free(keys);
+    free(family);
+#endif
+    if (rewritten) ESP_LOGW(TAG, "Settings store: %d entries of an earlier version rewritten to take less room", rewritten);
+}
+
 void app_main(void)
 {
     esp_err_t err = nvs_flash_init();
@@ -4881,6 +5122,7 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(err);
     store_cleanup();
+    store_compact();
 #ifdef NANO_WDTEST
     store_rescue();   // development: write the copy now, to read it back and compare
 #endif
@@ -4901,6 +5143,8 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&usb_timer, &s_usb_timer));
     const esp_timer_create_args_t fxp_timer = { .callback = fxp_timer_cb, .name = "fxp" };
     ESP_ERROR_CHECK(esp_timer_create(&fxp_timer, &s_fxp_timer));
+    const esp_timer_create_args_t rp_timer = { .callback = rp_timer_cb, .name = "rp" };
+    ESP_ERROR_CHECK(esp_timer_create(&rp_timer, &s_rp_timer));
     const esp_timer_create_args_t source_timer = { .callback = source_timer_cb, .name = "source" };
     ESP_ERROR_CHECK(esp_timer_create(&source_timer, &s_src_timer));
     const esp_timer_create_args_t exp_timer = { .callback = exp_timer_cb, .name = "exp" };
