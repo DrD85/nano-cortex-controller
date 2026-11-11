@@ -528,6 +528,10 @@ internal memory, and how full the settings memory is.
   seconds later; after such a start it says so, and the System page names the reason.
 - After a lost connection the controller is back as soon as the Nano is: it reads the current preset at once and
   the preset names again later, in a quiet moment.
+- **If the Nano is not found.** The Nano can be found over Bluetooth for a few seconds only after it was switched on
+  or lost its connection. If the controller comes later than that – it was off, or updated – put the Nano into
+  pairing mode: **EXIT + CAPTURE** on the Nano. The controller says so on its search screen after seven seconds,
+  and with a message if the Nano does not come back after a lost connection.
 
 ## What is stored where
 

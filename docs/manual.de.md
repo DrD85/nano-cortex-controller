@@ -559,6 +559,11 @@ internen Speicher und wie voll der Einstellungsspeicher ist.
   paar Sekunden später wieder verbunden; nach so einem Start meldet er das, und die System-Seite nennt den Grund.
 - Nach einem Verbindungsabriss ist der Controller wieder da, sobald der Nano es ist: Er liest sofort das aktuelle
   Preset und die Preset-Namen später, in einem ruhigen Moment.
+- **Wenn der Nano nicht gefunden wird.** Der Nano ist per Bluetooth nur ein paar Sekunden lang zu finden, nachdem er
+  eingeschaltet wurde oder seine Verbindung verloren hat. Kommt der Controller später – er war aus oder wurde
+  aktualisiert –, den Nano in den Pairing-Modus bringen: **EXIT + CAPTURE** am Nano. Der Controller sagt das nach
+  sieben Sekunden auf seinem Suchbildschirm und mit einer Meldung, wenn der Nano nach einem Verbindungsabriss nicht
+  wiederkommt.
 
 ## Was wo gespeichert ist
 

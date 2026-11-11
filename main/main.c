@@ -778,6 +778,17 @@ static void midi_gate_cb(void *arg)
     command('q', 0);
 }
 
+// The Nano can be found for a few seconds only after it lost its connection or was switched on. Later it has to be
+// put into pairing mode by hand: EXIT + CAPTURE on the Nano. The controller says so when the Nano has not come
+// after PAIR_HINT_US.
+#define PAIR_HINT_US (7 * 1000 * 1000)
+static esp_timer_handle_t s_pair_hint_timer;
+
+static void pair_hint_cb(void *arg)
+{
+    command(',', 0);
+}
+
 static void app_read_cb(void *arg)
 {
     command('j', 0);
@@ -3991,10 +4002,20 @@ static void handle_command(char c, int arg)
         return;
     }
     if (c == 'w' && looper_switch(arg)) return;        // looper mode keeps working without the Nano
+    if (c == ',') {                                    // the Nano has not come for some seconds
+#ifndef NANO_WEB
+        if (!nano_link_ready()) {
+            ESP_LOGW(TAG, "Nano not found yet - it may need pairing (EXIT + CAPTURE on the Nano)");
+            ui_splash_status("Not found yet - press EXIT + CAPTURE on the Nano", NULL);
+            if (s_state.names_loaded) ui_show_message("Nano not found - press EXIT + CAPTURE on it to pair again.");
+        }
+#endif
+        return;
+    }
     if (c == 'q') {                                    // MIDI gate timer: the Nano did not come
         nano_link_log_status();
 #ifndef NANO_WEB   // in the browser the start screen keeps asking to click CONNECT
-        ui_splash_status("No Nano Cortex yet - switch it on (tap to continue)", NULL);
+        ui_splash_status("No Nano yet - switch it on or press EXIT + CAPTURE on it (tap to continue)", NULL);
 #endif
         midi_ble_allow(true);
         app_link_allow_phone(true);
@@ -4952,6 +4973,7 @@ static void app_event(app_event_t ev)
 {
     switch (ev.kind) {
     case EV_LINK_UP:
+        esp_timer_stop(s_pair_hint_timer);
         s_incomplete_retries = 0;
         s_state_retries = 0;
         ui_set_link(true);
@@ -4974,6 +4996,8 @@ static void app_event(app_event_t ev)
         app_link_enable(false);  // the app can only use the Nano through the controller while it is connected
         esp_timer_stop(s_midi_gate_timer);
         esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
+        esp_timer_stop(s_pair_hint_timer);
+        esp_timer_start_once(s_pair_hint_timer, PAIR_HINT_US);
         s_tuner_on = false;
         s_last_preset = 0;
         s_exp_asked_count = 0;
@@ -5342,6 +5366,9 @@ void app_main(void)
     midi_ble_allow(false);   // first the Nano and its presets
     phone_midi_start(on_phone_midi, on_phone_state);
     esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
+    const esp_timer_create_args_t pair_hint_timer = { .callback = pair_hint_cb, .name = "pair" };
+    ESP_ERROR_CHECK(esp_timer_create(&pair_hint_timer, &s_pair_hint_timer));
+    esp_timer_start_once(s_pair_hint_timer, PAIR_HINT_US);
 
     pedal_assets_init();   // pictures for the pedal view, if the flash memory holds the file with them
     ui_init(command, on_param, on_text);
