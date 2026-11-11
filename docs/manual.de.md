@@ -274,9 +274,11 @@ vorne ist, bestimmt, was der Schalter ab dann tut**; der gerade verwendete träg
   *Room* und *Atmos* – mit allen Reglern (Mix, Decay, Damping …). Das Reverb bleibt dasselbe, es gibt also keinen
   Aussetzer. Einrichten: das Reverb so einstellen, wie es klingen soll (im FX-Editor von Kachel 7 oder am Nano),
   dann in der Zeile auf **Set from the reverb** tippen; für die andere Einstellung genauso. Ein Tipp auf den Namen
-  ändert ihn. **SAVE** braucht beide Einstellungen. Kachel 8 zeigt dann den Namen der Einstellung, die an ist, und
-  klein die, zu der der nächste Druck wechselt; bei Einstellung 2 ist die Kachel heller. Ein Druck schaltet das
-  Reverb auch ein, falls es aus war.
+  ändert ihn. **SAVE** braucht beide Einstellungen. Kachel 8 zeigt dann beide Namen als zwei Zeilen: Die
+  Einstellung, die an ist, ist gefüllt, die andere umrandet. Welche an ist, erkennt der Controller an den Werten des
+  Reverbs, auch nach einem Presetwechsel; steht das Reverb auf keiner von beiden (von Hand verstellt oder das Preset
+  mit anderen Werten gespeichert), ist keine Zeile gefüllt und der nächste Druck geht zur ersten Einstellung. Ein
+  Druck schaltet das Reverb auch ein, falls es aus war.
   Die zwei Einstellungen speichert der Controller, pro Preset, und sie sind **etwas Eigenes**: Mit dem A und B der
   Reverb-Kachel selbst (Kachel 7) haben sie nichts zu tun – die behält ihren zweiten Effekt und ihr Tippen oder
   Halten wie bisher.
@@ -284,8 +286,7 @@ vorne ist, bestimmt, was der Schalter ab dann tut**; der gerade verwendete träg
   Reverb-Kachel ein zweites Reverb (B) hat, auch dieses. Auf der Reverb-Kachel zu B wechseln, dieses Fenster öffnen
   und seine zwei genauso einrichten – oben rechts steht, welches Reverb gerade im Slot ist. Ab dann wechselt
   Fußschalter 8 zwischen den zwei Einstellungen des Reverbs, das gerade an ist. Bei einem Reverb ohne eigene
-  Einstellungen bleibt der Schalter bei Reverb A / B oder dem Mix, und die Kachel zeigt das. Nach dem Laden eines
-  Presets zeigt die Kachel Einstellung 1 – das Preset am besten mit Einstellung 1 auf dem Nano speichern.
+  Einstellungen bleibt der Schalter bei Reverb A / B oder dem Mix, und die Kachel zeigt das.
 
 ## Zweiter Effekt: A und B auf einem FX-Slot
 

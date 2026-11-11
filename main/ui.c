@@ -128,6 +128,9 @@ static lv_obj_t *s_cal_panel, *s_cal_bar, *s_cal_text, *s_cal_save;
 static lv_obj_t *s_ex_jack[2];   // the Nano's EXP/MIDI connector: [0] expression pedal, [1] MIDI
 static int s_jack_mode = -1;     // NANO_JACK_*, -1 = not known
 static bool s_linked;         // connected to the Nano
+// The reverb switch with two settings: both names as rows on the tile, the one that is on filled (draw_pair).
+typedef struct { bool shown, on; int active; char names[2][16]; uint32_t color; } tile_pair_t;   // active: 0 / 1, -1 = neither
+static tile_pair_t s_tile_pair[TILES];
 static int s_tile_marks[TILES];                 // 0 = none, else 0x200 | 0x100 if the tile is filled | bit n = FX slot n on
                                                 // | bit 16 + n = the scene carries settings for slot n
 static uint32_t s_slot_type[NANO_FX_SLOTS];     // effects of the current preset (filled by ui_show_state)
@@ -610,12 +613,13 @@ static void draw_scene_marks(lv_layer_t *layer, const lv_area_t *tile, int i)
         const nano_fx_model_t *model = nano_fx_model(s_slot_type[slot]);
         bool on = (s_tile_marks[i] >> slot) & 1;
         uint32_t color = filled ? s_tile_ink[i] : model ? model->color : 0x4A4F55;
-        lv_area_t a = { tile->x1 + 14 + slot * 21, tile->y1 + 16, tile->x1 + 14 + slot * 21 + 14, tile->y1 + 16 + 14 };
+        const int size = 20, pitch = 27, top = 12;   // (14 px marks could not be told apart from standing height)
+        lv_area_t a = { tile->x1 + 14 + slot * pitch, tile->y1 + top, tile->x1 + 14 + slot * pitch + size, tile->y1 + top + size };
         lv_draw_rect_dsc_t r;
         lv_draw_rect_dsc_init(&r);
-        r.radius = 4;
+        r.radius = 6;
         if (!model) {
-            a = (lv_area_t){ a.x1 + 5, a.y1 + 5, a.x2 - 5, a.y2 - 5 };
+            a = (lv_area_t){ a.x1 + 7, a.y1 + 7, a.x2 - 7, a.y2 - 7 };
             r.radius = LV_RADIUS_CIRCLE;
             r.bg_color = lv_color_hex(color);
             r.bg_opa = filled ? LV_OPA_50 : LV_OPA_COVER;
@@ -629,7 +633,7 @@ static void draw_scene_marks(lv_layer_t *layer, const lv_area_t *tile, int i)
         }
         lv_draw_rect(layer, &r, &a);
         if (model && ((s_tile_marks[i] >> (16 + slot)) & 1)) {   // the scene carries settings for this effect
-            lv_area_t bar = { a.x1 + 1, a.y2 + 4, a.x2 - 1, a.y2 + 6 };
+            lv_area_t bar = { a.x1 + 1, a.y2 + 4, a.x2 - 1, a.y2 + 7 };
             lv_draw_rect_dsc_init(&r);
             r.radius = 1;
             r.bg_color = lv_color_hex(color);
@@ -639,16 +643,51 @@ static void draw_scene_marks(lv_layer_t *layer, const lv_area_t *tile, int i)
     }
 }
 
+// The two settings of the reverb as two rows - the one that is on filled, the other outlined (as every pair of
+// states here: filled = on). With the reverb off the rows are dimmed, and the one that would be on stays marked.
+static void draw_pair(lv_layer_t *layer, const lv_area_t *tile, int i)
+{
+    const int h = 33, gap = 6, pad = 10;
+    for (int n = 0; n < 2; n++) {
+        int y2 = tile->y2 - pad - (1 - n) * (h + gap);
+        lv_area_t a = { tile->x1 + pad, y2 - h, tile->x2 - pad, y2 };
+        bool active = s_tile_pair[i].active == n;
+        uint32_t ink = s_tile_ink[i];
+        lv_draw_rect_dsc_t r;
+        lv_draw_rect_dsc_init(&r);
+        r.radius = 9;
+        if (active) {
+            r.bg_color = lv_color_hex(s_tile_pair[i].on ? ink : blend(s_tile_pair[i].color, TILE_OFF_BG, 0.45f));
+        } else {
+            r.bg_opa = LV_OPA_TRANSP;
+            r.border_width = 2;
+            r.border_color = lv_color_hex(s_tile_pair[i].on ? ink : 0x5D6267);
+            r.border_opa = s_tile_pair[i].on ? 110 : LV_OPA_COVER;
+        }
+        lv_draw_rect(layer, &r, &a);
+        lv_draw_label_dsc_t d;
+        lv_draw_label_dsc_init(&d);
+        d.font = &ui_font_title_22;
+        d.text = s_tile_pair[i].names[n];
+        d.align = LV_TEXT_ALIGN_LEFT;
+        d.color = lv_color_hex(active ? (s_tile_pair[i].on ? s_tile_pair[i].color : 0xFFFFFF) : s_tile_pair[i].on ? ink : 0xB9BDC2);
+        int lh = lv_font_get_line_height(d.font);
+        lv_area_t t = { a.x1 + 12, a.y1 + (h - lh) / 2 + 1, a.x2 - 8, a.y1 + (h - lh) / 2 + 1 + lh };
+        lv_draw_label(layer, &d, &t);
+    }
+}
+
 // A tile that is not active: its top row (symbol, caption, number) lies on the dimmed colour.
 static void on_tile_draw(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (!s_tile_head[i] && !s_tile_marks[i]) return;
+    if (!s_tile_head[i] && !s_tile_marks[i] && !s_tile_pair[i].shown) return;
     lv_area_t a;
     lv_obj_get_coords(lv_event_get_current_target_obj(e), &a);
     lv_area_t in = { a.x1 + 2, a.y1 + 2, a.x2 - 2, a.y2 - 2 };   // inside the border
     if (s_tile_head[i]) draw_top(lv_event_get_layer(e), &in, 14, 50, blend(s_tile_head[i], TILE_OFF_BG, 0.24f));
     if (s_tile_marks[i]) draw_scene_marks(lv_event_get_layer(e), &a, i);
+    if (s_tile_pair[i].shown) draw_pair(lv_event_get_layer(e), &a, i);
 }
 
 static void build_tile(lv_obj_t *parent, int i)
@@ -757,6 +796,7 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     s_tile_note[i] = NULL;
     s_tile_note_icon[i] = NULL;
     s_tile_marks[i] = 0;        // set again by show_scene_tiles
+    memset(&s_tile_pair[i], 0, sizeof(s_tile_pair[i]));   // set again for the reverb switch with two settings
     lv_obj_t *t = s_tile[i];
     uint32_t head = empty || active ? 0 : color;
     if (head != s_tile_head[i]) {
@@ -852,8 +892,10 @@ static void show_tile_extras(void)
     bool types_changed = memcmp(drawn_types, s_slot_type, sizeof(drawn_types)) != 0;
     memcpy(drawn_types, s_slot_type, sizeof(drawn_types));
     for (int i = 0; i < TILES; i++) {
-        if (s_tile_marks[i] != drawn_marks[i] || (types_changed && s_tile_marks[i])) {
+        static tile_pair_t drawn_pair[TILES];
+        if (s_tile_marks[i] != drawn_marks[i] || (types_changed && s_tile_marks[i]) || memcmp(&s_tile_pair[i], &drawn_pair[i], sizeof(drawn_pair[i]))) {
             drawn_marks[i] = s_tile_marks[i];
+            drawn_pair[i] = s_tile_pair[i];
             lv_obj_invalidate(s_tile[i]);
         }
         const lv_image_dsc_t *pedal = s_tile_pedal_type[i] ? nano_fx_pedal_tile(s_tile_pedal_type[i]) : NULL;
@@ -3417,21 +3459,20 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
     char caption[32];
     const lv_image_dsc_t *icon = NANO_ICONS[NANO_ICON_REVERB];
     if (view->rp_used && view->mix_slot >= 0) {
-        // The switch between two settings of the reverb: the tile carries the name of the one that is in, in the
-        // reverb's colour - the second one in the lighter shade
+        // The switch between two settings of the reverb: the tile carries both names as rows, the one that is in
+        // filled (draw_pair)
         int slot = view->mix_slot, n = view->rp_active == 1 ? 1 : 0;
         const nano_fx_model_t *model = nano_fx_model(st->fx_type[slot]);
         uint32_t color = model ? model->color : 0x00FFDD;
-        bool neither = view->rp_active > 1;   // the reverb is set to something else: its own name, the next press = setting 1
-        if (n) color = blend(color, 0xFFFFFF, 0.5f);
-        int next = neither ? 0 : !n;
-        set_tile(7, neither ? "REVERB" : n ? "REVERB 2" : "REVERB 1",
-                 neither ? nano_fx_name(st->fx_type[slot]) : view->rp_names[n][0] ? view->rp_names[n] : n ? "Setting 2" : "Setting 1", color,
-                 st->fx_on[slot], false, model ? NANO_ICONS[model->icon] : icon, NULL);
-        set_tile_pedal(7, st->fx_type[slot]);
-        // (under the caption: the one the next press brings)
-        snprintf(s_tile_note_text[7], sizeof(s_tile_note_text[7]), LV_SYMBOL_SHUFFLE " %.15s", view->rp_names[next][0] ? view->rp_names[next] : next ? "Setting 2" : "Setting 1");
-        s_tile_note[7] = s_tile_note_text[7];
+        bool neither = view->rp_active > 1;   // the reverb is set to something else: no row is filled, the next press = setting 1
+        set_tile(7, "REVERB", "", color, st->fx_on[slot], false, model ? NANO_ICONS[model->icon] : icon, NULL);
+        s_tile_pair[7].shown = true;
+        s_tile_pair[7].on = st->fx_on[slot];
+        s_tile_pair[7].active = neither ? -1 : n;
+        s_tile_pair[7].color = color;
+        for (int k = 0; k < 2; k++) {
+            snprintf(s_tile_pair[7].names[k], sizeof(s_tile_pair[7].names[k]), "%s", view->rp_names[k][0] ? view->rp_names[k] : k ? "Setting 2" : "Setting 1");
+        }
     } else if (view->rev_b_type && view->mix_slot >= 0) {
         // The switch between the two reverbs: as the tile of a slot with a second effect - both symbols, and the
         // colour says which one runs (B of the same reverb, a second setting of it: the lighter shade).

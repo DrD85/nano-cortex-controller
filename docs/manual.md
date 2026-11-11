@@ -259,16 +259,17 @@ switch does** from then on; the one in use carries a tick.
   *Atmos* – with all its controls (mix, decay, damping …). The reverb stays the same, so there is no gap in the
   sound. To set one up: set the reverb the way you want it (in the FX editor of tile 7 or on the Nano), then tap
   **Set from the reverb** in that row; do the same for the other one. Tap a name to change it. **SAVE** needs both
-  settings. Tile 8 then shows the name of the setting that is on and, small, the one the next press goes to; with
-  setting 2 on the tile is a lighter shade. A press also switches the reverb on if it was off.
+  settings. Tile 8 then shows both names as two rows: the setting that is on is filled, the other one outlined.
+  The controller tells which one is on from the reverb's values, also after a preset change; if the reverb is set
+  to neither (changed by hand, or the preset was stored with other values), no row is filled and the next press
+  goes to the first setting. A press also switches the reverb on if it was off.
   The two settings are stored on the controller, per preset, and are **their own thing**: they have nothing to do
   with the A and B of the reverb's own tile (tile 7), which keeps its second effect and its tap or hold as before.
   **Each reverb of the preset has its own two settings**: the preset's reverb (A) and, if the reverb's tile has a
   second reverb (B), that one too. Switch to B on the reverb's tile, open this dialog and set its two up the same
   way – the header shows which reverb is in the slot. From then on footswitch 8 changes between the two settings of
   whichever reverb is on. A reverb without settings of its own leaves the switch at reverb A / B or the mix, and
-  the tile shows that. After a preset is loaded the tile shows setting 1 – best store the preset on the Nano with
-  setting 1 on.
+  the tile shows that.
 
 ## Second effect: A and B on an FX slot
 
