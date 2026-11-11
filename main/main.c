@@ -30,7 +30,9 @@
 #endif
 #include "sdkconfig.h"
 #include "esp_app_desc.h"
+#ifndef NANO_WEB
 #include "esp_attr.h"
+#endif
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_system.h"
