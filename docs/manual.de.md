@@ -19,6 +19,18 @@ Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../R
 - **Nach oben wischen – Gig-Ansicht**: die Kacheln füllen den Bildschirm mit größeren Namen, eine schmale Leiste
   oben zeigt Verbindung, Preset-Nummer, Bank, Preset-Name, ungespeicherte Änderungen und den Modus (PRESETS / SCENES / FX).
   **Nach unten wischen**: zurück.
+- **Pedalansicht**: **PEDALS** in der Leiste der Gig-Ansicht zeigt die fünf FX-Slots als Pedale auf einem Brett,
+  sobald der Controller im FX-Modus ist – in Signalreihenfolge, der Platz des Amps ist zwischen Pre FX 2 und
+  Post FX 1 markiert. Unter jedem Pedal stehen sein Licht, sein Name und sein Fußschalter, in der Effektfarbe gefüllt,
+  solange es an ist; ein ausgeschaltetes Pedal steht im Dunkeln. Ein Tipp schaltet den Effekt, ein langer Druck öffnet
+  seinen FX-Editor, wie auf einer Kachel. **PEDALS** nochmal tippen bringt die Kacheln zurück. Fußschalter 1, 2 und 8
+  arbeiten wie immer, sie haben in dieser Ansicht nur kein Feld.
+
+  <img src="images/39-pedal-view.png" alt="" width="440">
+
+  Die veröffentlichte Firmware zeichnet jedes Pedal: seine Farbe und sein Symbol. Ein eigener Build kann stattdessen
+  Bilder zeigen – siehe `tools/gen_pedalboard.py`: Sie werden in einen Teil des Flash-Speichers geschrieben, den die
+  Firmware nicht benutzt, und von dort gezeichnet, wie sie sind; sie kosten also weder Speicher noch Zeit.
 - Rechts in der oberen Leiste: der **Pedal**-Knopf für das [Expression-Pedal](#expression-pedal), der
   **Szenen**-Knopf (Ebenen) und **Save**. Der Szenen-Knopf legt die [Szenen](#szenen) des aktuellen Presets auf die
   Kacheln 3–8, anstelle der Presets der Bank; nochmal tippen geht zurück. In der Gig-Ansicht macht ein Tipp auf den

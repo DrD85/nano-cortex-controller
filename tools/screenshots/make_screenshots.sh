@@ -20,7 +20,7 @@ find "$LVGL/src" -name '*.c' -print0 | xargs -0 -n 1 -P 8 sh -c '
 clang -O1 -w "-DLV_CONF_KCONFIG_EXTERNAL_INCLUDE=\"sdkconfig.h\"" \
     "-DTTF_PATH=\"$PWD/main/fonts/IBMPlexSans-SemiBold.ttf\"" \
     -I"$OUT" -Imain -I"$LVGL" -I"$LVGL/src" tools/screenshots/shots.c main/ui_fonts.c main/ui_icons.c main/nano_state.c main/fx_models.c \
-    main/fx_icons.c main/preset_icons.c main/fx_pedals.c main/ui_mem.c "$OUT"/obj/*.o -lm -o "$OUT/uishots"
+    main/fx_icons.c main/preset_icons.c main/fx_pedals.c main/ui_mem.c main/pedal_assets.c "$OUT"/obj/*.o -lm -o "$OUT/uishots"
 (cd "$OUT" && ./uishots)
 mkdir -p docs/images
 # A Python with Pillow (the ESP-IDF environment's Python usually has none)

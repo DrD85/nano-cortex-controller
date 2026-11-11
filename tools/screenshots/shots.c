@@ -1,3 +1,4 @@
+#include <stdlib.h>
 // Renders screenshots of the controller UI on a computer: the real main/ui.c with the board's LVGL configuration,
 // fed with example data. Output: shots/<name>.ppm; tools/screenshots/make_screenshots.sh turns them into
 // docs/images/<name>.png.
@@ -163,6 +164,18 @@ int main(void)
     lv_display_set_buffers(d, s_draw, NULL, sizeof(s_draw), LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(d, flush);
 
+    {   // PEDALBOARD=<file>: the own build's pictures for the pedal view (never for the published screenshots)
+        const char *file = getenv("PEDALBOARD");
+        FILE *f = file ? fopen(file, "rb") : NULL;
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            long size = ftell(f);
+            rewind(f);
+            uint8_t *data = malloc((size_t)size);
+            if (data && fread(data, 1, (size_t)size, f) == (size_t)size) pedal_assets_load(data, (size_t)size);
+            fclose(f);
+        }
+    }
     ui_init(on_command, on_param_cb, on_text_cb);
     ui_set_scene_names_source(example_scene_names);
     ui_splash_status("Connected - loading presets ...", "v1.4.1");
@@ -250,6 +263,18 @@ int main(void)
     view.fx_mode = false;
     ui_show_state(&st, &view);
     shot("03-fullscreen");
+    // Pedal view: the FX slots as pedals (drawn here; the own build has pictures in the flash memory)
+    view.fx_mode = true;
+    ui_set_pedal_view(true);
+    ui_show_state(&st, &view);
+    shot("39-pedal-view");
+    st.fx_on[2] = !st.fx_on[2];
+    ui_show_state(&st, &view);
+    shot("40-pedal-view-off");
+    st.fx_on[2] = !st.fx_on[2];
+    ui_set_pedal_view(false);
+    view.fx_mode = false;
+    ui_show_state(&st, &view);
     set_fullscreen(false);
 
     view.fx_mode = true;

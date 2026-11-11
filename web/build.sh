@@ -44,7 +44,7 @@ find "$LVGL/src" -name '*.c' -print0 | xargs -0 -n 1 -P 8 sh -c '
     [ -f "$o" ] || emcc -c -O2 -w "-DLV_CONF_KCONFIG_EXTERNAL_INCLUDE=\"sdkconfig.h\"" -I"$GEN" -I"$LVGL" -I"$LVGL/src" "$1" -o "$o"' _
 
 SOURCES=(main/main.c main/ui.c main/ui_fonts.c main/ui_icons.c main/nano_state.c main/library.c main/fx_models.c main/preset_icons.c
-         main/fx_icons.c main/fx_pedals.c main/ui_mem.c
+         main/fx_icons.c main/fx_pedals.c main/ui_mem.c main/pedal_assets.c
          web/platform.c web/board_web.c web/nano_link_web.c web/midi_web.c "$GEN/note_ttf.c")
 
 emcc "${CFLAGS[@]}" -DNANO_WEB=1 -DNANO_PUBLIC=1 "-DPROJECT_VER=\"$VERSION\"" -Iweb/shim -Imain \

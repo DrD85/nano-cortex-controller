@@ -55,6 +55,7 @@
 #include "nano_link.h"
 #include "nano_state.h"
 #include "ui.h"
+#include "pedal_assets.h"
 
 static const char *TAG = "nano_ctrl";
 
@@ -159,6 +160,7 @@ static int s_scene_last = -1;   // recalled last: the lit one if two scenes are 
 #define SCENE_VALUES_MAX (UI_SCENES * NANO_FX_SLOTS * (6 + 2 * NANO_MAX_PARAMS))
 #define SCENE_MODE_KEY "scenemode"
 #define LAYOUT_KEY "layout"   // { count, order[8] }
+#define PEDALS_KEY "pedals"   // 1 = the full-screen view shows the FX slots as pedals
 
 // Tile layout: footswitch / CC 50+p-1 / Chocolate switch p presses the switch s_layout[p - 1] (1-8) - for p up to
 // s_layout_count (6 or 8); the switches themselves keep their numbers everywhere else. Set in the layout dialog.
@@ -949,6 +951,8 @@ static bool layout_valid(int count, const uint8_t *order)
     return seen == 0x1FE;
 }
 
+static bool s_pedal_view;
+
 static void layout_load(void)
 {
     nvs_handle_t nvs;
@@ -962,7 +966,28 @@ static void layout_load(void)
     uint8_t switch1;
     size = 1;
     if (nvs_get_blob(nvs, SWITCH1_KEY, &switch1, &size) == ESP_OK && size == 1 && switch1 < UI_SWITCH1_COUNT) s_switch1 = switch1;
+    uint8_t pedals = 0;
+    size = 1;
+    if (nvs_get_blob(nvs, PEDALS_KEY, &pedals, &size) == ESP_OK && size == 1) s_pedal_view = pedals == 1;
     nvs_close(nvs);
+}
+
+// The "PEDALS" field of the full-screen bar: FX slots as pedals, or as tiles. (Also sent when the full-screen view
+// comes up, to have the state shown again: then nothing is stored.)
+static void pedal_view_set(bool on)
+{
+    if (on != s_pedal_view) {
+        s_pedal_view = on;
+        nvs_handle_t nvs;
+        if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
+            uint8_t stored = on;
+            if (nvs_set_blob(nvs, PEDALS_KEY, &stored, 1) == ESP_OK) nvs_commit(nvs);
+            nvs_close(nvs);
+        }
+        ESP_LOGI(TAG, "Pedal view %s", on ? "on" : "off");
+    }
+    ui_set_pedal_view(s_pedal_view);
+    if (nano_link_ready()) show();
 }
 
 // From the layout dialog: count << 24 | (switch at position p - 1) << 3p.
@@ -4074,6 +4099,7 @@ static void handle_command(char c, int arg)
     case '{': state_overdue(); break;
 
     case '(': library_when_quiet(); break;
+    case '_': pedal_view_set(arg != 0); break;
     case '[': ab_swap(arg); break;   // FX editor, A | B: the other one
     case '>': ab_set_tap(arg >> 8, arg & 0xFF); break;
     case 'M': editor_choose_model((uint32_t)arg); break;
@@ -5260,11 +5286,13 @@ void app_main(void)
     phone_midi_start(on_phone_midi, on_phone_state);
     esp_timer_start_once(s_midi_gate_timer, MIDI_GATE_US);
 
+    pedal_assets_init();   // pictures for the pedal view, if the flash memory holds the file with them
     ui_init(command, on_param, on_text);
     ui_set_scene_names_source(scene_names_read);
     uint8_t order[FOOTSWITCH_COUNT];
     for (int p = 0; p < FOOTSWITCH_COUNT; p++) order[p] = s_layout[p];
     ui_set_layout(s_layout_count, order, s_switch1);
+    ui_set_pedal_view(s_pedal_view);
     char version[40];
     snprintf(version, sizeof(version), "v%s", esp_app_get_description()->version);
 #ifdef NANO_WEB

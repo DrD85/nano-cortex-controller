@@ -18,6 +18,17 @@ Every function in detail. The short illustrated guide is in the [README](../READ
 - **Swipe left / right**: next / previous preset.
 - **Swipe up – gig view**: the tiles fill the screen with larger names, and a slim bar on top shows the
   connection, preset number, bank, preset name, unsaved changes and the mode (PRESETS / SCENES / FX). **Swipe down**: back.
+- **Pedal view**: **PEDALS** in the gig view's bar shows the five FX slots as pedals on a shelf whenever the
+  controller is in FX mode – in signal order, with the amp's place marked between Pre FX 2 and Post FX 1. Under each
+  pedal are its light, its name and its footswitch, filled in the effect's colour while it is on; a pedal that is
+  off stands in the dark. A tap switches the effect, a long press opens its FX editor, as on a tile. Tap **PEDALS**
+  again for the tiles. Footswitches 1, 2 and 8 work as always, they just have no field in this view.
+
+  <img src="images/39-pedal-view.png" alt="" width="440">
+
+  The published firmware draws every pedal: its colour and symbol. An own build can show pictures instead – see
+  `tools/gen_pedalboard.py`: they are written to a part of the flash memory the firmware does not use and drawn
+  from there as they are, so they cost neither memory nor time.
 - On the right of the top bar: the **pedal** button for the [expression pedal](#expression-pedal), the **scenes**
   button (layers) and **Save**. The scenes button puts the [scenes](#scenes) of the current preset on tiles 3–8
   instead of the bank's presets; tap it again to go back. In the gig view a tap on the mode at the top right does

@@ -10,6 +10,7 @@
 #include "esp_lvgl_port.h"
 #include "fx_icons.h"
 #include "fx_pedals.h"
+#include "pedal_assets.h"
 #include "library.h"
 #include "ui_icons.h"
 #include "preset_icons.h"
@@ -62,7 +63,14 @@ static bool s_looper_mode;   // the tiles are the switches of a looper app (foot
 
 static lv_obj_t *s_main;   // everything of the main screen (hidden under the full-screen editor and tuner)
 static lv_obj_t *s_status_dot, *s_status, *s_edited, *s_app, *s_midi_icon, *s_preset_chip, *s_preset_chip_text;
-static lv_obj_t *s_gig_bar, *s_gig_dot, *s_gig_number, *s_gig_bank, *s_gig_name, *s_gig_dirty, *s_gig_mode;
+static lv_obj_t *s_gig_bar, *s_gig_dot, *s_gig_number, *s_gig_bank, *s_gig_name, *s_gig_dirty, *s_gig_mode, *s_gig_view;
+// Pedal view: in the full-screen view's FX mode the five slots as pedals on a shelf instead of tiles (the "PEDALS"
+// field of its bar). A pedal's picture comes from the picture file in the flash memory (pedal_assets.h); a model
+// without one - and every model in the published firmware - is drawn: colour, symbol, name.
+static lv_obj_t *s_pedals, *s_pv_slot[NANO_FX_SLOTS], *s_pv_image[NANO_FX_SLOTS], *s_pv_drawn[NANO_FX_SLOTS], *s_pv_icon[NANO_FX_SLOTS],
+                *s_pv_led[NANO_FX_SLOTS], *s_pv_name[NANO_FX_SLOTS], *s_pv_key[NANO_FX_SLOTS], *s_pv_cap[NANO_FX_SLOTS], *s_pv_num[NANO_FX_SLOTS];
+static bool s_pedal_view;     // chosen (kept by the controller)
+static bool s_pedals_shown;   // on the screen now: chosen, full screen, FX mode
 static lv_obj_t *s_capture_title;
 static uint32_t s_tile_accent[TILES];   // colour of the pedal drawing on the tile
 static lv_obj_t *s_preset_number, *s_preset_name, *s_capture, *s_cab;
@@ -242,6 +250,8 @@ static void on_tile(lv_event_t *e)
 }
 
 static void set_fullscreen(bool on);
+static void on_pedal_view(lv_event_t *e);
+static void build_pedals(lv_obj_t *parent);
 
 static void open_bank_editor(int tile);
 static void open_looper_editor(int tile);
@@ -540,7 +550,7 @@ static void place_tile(int i)
 {
     int h = tile_height(), p = tile_position(i), columns = s_layout_count / 2;
     s_tile_w = (780 - (columns - 1) * TILE_GAP) / columns;   // 186 with four columns, 252 with three
-    lv_obj_set_hidden(s_tile[i], p < 0);
+    lv_obj_set_hidden(s_tile[i], p < 0 || s_pedals_shown);
     if (p < 0) return;
     lv_obj_set_size(s_tile[i], s_tile_w, h);
     lv_obj_set_pos(s_tile[i], 10 + (p % columns) * (s_tile_w + TILE_GAP), (s_fullscreen ? FULL_TILE_Y : TILE_Y) + (p / columns) * (h + 8));
@@ -694,6 +704,181 @@ static void on_tile_draw(lv_event_t *e)
     if (s_tile_pair[i].shown) draw_pair(lv_event_get_layer(e), &a, i);
 }
 
+// ---- pedal view ----
+
+#define PV_SLOT_W 156
+#define PV_H (480 - FULL_TILE_Y - 8)
+#define PV_BASE 84            // from the shelf's lower edge up to the line the pedals stand on
+
+static void on_pedal_view(lv_event_t *e)
+{
+    (void)e;
+    s_pedal_view = !s_pedal_view;
+    send('_', s_pedal_view);   // the controller keeps it and shows the state again
+}
+
+// The pedals instead of the tiles, or back: only what is shown changes hands, both are built and kept up to date.
+static void pedals_show(bool shown)
+{
+    if (shown == s_pedals_shown) return;
+    s_pedals_shown = shown;
+    lv_obj_set_hidden(s_pedals, !shown);
+    for (int i = 0; i < TILES; i++) place_tile(i);
+}
+
+static void build_pedals(lv_obj_t *parent)
+{
+    s_pedals = lv_obj_create(parent);
+    lv_obj_remove_style_all(s_pedals);
+    lv_obj_set_pos(s_pedals, 10, FULL_TILE_Y);
+    lv_obj_set_size(s_pedals, 780, PV_H);
+    lv_obj_set_style_radius(s_pedals, 16, 0);
+    lv_obj_set_style_bg_color(s_pedals, lv_color_hex(PANEL_BG), 0);
+    lv_obj_set_style_bg_opa(s_pedals, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_pedals, 1, 0);
+    lv_obj_set_style_border_color(s_pedals, lv_color_hex(CARD_BORDER), 0);
+    lv_obj_set_scrollable(s_pedals, false);
+    // Between Pre FX 2 and Post FX 1: where the capture and the cab are in the chain
+    lv_obj_t *amp_line = lv_obj_create(s_pedals);
+    lv_obj_remove_style_all(amp_line);
+    lv_obj_set_size(amp_line, 1, PV_H - PV_BASE - 36);
+    lv_obj_set_pos(amp_line, 2 * PV_SLOT_W, 30);
+    lv_obj_set_style_bg_color(amp_line, lv_color_hex(0x33383E), 0);
+    lv_obj_set_style_bg_opa(amp_line, LV_OPA_COVER, 0);
+    lv_obj_t *amp = label(s_pedals, &ui_font_12, 0x969AA0);
+    lv_label_set_text(amp, "AMP");
+    lv_obj_set_style_text_letter_space(amp, 1, 0);
+    lv_obj_set_style_pad_hor(amp, 7, 0);
+    lv_obj_set_style_pad_ver(amp, 2, 0);
+    lv_obj_set_style_radius(amp, 6, 0);
+    lv_obj_set_style_bg_color(amp, lv_color_hex(PANEL_BG), 0);
+    lv_obj_set_style_bg_opa(amp, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(amp, 1, 0);
+    lv_obj_set_style_border_color(amp, lv_color_hex(0x33383E), 0);
+    lv_obj_align(amp, LV_ALIGN_TOP_LEFT, 2 * PV_SLOT_W - 22, 8);
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
+        lv_obj_t *box = lv_obj_create(s_pedals);
+        s_pv_slot[slot] = box;
+        lv_obj_remove_style_all(box);
+        lv_obj_set_pos(box, slot * PV_SLOT_W, 0);
+        lv_obj_set_size(box, PV_SLOT_W, PV_H);
+        lv_obj_set_scrollable(box, false);
+        lv_obj_set_clickable(box, true);
+        lv_obj_set_style_opa(box, 190, LV_STATE_PRESSED);
+        lv_obj_add_event_cb(box, on_tile, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)(2 + slot));
+        lv_obj_add_event_cb(box, on_tile_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)(2 + slot));
+
+        s_pv_image[slot] = lv_image_create(box);
+        lv_obj_align(s_pv_image[slot], LV_ALIGN_BOTTOM_MID, 0, -PV_BASE);
+        lv_obj_set_hidden(s_pv_image[slot], true);
+
+        // A pedal without a picture: an enclosure in the effect's colour with its symbol and a footswitch
+        lv_obj_t *drawn = lv_obj_create(box);
+        s_pv_drawn[slot] = drawn;
+        lv_obj_remove_style_all(drawn);
+        lv_obj_set_size(drawn, 126, 220);
+        lv_obj_align(drawn, LV_ALIGN_BOTTOM_MID, 0, -PV_BASE);
+        lv_obj_set_style_radius(drawn, 14, 0);
+        lv_obj_set_style_bg_color(drawn, lv_color_hex(0x2A2E33), 0);
+        lv_obj_set_style_bg_grad_color(drawn, lv_color_hex(0x15171A), 0);
+        lv_obj_set_style_bg_grad_dir(drawn, LV_GRAD_DIR_VER, 0);
+        lv_obj_set_style_bg_opa(drawn, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(drawn, 2, 0);
+        lv_obj_set_scrollable(drawn, false);
+        lv_obj_set_clickable(drawn, false);
+        s_pv_icon[slot] = lv_image_create(drawn);
+        lv_image_set_scale(s_pv_icon[slot], 512);   // the 36 px symbol at twice its size
+        lv_obj_set_style_image_recolor_opa(s_pv_icon[slot], LV_OPA_COVER, 0);
+        lv_obj_align(s_pv_icon[slot], LV_ALIGN_TOP_MID, 0, 46);
+        lv_obj_t *stomp = lv_obj_create(drawn);
+        lv_obj_remove_style_all(stomp);
+        lv_obj_set_size(stomp, 38, 38);
+        lv_obj_set_style_radius(stomp, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_width(stomp, 3, 0);
+        lv_obj_set_style_border_color(stomp, lv_color_hex(0x6B7076), 0);
+        lv_obj_set_style_bg_color(stomp, lv_color_hex(0x0D0F11), 0);
+        lv_obj_set_style_bg_opa(stomp, LV_OPA_COVER, 0);
+        lv_obj_align(stomp, LV_ALIGN_BOTTOM_MID, 0, -22);
+        lv_obj_set_hidden(drawn, true);
+
+        // Under the pedal: its light and name, then the footswitch - filled while the effect is on
+        s_pv_led[slot] = lv_obj_create(box);
+        lv_obj_remove_style_all(s_pv_led[slot]);
+        lv_obj_set_size(s_pv_led[slot], 10, 10);
+        lv_obj_set_style_radius(s_pv_led[slot], LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_width(s_pv_led[slot], 2, 0);
+        lv_obj_align(s_pv_led[slot], LV_ALIGN_BOTTOM_LEFT, 12, -(PV_BASE - 20));
+        s_pv_name[slot] = label(box, &ui_font_16, TEXT);
+        lv_obj_set_size(s_pv_name[slot], PV_SLOT_W - 32, lv_font_get_line_height(&ui_font_16));
+        lv_label_set_long_mode(s_pv_name[slot], LV_LABEL_LONG_DOT);
+        lv_obj_align(s_pv_name[slot], LV_ALIGN_BOTTOM_LEFT, 28, -(PV_BASE - 26));
+        s_pv_key[slot] = lv_obj_create(box);
+        lv_obj_remove_style_all(s_pv_key[slot]);
+        lv_obj_set_size(s_pv_key[slot], PV_SLOT_W - 20, 34);
+        lv_obj_align(s_pv_key[slot], LV_ALIGN_BOTTOM_MID, 0, -12);
+        lv_obj_set_style_radius(s_pv_key[slot], 9, 0);
+        lv_obj_set_style_border_width(s_pv_key[slot], 2, 0);
+        lv_obj_set_clickable(s_pv_key[slot], false);
+        static const char *const SHORT[NANO_FX_SLOTS] = { "PRE 1", "PRE 2", "POST 1", "POST 2", "POST 3" };
+        s_pv_cap[slot] = label(s_pv_key[slot], &ui_font_14, TEXT);
+        lv_label_set_text(s_pv_cap[slot], SHORT[slot]);
+        lv_obj_set_style_text_letter_space(s_pv_cap[slot], 1, 0);
+        lv_obj_align(s_pv_cap[slot], LV_ALIGN_LEFT_MID, 10, 0);
+        s_pv_num[slot] = label(s_pv_key[slot], &ui_font_24, TEXT);
+        lv_obj_align(s_pv_num[slot], LV_ALIGN_RIGHT_MID, -10, 0);
+    }
+    lv_obj_set_hidden(s_pedals, true);
+}
+
+// The five slots as they are now (called with every state while the pedals are shown, and when they come up).
+static void show_pedals(const nano_state_t *st)
+{
+    char text[8];
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
+        uint32_t type = st->fx_known ? st->fx_type[slot] : 0;
+        const nano_fx_model_t *model = nano_fx_model(type);
+        bool on = model && st->fx_on[slot];
+        uint32_t color = model ? model->color : 0x5D6267;
+        const lv_image_dsc_t *picture = model ? pedal_asset(type) : NULL;
+        set_hidden(s_pv_image[slot], picture == NULL);
+        set_hidden(s_pv_drawn[slot], picture != NULL || !model);
+        if (picture) {
+            set_image(s_pv_image[slot], picture);
+            set_num_prop(s_pv_image[slot], LV_STYLE_IMAGE_OPA, on ? LV_OPA_COVER : 82);   // off: in the dark
+        } else if (model) {
+            set_image(s_pv_icon[slot], NANO_ICONS[model->icon]);
+            set_color_prop(s_pv_icon[slot], LV_STYLE_IMAGE_RECOLOR, color);
+            set_color_prop(s_pv_drawn[slot], LV_STYLE_BORDER_COLOR, color);
+            set_num_prop(s_pv_drawn[slot], LV_STYLE_OPA, on ? LV_OPA_COVER : 100);
+        }
+        set_color_prop(s_pv_led[slot], LV_STYLE_BG_COLOR, color);
+        set_num_prop(s_pv_led[slot], LV_STYLE_BG_OPA, on ? LV_OPA_COVER : LV_OPA_TRANSP);
+        set_color_prop(s_pv_led[slot], LV_STYLE_BORDER_COLOR, on ? color : 0x5D6267);
+        const char *name = model ? nano_fx_name(type) : "Empty";
+        lv_point_t size;   // a long name in the smaller size rather than cut off
+        lv_text_get_size(&size, name, &ui_font_16, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        set_ptr_prop(s_pv_name[slot], LV_STYLE_TEXT_FONT, size.x > PV_SLOT_W - 34 ? &ui_font_14 : &ui_font_16);
+        set_text(s_pv_name[slot], name);
+        set_color_prop(s_pv_name[slot], LV_STYLE_TEXT_COLOR, on ? TEXT : 0x969AA0);
+        uint32_t ink = on ? ink_for(color) : 0xC8CCD1;
+        set_color_prop(s_pv_key[slot], LV_STYLE_BG_COLOR, color);
+        set_num_prop(s_pv_key[slot], LV_STYLE_BG_OPA, on ? LV_OPA_COVER : LV_OPA_TRANSP);
+        set_color_prop(s_pv_key[slot], LV_STYLE_BORDER_COLOR, on ? color : blend(color, PANEL_BG, 0.45f));
+        set_color_prop(s_pv_cap[slot], LV_STYLE_TEXT_COLOR, ink);
+        set_color_prop(s_pv_num[slot], LV_STYLE_TEXT_COLOR, ink);
+        int p = tile_position(2 + slot);   // the footswitch that presses it (none: the slot is not on the six-field layout)
+        snprintf(text, sizeof(text), "%d", p + 1);
+        set_text(s_pv_num[slot], p >= 0 ? text : "");
+    }
+}
+
+void ui_set_pedal_view(bool on)
+{
+    lvgl_port_lock(0);
+    s_pedal_view = on;
+    lvgl_port_unlock();
+}
+
 static void build_tile(lv_obj_t *parent, int i)
 {
     lv_obj_t *tile = lv_obj_create(parent);
@@ -767,7 +952,7 @@ void ui_flash_tile(int i)
 {
     if (i < 0 || i >= TILES) return;
     lvgl_port_lock(0);
-    lv_obj_t *t = s_tile[i];
+    lv_obj_t *t = s_pedals_shown && i >= 2 && i < 2 + NANO_FX_SLOTS ? s_pv_key[i - 2] : s_tile[i];
     lv_obj_set_style_outline_width(t, 4, 0);
     lv_obj_set_style_outline_pad(t, 2, 0);
     lv_obj_set_style_outline_color(t, lv_color_white(), 0);
@@ -3332,7 +3517,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_style_text_letter_space(s_gig_bank, 1, 0);
     lv_obj_align_to(s_gig_bank, badge, LV_ALIGN_OUT_RIGHT_MID, 12, 0);
     s_gig_name = label(s_gig_bar, &ui_font_title_22, TEXT);
-    lv_obj_set_width(s_gig_name, 440);
+    lv_obj_set_width(s_gig_name, 380);   // (between the number at the left and the two fields at the right)
     lv_obj_set_style_text_align(s_gig_name, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(s_gig_name, LV_LABEL_LONG_DOT);
     lv_obj_align(s_gig_name, LV_ALIGN_CENTER, 0, 0);
@@ -3342,14 +3527,32 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_style_border_width(s_gig_dirty, 0, 0);
     lv_obj_set_style_bg_color(s_gig_dirty, lv_color_hex(ORANGE), 0);
     lv_obj_set_hidden(s_gig_dirty, true);
-    s_gig_mode = label(s_gig_bar, &ui_font_14, TEXT);
+    lv_obj_t *gig_right = lv_obj_create(s_gig_bar);   // the two fields at the right: PEDALS | the mode
+    lv_obj_remove_style_all(gig_right);
+    lv_obj_set_size(gig_right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(gig_right, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(gig_right, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(gig_right, 8, 0);
+    lv_obj_align(gig_right, LV_ALIGN_RIGHT_MID, -12, 0);
+    s_gig_view = label(gig_right, &ui_font_14, TEXT);
+    lv_label_set_text(s_gig_view, "PEDALS");
+    lv_obj_set_style_text_letter_space(s_gig_view, 1, 0);
+    lv_obj_set_style_pad_hor(s_gig_view, 11, 0);
+    lv_obj_set_style_pad_ver(s_gig_view, 5, 0);
+    lv_obj_set_style_radius(s_gig_view, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_width(s_gig_view, 2, 0);
+    lv_obj_set_style_border_color(s_gig_view, lv_color_hex(TEXT), 0);
+    lv_obj_set_style_bg_color(s_gig_view, lv_color_hex(TEXT), 0);
+    lv_obj_set_clickable(s_gig_view, true);
+    lv_obj_set_ext_click_area(s_gig_view, 12);
+    lv_obj_add_event_cb(s_gig_view, on_pedal_view, LV_EVENT_CLICKED, NULL);
+    s_gig_mode = label(gig_right, &ui_font_14, TEXT);
     lv_obj_set_style_text_letter_space(s_gig_mode, 1, 0);
     lv_obj_set_style_pad_hor(s_gig_mode, 11, 0);
     lv_obj_set_style_pad_ver(s_gig_mode, 5, 0);
     lv_obj_set_style_radius(s_gig_mode, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_border_width(s_gig_mode, 2, 0);
     lv_obj_set_style_border_color(s_gig_mode, lv_color_hex(TEXT), 0);
-    lv_obj_align(s_gig_mode, LV_ALIGN_RIGHT_MID, -12, 0);
     lv_obj_set_clickable(s_gig_mode, true);   // a tap: as the Scenes button of the top bar, which is hidden here
     lv_obj_set_ext_click_area(s_gig_mode, 14);
     lv_obj_add_event_cb(s_gig_mode, on_scene_button, LV_EVENT_CLICKED, NULL);
@@ -3362,6 +3565,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
                                    &s_cab_square, &s_cab, &s_cab_slot_label, NULL);
 
     for (int i = 0; i < TILES; i++) build_tile(s_main, i);
+    build_pedals(s_main);
     build_picker(screen);
     build_bank_editor(screen);
     build_looper_editor(screen);
@@ -3397,8 +3601,10 @@ static void set_fullscreen(bool on)
     lv_obj_set_hidden(s_source_card[0], on);
     lv_obj_set_hidden(s_source_card[1], on);
     lv_obj_set_hidden(s_gig_bar, !on);
+    if (!on) s_pedals_shown = false, lv_obj_set_hidden(s_pedals, true);   // (the pedals belong to the full-screen view)
     for (int i = 0; i < TILES; i++) place_tile(i);
     fit_names();
+    if (on && s_pedal_view) send('_', 1);   // the state once more: the pedals come up with it
 }
 
 void ui_set_app(bool connected)
@@ -3714,7 +3920,7 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     set_text(s_gig_bank, where);
     set_text(s_gig_name, shown);
     lv_text_get_size(&name_size, shown, &ui_font_title_22, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-    half = (name_size.x < 440 ? name_size.x : 440) / 2;
+    half = (name_size.x < 380 ? name_size.x : 380) / 2;
     set_align_if(s_gig_dirty, LV_ALIGN_CENTER, half + 12, 0);
     set_hidden(s_gig_dirty, !st->dirty);
     set_text(s_gig_mode, view->looper ? "LOOPER" : view->fx_mode ? "FX" : view->scenes ? "SCENES" : "PRESETS");
@@ -3777,6 +3983,13 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     else show_preset_tiles(st, view);
     show_tile_extras();
     fit_names();
+    // The pedal view: its field in the full-screen bar is filled while it is chosen; the pedals take the tiles' place
+    // in FX mode
+    set_num_prop(s_gig_view, LV_STYLE_BG_OPA, s_pedal_view ? LV_OPA_COVER : LV_OPA_TRANSP);
+    set_color_prop(s_gig_view, LV_STYLE_TEXT_COLOR, s_pedal_view ? INK : TEXT);
+    bool pedals = s_pedal_view && s_fullscreen && view->fx_mode && !view->looper;
+    if (pedals) show_pedals(st);
+    pedals_show(pedals);
 
     lvgl_port_unlock();
 }

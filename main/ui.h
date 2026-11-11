@@ -254,6 +254,10 @@ void ui_show_system(const char *text);
 // Footswitch tile 0-7 lights up for a moment (the press arrived).
 void ui_flash_tile(int tile);
 
+// Pedal view chosen or not (the field "PEDALS" of the full-screen bar sends '_' with 1 / 0; the controller keeps it
+// and answers with this call and the state).
+void ui_set_pedal_view(bool on);
+
 #ifdef NANO_BENCH
 // Development (-DNANO_BENCH=1): times the FX editor's lists on the board and prints the result (console '%').
 void ui_bench(void);
