@@ -26,8 +26,8 @@ target_add_binary_data(${COMPONENT_LIB} "fonts/IBMPlexSans-SemiBold.ttf" BINARY)
 # Development: -DNANO_BENCH=1 adds the console command '%' that times the FX editor's lists on the board (ui_bench).
 # Development: -DNANO_WDTEST=1 adds the console commands 'W' and 'U' that hang the app task / the screen, to see the
 # watchdog restart the controller.
-# Development: -DNANO_RPTEST=1 adds the console commands '_' '+' '=' '\\' for the reverb switch's two settings (set 1,
-# set 2, put them on the switch, forget them) - to go through them without the touch screen.
+# Development: -DNANO_RPTEST=1 adds the console commands '_' '+' '=' '\\' '|' for the reverb switch's two settings (set 1,
+# set 2, put them on the switch, forget them, swap the reverb's A / B) - to go through them without the touch screen.
 if(NANO_RPTEST)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_RPTEST=1)
 endif()

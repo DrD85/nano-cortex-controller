@@ -279,8 +279,12 @@ vorne ist, bestimmt, was der Schalter ab dann tut**; der gerade verwendete träg
   Reverb auch ein, falls es aus war.
   Die zwei Einstellungen speichert der Controller, pro Preset, und sie sind **etwas Eigenes**: Mit dem A und B der
   Reverb-Kachel selbst (Kachel 7) haben sie nichts zu tun – die behält ihren zweiten Effekt und ihr Tippen oder
-  Halten wie bisher. Sie gehören zu dem Reverb-Modell, von dem sie genommen wurden. Solange ein anderes Reverb im
-  Slot ist, fällt der Schalter auf Reverb A / B oder den Mix zurück, und die Kachel zeigt das. Nach dem Laden eines
+  Halten wie bisher.
+  **Jedes Reverb des Presets hat seine eigenen zwei Einstellungen**: das Reverb des Presets (A) und, falls die
+  Reverb-Kachel ein zweites Reverb (B) hat, auch dieses. Auf der Reverb-Kachel zu B wechseln, dieses Fenster öffnen
+  und seine zwei genauso einrichten – oben rechts steht, welches Reverb gerade im Slot ist. Ab dann wechselt
+  Fußschalter 8 zwischen den zwei Einstellungen des Reverbs, das gerade an ist. Bei einem Reverb ohne eigene
+  Einstellungen bleibt der Schalter bei Reverb A / B oder dem Mix, und die Kachel zeigt das. Nach dem Laden eines
   Presets zeigt die Kachel Einstellung 1 – das Preset am besten mit Einstellung 1 auf dem Nano speichern.
 
 ## Zweiter Effekt: A und B auf einem FX-Slot

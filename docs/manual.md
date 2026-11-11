@@ -263,9 +263,12 @@ switch does** from then on; the one in use carries a tick.
   setting 2 on the tile is a lighter shade. A press also switches the reverb on if it was off.
   The two settings are stored on the controller, per preset, and are **their own thing**: they have nothing to do
   with the A and B of the reverb's own tile (tile 7), which keeps its second effect and its tap or hold as before.
-  They belong to the reverb model they were set from. While another reverb is in the slot the switch falls back to
-  reverb A / B or the mix, and the tile shows that. After a preset is loaded the tile shows setting 1 – best store
-  the preset on the Nano with setting 1 on.
+  **Each reverb of the preset has its own two settings**: the preset's reverb (A) and, if the reverb's tile has a
+  second reverb (B), that one too. Switch to B on the reverb's tile, open this dialog and set its two up the same
+  way – the header shows which reverb is in the slot. From then on footswitch 8 changes between the two settings of
+  whichever reverb is on. A reverb without settings of its own leaves the switch at reverb A / B or the mix, and
+  the tile shows that. After a preset is loaded the tile shows setting 1 – best store the preset on the Nano with
+  setting 1 on.
 
 ## Second effect: A and B on an FX slot
 

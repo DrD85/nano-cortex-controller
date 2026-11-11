@@ -2193,8 +2193,8 @@ static void build_mix_editor(lv_obj_t *screen)
     lv_obj_t *two_info = label(two, &ui_font_14, MUTED);
     lv_obj_set_width(two_info, 520);
     lv_label_set_long_mode(two_info, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(two_info, "Save here: the switch changes between two settings of this reverb, all its controls. "
-                                "Set the reverb up, tap Set from the reverb; tap a name to change it.");
+    lv_label_set_text(two_info, "Save here: two settings of this reverb on the switch - reverb A and B each have "
+                                "their own. Set the reverb up, tap Set from the reverb; tap a name to change it.");
     lv_obj_set_pos(two_info, 20, 0);
     for (int n = 0; n < 2; n++) {
         int y = 46 + n * 62;
