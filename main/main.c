@@ -4193,8 +4193,37 @@ static void external_change(uint32_t type)
     if (type == NANO_MSG_CAB_SETTING) cab_settings_command(2);
 }
 
+#ifdef NANO_DBG
+static bool s_dbg_dump;   // console '`': every message from the Nano in the log, as it is
+
+// Console "!<type, hex> <payload, hex>": send a message as it is - to ask the Nano things the controller has no
+// function for (development only).
+static void dbg_send(const char *line)
+{
+    char *end;
+    uint32_t type = (uint32_t)strtoul(line, &end, 16);
+    uint8_t payload[96];
+    size_t n = 0;
+    while (*end && n < sizeof(payload)) {
+        while (*end == ' ') end++;
+        if (!isxdigit((unsigned char)end[0]) || !isxdigit((unsigned char)end[1])) break;
+        char byte[3] = { end[0], end[1], 0 };
+        payload[n++] = (uint8_t)strtoul(byte, NULL, 16);
+        end += 2;
+    }
+    ESP_LOGW(TAG, "Debug: sending type %u with %u payload bytes", (unsigned)type, (unsigned)n);
+    send("Debug message", type, payload, n);
+}
+#endif
+
 static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
 {
+#ifdef NANO_DBG
+    if (s_dbg_dump) {
+        ESP_LOGI(TAG, "<- type %u (%u bytes)", (unsigned)type, (unsigned)len);
+        if (len) ESP_LOG_BUFFER_HEX(TAG, payload, len < 96 ? len : 96);
+    }
+#endif
     switch (type) {
     case NANO_MSG_STATE_RESPONSE: {
         if (!nano_payload_complete(payload, len) && s_incomplete_retries < 3) {
@@ -4994,6 +5023,9 @@ static void app_event(app_event_t ev)
         else if (ev.command == 'S') scene_edit((const char *)ev.data);
         else if (ev.command == 'T') setlist_edit((const char *)ev.data);
         else if (ev.command == 'R') rp_name((const char *)ev.data);
+#ifdef NANO_DBG
+        else if (ev.command == '!') dbg_send((const char *)ev.data);
+#endif
         else if (ev.command == 'X') exp_dialog_save((const char *)ev.data);
         free(ev.data);
         break;
@@ -5095,6 +5127,22 @@ static void console_task(void *arg)
 #ifdef NANO_BENCH
         if (c == '%') {
             ui_bench();
+            continue;
+        }
+#endif
+#ifdef NANO_DBG
+        if (c == '!') {   // a message as it is, up to the end of the line (see dbg_send)
+            char line[220];
+            size_t n = 0;
+            uint8_t ch;
+            while (n < sizeof(line) - 1 && console_read(&ch, pdMS_TO_TICKS(2000)) == 1 && ch != '\n' && ch != '\r') line[n++] = (char)ch;
+            line[n] = 0;
+            on_text('!', line);
+            continue;
+        }
+        if (c == '`') {
+            s_dbg_dump = !s_dbg_dump;
+            ESP_LOGW(TAG, "Debug: messages from the Nano %s", s_dbg_dump ? "are logged" : "are no longer logged");
             continue;
         }
 #endif

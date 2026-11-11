@@ -32,6 +32,12 @@ if(NANO_RPTEST)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_RPTEST=1)
 endif()
 
+# Development: -DNANO_DBG=1 adds the console commands "!<type> <payload>" (hex: send a message to the Nano as it is)
+# and '`' (log every message from the Nano as it is).
+if(NANO_DBG)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_DBG=1)
+endif()
+
 if(NANO_WDTEST)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_WDTEST=1)
 endif()
