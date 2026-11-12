@@ -4693,7 +4693,8 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
 //                                                  (until the app goes): 60011 { switch 1-8, flags (UI_TILE_*), colour
 //                                                  u24, filled row i8, caption, name, note, row 1, row 2 (each length
 //                                                  u8 + text) }; 60013 see tiles_settings
-//   60014 app: { command u8, arg i32 }          -> 60015 { ok u8 }   (the screen's commands the editor may give)
+//   60014 app: { command u8, arg i32 }          -> 60015 { ok u8 }   (the screen's commands the editor may give:
+//                                                  'w' ']' 'A' '>' 'B' 'k', '-' 1 / 2 / 16 / 17)
 //   60016 app: { model u32 }                    -> 60017 { model u32, its FX presets as stored (FXP_COUNT x fxp_t) }
 //   60018 app: which models have FX presets     -> 60019 { count u16, models u32 ... }
 //   60020 app: { model u32, FX presets }        -> 60021 { ok u8 }   (all empty: removed)
@@ -4815,7 +4816,7 @@ static void backup_entry(int index)
 static bool s_tiles_sub;                       // the editor asked for the tiles: they follow every change
 static ui_tile_info_t s_tiles_sent[8];
 static uint8_t s_tiles_sent_ok;                // bit n: tile n went out as in s_tiles_sent
-static uint8_t s_settings_sent[96];
+static uint8_t s_settings_sent[128];
 static size_t s_settings_sent_len;
 
 static size_t put_text(uint8_t *out, const char *text, size_t max)
@@ -4828,7 +4829,8 @@ static size_t put_text(uint8_t *out, const char *text, size_t max)
 
 // 60013 { fields u8, order u8 x 8, switch 1 u8, FX mode u8, reverb slot i8, mix known u8, reverb settings used u8,
 // settings set u8, reverb B u32, reverb B kept u32, second effects u32 x 5, their switch u8 x 5, setting names 2 x
-// (length u8 + text) }
+// (length u8 + text), bank u8, its presets u8 x 6 (switches 3-8, 0 = empty), colours u8 x 6, symbols u8 x 6,
+// scenes u8, set list u8, looper u8 }
 static size_t tiles_settings(const ui_view_t *v, uint8_t *out)
 {
     size_t n = 0;
@@ -4845,6 +4847,13 @@ static size_t tiles_settings(const ui_view_t *v, uint8_t *out)
     for (int w = 0; w < 2 + NANO_FX_SLOTS; w++) for (int b = 0; b < 4; b++) out[n++] = (uint8_t)(words[w] >> (8 * b));
     for (int i = 0; i < NANO_FX_SLOTS; i++) out[n++] = v->ab_mode[i];
     for (int r = 0; r < 2; r++) n += put_text(out + n, v->rp_names[r], 15);
+    out[n++] = (uint8_t)v->bank;
+    for (int i = 0; i < 6; i++) out[n++] = v->bank_presets[i];
+    for (int i = 0; i < 6; i++) out[n++] = v->bank_colors[i];
+    for (int i = 0; i < 6; i++) out[n++] = v->bank_icons[i];
+    out[n++] = v->scenes;
+    out[n++] = v->setlist_on;
+    out[n++] = v->looper;
     return n;
 }
 
@@ -4886,12 +4895,12 @@ static void tiles_push(void)
 }
 
 // The commands of the screen the editor's strip may give (pressing a tile, the second effects, footswitch 8, the
-// layout) - nothing that opens a dialog on the board.
+// layout, the own bank's presets, colours and symbols, the bank arrows) - nothing that opens a dialog on the board.
 static bool editor_command(char c, int arg)
 {
     switch (c) {
     case 'w': return (arg & 0xFF) >= 1 && (arg & 0xFF) <= FOOTSWITCH_COUNT && !(arg & ~(0xFF | UI_SWITCH_HOLD));
-    case ']': case 'A': case '>': return true;
+    case ']': case 'A': case '>': case 'B': case 'k': return true;
     case '-': return arg == 1 || arg == 2 || arg == 16 || arg == 17;
     default: return false;
     }
