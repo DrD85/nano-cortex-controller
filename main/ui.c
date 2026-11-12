@@ -87,6 +87,8 @@ static char s_tile_note_text[TILES][24];    // a note that is not a fixed text (
 static const char *s_tile_note[TILES];   // a line of text under the caption instead (looper mode, what holding does), NULL = none
 static const lv_image_dsc_t *s_tile_note_icon[TILES];   // ... with this symbol in front of it, NULL = none
 static lv_obj_t *s_tile_note_image[TILES];
+static uint32_t s_tile_color[TILES];   // the tile's colour and state as set_tile drew it (for the editor)
+static bool s_tile_active[TILES], s_tile_empty[TILES], s_tiles_drawn;
 static uint32_t s_tile_head[TILES];   // colour of a tile that is not active, dimmed behind its top row (0 = none)
 static lv_obj_t *s_capture_square, *s_capture_slot_label, *s_cab_square, *s_cab_slot_label;
 static lv_obj_t *s_picker, *s_picker_title, *s_picker_list, *s_picker_tab[2], *s_picker_chips, *s_picker_chip[LIB_CATEGORY_COUNT];
@@ -1038,6 +1040,10 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     uint32_t mark = empty ? 0x3A3F45 : active ? ink : color;   // symbol colour
     s_tile_ink[i] = ink;
     s_tile_accent[i] = mark;
+    s_tile_color[i] = color;
+    s_tile_active[i] = active;
+    s_tile_empty[i] = empty;
+    s_tiles_drawn = true;
     s_tile_pedal_type[i] = 0;   // set again by set_tile_pedal / set_tile_other, shown by show_tile_extras
     s_tile_other_type[i] = 0;
     s_tile_ab_pedal[i] = false;
@@ -6079,3 +6085,40 @@ void ui_bench(void)
     lvgl_port_unlock();
 }
 #endif
+
+
+// A text of the screen for the editor: without the screen's own symbols (private code points, three bytes from 0xEF).
+static void plain_copy(char *out, size_t size, const char *text)
+{
+    size_t n = 0;
+    for (const unsigned char *p = (const unsigned char *)(text ? text : ""); *p && n + 1 < size; p++) {
+        if (*p == 0xEF && p[1] && p[2]) { p += 2; continue; }
+        if (n == 0 && *p == ' ') continue;
+        out[n++] = (char)*p;
+    }
+    out[n] = 0;
+}
+
+bool ui_tiles_get(ui_tile_info_t tiles[TILES], ui_view_t *view)
+{
+    lvgl_port_lock(0);
+    bool drawn = s_tiles_drawn;
+    for (int i = 0; i < TILES && drawn; i++) {
+        ui_tile_info_t *t = &tiles[i];
+        memset(t, 0, sizeof(*t));
+        plain_copy(t->caption, sizeof(t->caption), lv_label_get_text(s_tile_caption[i]));
+        plain_copy(t->name, sizeof(t->name), lv_label_get_text(s_tile_name[i]));
+        plain_copy(t->note, sizeof(t->note), s_tile_note[i]);
+        t->color = s_tile_color[i];
+        t->flags = (s_tile_active[i] ? UI_TILE_ACTIVE : 0) | (s_tile_empty[i] ? UI_TILE_EMPTY : 0);
+        t->row_active = -1;
+        if (s_tile_pair[i].shown) {
+            t->flags |= UI_TILE_ROWS | (s_tile_pair[i].on ? UI_TILE_ROWS_ON : 0);
+            t->row_active = (int8_t)s_tile_pair[i].active;
+            for (int r = 0; r < 2; r++) plain_copy(t->rows[r], sizeof(t->rows[r]), s_tile_pair[i].names[r]);
+        }
+    }
+    if (drawn && view) *view = s_view;
+    lvgl_port_unlock();
+    return drawn;
+}

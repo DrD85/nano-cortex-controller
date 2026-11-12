@@ -2428,6 +2428,8 @@ static void fxp_load(int n)
     fxp_send_step();
 }
 
+static void editor_fxp_changed(uint32_t type);
+
 // Text from the keyboard for FX preset n (1-FXP_COUNT): save the current values under this name, "" = delete.
 static void fxp_save(int n, const char *name)
 {
@@ -2465,6 +2467,7 @@ static void fxp_save(int n, const char *name)
         nvs_close(nvs);
     }
     ESP_LOGI(TAG, "%s FX preset %d: %s", nano_fx_name(s_fxp.type), n, name[0] ? name : "deleted");
+    editor_fxp_changed(s_fxp.type);
     ui_show_message(name[0] ? "FX preset saved." : "FX preset deleted.");
     editor_show();
 }
@@ -4685,6 +4688,16 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
 //   60005 app: { key length u8, key, total u16, offset u16, bytes } -> 60006 { ok u8 }   (a value in pieces)
 //   60007 app: restore done                     -> 60008 { ok u8, entries written u16 }, then the controller restarts
 //   60009 app: info request                     -> 60002 { entries u16, used u16, capacity u16, version }
+// The editor's view of the board (its footswitch strip) and the FX presets shared with it:
+//   60010 app: tiles, please                    -> 60011 per tile and 60013 settings, then again whenever they change
+//                                                  (until the app goes): 60011 { switch 1-8, flags (UI_TILE_*), colour
+//                                                  u24, filled row i8, caption, name, note, row 1, row 2 (each length
+//                                                  u8 + text) }; 60013 see tiles_settings
+//   60014 app: { command u8, arg i32 }          -> 60015 { ok u8 }   (the screen's commands the editor may give)
+//   60016 app: { model u32 }                    -> 60017 { model u32, its FX presets as stored (FXP_COUNT x fxp_t) }
+//   60018 app: which models have FX presets     -> 60019 { count u16, models u32 ... }
+//   60020 app: { model u32, FX presets }        -> 60021 { ok u8 }   (all empty: removed)
+//   60023 controller: { model u32 }             an FX preset of this model was saved or deleted on the board
 #define STORE_WARN_PERCENT 85
 #define BACKUP_VALUE_MAX 4000
 
@@ -4716,6 +4729,7 @@ static void store_warn(void)
 
 #ifdef NANO_WEB
 static void backup_message(uint32_t type, const uint8_t *payload, size_t len) { }
+static void editor_fxp_changed(uint32_t type) { }
 #else
 static void backup_reply(uint32_t type, const uint8_t *payload, size_t len)
 {
@@ -4795,8 +4809,194 @@ static void backup_entry(int index)
     nvs_close(nvs);
 }
 
+
+// ---- The editor's footswitch strip and the shared FX presets (60010-60023, see above) ----
+
+static bool s_tiles_sub;                       // the editor asked for the tiles: they follow every change
+static ui_tile_info_t s_tiles_sent[8];
+static uint8_t s_tiles_sent_ok;                // bit n: tile n went out as in s_tiles_sent
+static uint8_t s_settings_sent[96];
+static size_t s_settings_sent_len;
+
+static size_t put_text(uint8_t *out, const char *text, size_t max)
+{
+    size_t n = strnlen(text, max);
+    out[0] = (uint8_t)n;
+    memcpy(out + 1, text, n);
+    return 1 + n;
+}
+
+// 60013 { fields u8, order u8 x 8, switch 1 u8, FX mode u8, reverb slot i8, mix known u8, reverb settings used u8,
+// settings set u8, reverb B u32, reverb B kept u32, second effects u32 x 5, their switch u8 x 5, setting names 2 x
+// (length u8 + text) }
+static size_t tiles_settings(const ui_view_t *v, uint8_t *out)
+{
+    size_t n = 0;
+    out[n++] = (uint8_t)s_layout_count;
+    for (int p = 0; p < FOOTSWITCH_COUNT; p++) out[n++] = s_layout[p];
+    out[n++] = (uint8_t)s_switch1;
+    out[n++] = v->fx_mode;
+    out[n++] = (uint8_t)(int8_t)v->mix_slot;
+    out[n++] = v->mix_known;
+    out[n++] = v->rp_used;
+    out[n++] = v->rp_set;
+    uint32_t words[2 + NANO_FX_SLOTS] = { v->rev_b_type, v->rev_b_stored };
+    for (int i = 0; i < NANO_FX_SLOTS; i++) words[2 + i] = v->ab_b_type[i];
+    for (int w = 0; w < 2 + NANO_FX_SLOTS; w++) for (int b = 0; b < 4; b++) out[n++] = (uint8_t)(words[w] >> (8 * b));
+    for (int i = 0; i < NANO_FX_SLOTS; i++) out[n++] = v->ab_mode[i];
+    for (int r = 0; r < 2; r++) n += put_text(out + n, v->rp_names[r], 15);
+    return n;
+}
+
+// Sends what changed since the last time (called by the app task after each event).
+static void tiles_push(void)
+{
+    if (!s_tiles_sub) return;
+    if (!app_link_connected()) { s_tiles_sub = false; return; }
+    static ui_tile_info_t tiles[8];
+    static ui_view_t view;
+    if (!ui_tiles_get(tiles, &view)) return;
+    for (int i = 0; i < 8; i++) {
+        if ((s_tiles_sent_ok >> i & 1) && !memcmp(&tiles[i], &s_tiles_sent[i], sizeof(tiles[i]))) continue;
+        const ui_tile_info_t *t = &tiles[i];
+        uint8_t m[8 + 24 + 40 + 24 + 16 + 16];
+        size_t n = 0;
+        m[n++] = (uint8_t)(i + 1);
+        m[n++] = t->flags;
+        m[n++] = (uint8_t)t->color;
+        m[n++] = (uint8_t)(t->color >> 8);
+        m[n++] = (uint8_t)(t->color >> 16);
+        m[n++] = (uint8_t)t->row_active;
+        n += put_text(m + n, t->caption, 23);
+        n += put_text(m + n, t->name, 39);
+        n += put_text(m + n, t->note, 23);
+        n += put_text(m + n, t->rows[0], 15);
+        n += put_text(m + n, t->rows[1], 15);
+        backup_reply(60011, m, n);
+        s_tiles_sent[i] = *t;
+        s_tiles_sent_ok |= 1 << i;
+    }
+    uint8_t settings[sizeof(s_settings_sent)];
+    size_t len = tiles_settings(&view, settings);
+    if (len != s_settings_sent_len || memcmp(settings, s_settings_sent, len)) {
+        backup_reply(60013, settings, len);
+        memcpy(s_settings_sent, settings, len);
+        s_settings_sent_len = len;
+    }
+}
+
+// The commands of the screen the editor's strip may give (pressing a tile, the second effects, footswitch 8, the
+// layout) - nothing that opens a dialog on the board.
+static bool editor_command(char c, int arg)
+{
+    switch (c) {
+    case 'w': return (arg & 0xFF) >= 1 && (arg & 0xFF) <= FOOTSWITCH_COUNT && !(arg & ~(0xFF | UI_SWITCH_HOLD));
+    case ']': case 'A': case '>': return true;
+    case '-': return arg == 1 || arg == 2 || arg == 16 || arg == 17;
+    default: return false;
+    }
+}
+
+static void editor_fxp_changed(uint32_t type)
+{
+    if (!s_tiles_sub || !app_link_connected()) return;
+    uint8_t m[4] = { (uint8_t)type, (uint8_t)(type >> 8), (uint8_t)(type >> 16), (uint8_t)(type >> 24) };
+    backup_reply(60023, m, sizeof(m));
+}
+
+static uint32_t read_u32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
+
+static void editor_message(uint32_t type, const uint8_t *payload, size_t len)
+{
+    switch (type) {
+    case 60010:
+        s_tiles_sub = true;
+        s_tiles_sent_ok = 0;
+        s_settings_sent_len = 0;
+        tiles_push();
+        break;
+    case 60014: {
+        uint8_t ok = 0;
+        if (len >= 5) {
+            char c = (char)payload[0];
+            int arg = (int)read_u32(payload + 1);
+            if (editor_command(c, arg)) {
+                ESP_LOGI(TAG, "Editor: command %c %d", c, arg);
+                command(c, arg);
+                ok = 1;
+            }
+        }
+        backup_reply(60015, &ok, 1);
+        break;
+    }
+    case 60016: {
+        if (len < 4) break;
+        uint32_t model = read_u32(payload);
+        static uint8_t reply[4 + sizeof(fxp_t) * FXP_COUNT];
+        memcpy(reply, payload, 4);
+        fxp_read(model, (fxp_t *)(reply + 4));
+        backup_reply(60017, reply, sizeof(reply));
+        break;
+    }
+    case 60018: {
+        static uint8_t reply[2 + 4 * 128];
+        int count = 0;
+        nvs_iterator_t it = NULL;
+        esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, BANK_STORE_NAMESPACE, NVS_TYPE_BLOB, &it);
+        while (err == ESP_OK && count < 128) {
+            nvs_entry_info_t info;
+            nvs_entry_info(it, &info);
+            if (!strncmp(info.key, "fxp", 3)) {
+                uint32_t model = (uint32_t)strtoul(info.key + 3, NULL, 10);
+                for (int b = 0; b < 4; b++) reply[2 + 4 * count + b] = (uint8_t)(model >> (8 * b));
+                count++;
+            }
+            err = nvs_entry_next(&it);
+        }
+        nvs_release_iterator(it);
+        reply[0] = (uint8_t)count;
+        reply[1] = (uint8_t)(count >> 8);
+        backup_reply(60019, reply, 2 + 4 * count);
+        break;
+    }
+    case 60020: {
+        uint8_t ok = 0;
+        if (len == 4 + sizeof(fxp_t) * FXP_COUNT) {
+            uint32_t model = read_u32(payload);
+            static fxp_t list[FXP_COUNT];
+            memcpy(list, payload + 4, sizeof(list));
+            bool empty = true;
+            for (int i = 0; i < FXP_COUNT; i++) {
+                list[i].name[sizeof(list[i].name) - 1] = 0;
+                if (list[i].count > NANO_MAX_PARAMS) list[i].count = NANO_MAX_PARAMS;
+                empty &= !list[i].name[0];
+            }
+            char key[16];
+            fxp_key(model, key);
+            nvs_handle_t nvs;
+            if (model && nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
+                esp_err_t err = empty ? nvs_erase_key(nvs, key) : nvs_set_blob(nvs, key, list, sizeof(list));
+                ok = (err == ESP_OK || err == ESP_ERR_NVS_NOT_FOUND) && nvs_commit(nvs) == ESP_OK;
+                nvs_close(nvs);
+            }
+            if (ok && model == s_fxp.type) {   // the FX editor shows this model: its list as it is now
+                memcpy(s_fxp.list, list, sizeof(list));
+                s_fxp.active = -1;
+                if (s_edit.slot >= 0) editor_show();
+            }
+            ESP_LOGI(TAG, "Editor: FX presets of %s %s", nano_fx_name(model), ok ? (empty ? "removed" : "stored") : "NOT stored");
+        }
+        backup_reply(60021, &ok, 1);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
 static void backup_message(uint32_t type, const uint8_t *payload, size_t len)
 {
+    if (type >= 60010 && type < 60030) { editor_message(type, payload, len); return; }
     static uint8_t *value;        // the value being put together (PSRAM)
     static char key[NVS_KEY_NAME_MAX_SIZE];
     static size_t got, total;
@@ -5112,6 +5312,7 @@ static void app_task(void *arg)
     for (;;) {
         s_app_beat = xTaskGetTickCount();
         if (xQueueReceive(s_events, &ev, pdMS_TO_TICKS(2000)) == pdTRUE) app_event(ev);
+        tiles_push();   // the editor's footswitch strip, if it asked for it
         // Internal RAM is what Bluetooth lives on: say so when its lowest free amount goes down (by 4 KB or more)
         size_t low = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
         if (low + 4096 <= low_logged) {

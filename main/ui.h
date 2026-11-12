@@ -262,3 +262,15 @@ void ui_set_pedal_view(bool on);
 // Development (-DNANO_BENCH=1): times the FX editor's lists on the board and prints the result (console '%').
 void ui_bench(void);
 #endif
+
+// For the editor (connected through the controller): what tile n (switch n + 1, before the layout) shows, with
+// the screen's own symbols left out of the texts.
+enum { UI_TILE_ACTIVE = 1, UI_TILE_EMPTY = 2, UI_TILE_ROWS = 4, UI_TILE_ROWS_ON = 8 };
+typedef struct {
+    char caption[24], name[40], note[24], rows[2][16];
+    uint32_t color;
+    uint8_t flags;       // UI_TILE_*
+    int8_t row_active;   // the filled row: 0 / 1, -1 = none
+} ui_tile_info_t;
+// The eight tiles and the view they were drawn from; false while the screen has not drawn them yet.
+bool ui_tiles_get(ui_tile_info_t tiles[8], ui_view_t *view);
