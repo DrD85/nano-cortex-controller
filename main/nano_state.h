@@ -45,6 +45,7 @@
 #define NANO_MSG_FX_TYPE 136                  // FX model of a slot
 #define NANO_MSG_FX_PARAMS_REQUEST 137        // read all parameters of a slot (only for active FX!)
 #define NANO_MSG_FX_PARAMS_RESPONSE 138
+#define NANO_MSG_TEMPO_SCREEN 145             // tempo menu and metronome (NanOS 2.3.0), both directions
 #define NANO_MAX_PARAMS 24
 
 #define NANO_PRESETS 64
@@ -86,6 +87,23 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len);
 
 // Applies a preset change reported by the Nano (SetPresetSlots from the device).
 void nano_state_apply_preset_change(nano_state_t *st, const uint8_t *payload, size_t len);
+
+// TempoScreenMessage (type 145), as Cortex Cloud 2.8.3 fills it: 3 tempoScreenActive, 4 tempoIsGlobal, 5 tempo
+// (float32), 6 externalMidiClockRunning, 7 volume (float32, dB), 8 muteMetronome, 9 timeSignature, 10 noteLength,
+// 11 metronomeSound. It is a whole state: the app sends every field each time, and a field left out means 0 / off.
+typedef struct {
+    bool screen_active, global, ext_clock, muted, has_volume;
+    float tempo, volume_db;
+    int time_sig, note_len, sound;      // indexes into the app's lists (NANO_TIME_SIGS ...)
+} nano_tempo_t;
+#define NANO_TIME_SIG_COUNT 21
+#define NANO_NOTE_LEN_COUNT 4
+#define NANO_METRO_SOUND_COUNT 2
+extern const char *const NANO_TIME_SIGS[NANO_TIME_SIG_COUNT];
+extern const char *const NANO_NOTE_LENS[NANO_NOTE_LEN_COUNT];
+extern const char *const NANO_METRO_SOUNDS[NANO_METRO_SOUND_COUNT];
+void nano_tempo_read(nano_tempo_t *t, const uint8_t *payload, size_t len);
+size_t nano_tempo_message(const nano_tempo_t *t, uint8_t *out);   // out: at least 48 bytes
 
 // Reads one varint field (0 if missing) from a small message such as a status reply.
 uint64_t nano_field_varint(const uint8_t *payload, size_t len, uint32_t field);

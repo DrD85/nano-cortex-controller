@@ -94,6 +94,62 @@ static bool nested_string(const uint8_t *data, size_t len, uint32_t field, char 
     return false;
 }
 
+const char *const NANO_TIME_SIGS[NANO_TIME_SIG_COUNT] = {
+    "2/4", "3/4", "4/4", "5/4", "6/4", "7/4", "8/4", "9/4", "10/4", "11/4", "12/4", "13/4", "3/8", "6/8", "9/8", "12/8",
+    "5/8 (3+2)", "5/8 (2+3)", "7/8 (3+2+2)", "7/8 (2+3+2)", "7/8 (2+2+3)" };
+const char *const NANO_NOTE_LENS[NANO_NOTE_LEN_COUNT] = { "1/4", "1/8", "1/8T", "1/16" };
+const char *const NANO_METRO_SOUNDS[NANO_METRO_SOUND_COUNT] = { "Blip", "Digital" };
+
+void nano_tempo_read(nano_tempo_t *t, const uint8_t *payload, size_t len)
+{
+    memset(t, 0, sizeof(*t));
+    pb_reader_t r = { payload, payload + len };
+    pb_field_t f;
+    while (pb_next(&r, &f)) {
+        float v = 0;
+        if (f.wire == 5) memcpy(&v, f.data, sizeof(float));
+        uint64_t n = f.wire == 0 ? f.value : 0;
+        switch (f.field) {
+        case 3: t->screen_active = n != 0; break;
+        case 4: t->global = n != 0; break;
+        case 5: t->tempo = v; break;
+        case 6: t->ext_clock = n != 0; break;
+        case 7: t->volume_db = v; t->has_volume = true; break;
+        case 8: t->muted = n != 0; break;
+        case 9: t->time_sig = (int)n; break;
+        case 10: t->note_len = (int)n; break;
+        case 11: t->sound = (int)n; break;
+        default: break;
+        }
+    }
+}
+
+static size_t put_varint(uint8_t *out, uint64_t v);
+
+static size_t put_float(uint8_t *out, uint32_t field, float v)
+{
+    out[0] = (uint8_t)(field << 3 | 5);
+    memcpy(out + 1, &v, sizeof(float));
+    return 5;
+}
+
+size_t nano_tempo_message(const nano_tempo_t *t, uint8_t *out)
+{
+    size_t n = 0;
+    const struct { uint32_t field; uint64_t value; } ints[] = {
+        { 3, t->screen_active }, { 4, t->global }, { 6, t->ext_clock }, { 8, t->muted },
+        { 9, (uint64_t)t->time_sig }, { 10, (uint64_t)t->note_len }, { 11, (uint64_t)t->sound } };
+    // (proto3: a value of 0 is left out, as the app's library does)
+    for (size_t i = 0; i < sizeof(ints) / sizeof(ints[0]); i++) {
+        if (i == 2 && t->tempo != 0) n += put_float(out + n, 5, t->tempo);   // tag order 3, 4, 5, 6, 7 ...
+        if (i == 3 && t->volume_db != 0) n += put_float(out + n, 7, t->volume_db);
+        if (!ints[i].value) continue;
+        out[n++] = (uint8_t)(ints[i].field << 3);
+        n += put_varint(out + n, ints[i].value);
+    }
+    return n;
+}
+
 uint64_t nano_field_varint(const uint8_t *payload, size_t len, uint32_t field)
 {
     pb_reader_t r = { payload, payload + len };

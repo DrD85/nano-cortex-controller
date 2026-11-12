@@ -4252,6 +4252,11 @@ static void dbg_send(const char *line)
 }
 #endif
 
+// The Nano's tempo menu / metronome as it last reported it (type 145). Sending it back needs this first: the message
+// is a whole state, so guessed fields would change the tempo or its global setting.
+static nano_tempo_t s_tempo;
+static bool s_tempo_known;
+
 static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
 {
 #ifdef NANO_DBG
@@ -4649,6 +4654,20 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         }
         external_change(type);
         break;
+    case NANO_MSG_TEMPO_SCREEN: {   // tempo menu / metronome (NanOS 2.3.0): only kept and logged for now
+        nano_tempo_read(&s_tempo, payload, len);
+        s_tempo_known = true;
+        const nano_tempo_t *t = &s_tempo;
+        ESP_LOGI(TAG, "Tempo message: screen %d, global %d, %.1f BPM, MIDI clock %d, metronome %s %.1f dB, %s, %s, %s%s",
+                 t->screen_active, t->global, (double)t->tempo, t->ext_clock, t->muted ? "muted" : "ON",
+                 (double)t->volume_db, t->time_sig < NANO_TIME_SIG_COUNT ? NANO_TIME_SIGS[t->time_sig] : "?",
+                 t->note_len < NANO_NOTE_LEN_COUNT ? NANO_NOTE_LENS[t->note_len] : "?",
+                 t->sound < NANO_METRO_SOUND_COUNT ? NANO_METRO_SOUNDS[t->sound] : "?", t->has_volume ? "" : " (no volume field)");
+        char bytes[3 * 48 + 1] = "";
+        for (size_t i = 0; i < len && i < 48; i++) snprintf(bytes + 3 * i, 4, "%02X ", payload[i]);
+        ESP_LOGI(TAG, "Tempo message bytes: %s", bytes);
+        break;
+    }
     default:
         ESP_LOGI(TAG, "Message type %lu (%u bytes)", (unsigned long)type, (unsigned)len);
         break;
