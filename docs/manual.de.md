@@ -280,8 +280,10 @@ vorne ist, bestimmt, was der Schalter ab dann tut**; der gerade verwendete träg
   zum Einstellen. Reverb B speichert der Controller, pro Preset. Wird das Preset gespeichert, während B läuft,
   wird B zum Reverb des Presets. Ein Preset laden – auch dasselbe noch einmal – bringt immer sein eigenes Reverb (A)
   zurück; B bleibt gespeichert.
-  Auf dem Reiter *MIX* gespeichert, ist Fußschalter 8 wieder der Mix-Schalter, und Reverb B bleibt mit
-  seinen Einstellungen für später gespeichert; *None* in der Liste entfernt es.
+  Reverb B ist der zweite Effekt der Reverb-Kachel selbst (Kachel 7), und diese Kachel wechselt ihn immer. Auf
+  dem Reiter *MIX* oder *2 SETTINGS* gespeichert, ist Fußschalter 8 der Mix-Schalter (oder wechselt die
+  Einstellungen), und die Kachel behält ihr A / B – der Reverb-Typ auf dem einen Schalter, die Menge auf dem
+  anderen. *None* in der Liste entfernt B.
 - **2 SETTINGS**: Fußschalter 8 wechselt zwischen zwei benannten Einstellungen des Reverbs im Preset – zum Beispiel
   *Room* und *Atmos* – mit allen Reglern (Mix, Decay, Damping …). Das Reverb bleibt dasselbe, es gibt also keinen
   Aussetzer. Einrichten: das Reverb so einstellen, wie es klingen soll (im FX-Editor von Kachel 7 oder am Nano),
@@ -339,9 +341,11 @@ Kachel des Reverb-Schalters (Fußschalter 8) sieht genauso aus.
   Einrichten von B nie an, schaltet der erste Wechsel es kurz an, um sie zu lesen.
 - Ein Preset laden – auch das, das gerade an ist – holt A zurück. Wer das Preset speichert, während B läuft, macht B
   zum Effekt des Presets.
-- Der zweite Effekt des Reverbs ist der, den Fußschalter 8 wechselt (der
-  [Reverb-Schalter](#reverb-schalter-fußschalter-8)); liegt der Wechsel auf der Kachel des Reverbs selbst, wird
-  Fußschalter 8 dafür nicht gebraucht – praktisch mit [6 Feldern](#kachel-anordnung-6-oder-8-felder).
+- Den zweiten Effekt des Reverbs wechselt immer die Kachel des Reverbs selbst. Fußschalter 8 (der
+  [Reverb-Schalter](#reverb-schalter-fußschalter-8)) wechselt ihn nur dann auch, wenn das Reverb-Fenster auf dem
+  Reiter *REVERB A / B* gespeichert wurde; sonst bleibt er der Mix-Schalter oder wechselt die zwei Einstellungen.
+  B auf der Reverb-Kachel einzurichten ändert Fußschalter 8 nicht. Wechselt die Kachel, während Fußschalter 8 der
+  Mix-Schalter ist, bekommt das neue Reverb den Mix, den der Schalter zeigt (Pos 1 oder Pos 2).
 - MIDI: **CC 61–65** wählen A (Wert 0–63) oder B (64–127) von FX-Slot 1–5; CC 58 wechselt Pre FX 1.
 
 ## Auto-Wah

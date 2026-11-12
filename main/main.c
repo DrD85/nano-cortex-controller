@@ -442,13 +442,15 @@ static esp_timer_handle_t s_src_timer;
 // running effect are read before a swap (only possible while it is on), so edits are kept. The values of A are
 // stored too (read whenever A is on), so a switched-off A need not be switched on for that: the swap keeps the
 // effect on or off. Values may be written to an effect that is off (the desktop editor does that too).
-//   reverb:   the reverb dialog (long press on tile 8) chooses B; footswitch 8 swaps A <-> B - or, saved on the
-//             dialog's mix tab, switches the mix again while B stays stored for later ("parked")
+//   reverb:   B is the reverb's like any slot's: its own tile swaps it. Footswitch 8 swaps A <-> B too only when the
+//             reverb dialog (long press on tile 8) was saved on its Reverb A / B tab; otherwise B is "parked" for
+//             footswitch 8, which then is the mix switch (or the two settings) - the reverb's tile keeps its A / B
 //   Pre FX 1: the 2ND button in its FX editor chooses B; footswitch 3 short = on/off, held = A <-> B
 typedef struct {
     uint32_t type;                    // model of B, 0 = none
     uint8_t count;                    // stored values, 0 = model defaults
-    uint8_t parked;                   // reverb B: kept, but footswitch 8 is the mix switch (0 in data stored before 1.8)
+    uint8_t parked;                   // reverb B: footswitch 8 does not swap it (mix / two settings); its tile does
+                                      // (0 in data stored before 1.8: footswitch 8 swaps)
     uint8_t tap;                      // what the slot's switch does (UI_AB_*): 0 = a tap switches on / off and holding
     uint8_t reserved;                 // swaps (also data stored before 1.12), 1 = the other way round, 2 = a press swaps
     float values[NANO_MAX_PARAMS];
@@ -546,12 +548,13 @@ static const char *ab_name(const ab_t *ab)
     return NANO_FX_SLOT_NAMES[ab->slot];
 }
 
-// The slot has a second effect that its switch can swap in (one kept aside for the reverb switch's mix does not count).
+// The slot has a second effect that its switch can swap in. (For the reverb: whether footswitch 8 swaps it too is
+// reverb_b_used().)
 static bool ab_used(int slot)
 {
     if (slot < 0 || slot >= AB_COUNT) return false;
     const ab_t *ab = &s_ab[slot];
-    return ab->preset && ab->preset == s_state.current_preset && ab->b.type && !ab->b.parked;
+    return ab->preset && ab->preset == s_state.current_preset && ab->b.type;
 }
 // Switches whose short press acts on release because they have a held function (bit n = footswitch n).
 static volatile uint32_t s_hold_switches;
@@ -1399,13 +1402,13 @@ static int reverb_slot(void)
     return -1;
 }
 
-// Footswitch 8 in FX mode swaps reverb A <-> B (a second reverb is set and not parked); otherwise it is the mix switch.
+// Footswitch 8 in FX mode swaps reverb A <-> B when the reverb dialog was saved on its Reverb A / B tab (B not
+// parked); otherwise it is the mix switch. The reverb's own tile swaps its A / B either way.
 static bool ab_used(int slot);
 
-// Footswitch 8 swaps the reverb's A / B (otherwise it is the mix switch).
 static bool reverb_b_used(void)
 {
-    return ab_used(s_mix.slot);
+    return ab_used(s_mix.slot) && !s_ab[s_mix.slot].b.parked;
 }
 
 // Which footswitches wait for their release (they have a held function): 1 (held = looper mode) and 2 (held =
@@ -2634,6 +2637,20 @@ static void toggle_mix(void)
     }
 }
 
+// The reverb's tile swapped A / B while footswitch 8 is the mix switch: the new reverb brought its own mix along -
+// the switch's position (Pos 1 / Pos 2) goes out again, so the tile and the sound agree. The reverb's type and its
+// amount are two switches.
+static void mix_after_swap(int slot)
+{
+    if (slot != s_mix.slot || rp_used() || reverb_b_used() || !s_mix.known || s_mix.active < 0) return;
+    int param = mix_param();
+    if (param < 0) return;
+    uint8_t buf[16];
+    char label[40];
+    snprintf(label, sizeof(label), "Reverb mix Pos %d (%ld%%)", s_mix.active + 1, lroundf(s_mix.pos[s_mix.active] * 100));
+    send(label, NANO_MSG_FX_VALUE, buf, nano_fx_param(s_mix.slot, param, s_mix.pos[s_mix.active], buf));
+}
+
 // Pos 1 / Pos 2 editor: a slider moved (which << 8 | value 0-255). Plays that mix on the reverb.
 static void mix_preview(int arg)
 {
@@ -3161,6 +3178,7 @@ static void ab_step(void)
         ab->phase = AB_IDLE;
         app_sync_later();
         ESP_LOGI(TAG, "%s %c active (%d values)", ab_name(ab), ab->active ? 'B' : 'A', count);
+        mix_after_swap(ab->slot);
         rp_match(ab->slot, values, count);
         schedule_refresh(300);
         if (ab->open_editor) {
@@ -3178,18 +3196,19 @@ static void ab_step(void)
     }
 }
 
-// From the reverb dialog or the 2ND list of Pre FX 1: arg = which << 24 | model of B (0 = none).
-// arg = w << 24 | model of B (0 = none). w: 0 = reverb, 1 = Pre FX 1, 2 = reverb with footswitch 8 as the mix
-// switch - B stays stored with its values ("parked") until the dialog is saved on its 2nd reverb tab again.
+// From the reverb dialog, the 2ND list of Pre FX 1 or an FX editor: arg = w << 24 | model of B (0 = none).
+// w: 0 = reverb, footswitch 8 swaps A / B; 2 = reverb, footswitch 8 is the mix switch or the two settings - B stays
+// the reverb tile's ("parked" for footswitch 8); 1 = Pre FX 1; 8 + n = FX slot n (for the reverb's slot: footswitch 8
+// keeps what it does, and a new B is parked - the tile swaps it, the reverb switch stays as it was).
 static void ab_set_b(int arg)
 {
-    int which = arg >> 24;   // 0 / 2: the reverb's slot (2: kept aside), 1: Pre FX 1, 8 + n: FX slot n
+    int w = arg >> 24;
     uint32_t type = (uint32_t)arg & 0xFFFFFF;
-    bool parked = which == 2 && type;
-    which = which == 0 || which == 2 ? s_mix.slot : which == 1 ? 0 : which - 8;
+    int which = w == 0 || w == 2 ? s_mix.slot : w == 1 ? 0 : w - 8;
     if (which < 0 || which >= AB_COUNT || (type && !nano_fx_model(type))) return;
     ab_t *ab = &s_ab[which];
     if (ab->preset != s_state.current_preset) return;
+    bool parked = type && (w == 2 || (w >= 8 && which == s_mix.slot && (ab->b.parked || !ab->b.type)));
     ab_t *running = ab_running();
     if (running && !running->cache_only) {
         ui_show_message("Still switching - try again in a moment.");
@@ -3204,15 +3223,11 @@ static void ab_set_b(int arg)
     ab->b.parked = parked;
     ab_store(ab);
     if (!type) ab_store_a(ab);   // no B: the kept A values are not needed any more
-    ESP_LOGI(TAG, "%s B: %s%s", ab_name(ab), type ? nano_fx_name(type) : "none", parked ? " (kept; footswitch 8 is the mix switch)" : "");
-    if (ab->active == 1) {   // B is running: show the new choice, or go back to A
-        if (parked && !changed) {
-            ab_swap(which);   // back to A as the footswitch does it: B's values are read and kept first
-        } else if (changed || parked) {
-            ab->target = type && !parked ? 1 : 0;
-            if (ab->target || ab->a_type) ab_load_target(ab);
-            else ab->active = 0;
-        }
+    ESP_LOGI(TAG, "%s B: %s%s", ab_name(ab), type ? nano_fx_name(type) : "none", parked ? " (footswitch 8: mix / settings, the tile swaps)" : "");
+    if (ab->active == 1 && changed) {   // B is running: show the new choice, or go back to A (parking leaves it as it is)
+        ab->target = type ? 1 : 0;
+        if (ab->target || ab->a_type) ab_load_target(ab);
+        else ab->active = 0;
     }
     show();
     if (s_edit.slot == ab->slot) editor_show();

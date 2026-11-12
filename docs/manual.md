@@ -264,8 +264,9 @@ switch does** from then on; the one in use carries a tick.
   (takes about half a second). Tile 8 shows reverb B and lights up while it runs; tile 7 shows the reverb in the slot. **EDIT B** loads B and opens the FX editor to set it up. Reverb B is stored on the
   controller, per preset. If you save the preset while B is active, B becomes the preset's reverb.
   Loading a preset – also the one that is on, once more – always brings back its own reverb (A); B stays stored.
-  Saved on the *MIX* tab, footswitch 8 is the mix switch again and reverb B stays stored with its settings
-  for later; *None* in the list removes it.
+  Reverb B is the second effect of the reverb's own tile (tile 7), and that tile always swaps it. Saved on the
+  *MIX* or *2 SETTINGS* tab, footswitch 8 is the mix switch (or the settings) and the tile keeps its A / B – the
+  reverb's type on one switch, its amount on the other. *None* in the list removes B.
 - **2 SETTINGS**: footswitch 8 changes between two named settings of the preset's reverb – for example *Room* and
   *Atmos* – with all its controls (mix, decay, damping …). The reverb stays the same, so there is no gap in the
   sound. To set one up: set the reverb the way you want it (in the FX editor of tile 7 or on the Nano), then tap
@@ -320,8 +321,11 @@ reverb switch (footswitch 8) looks the same.
   the first swap switches it on for a moment to read them.
 - Loading a preset – also the one that is on – brings back A. If you save the preset while B runs, B becomes the
   preset's effect.
-- The reverb's second effect is the one footswitch 8 swaps (the [reverb switch](#reverb-switch-footswitch-8)); with
-  it on the reverb's own tile, footswitch 8 is not needed for it – useful with [6 fields](#tile-layout-6-or-8-fields).
+- The reverb's second effect is swapped by the reverb's own tile, always. Footswitch 8 (the
+  [reverb switch](#reverb-switch-footswitch-8)) swaps it too only when the reverb dialog was saved on its
+  *REVERB A / B* tab; otherwise it stays the mix switch or the two settings. Setting up B on the reverb's tile leaves
+  footswitch 8 as it was. When the tile swaps while footswitch 8 is the mix switch, the new reverb gets the mix the
+  switch shows (Pos 1 or Pos 2).
 - MIDI: **CC 61–65** choose A (value 0–63) or B (64–127) of FX slot 1–5; CC 58 swaps Pre FX 1.
 
 ## Auto-wah

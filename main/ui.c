@@ -2378,8 +2378,9 @@ static void on_rev_same(lv_event_t *e)
 }
 
 // 0 cancel, 1 save, 2 edit reverb B, 3 save and take the reverb off the Nano's expression pedal.
-// The tab in front decides what footswitch 8 does from now on: saved on the mix tab it switches the mix (a second
-// reverb stays stored for later), saved on the 2nd reverb tab it swaps the two reverbs.
+// The tab in front decides what footswitch 8 does from now on: saved on the mix tab it switches the mix, on the
+// Reverb A / B tab it swaps the two reverbs, on the 2 settings tab it changes between them. A second reverb always
+// stays on the reverb's own tile.
 static void on_mix_button(lv_event_t *e)
 {
     int action = (int)(intptr_t)lv_event_get_user_data(e);
@@ -2397,7 +2398,7 @@ static void on_mix_button(lv_event_t *e)
     }
     if (decide) {
         uint32_t chosen = chosen_rev_b();
-        bool parked = mix && chosen, was_parked = s_view.rev_b_stored && !s_view.rev_b_type;
+        bool parked = s_mix_tab_shown != 1 && chosen, was_parked = s_view.rev_b_stored && !s_view.rev_b_type;
         if (chosen != s_view.rev_b_stored || parked != was_parked) send('A', (parked ? 2 : 0) << 24 | (int)chosen);
         send('-', settings ? 17 : 16);   // the two settings are what the switch does - or not
     }
@@ -2424,7 +2425,7 @@ static void open_mix_editor(void)
     // pedal (they were stored there): Free pedal takes it off, the switch keeps its values.
     lv_label_set_text(s_mix_info, s_view.mix_exp
         ? "Save here: footswitch 8 switches the mix, Pos 1 / Pos 2. The Nano's preset still has this reverb on the expression pedal - Free pedal ends that."
-        : s_view.rev_b_stored ? "Save here: footswitch 8 switches the reverb's mix between Pos 1 and Pos 2 again. The second reverb stays stored."
+        : s_view.rev_b_stored ? "Save here: footswitch 8 switches the reverb's mix between Pos 1 and Pos 2. The second reverb stays on the reverb's own tile."
         : "Save here: footswitch 8 switches the reverb's mix between Pos 1 and Pos 2. Moving a slider plays that mix.");
     int selected = 0;
     for (int i = 0; i < s_rev_type_count; i++) if (s_rev_types[i] == s_view.rev_b_stored) selected = i + 1;
