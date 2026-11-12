@@ -366,6 +366,18 @@ int main(void)
     view.rev_b_type = rev_was;
     ui_show_state(&st, &view);
 
+    // Footswitch 8 as the mix switch at Pos 2, while the reverb's tile keeps its A / B (Room)
+    view.rev_b_type = 0;
+    view.mix_active = 1;
+    ui_show_state(&st, &view);
+    shot("41-mix-tile");
+    open_mix_editor();
+    shot("42-mix-dialog");
+    close_all();
+    view.rev_b_type = rev_was;
+    view.mix_active = -1;
+    ui_show_state(&st, &view);
+
     // The Nano's expression pedal has Pre FX 1 (its amount) and Post FX 2 (amount and on / off) in this preset
     view.exp_amount = 1u << 0 | 1u << 3;
     view.exp_switch = 1u << 3;

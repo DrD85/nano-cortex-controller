@@ -104,6 +104,8 @@ static lv_obj_t *s_mix_tab[3], *s_mix_panel[3], *s_rev_dropdown, *s_rev_edit, *s
 static lv_obj_t *s_rp_name[2], *s_rp_state[2];   // the two settings of the reverb: name (tap = keyboard) and "set" / "not set"
 static char s_mix_model[48];
 static bool s_mix_touched;                 // Pos 1 / Pos 2 moved: SAVE writes them
+static int s_second_pending = -1;           // FX editor of this slot opens with its second effect's list
+static lv_obj_t *s_rev_b_label;             // reverb switch dialog, A / B tab: the reverb's A and B
 static int s_mix_tab_shown;                // the tab in front: saved, it is what footswitch 8 does
 static uint32_t s_rev_types[16];           // reverb models for the dropdown (index + 1; 0 = none)
 static int s_rev_type_count;
@@ -342,6 +344,18 @@ static void primary(lv_obj_t *btn)
 }
 
 // A UI symbol (ui_icons.c) at a size, in a colour.
+// A top bar button: its symbol above, a small word below (as the tab bars of iOS name their symbols).
+static void top_word(lv_obj_t *b, lv_obj_t *img, const char *word)
+{
+    lv_obj_set_style_pad_all(b, 0, 0);
+    lv_obj_align(img, LV_ALIGN_TOP_MID, 0, 5);
+    lv_obj_t *l = lv_label_create(b);
+    lv_obj_set_style_text_font(l, &ui_font_12, 0);
+    lv_obj_set_style_text_color(l, lv_color_hex(0x9AA0A6), 0);
+    lv_label_set_text(l, word);
+    lv_obj_align(l, LV_ALIGN_BOTTOM_MID, 0, -3);
+}
+
 static lv_obj_t *ui_icon(lv_obj_t *parent, int icon, int size, uint32_t color)
 {
     lv_obj_t *img = lv_image_create(parent);
@@ -2365,16 +2379,15 @@ static void on_rev_dropdown(lv_event_t *e)
 }
 
 // "Same reverb": B is the reverb that is in the slot - a second setting of it (set up with Edit B).
-static void on_rev_same(lv_event_t *e)
+// A / B tab: the reverb's FX editor, with its second effect's list open
+static void on_rev_choose(lv_event_t *e)
 {
-    uint32_t type = s_view.mix_slot >= 0 ? s_slot_type[s_view.mix_slot] : 0;
-    for (int i = 0; i < s_rev_type_count; i++) {
-        if (s_rev_types[i] != type) continue;
-        lv_dropdown_set_selected(s_rev_dropdown, (uint32_t)(i + 1));
-        on_rev_dropdown(NULL);
-        return;
-    }
-    ui_show_message("No reverb in this preset.");
+    (void)e;
+    if (s_view.mix_slot < 0) return;
+    lv_obj_set_hidden(s_mix_editor, true);
+    send('K', 0);
+    s_second_pending = s_view.mix_slot;
+    send('O', s_view.mix_slot);
 }
 
 // 0 cancel, 1 save, 2 edit reverb B, 3 save and take the reverb off the Nano's expression pedal.
@@ -2424,9 +2437,14 @@ static void open_mix_editor(void)
     // Pos 1 / Pos 2 are the controller's. A preset set up before 1.8 still has the reverb on the Nano's expression
     // pedal (they were stored there): Free pedal takes it off, the switch keeps its values.
     lv_label_set_text(s_mix_info, s_view.mix_exp
-        ? "Save here: footswitch 8 switches the mix, Pos 1 / Pos 2. The Nano's preset still has this reverb on the expression pedal - Free pedal ends that."
-        : s_view.rev_b_stored ? "Save here: footswitch 8 switches the reverb's mix between Pos 1 and Pos 2. The second reverb stays on the reverb's own tile."
-        : "Save here: footswitch 8 switches the reverb's mix between Pos 1 and Pos 2. Moving a slider plays that mix.");
+        ? "The reverb's mix, Pos 1 / Pos 2. The Nano's preset still has this reverb on the expression pedal - Free pedal ends that."
+        : "The reverb's mix, Pos 1 or Pos 2. Moving a slider plays that mix.");
+    {   // A / B tab: the reverb's two, as its tile has them (chosen in its FX editor)
+        uint32_t a = s_view.mix_slot >= 0 ? s_slot_type[s_view.mix_slot] : 0, b = s_view.rev_b_stored;
+        if (s_view.rev_active && s_view.mix_slot >= 0 && s_view.ab_a_type[s_view.mix_slot]) a = s_view.ab_a_type[s_view.mix_slot];
+        if (b) lv_label_set_text_fmt(s_rev_b_label, "A  %s\nB  %s", a ? nano_fx_name(a) : "-", b == a ? "the same reverb, 2nd setting" : nano_fx_name(b));
+        else lv_label_set_text(s_rev_b_label, "No B yet - choose one in the reverb's editor.");
+    }
     int selected = 0;
     for (int i = 0; i < s_rev_type_count; i++) if (s_rev_types[i] == s_view.rev_b_stored) selected = i + 1;
     lv_dropdown_set_selected(s_rev_dropdown, (uint32_t)selected);
@@ -2455,7 +2473,7 @@ static lv_obj_t *mix_panel(lv_obj_t *parent, int y, int h)
 static void build_mix_editor(lv_obj_t *screen)
 {
     s_mix_editor = panel(screen, 120, 66, 560, 364);
-    dialog_title(s_mix_editor, "Reverb switch");
+    dialog_title(s_mix_editor, "Footswitch 8 switches");
     s_mix_model_label = label(s_mix_editor, HINT_FONT, MUTED);
     lv_obj_align(s_mix_model_label, LV_ALIGN_TOP_RIGHT, -20, 20);
     static const char *const tabs[3] = { "Mix", "Reverb A / B", "2 settings" };
@@ -2470,8 +2488,8 @@ static void build_mix_editor(lv_obj_t *screen)
     lv_obj_t *two_info = label(two, HINT_FONT, MUTED);
     lv_obj_set_width(two_info, 520);
     lv_label_set_long_mode(two_info, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(two_info, "Save here: two settings of this reverb on the switch - reverb A and B each have "
-                                "their own. Set the reverb up, tap Set from the reverb; tap a name to change it.");
+    lv_label_set_text(two_info, "Set the reverb up, tap Set from the reverb. Tap a name to rename it. "
+                                "Reverb A and B each have their own two.");
     lv_obj_set_pos(two_info, 20, 0);
     for (int n = 0; n < 2; n++) {
         int y = 46 + n * 62;
@@ -2518,9 +2536,14 @@ static void build_mix_editor(lv_obj_t *screen)
     lv_obj_t *info = label(rev, HINT_FONT, MUTED);
     lv_obj_set_width(info, 520);
     lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(info, "Save here: the switch changes between two reverbs with all their settings, A (the preset's) "
-                            "and B. Edit B sets B up.");
+    lv_label_set_text(info, "The reverb's A and B - the same two its own tile swaps. B is chosen and set up in the "
+                            "reverb's editor.");
     lv_obj_set_pos(info, 20, 0);
+    s_rev_b_label = label(rev, &ui_font_20, TEXT);
+    lv_obj_set_width(s_rev_b_label, 520);
+    lv_obj_set_style_text_line_space(s_rev_b_label, 8, 0);
+    lv_obj_set_pos(s_rev_b_label, 20, 58);
+    small_button(rev, 20, 130, 320, 46, "Choose B in the reverb's editor", on_rev_choose, 0);
     static char options[512];
     size_t n = (size_t)snprintf(options, sizeof(options), "None (footswitch 8 = mix)");
     for (unsigned i = 0; i < NANO_SLOT_MODEL_COUNT[4] && s_rev_type_count < 16; i++) {
@@ -2537,7 +2560,8 @@ static void build_mix_editor(lv_obj_t *screen)
     lv_obj_set_style_text_font(lv_dropdown_get_list(s_rev_dropdown), &ui_font_20, 0);
     lv_obj_add_event_cb(s_rev_dropdown, on_rev_dropdown, LV_EVENT_VALUE_CHANGED, NULL);
     s_rev_edit = small_button(rev, 360, 56, 180, 52, "Edit B", on_mix_button, 2);
-    small_button(rev, 20, 120, 320, 46, "Same reverb, second setting", on_rev_same, 0);
+    lv_obj_set_hidden(s_rev_dropdown, true);   // (B is chosen in the reverb's editor; the list stays for chosen_rev_b())
+    lv_obj_set_hidden(s_rev_edit, true);
 
     s_mix_free = small_button(s_mix_editor, 20, 302, 150, 46, "Free pedal", on_mix_button, 3);
     small_button(s_mix_editor, 200, 302, 160, 46, "Cancel", on_mix_button, 0);
@@ -3455,10 +3479,11 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     static const struct { int icon; lv_event_cb_t cb; } TOP[] = {
         { UI_ICON_REFRESH, on_refresh }, { UI_ICON_VOLUME, open_volume }, { UI_ICON_MIDI, open_midi }, { UI_ICON_USB, open_usb },
     };
+    static const char *const TOP_WORDS[4] = { "Reload", "Capture", "MIDI", "USB" };
     for (int i = 0; i < 4; i++) {
         lv_obj_t *b = button(preset, 10 + i * 62, 4, 56, 44, TOP[i].cb);
-        lv_obj_t *img = ui_icon(b, TOP[i].icon, 24, 0xC8CCD1);
-        lv_obj_center(img);
+        lv_obj_t *img = ui_icon(b, TOP[i].icon, 20, 0xC8CCD1);
+        top_word(b, img, TOP_WORDS[i]);
         if (TOP[i].icon == UI_ICON_MIDI) s_midi_icon = img;
     }
     s_midi_label = NULL;
@@ -3501,12 +3526,12 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
 
     // Expression pedal: what the Nano's pedal moves in this preset
     s_exp_button = button(preset, 610, 4, 56, 44, open_expression);
-    lv_obj_center(ui_icon(s_exp_button, UI_ICON_EXP, 24, 0xC8CCD1));
+    top_word(s_exp_button, ui_icon(s_exp_button, UI_ICON_EXP, 20, 0xC8CCD1), "Pedal");
     // Scenes: footswitches 3-8 switch between the scenes of this preset instead of between the bank's presets
     s_scene_button = button(preset, 672, 4, 56, 44, on_scene_button);
-    lv_obj_center(ui_icon(s_scene_button, UI_ICON_SCENES, 24, 0xC8CCD1));
+    top_word(s_scene_button, ui_icon(s_scene_button, UI_ICON_SCENES, 20, 0xC8CCD1), "Scenes");
     s_save_button = button(preset, 734, 4, 56, 44, on_save_button);
-    lv_obj_center(ui_icon(s_save_button, UI_ICON_SAVE, 24, 0xC8CCD1));
+    top_word(s_save_button, ui_icon(s_save_button, UI_ICON_SAVE, 20, 0xC8CCD1), "Save");
 
     lv_obj_t *prev = button(preset, 10, 52, 64, 66, on_previous);
     lv_obj_t *prev_label = label(prev, &ui_font_title_40, TEXT);
@@ -3716,15 +3741,10 @@ static void set_tile_pedal(int i, uint32_t type)
 // Footswitch 1 (mode) and 2 (tuner) tiles.
 static void show_fixed_tiles(const ui_view_t *view)
 {
-    char caption[24];
-    if (view->fx_mode) snprintf(caption, sizeof(caption), "MODE");
-    else if (view->scenes) snprintf(caption, sizeof(caption), "PRESET %d", s_current_preset);
-    else if (view->setlist_on && view->setlist_count) {   // the songs on this page
-        int last = view->setlist_first + 6 < view->setlist_count ? view->setlist_first + 6 : view->setlist_count;
-        snprintf(caption, sizeof(caption), "SET %d-%d", view->setlist_first + 1, last);
-    }
-    else snprintf(caption, sizeof(caption), "BANK %d", view->bank + 1);
-    set_tile(0, caption, view->fx_mode ? "FX" : view->scenes ? "Scenes" : "Presets", 0x8A9099, false, false, NULL, LV_SYMBOL_LOOP);
+    // Tile 1: always MODE, the mode it is in large. (Bank, preset and song are in the top bar.)
+    bool fx = view->fx_mode, scenes = !fx && view->scenes;
+    set_tile(0, "MODE", fx ? "FX" : scenes ? "Scenes" : view->setlist_on && view->setlist_count ? "Songs" : "Presets",
+             0x8A9099, false, false, NULL, LV_SYMBOL_LOOP);
     set_tile(1, "TUNER", "Tuner", 0xBDBDBD, false, false, NANO_ICONS[NANO_ICON_TUNER], NANO_ICONS[NANO_ICON_TUNER] ? NULL : LV_SYMBOL_AUDIO);
     // Under the caption: what holding the footswitch does (as the other effect of an A/B slot on its tile) - the
     // looper mode, and the scenes or the bank's presets with the symbol of the scenes button
@@ -3773,8 +3793,7 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
         }
     }
 
-    // Footswitch 8: reverb A/B, or the reverb mix between Pos 1 and Pos 2 of the expression assignment.
-    char caption[32];
+    // Footswitch 8: one of two - the reverb's two settings, its A / B or its mix Pos 1 / Pos 2 - as rows on its tile.
     const lv_image_dsc_t *icon = NANO_ICONS[NANO_ICON_REVERB];
     if (view->rp_used && view->mix_slot >= 0) {
         // The switch between two settings of the reverb: the tile carries both names as rows, the one that is in
@@ -3792,18 +3811,21 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
             snprintf(s_tile_pair[7].names[k], sizeof(s_tile_pair[7].names[k]), "%s", view->rp_names[k][0] ? view->rp_names[k] : k ? "Setting 2" : "Setting 1");
         }
     } else if (view->rev_b_type && view->mix_slot >= 0) {
-        // The switch between the two reverbs: as the tile of a slot with a second effect - both symbols, and the
-        // colour says which one runs (B of the same reverb, a second setting of it: the lighter shade).
+        // The switch between the two reverbs: one of two, as the two settings - the names as rows, the one that
+        // runs filled. (The reverb's own tile shows the same A / B with its symbols; this one is the switch.)
         int slot = view->mix_slot;
         uint32_t now = st->fx_type[slot];
         const nano_fx_model_t *model = nano_fx_model(now);
         bool b_runs = view->rev_active == 1, on = now && st->fx_on[slot];
         uint32_t a_type = b_runs ? view->ab_a_type[slot] : now;
         uint32_t color = model ? model->color : 0x00FFDD;
-        if (b_runs && a_type == now) color = blend(color, 0xFFFFFF, 0.5f);
-        set_tile(7, "REVERB", now ? nano_fx_name(now) : "No reverb", color, on, false, model ? NANO_ICONS[model->icon] : icon, NULL);
-        set_tile_pedal(7, now);
-        set_tile_ab(7, "REVERB", a_type, view->rev_b_type, b_runs, on, color);
+        set_tile(7, "REV A / B", "", color, on, false, model ? NANO_ICONS[model->icon] : icon, NULL);
+        s_tile_pair[7].shown = true;
+        s_tile_pair[7].on = on;
+        s_tile_pair[7].active = b_runs ? 1 : 0;
+        s_tile_pair[7].color = color;
+        snprintf(s_tile_pair[7].names[0], sizeof(s_tile_pair[7].names[0]), "A  %s", a_type ? nano_fx_name(a_type) : "-");
+        snprintf(s_tile_pair[7].names[1], sizeof(s_tile_pair[7].names[1]), "B  %s", a_type == view->rev_b_type ? "2nd setting" : nano_fx_name(view->rev_b_type));
     } else if (view->rev_b_type) {
         set_tile(7, "REVERB", "No reverb", 0x00FFDD, false, true, icon, NULL);
     } else if (view->mix_slot < 0) {
@@ -3811,11 +3833,20 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
     } else if (!view->mix_known) {
         set_tile(7, "REV MIX", "No Pos 1/2", 0x00FFDD, false, true, icon, NULL);
     } else {
-        snprintf(caption, sizeof(caption), "MIX %d/%d", (int)lroundf(view->mix_pos[0] * 100), (int)lroundf(view->mix_pos[1] * 100));
-        set_tile(7, caption, view->mix_active == 1 ? "Pos 2" : view->mix_active == 0 ? "Pos 1" : "Rev Mix",
-                 0x00FFDD, view->mix_active == 1, false, icon, NULL);
+        // The mix switch: Pos 1 and Pos 2 as rows with their mix, the one that is set filled (none: as the preset has it)
+        int slot = view->mix_slot;
+        const nano_fx_model_t *model = nano_fx_model(st->fx_type[slot]);
+        uint32_t color = model ? model->color : 0x00FFDD;
+        set_tile(7, "REV MIX", "", color, st->fx_on[slot], false, model ? NANO_ICONS[model->icon] : icon, NULL);
+        s_tile_pair[7].shown = true;
+        s_tile_pair[7].on = st->fx_on[slot];
+        s_tile_pair[7].active = view->mix_active == 1 ? 1 : view->mix_active == 0 ? 0 : -1;
+        s_tile_pair[7].color = color;
+        for (int k = 0; k < 2; k++) {
+            snprintf(s_tile_pair[7].names[k], sizeof(s_tile_pair[7].names[k]), "Pos %d  \xC2\xB7  %d %%", k + 1, (int)lroundf(view->mix_pos[k] * 100));
+        }
     }
-    if (view->mix_slot >= 0 && !view->rev_b_type && view->mix_known) set_tile_pedal(7, st->fx_type[view->mix_slot]);
+    if (view->mix_slot >= 0 && view->mix_known) set_tile_pedal(7, st->fx_type[view->mix_slot]);
 }
 
 // Looper mode: tile 1 is the mode (filled while the phone is connected), 2-8 the switches of the looper app with
@@ -5153,6 +5184,10 @@ void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, i
 
     set_hidden(s_editor, false);
     update_main_hidden();
+    if (s_second_pending == slot) {   // opened from the reverb switch's dialog: straight to the second effect's list
+        s_second_pending = -1;
+        open_panel(PANEL_SECOND, 0);
+    }
     lvgl_port_unlock();
 }
 
