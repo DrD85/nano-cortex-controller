@@ -456,6 +456,10 @@ does not matter; a freely recorded first loop can be that much longer or shorter
 The phone and the Nano Cortex Editor can be connected at the same time. What the app sends back (feedback meant
 for a controller's lights) is written to the serial log for now.
 
+With *Cortex Cloud through the board* switched on ([settings](#settings), page *Nano*) the controller offers itself to the
+Cortex Cloud app and to the phone in turns, two seconds each: both do not fit into one Bluetooth advertisement. The
+phone still finds it, at most two seconds later.
+
 ## Nano Cortex Editor through the controller
 
 The Nano accepts only one Bluetooth connection. When the controller is connected to the Nano, it offers itself as

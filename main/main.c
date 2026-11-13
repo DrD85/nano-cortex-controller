@@ -233,6 +233,9 @@ static esp_timer_handle_t s_library_timer;
 static int s_expect_preset;     // 0 = none
 static int s_preset_tries;       // requests sent for the preset change under way
 static int s_preset_refused;     // preset the Nano refused to load, 0 = none (shown until a change succeeds)
+// Preset changes refused one after the other. From the second on the Nano is taken as stuck: seen twice in soak tests
+// (2026-11-11, -13), it then loaded no preset at all, not even from its own footswitches, until switched off and on.
+static int s_refused_run;
 static bool s_expect_ack;       // the Nano has not confirmed the change yet: a state reply is from before it
 static int64_t s_expect_us;
 static int s_bank;              // 0-15
@@ -5099,6 +5102,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         s_expect_preset = 0;
         s_expect_ack = false;
         s_preset_refused = 0;
+        s_refused_run = 0;   // (it changes presets again)
         ESP_LOGI(TAG, "Preset changed on the Nano: %d", s_state.current_preset);
         uint8_t buf[4];
         send("Preset change ack", NANO_MSG_SET_PRESET_SLOTS_RESPONSE, buf, nano_preset_change_ack(buf));
@@ -5110,6 +5114,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         if (ok) {
             ESP_LOGI(TAG, "Preset change confirmed");
             s_preset_refused = 0;
+            s_refused_run = 0;
         } else {
             ESP_LOGW(TAG, "Preset change FAILED - the Nano's reply (%u bytes):", (unsigned)len);
             ESP_LOG_BUFFER_HEX(TAG, payload, len < 64 ? len : 64);
@@ -5120,8 +5125,14 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
                 break;
             }
             s_preset_refused = s_expect_preset ? s_expect_preset : s_state.current_preset;
+            s_refused_run++;
             char text[80];
-            snprintf(text, sizeof(text), "The Nano did not load preset %d - the sound is still the one before.", s_preset_refused);
+            if (s_refused_run >= 2) {
+                ESP_LOGW(TAG, "The Nano refused %d preset changes in a row - it seems stuck", s_refused_run);
+                snprintf(text, sizeof(text), "The Nano loads no presets - switch it off and on.");
+            } else {
+                snprintf(text, sizeof(text), "Preset %d not loaded - the sound is the one before.", s_preset_refused);   // (one line)
+            }
             ui_show_message(text);
         }
         s_expect_ack = false;
@@ -5779,6 +5790,7 @@ static void app_event(app_event_t ev)
             break;
         }
         ESP_LOGI(TAG, "Connected to the Nano Cortex - reading presets");
+        s_refused_run = 0;   // (after switching it off and on)
         ui_splash_status("Connected - loading presets ...", NULL);
         request_full_state();
         break;

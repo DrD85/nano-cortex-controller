@@ -10,6 +10,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "host/ble_hs.h"
+#include "nimble/nimble_port.h"
 #include "os/os_mbuf.h"
 #include "nano_link.h"
 #include "phone_midi.h"
@@ -40,9 +41,13 @@ static volatile bool s_phone_allowed;
 static bool s_adv_app, s_adv_phone, s_adv_cloud;   // what the running advertisement offers
 // Cortex Cloud mode: the app finds a Nano by the service A002 *and* reads its identity from the manufacturer data
 // (Cortex Cloud 2.8.3, BluePlusAdapter.startScan) - the board then advertises the Nano's own manufacturer data, so
-// the app sees "its" Nano and connects through the board. Bluetooth MIDI for a phone is not offered meanwhile (both
-// do not fit into one advertisement).
+// the app sees "its" Nano and connects through the board. Both do not fit into one advertisement with Bluetooth
+// MIDI for a phone (the looper): while both are wanted the board offers them in turns, TURN_MS each - the phone found
+// the board no more while the Cortex Cloud setting was on.
 static volatile bool s_cloud;
+#define TURN_MS 2000
+static struct ble_npl_callout s_turn;   // the change of turn runs in the host task, as the Bluetooth events
+static bool s_turn_ready, s_turn_running, s_phone_turn, s_turn_quiet;
 
 static app_write_cb s_on_write;
 static app_state_cb s_on_state;
@@ -189,6 +194,18 @@ static int peer_slot(uint16_t conn)
 // One advertisement for both: the Nano's service for the app (only while the Nano is connected) and Bluetooth MIDI
 // for a phone, each as long as nobody has taken it. The name is in the scan response (it does not fit next to the
 // MIDI service's long UUID).
+static void advertise(void);
+
+static void turn_event(struct ble_npl_event *ev)
+{
+    (void)ev;
+    s_turn_running = false;
+    s_phone_turn = !s_phone_turn;
+    s_turn_quiet = true;   // (not logged every two seconds)
+    advertise();
+    s_turn_quiet = false;
+}
+
 static void advertise(void)
 {
     bool app = s_enabled && s_conn == BLE_HS_CONN_HANDLE_NONE;
@@ -197,7 +214,25 @@ static void advertise(void)
     static uint8_t mfg[27];
     size_t mfg_len = s_cloud && app ? nano_link_nano_mfg(mfg, sizeof(mfg)) : 0;
     bool cloud = mfg_len > 0;
-    if (cloud) phone = false;
+    // Cortex Cloud and the phone both wanted: in turns (the phone's turn without the manufacturer data)
+    bool turns = cloud && phone;
+    if (turns) {
+        if (!s_turn_ready) {
+            ble_npl_callout_init(&s_turn, nimble_port_get_dflt_eventq(), turn_event, NULL);
+            s_turn_ready = true;
+        }
+        if (!s_turn_running) {
+            ble_npl_callout_reset(&s_turn, ble_npl_time_ms_to_ticks32(TURN_MS));
+            s_turn_running = true;
+        }
+        if (s_phone_turn) cloud = false;
+        else phone = false;
+    } else {
+        if (s_turn_running) ble_npl_callout_stop(&s_turn);
+        s_turn_running = false;
+        s_phone_turn = false;
+        if (cloud) phone = false;
+    }
     if (ble_gap_adv_active()) {
         if (app == s_adv_app && phone == s_adv_phone && cloud == s_adv_cloud) return;
         ble_gap_adv_stop();
@@ -242,7 +277,9 @@ static void advertise(void)
     s_adv_app = app;
     s_adv_phone = phone;
     s_adv_cloud = cloud;
-    ESP_LOGI(TAG, "Offered as \"%s\" to%s%s%s", NAME, app ? " the app" : "", app && phone ? " and" : "", phone ? " a phone (MIDI)" : "");
+    if (s_turn_quiet) return;
+    ESP_LOGI(TAG, "Offered as \"%s\" to%s%s%s%s", NAME, app ? " the app" : "", app && phone ? " and" : "", phone ? " a phone (MIDI)" : "",
+             turns ? " (Cortex Cloud and the phone in turns)" : cloud ? " (Cortex Cloud)" : "");
 }
 
 // A connection that never said what it is (no subscription) gives its place back.

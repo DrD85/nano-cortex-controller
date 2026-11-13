@@ -48,8 +48,11 @@ typedef struct {
 typedef struct {
     uint32_t reply;
     uint8_t owner;
+    uint8_t kind;   // state requests: STATE_FULL (with the preset list, 11-18 KB) or STATE_CURRENT - both answered with 2
     int64_t at_us;
 } pending_t;
+#define STATE_FULL 1
+#define STATE_CURRENT 2
 #define PENDING_MAX 24
 #define PENDING_TIMEOUT_US (5 * 1000 * 1000)
 #define PENDING_MAX_US (12 * 1000 * 1000)   // ... and never longer than this: a request the Nano did not answer must
@@ -439,16 +442,18 @@ static uint32_t reply_type(uint32_t request)
     }
 }
 
-static void note_request(uint32_t request, uint8_t owner)
+static void note_request(uint32_t request, uint8_t owner, const uint8_t *data, size_t len)
 {
     uint32_t reply = reply_type(request);
     if (!reply) return;
+    // (the full state request is READ alone, 08 03; the current one asks for more fields - see nano_state.c)
+    uint8_t kind = request == 1 && len >= 6 ? (len - 6 <= 2 ? STATE_FULL : STATE_CURRENT) : 0;
     xSemaphoreTake(s_pending_lock, portMAX_DELAY);
     if (s_pending_count == PENDING_MAX) {
         memmove(s_pending, s_pending + 1, sizeof(s_pending[0]) * (PENDING_MAX - 1));
         s_pending_count--;
     }
-    s_pending[s_pending_count++] = (pending_t){ .reply = reply, .owner = owner, .at_us = esp_timer_get_time() };
+    s_pending[s_pending_count++] = (pending_t){ .reply = reply, .owner = owner, .kind = kind, .at_us = esp_timer_get_time() };
     xSemaphoreGive(s_pending_lock);
 }
 
@@ -466,9 +471,11 @@ static int route(uint32_t type)
         if (now - since < PENDING_TIMEOUT_US && now - s_pending[i].at_us < PENDING_MAX_US) s_pending[keep++] = s_pending[i];
     }
     s_pending_count = keep;
-    // The state (reply 2) is the same for whoever asked: while both sides wait for one, it goes to both and closes
-    // the oldest request of each. (The Nano sometimes leaves a state request unanswered - during a preset change -
-    // and the replies after it would else go to the wrong side: the editor kept showing the preset before.)
+    // The state (reply 2) is the same for whoever asked: while both sides wait for one of the same kind, it goes to
+    // both and closes the oldest request of each. (The Nano sometimes leaves a state request unanswered - during a
+    // preset change - and the replies after it would else go to the wrong side: the editor kept showing the preset
+    // before.) Not for different kinds: the board's full state (after a save from the editor) went to the editor as
+    // its current preset too, and the editor stalled for half a minute.
     if (type == 2) {
         int board = -1, app = -1;
         for (int i = 0; i < s_pending_count; i++) {
@@ -476,7 +483,7 @@ static int route(uint32_t type)
             if (s_pending[i].owner == NANO_OWNER_APP && app < 0) app = i;
             if (s_pending[i].owner != NANO_OWNER_APP && board < 0) board = i;
         }
-        if (board >= 0 && app >= 0) {
+        if (board >= 0 && app >= 0 && s_pending[board].kind == s_pending[app].kind) {
             int first = board < app ? board : app, second = board < app ? app : board;
             memmove(s_pending + second, s_pending + second + 1, sizeof(s_pending[0]) * (size_t)(s_pending_count - second - 1));
             memmove(s_pending + first, s_pending + first + 1, sizeof(s_pending[0]) * (size_t)(s_pending_count - first - 2));
@@ -566,7 +573,7 @@ static bool write_packet(const char *label, const uint8_t *data, size_t len, uin
         vTaskDelay(pdMS_TO_TICKS(5));
     }
     if (tries) ESP_LOGW(TAG, "%s: sent after %d ms (the host was out of buffers)", label, tries * 5);
-    if (rc == 0) note_request(request, owner);   // (only a request that went out waits for a reply)
+    if (rc == 0) note_request(request, owner, data, len);   // (only a request that went out waits for a reply)
     if (rc != 0) ESP_LOGE(TAG, "Write not started (%d): %s", rc, label);
     else if (xSemaphoreTake(s_write_done, pdMS_TO_TICKS(3000)) != pdTRUE) ESP_LOGW(TAG, "No write response: %s", label);
     else if (s_write_status != 0) ESP_LOGW(TAG, "Write failed (%d): %s", s_write_status, label);

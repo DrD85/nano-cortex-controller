@@ -480,6 +480,10 @@ App), spielt das keine Rolle; ein frei aufgenommener erster Loop kann um so viel
 Telefon und Nano Cortex Editor können gleichzeitig verbunden sein. Was die App zurückschickt (Rückmeldung für die
 Lämpchen eines Controllers), steht vorerst im seriellen Protokoll.
 
+Ist *Cortex Cloud through the board* eingeschaltet ([Einstellungen](#einstellungen), Seite *Nano*), bietet sich der Controller der
+Cortex-Cloud-App und dem Telefon abwechselnd an, je zwei Sekunden: Beides passt nicht in eine Bluetooth-Anzeige. Das
+Telefon findet ihn trotzdem, höchstens zwei Sekunden später.
+
 ## Nano Cortex Editor über den Controller
 
 Der Nano erlaubt nur eine Bluetooth-Verbindung. Ist der Controller mit dem Nano verbunden, bietet er sich selbst als
