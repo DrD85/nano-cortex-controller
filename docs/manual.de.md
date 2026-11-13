@@ -291,10 +291,13 @@ Kachel des Reverbs selbst (Kachel 7).
   anderen.
 - **2 SETTINGS**: Fußschalter 8 wechselt zwischen zwei benannten Einstellungen des Reverbs im Preset – zum Beispiel
   *Room* und *Atmos* – mit allen Reglern (Mix, Decay, Damping …). Das Reverb bleibt dasselbe, es gibt also keinen
-  Aussetzer. Einrichten: das Reverb so einstellen, wie es klingen soll (im FX-Editor von Kachel 7 oder am Nano),
-  dann in der Zeile auf **Set from the reverb** tippen; für die andere Einstellung genauso. Ein Tipp auf den Namen
-  ändert ihn. **SAVE** braucht beide Einstellungen. Kachel 8 zeigt dann beide Namen als zwei Zeilen: Die
-  Einstellung, die an ist, ist gefüllt, die andere umrandet. Welche an ist, erkennt der Controller an den Werten des
+  Aussetzer. Einrichten: neben dem Namen der Einstellung auf eines der FX-Presets des Reverbs tippen (bis zu vier,
+  die im FX-Editor des Reverbs gespeicherten). Seine Werte und sein Name werden in die Einstellung kopiert, sein
+  Knopf ist gefüllt. Oder das Reverb so einstellen, wie es klingen soll (im FX-Editor von Kachel 7 oder am Nano), und
+  auf **Now** tippen. Für die andere Einstellung genauso. Eine spätere Änderung am FX-Preset ändert die Einstellung
+  nicht. Ein Tipp auf den Namen ändert ihn. **SAVE** braucht beide Einstellungen. Im Editor (über den Controller)
+  bietet das Zahnrad von Fußschalter 8 dasselbe je Einstellung. Kachel 8 zeigt dann beide Einstellungen als ihre
+  zwei Hälften: Die, die an ist, leuchtet, die andere ist gedimmt. Welche an ist, erkennt der Controller an den Werten des
   Reverbs, auch nach einem Presetwechsel; steht das Reverb auf keiner von beiden (von Hand verstellt oder das Preset
   mit anderen Werten gespeichert), ist keine Zeile gefüllt und der nächste Druck geht zur ersten Einstellung. Ein
   Druck schaltet das Reverb auch ein, falls es aus war.

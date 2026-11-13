@@ -275,9 +275,12 @@ is in filled, the other one outlined. So it never looks like the reverb's own ti
   keeps its A / B – the reverb's type on one switch, its amount on the other.
 - **2 SETTINGS**: footswitch 8 changes between two named settings of the preset's reverb – for example *Room* and
   *Atmos* – with all its controls (mix, decay, damping …). The reverb stays the same, so there is no gap in the
-  sound. To set one up: set the reverb the way you want it (in the FX editor of tile 7 or on the Nano), then tap
-  **Set from the reverb** in that row; do the same for the other one. Tap a name to change it. **SAVE** needs both
-  settings. Tile 8 then shows both names as two rows: the setting that is on is filled, the other one outlined.
+  sound. To set one up, tap one of the reverb's FX presets beside the setting's name (up to four, the ones saved in
+  the reverb's FX editor): its values and name are copied into the setting, and its button is filled. Or set the
+  reverb the way you want it (in the FX editor of tile 7 or on the Nano) and tap **Now**. Do the same for the other
+  setting. A later change of the FX preset leaves the setting as it is. Tap a name to change it. **SAVE** needs both
+  settings. In the editor (through the controller) the gear of footswitch 8 offers the same per setting. Tile 8 then
+  shows both settings as the tile's two halves: the one that is on is lit, the other one dimmed.
   The controller tells which one is on from the reverb's values, also after a preset change; if the reverb is set
   to neither (changed by hand, or the preset was stored with other values), no row is filled and the next press
   goes to the first setting. A press also switches the reverb on if it was off.
