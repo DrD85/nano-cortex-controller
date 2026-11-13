@@ -2466,6 +2466,9 @@ static void fxp_read(uint32_t type, fxp_t list[FXP_COUNT])
 // Once after the update to 1.17.0: the lists of the fixed form are written packed (frees about half of their room).
 static void fxp_compact_store(void)
 {
+#ifdef NANO_WEB   // the browser's store (localStorage) is not walked through: its lists stay as they are, read either way
+    return;
+#else
     static char keys[64][NVS_KEY_NAME_MAX_SIZE];   // (not on the small stack of the main task)
     int count = 0;
     nvs_iterator_t it = NULL;
@@ -2488,6 +2491,7 @@ static void fxp_compact_store(void)
     nvs_commit(nvs);
     nvs_close(nvs);
     if (packed) ESP_LOGI(TAG, "FX presets of %d models packed in the store", packed);
+#endif
 }
 
 // The presets of the model in the editor, and its original values once they are read.

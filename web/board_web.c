@@ -221,6 +221,7 @@ void app_link_register(void) {}
 void app_link_start(app_write_cb on_write, app_state_cb on_state) { (void)on_write; (void)on_state; }
 void app_link_enable(bool enabled) { (void)enabled; }
 void app_link_allow_phone(bool allowed) { (void)allowed; }
+void app_link_set_cloud(bool on) { (void)on; }   // (no Cortex Cloud through the browser)
 // Looper control over Bluetooth MIDI: the browser cannot be a Bluetooth device a phone connects to.
 void phone_midi_start(midi_message_cb on_message, phone_state_cb on_state) { (void)on_message; (void)on_state; }
 bool phone_midi_connected(void) { return false; }
