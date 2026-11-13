@@ -52,6 +52,8 @@ typedef struct {
 } pending_t;
 #define PENDING_MAX 24
 #define PENDING_TIMEOUT_US (5 * 1000 * 1000)
+#define PENDING_MAX_US (12 * 1000 * 1000)   // ... and never longer than this: a request the Nano did not answer must
+                                            // not take the replies of later ones while messages keep coming
 static pending_t s_pending[PENDING_MAX];
 static int s_pending_count;
 static int64_t s_last_reply_us;   // the Nano's last message: a request waits from then on (it answers in order)
@@ -461,9 +463,29 @@ static int route(uint32_t type)
         // (counted from the Nano's last message, not from the request: a request behind a long reply - the library,
         // 3 s - would else expire while the Nano is still busy, and its reply would go to the wrong side)
         int64_t since = s_pending[i].at_us > s_last_reply_us ? s_pending[i].at_us : s_last_reply_us;
-        if (now - since < PENDING_TIMEOUT_US) s_pending[keep++] = s_pending[i];
+        if (now - since < PENDING_TIMEOUT_US && now - s_pending[i].at_us < PENDING_MAX_US) s_pending[keep++] = s_pending[i];
     }
     s_pending_count = keep;
+    // The state (reply 2) is the same for whoever asked: while both sides wait for one, it goes to both and closes
+    // the oldest request of each. (The Nano sometimes leaves a state request unanswered - during a preset change -
+    // and the replies after it would else go to the wrong side: the editor kept showing the preset before.)
+    if (type == 2) {
+        int board = -1, app = -1;
+        for (int i = 0; i < s_pending_count; i++) {
+            if (s_pending[i].reply != type) continue;
+            if (s_pending[i].owner == NANO_OWNER_APP && app < 0) app = i;
+            if (s_pending[i].owner != NANO_OWNER_APP && board < 0) board = i;
+        }
+        if (board >= 0 && app >= 0) {
+            int first = board < app ? board : app, second = board < app ? app : board;
+            memmove(s_pending + second, s_pending + second + 1, sizeof(s_pending[0]) * (size_t)(s_pending_count - second - 1));
+            memmove(s_pending + first, s_pending + first + 1, sizeof(s_pending[0]) * (size_t)(s_pending_count - first - 2));
+            s_pending_count -= 2;
+            s_last_reply_us = now;
+            xSemaphoreGive(s_pending_lock);
+            return NANO_OWNER_BOTH;
+        }
+    }
     for (int i = 0; i < s_pending_count; i++) {
         if (s_pending[i].reply != type) continue;
         owner = s_pending[i].owner;
