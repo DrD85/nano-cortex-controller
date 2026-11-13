@@ -133,6 +133,7 @@ static int s_amp_values[NANO_AMP_KNOBS];
 static uint32_t s_volume_tick, s_amp_tick;
 static lv_obj_t *s_mix_editor, *s_mix_model_label, *s_mix_info, *s_mix_slider[2], *s_mix_value[2];
 static lv_obj_t *s_mix_tab[3], *s_mix_panel[3], *s_rev_dropdown, *s_rev_edit, *s_mix_free;   // tabs: mix, A / B, two settings
+static lv_obj_t *s_rp_chip[2][5];   // per setting: the reverb's FX presets (up to four) and Now (the reverb as it is)
 static lv_obj_t *s_rp_name[2], *s_rp_state[2];   // the two settings of the reverb: name (tap = keyboard) and "set" / "not set"
 static char s_mix_model[48];
 static bool s_mix_touched;                 // Pos 1 / Pos 2 moved: SAVE writes them
@@ -2914,6 +2915,15 @@ static void show_mix_tab(int tab)
 }
 
 // The two settings of the reverb in the dialog: their names, and whether they are set.
+// A choice button: filled light while it is the one (as the editor's chosen buttons), else as the others.
+static void choice_on(lv_obj_t *btn, bool on)
+{
+    set_color_prop(btn, LV_STYLE_BG_COLOR, on ? 0xECECEC : BUTTON_BG);
+    set_color_prop(btn, LV_STYLE_BORDER_COLOR, on ? 0xECECEC : BUTTON_LINE);
+    lv_obj_t *l = lv_obj_get_child(btn, 0);
+    if (l) set_color_prop(l, LV_STYLE_TEXT_COLOR, on ? INK : TEXT);
+}
+
 static void show_rp_rows(void)
 {
     for (int n = 0; n < 2; n++) {
@@ -2922,9 +2932,25 @@ static void show_rp_rows(void)
         if (s_view.rp_names[n][0]) snprintf(text, sizeof(text), "%s", s_view.rp_names[n]);
         else snprintf(text, sizeof(text), "Setting %d", n + 1);
         lv_label_set_text(s_rp_name[n], text);
-        lv_label_set_text(s_rp_state[n], set ? LV_SYMBOL_OK " set" : "not set yet");
-        lv_obj_set_style_text_color(s_rp_state[n], lv_color_hex(set ? GREEN : MUTED), 0);
+        lv_label_set_text(s_rp_state[n], set ? LV_SYMBOL_OK : "");
+        lv_obj_set_style_text_color(s_rp_state[n], lv_color_hex(GREEN), 0);
+        // The reverb's FX presets: the one this setting was taken from filled (the same name)
+        for (int k = 0; k < 4; k++) {
+            bool shown = k < s_view.rp_fxp_count;
+            set_hidden(s_rp_chip[n][k], !shown);
+            if (!shown) continue;
+            lv_label_set_text(lv_obj_get_child(s_rp_chip[n][k], 0), s_view.rp_fxp_names[k]);
+            choice_on(s_rp_chip[n][k], set && !strcmp(s_view.rp_fxp_names[k], s_view.rp_names[n]));
+        }
     }
+}
+
+// A chip of a setting's row: an FX preset of the reverb (0-3) or Now (4, the reverb as it is set now).
+static void on_rp_chip(lv_event_t *e)
+{
+    int data = (int)(intptr_t)lv_event_get_user_data(e), n = data >> 4, k = data & 0xF;
+    if (k == 4) send('-', 1 + n);
+    else send('-', 0x100 | n << 4 | k);
 }
 
 static void on_rp_name(lv_event_t *e)
@@ -2935,11 +2961,6 @@ static void on_rp_name(lv_event_t *e)
     if (s_view.rp_names[n][0]) strlcpy(name, s_view.rp_names[n], sizeof(name));
     else snprintf(name, sizeof(name), n ? "Atmos" : "Room");
     show_rename(n ? 'r' : 'R', title, "OK", name, 15);
-}
-
-static void on_rp_capture(lv_event_t *e)
-{
-    send('-', 1 + (int)(intptr_t)lv_event_get_user_data(e));
 }
 
 static void on_mix_tab(lv_event_t *e)
@@ -2980,7 +3001,7 @@ static void on_mix_button(lv_event_t *e)
     int action = (int)(intptr_t)lv_event_get_user_data(e);
     bool settings = s_mix_tab_shown == 2;
     if (action == 1 && settings && s_view.rp_set != 3) {   // (the dialog stays open)
-        ui_show_message("Set both settings first: set the reverb up, then tap Set from the reverb.");
+        ui_show_message("Set both settings first: tap an FX preset or Now in each row.");
         return;
     }
     lv_obj_set_hidden(s_mix_editor, true);
@@ -3069,21 +3090,29 @@ static void build_mix_editor(lv_obj_t *screen)
     lv_obj_t *two_info = label(two, HINT_FONT, MUTED);
     lv_obj_set_width(two_info, 520);
     lv_label_set_long_mode(two_info, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(two_info, "Set the reverb up, tap Set from the reverb. Tap a name to rename it. "
-                                "Reverb A and B each have their own two.");
+    lv_label_set_text(two_info, "Tap an FX preset of the reverb, or Now for the reverb as it is. Tap a name to rename it.");
     lv_obj_set_pos(two_info, 20, 0);
-    for (int n = 0; n < 2; n++) {
-        int y = 46 + n * 62;
-        lv_obj_t *name = button(two, 20, y, 250, 52, on_rp_name);
+    for (int n = 0; n < 2; n++) {   // (user, 2026-11-13: draft C - the FX presets as buttons beside each name)
+        int y = 50 + n * 62;
+        lv_obj_t *name = button(two, 20, y, 150, 52, on_rp_name);
         lv_obj_remove_event_cb(name, on_rp_name);
         lv_obj_add_event_cb(name, on_rp_name, LV_EVENT_CLICKED, (void *)(intptr_t)n);
         s_rp_name[n] = label(name, &ui_font_20, TEXT);
-        lv_obj_set_width(s_rp_name[n], 150);
+        lv_obj_set_width(s_rp_name[n], 96);
         lv_label_set_long_mode(s_rp_name[n], LV_LABEL_LONG_DOT);
         lv_obj_align(s_rp_name[n], LV_ALIGN_LEFT_MID, 0, 0);
-        s_rp_state[n] = label(name, HINT_FONT, MUTED);
+        s_rp_state[n] = label(name, HINT_FONT, GREEN);
         lv_obj_align(s_rp_state[n], LV_ALIGN_RIGHT_MID, 0, 0);
-        small_button(two, 280, y, 260, 52, "Set from the reverb", on_rp_capture, n);
+        for (int k = 0; k < 5; k++) {
+            lv_obj_t *chip = small_button(two, 178 + k * 74, y + 4, k < 4 ? 68 : 66, 44, k < 4 ? "" : "Now", on_rp_chip, n << 4 | k);
+            lv_obj_t *l = lv_obj_get_child(chip, 0);
+            lv_obj_set_style_text_font(l, &ui_font_14, 0);
+            lv_obj_set_width(l, 62);
+            lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+            lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+            lv_obj_center(l);
+            s_rp_chip[n][k] = chip;
+        }
     }
 
     // Tab 1: Pos 1 / Pos 2 of the expression assignment, played while moving
@@ -4823,6 +4852,8 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     if (!lv_obj_is_hidden(s_mix_editor)) {   // the reverb dialog shows the two settings: one may just have been set or named
         s_view.rp_set = view->rp_set;
         memcpy(s_view.rp_names, view->rp_names, sizeof(s_view.rp_names));
+        s_view.rp_fxp_count = view->rp_fxp_count;
+        memcpy(s_view.rp_fxp_names, view->rp_fxp_names, sizeof(s_view.rp_fxp_names));
         show_rp_rows();
     }
     if (!lv_obj_is_hidden(s_editor)) {   // the FX editor's scene button and list say which scenes carry settings

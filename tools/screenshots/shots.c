@@ -274,6 +274,11 @@ int main(void)
     view.rp_active = 1;
     snprintf(view.rp_names[0], sizeof(view.rp_names[0]), "Room");
     snprintf(view.rp_names[1], sizeof(view.rp_names[1]), "Atmos");
+    {   // the reverb's FX presets: the two settings were taken from Room and Atmos
+        static const char *const fxp[4] = { "Room", "Atmos", "Big Sky", "Hall" };
+        view.rp_fxp_count = 4;
+        for (int i = 0; i < 4; i++) snprintf(view.rp_fxp_names[i], sizeof(view.rp_fxp_names[i]), "%s", fxp[i]);
+    }
     ui_show_state(&st, &view);
     shot("40-pedal-view-off");
     st.fx_on[2] = !st.fx_on[2];
@@ -354,6 +359,11 @@ int main(void)
     view.rp_active = 1;
     snprintf(view.rp_names[0], sizeof(view.rp_names[0]), "Room");
     snprintf(view.rp_names[1], sizeof(view.rp_names[1]), "Atmos");
+    {   // the reverb's FX presets: the two settings were taken from Room and Atmos
+        static const char *const fxp[4] = { "Room", "Atmos", "Big Sky", "Hall" };
+        view.rp_fxp_count = 4;
+        for (int i = 0; i < 4; i++) snprintf(view.rp_fxp_names[i], sizeof(view.rp_fxp_names[i]), "%s", fxp[i]);
+    }
     ui_show_state(&st, &view);
     shot("37-reverb-settings-tile");
     open_mix_editor();

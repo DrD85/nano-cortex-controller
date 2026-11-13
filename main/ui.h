@@ -120,6 +120,8 @@ typedef struct {
     uint8_t rp_active;   // 0 / 1: the setting that is on, 2: the reverb is set to neither (the next press: setting 1)
     uint8_t rp_set;      // bit n: setting n + 1 is set (for the reverb that is in the slot)
     char rp_names[2][16];
+    uint8_t rp_fxp_count;   // the FX presets of the reverb in the slot (to take as a setting), their names
+    char rp_fxp_names[4][16];
     uint8_t exp_amount;  // bit n: the Nano's expression pedal moves the Amount of the effect in slot n in this preset
     uint8_t exp_switch;  // bit n: ... and switches it on / off
     uint8_t bank_presets[6];   // own bank: preset per switch 3-8, 0 = empty

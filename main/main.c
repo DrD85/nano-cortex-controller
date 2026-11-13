@@ -1420,6 +1420,8 @@ static bool reverb_b_used(void)
 static int wah_mode(int slot);
 static bool ab_used(int slot);
 static bool rp_used(void);
+static uint32_t s_fxp_names_type = UINT32_MAX;   // the reverb dialog's FX preset names: whose (UINT32_MAX = read again)
+static void fxp_read(uint32_t type, fxp_t list[FXP_COUNT]);
 static bool rp_set(int n);
 static int rp_pair(void);
 static void rp_match(int slot, const float *values, int count);
@@ -1478,6 +1480,20 @@ static void show(void)
     for (int n = 0; n < 2; n++) {
         if (rp_set(n)) view.rp_set |= (uint8_t)(1u << n);
         if (rp >= 0) strlcpy(view.rp_names[n], s_rp[rp].name[n], sizeof(view.rp_names[n]));
+    }
+    {   // the FX presets of the reverb in the slot, to take as one of its two settings (read when that reverb changes)
+        static char names[FXP_COUNT][16];
+        static int count;
+        uint32_t type = s_mix.slot >= 0 ? s_state.fx_type[s_mix.slot] : 0;
+        if (type != s_fxp_names_type) {
+            static fxp_t list[FXP_COUNT];   // (not on the stack)
+            fxp_read(type, list);
+            count = 0;
+            for (int i = 0; i < FXP_COUNT; i++) if (list[i].name[0]) strlcpy(names[count++], list[i].name, sizeof(names[0]));
+            s_fxp_names_type = type;
+        }
+        view.rp_fxp_count = (uint8_t)count;
+        memcpy(view.rp_fxp_names, names, sizeof(view.rp_fxp_names));
     }
     for (int slot = 0; slot < NANO_FX_SLOTS && s_exp.known; slot++) {   // effects the Nano's pedal moves or switches
         if (s_exp.ranges[NANO_EXP_PRE1 + slot].on) view.exp_amount |= (uint8_t)(1u << slot);
@@ -2394,6 +2410,7 @@ static bool fxp_unpack(const uint8_t *in, size_t len, fxp_t list[FXP_COUNT])
 // Writes a model's list (packed), or removes the key when no place is used.
 static esp_err_t fxp_write(nvs_handle_t nvs, const char *key, const fxp_t list[FXP_COUNT])
 {
+    s_fxp_names_type = UINT32_MAX;   // (the reverb dialog's list of FX presets may have changed)
     static uint8_t packed[FXP_PACKED_MAX];
     size_t n = fxp_pack(list, packed);
     if (n <= 1) {
@@ -3611,6 +3628,39 @@ static void rp_values(int slot, const float *values, int count)
     show();
 }
 
+// An FX preset of the reverb (its n-th with a name, as the dialog lists them) becomes setting n: its values and
+// name are copied - a later change of the FX preset leaves the setting as it is.
+static void rp_from_fxp(int n, int index)
+{
+    int slot = s_mix.slot;
+    if (n < 0 || n > 1 || slot < 0 || !s_state.fx_type[slot]) return;
+    static fxp_t list[FXP_COUNT];
+    fxp_read(s_state.fx_type[slot], list);
+    const fxp_t *f = NULL;
+    for (int i = 0, k = 0; i < FXP_COUNT && !f; i++) {
+        if (list[i].name[0] && k++ == index) f = &list[i];
+    }
+    if (!f || !f->count) {
+        ui_show_message("This FX preset is gone - open the dialog again.");
+        return;
+    }
+    int p = rp_pair_make();
+    if (p < 0) return;
+    rp_t *rp = &s_rp[p];
+    int count = f->count > NANO_MAX_PARAMS ? NANO_MAX_PARAMS : f->count;
+    rp->count[n] = (uint8_t)count;
+    memcpy(rp->values[n], f->values, sizeof(rp->values[n][0]) * (size_t)count);
+    strlcpy(rp->name[n], f->name, sizeof(rp->name[n]));
+    rp_store(p);
+    s_rp_active[p] = RP_NEITHER;   // (the reverb plays what it played: which setting that is, the next read says)
+    rp_check_later(300);
+    ESP_LOGI(TAG, "Reverb setting %d = FX preset \"%s\" of %s (%d values)", n + 1, rp->name[n], nano_fx_name(rp->type), count);
+    char text[64];
+    snprintf(text, sizeof(text), "\"%s\" is setting %d.", rp->name[n], n + 1);
+    ui_show_message(text);
+    show();
+}
+
 // Text from the keyboard: "<1 / 2><name>" - the name of a setting.
 static void rp_name(const char *text)
 {
@@ -4510,6 +4560,7 @@ static void handle_command(char c, int arg)
         break;
     case '-':   // reverb dialog: 1 / 2 = set that setting from the reverb, 16 / 17 = the switch uses the settings: no / yes
         if (arg == 1 || arg == 2) rp_capture(arg - 1);
+        else if (arg & 0x100) rp_from_fxp((arg >> 4) & 1, arg & 3);   // 0x100 | setting << 4 | FX preset (0-3)
         else if (arg == 16 || arg == 17) rp_use(arg == 17);
         else if (arg == 48) rp_check();
 #ifdef NANO_RPTEST
@@ -5138,7 +5189,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
 //                                                  u24, filled row i8, caption, name, note, row 1, row 2 (each length
 //                                                  u8 + text) }; 60013 see tiles_settings
 //   60014 app: { command u8, arg i32 }          -> 60015 { ok u8 }   (the screen's commands the editor may give:
-//                                                  'w' ']' 'A' '>' 'B' 'k', '-' 1 / 2 / 16 / 17)
+//                                                  'w' ']' 'A' '>' 'B' 'k', '-' 1 / 2 / 16 / 17 / 0x100 | setting << 4 | FX preset)
 //   60016 app: { model u32 }                    -> 60017 { model u32, its FX presets as stored (FXP_COUNT x fxp_t) }
 //   60018 app: which models have FX presets     -> 60019 { count u16, models u32 ... }
 //   60020 app: { model u32, FX presets }        -> 60021 { ok u8 }   (all empty: removed)
@@ -5345,7 +5396,7 @@ static bool editor_command(char c, int arg)
     switch (c) {
     case 'w': return (arg & 0xFF) >= 1 && (arg & 0xFF) <= FOOTSWITCH_COUNT && !(arg & ~(0xFF | UI_SWITCH_HOLD));
     case ']': case 'A': case '>': case 'B': case 'k': return true;
-    case '-': return arg == 1 || arg == 2 || arg == 16 || arg == 17;
+    case '-': return arg == 1 || arg == 2 || arg == 16 || arg == 17 || (arg & ~0x13) == 0x100;   // (0x100: an FX preset as setting)
     default: return false;
     }
 }
