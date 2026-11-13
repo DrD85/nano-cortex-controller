@@ -850,12 +850,13 @@ static void on_app_state(bool connected)
 }
 
 // The controller changed something on the Nano: tell the app once things are quiet (the app then reads the whole
-// preset again, which keeps the link busy for a moment - after a run of footswitch presses only once).
+// preset again, which keeps the link busy for a moment - after a run of footswitch presses only once). 350 ms:
+// with 1.2 s the editor showed the preset before for more than a second after a preset change here (soak test).
 static void app_sync_later(void)
 {
     if (!app_link_connected()) return;
     esp_timer_stop(s_app_notify_timer);
-    esp_timer_start_once(s_app_notify_timer, 1200 * 1000);
+    esp_timer_start_once(s_app_notify_timer, 350 * 1000);
 }
 
 static void ab_timer_cb(void *arg)
