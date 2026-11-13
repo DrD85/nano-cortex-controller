@@ -1850,7 +1850,8 @@ void ui_show_rotate(const ui_rotate_t *r)
     set_icon_square(s_rot_square, TEXT, NANO_ICONS[r->cab ? NANO_ICON_CAB : NANO_ICON_CAPTURE], true);
     lv_label_set_text(s_rot_title, r->cab ? "CAB / IR  \xC2\xB7  FOOTSWITCH II" : "CAPTURE  \xC2\xB7  FOOTSWITCH I");
     int position = r->cab ? r->slot : (r->slot ? (r->slot - 1) % 5 + 1 : 0);
-    if (!r->slot) lv_label_set_text(s_rot_where, "Bypass");
+    if (!r->slot && !r->cab && r->bank) lv_label_set_text_fmt(s_rot_where, "Bank %d  \xC2\xB7  bypass", r->bank);
+    else if (!r->slot) lv_label_set_text(s_rot_where, "Bypass");
     else if (r->cab) lv_label_set_text_fmt(s_rot_where, "Slot %d of 5", r->slot);
     else lv_label_set_text_fmt(s_rot_where, "Bank %d  \xC2\xB7  slot %d", (r->slot - 1) / 5 + 1, position);
     for (int i = 0; i < 5; i++) {

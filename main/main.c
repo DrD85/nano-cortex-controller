@@ -3698,7 +3698,7 @@ static void select_cab(int slot)
 // capture / cab before, now and after, and "Back to" the one the turning started from. A selector that does not say
 // which (or one with another selector) is shown after the state read that follows it. Not after a preset change on
 // the Nano (that changes the capture too) and not for the echo of our own selections.
-static struct { bool on, cab, pending; int from, before_capture, before_cab; int64_t last_us, quiet_until_us; } s_rot;
+static struct { bool on, cab, pending; int from, before_capture, before_cab, bank; int64_t last_us, quiet_until_us; } s_rot;
 
 static const char *rot_name(bool cab, int slot)
 {
@@ -3714,10 +3714,14 @@ static void rotate_show(bool cab, int slot)
     s_rot.on = true;
     s_rot.cab = cab;
     s_rot.last_us = now;
-    int last = cab ? NANO_CAB_SLOTS : NANO_CAPTURE_SLOTS;
-    ui_rotate_t r = { .cab = cab, .slot = slot, .from = s_rot.from,
-                      .prev = slot > 1 ? rot_name(cab, slot - 1) : "", .name = rot_name(cab, slot),
-                      .next = slot >= 1 && slot < last ? rot_name(cab, slot + 1) : "", .from_name = rot_name(cab, s_rot.from) };
+    // The Nano turns in a ring: bypass, 1-5, bypass ... (the capture within its bank, as the log of 2026-11-13 shows)
+    if (!cab && slot) s_rot.bank = (slot - 1) / 5 + 1;
+    if (s_rot.bank < 1) s_rot.bank = 1;
+    int base = cab ? 0 : (s_rot.bank - 1) * 5, position = cab ? slot : (slot ? (slot - 1) % 5 + 1 : 0);
+    int prev = position == 0 ? 5 : position - 1, next = position == 5 ? 0 : position + 1;
+    ui_rotate_t r = { .cab = cab, .slot = slot, .from = s_rot.from, .bank = cab ? 0 : s_rot.bank,
+                      .prev = rot_name(cab, prev ? base + prev : 0), .name = rot_name(cab, slot),
+                      .next = rot_name(cab, next ? base + next : 0), .from_name = rot_name(cab, s_rot.from) };
     ESP_LOGI(TAG, "Turned on the Nano: %s slot %d (%s)", cab ? "cab" : "capture", slot, r.name);
     ui_show_rotate(&r);
 }
@@ -3729,10 +3733,17 @@ static void rotate_selector(const uint8_t *payload, size_t len)
     s_rot.before_capture = s_state.capture_slot;
     s_rot.before_cab = s_state.cab_slot;
     int which = (int)nano_field_varint(payload, len, 3), value = (int)nano_field_varint(payload, len, 4);
-    int bank = s_state.capture_slot ? (s_state.capture_slot - 1) / 5 + 1 : 1, slot;
+    int bank = s_state.capture_slot ? (s_state.capture_slot - 1) / 5 + 1 : (s_rot.bank ? s_rot.bank : 1), slot;
+    int position = s_state.capture_slot ? (s_state.capture_slot - 1) % 5 + 1 : 0;
     bool cab;
     switch (which) {
-    case 1: cab = false; slot = value ? (bank - 1) * 5 + value : 0; break;   // position in the active bank
+    case 0:   // (field 3 left out: 0 =) the capture bank, 1-5 - the position stays
+        if (value < 1 || value > 5) return;
+        cab = false;
+        s_rot.bank = value;
+        slot = position ? (value - 1) * 5 + position : 0;
+        break;
+    case 1: cab = false; slot = value ? (bank - 1) * 5 + value : 0; s_rot.bank = bank; break;   // position in the bank
     case 4: cab = false; slot = value + 1; break;                            // slot 0-24 over all banks
     case 3: cab = true; slot = value; break;
     default: s_rot.pending = true; return;                                   // shown after the state read

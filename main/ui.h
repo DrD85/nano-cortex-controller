@@ -194,6 +194,7 @@ void ui_set_tempo(const ui_tempo_t *t);
 typedef struct {
     bool cab;
     int slot, from;            // capture 1-25 / cab 1-5, 0 = bypass
+    int bank;                  // capture: the bank (also while bypassed)
     const char *prev, *name, *next, *from_name;
 } ui_rotate_t;
 void ui_show_rotate(const ui_rotate_t *r);
