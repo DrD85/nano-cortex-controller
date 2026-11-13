@@ -2341,17 +2341,125 @@ static void fxp_key(uint32_t type, char *key)
     snprintf(key, 16, "fxp%lu", (unsigned long)type);
 }
 
-// The FX presets stored for a model (empty places if there are none).
+// In the store an FX preset list is packed (1.17.0): a mark, then for each used place its number, the name (length,
+// bytes), the number of values and the values (u16, little endian) - only what is there. One preset of a model
+// with 8 values takes 4 store entries instead of 11 for the four fixed places of before (264 bytes, still read).
+#define FXP_PACKED 0xF2
+#define FXP_PACKED_MAX (1 + FXP_COUNT * (3 + 15 + 2 * NANO_MAX_PARAMS))
+
+static size_t fxp_pack(const fxp_t list[FXP_COUNT], uint8_t *out)
+{
+    size_t n = 0;
+    out[n++] = FXP_PACKED;
+    for (int i = 0; i < FXP_COUNT; i++) {
+        const fxp_t *p = &list[i];
+        size_t name = strnlen(p->name, sizeof(p->name) - 1);
+        if (!name) continue;
+        int count = p->count > NANO_MAX_PARAMS ? NANO_MAX_PARAMS : p->count;
+        out[n++] = (uint8_t)i;
+        out[n++] = (uint8_t)name;
+        memcpy(out + n, p->name, name);
+        n += name;
+        out[n++] = (uint8_t)count;
+        for (int v = 0; v < count; v++) {
+            out[n++] = (uint8_t)(p->values[v] & 0xFF);
+            out[n++] = (uint8_t)(p->values[v] >> 8);
+        }
+    }
+    return n;
+}
+
+static bool fxp_unpack(const uint8_t *in, size_t len, fxp_t list[FXP_COUNT])
+{
+    memset(list, 0, sizeof(fxp_t) * FXP_COUNT);
+    if (len < 1 || in[0] != FXP_PACKED) return false;
+    size_t n = 1;
+    while (n + 3 <= len) {
+        int place = in[n++], name = in[n++];
+        if (place >= FXP_COUNT || name < 1 || name > 15 || n + name + 1 > len) return false;
+        fxp_t *p = &list[place];
+        memcpy(p->name, in + n, name);
+        p->name[name] = 0;
+        n += name;
+        int count = in[n++];
+        if (count > NANO_MAX_PARAMS || n + 2 * (size_t)count > len) return false;
+        p->count = (uint8_t)count;
+        for (int v = 0; v < count; v++, n += 2) p->values[v] = (uint16_t)(in[n] | in[n + 1] << 8);
+    }
+    return n == len;
+}
+
+// Writes a model's list (packed), or removes the key when no place is used.
+static esp_err_t fxp_write(nvs_handle_t nvs, const char *key, const fxp_t list[FXP_COUNT])
+{
+    static uint8_t packed[FXP_PACKED_MAX];
+    size_t n = fxp_pack(list, packed);
+    if (n <= 1) {
+        esp_err_t err = nvs_erase_key(nvs, key);
+        return err == ESP_ERR_NVS_NOT_FOUND ? ESP_OK : err;
+    }
+    return nvs_set_blob(nvs, key, packed, n);
+}
+
+// The FX presets stored for a model (empty places if there are none): packed, or the fixed form of 1.16.0.
+static bool fxp_read_key(nvs_handle_t nvs, const char *key, fxp_t list[FXP_COUNT], bool *old_form)
+{
+    static uint8_t buf[FXP_PACKED_MAX > sizeof(fxp_t) * FXP_COUNT ? FXP_PACKED_MAX : sizeof(fxp_t) * FXP_COUNT];
+    size_t size = sizeof(buf);
+    memset(list, 0, sizeof(fxp_t) * FXP_COUNT);
+    if (old_form) *old_form = false;
+    if (nvs_get_blob(nvs, key, buf, &size) != ESP_OK) return false;
+    if (size == sizeof(fxp_t) * FXP_COUNT && buf[0] != FXP_PACKED) {
+        memcpy(list, buf, size);
+        for (int i = 0; i < FXP_COUNT; i++) {
+            list[i].name[sizeof(list[i].name) - 1] = 0;
+            if (list[i].count > NANO_MAX_PARAMS) list[i].count = NANO_MAX_PARAMS;
+        }
+        if (old_form) *old_form = true;
+        return true;
+    }
+    if (fxp_unpack(buf, size, list)) return true;
+    ESP_LOGW(TAG, "FX presets %s unreadable (%u bytes)", key, (unsigned)size);
+    memset(list, 0, sizeof(fxp_t) * FXP_COUNT);
+    return false;
+}
+
 static void fxp_read(uint32_t type, fxp_t list[FXP_COUNT])
 {
-    size_t size = sizeof(fxp_t) * FXP_COUNT;
-    memset(list, 0, size);
+    memset(list, 0, sizeof(fxp_t) * FXP_COUNT);
     nvs_handle_t nvs;
     char key[16];
     fxp_key(type, key);
     if (!type || nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
-    if (nvs_get_blob(nvs, key, list, &size) != ESP_OK || size != sizeof(fxp_t) * FXP_COUNT) memset(list, 0, sizeof(fxp_t) * FXP_COUNT);
+    fxp_read_key(nvs, key, list, NULL);
     nvs_close(nvs);
+}
+
+// Once after the update to 1.17.0: the lists of the fixed form are written packed (frees about half of their room).
+static void fxp_compact_store(void)
+{
+    static char keys[64][NVS_KEY_NAME_MAX_SIZE];   // (not on the small stack of the main task)
+    int count = 0;
+    nvs_iterator_t it = NULL;
+    for (esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, BANK_STORE_NAMESPACE, NVS_TYPE_BLOB, &it); err == ESP_OK && count < 64;
+         err = nvs_entry_next(&it)) {
+        nvs_entry_info_t info;
+        if (nvs_entry_info(it, &info) == ESP_OK && !strncmp(info.key, "fxp", 3)) strlcpy(keys[count++], info.key, sizeof(keys[0]));
+    }
+    nvs_release_iterator(it);
+    nvs_handle_t nvs;
+    if (!count || nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
+    int packed = 0;
+    static fxp_t list[FXP_COUNT];
+    for (int i = 0; i < count; i++) {
+        bool old_form;
+        if (!fxp_read_key(nvs, keys[i], list, &old_form) || !old_form) continue;
+        if (fxp_write(nvs, keys[i], list) == ESP_OK) packed++;
+        else ESP_LOGW(TAG, "FX presets %s not packed", keys[i]);
+    }
+    nvs_commit(nvs);
+    nvs_close(nvs);
+    if (packed) ESP_LOGI(TAG, "FX presets of %d models packed in the store", packed);
 }
 
 // The presets of the model in the editor, and its original values once they are read.
@@ -2460,9 +2568,10 @@ static void fxp_save(int n, const char *name)
     fxp_key(s_fxp.type, key);
     bool empty = true;
     for (int i = 0; i < FXP_COUNT; i++) empty &= !s_fxp.list[i].name[0];
+    (void)empty;
     if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
-        esp_err_t err = empty ? nvs_erase_key(nvs, key) : nvs_set_blob(nvs, key, s_fxp.list, sizeof(s_fxp.list));
-        if ((err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) || nvs_commit(nvs) != ESP_OK) {
+        esp_err_t err = fxp_write(nvs, key, s_fxp.list);
+        if (err != ESP_OK || nvs_commit(nvs) != ESP_OK) {
             ui_show_message("Could not store the FX preset (memory full?).");
         }
         nvs_close(nvs);
@@ -5186,8 +5295,8 @@ static void editor_message(uint32_t type, const uint8_t *payload, size_t len)
             fxp_key(model, key);
             nvs_handle_t nvs;
             if (model && nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
-                esp_err_t err = empty ? nvs_erase_key(nvs, key) : nvs_set_blob(nvs, key, list, sizeof(list));
-                ok = (err == ESP_OK || err == ESP_ERR_NVS_NOT_FOUND) && nvs_commit(nvs) == ESP_OK;
+                esp_err_t err = fxp_write(nvs, key, list);
+                ok = err == ESP_OK && nvs_commit(nvs) == ESP_OK;
                 nvs_close(nvs);
             }
             if (ok && model == s_fxp.type) {   // the FX editor shows this model: its list as it is now
@@ -5787,6 +5896,7 @@ void app_main(void)
     looper_tiles_load();
     layout_load();
     metro_load();
+    fxp_compact_store();
     s_scenes = heap_caps_calloc(UI_SCENES, sizeof(scene_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     configASSERT(s_scenes);
     const esp_timer_create_args_t scene_timer = { .callback = scene_timer_cb, .name = "scene" };
