@@ -21,6 +21,9 @@ enum {
     UI_ICON_PLUS,
     UI_ICON_SCENES,
     UI_ICON_EXP,
+    UI_ICON_METRONOME,
+    UI_ICON_PLAY,
+    UI_ICON_STOP,
     UI_ICON_COUNT
 };
 

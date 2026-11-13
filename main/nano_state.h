@@ -46,6 +46,13 @@
 #define NANO_MSG_FX_PARAMS_REQUEST 137        // read all parameters of a slot (only for active FX!)
 #define NANO_MSG_FX_PARAMS_RESPONSE 138
 #define NANO_MSG_TEMPO_SCREEN 145             // tempo menu and metronome (NanOS 2.3.0), both directions
+// Listening to a library capture / IR without loading it (auditioning, as Cortex Cloud 2.8.3 does it)
+#define NANO_MSG_LISTEN_OFF 148               // AuditioningEnableDisableRequest { 2 requestId, 3 / 4 capture / IR false }
+#define NANO_MSG_LISTEN_OFF_RESPONSE 149
+#define NANO_MSG_LISTEN_CAPTURE 150           // AuditioningListenCaptureRequest { 3 factory | 4 user { 1 index, 2 name } }
+#define NANO_MSG_LISTEN_CAPTURE_RESPONSE 151  // { 1 action, 2 requestId, 3 status (1 = success), 5 message }
+#define NANO_MSG_LISTEN_IR 158                // AuditioningListenImpulseResponseRequest, the same shape
+#define NANO_MSG_LISTEN_IR_RESPONSE 159
 #define NANO_MAX_PARAMS 24
 
 #define NANO_PRESETS 64
@@ -74,6 +81,10 @@ typedef struct {
     char cab_names[NANO_CAB_SLOTS][48];
     float tuner_base_hz;                // reference pitch (default 440)
     float tempo;                        // the Nano's tempo in BPM (state field 56; its synced delays follow it), 0 = not reported
+    bool tempo_global;                  // one tempo for all presets (55), else each preset has its own
+    bool ext_clock;                     // the tempo comes from an external MIDI clock (61)
+    bool listening_capture, listening_ir;   // a library capture / IR is being listened to (64 / 65)
+    int fw_major, fw_minor;             // NanOS version from field 24 ("2.3.0+05c36621"), -1 = not reported
     bool tuner_muted;                   // output muted while the tuner is open (state field 63)
     bool names_loaded;
     char preset_names[NANO_PRESETS][65];
@@ -92,7 +103,7 @@ void nano_state_apply_preset_change(nano_state_t *st, const uint8_t *payload, si
 // (float32), 6 externalMidiClockRunning, 7 volume (float32, dB), 8 muteMetronome, 9 timeSignature, 10 noteLength,
 // 11 metronomeSound. It is a whole state: the app sends every field each time, and a field left out means 0 / off.
 typedef struct {
-    bool screen_active, global, ext_clock, muted, has_volume;
+    bool screen_active, global, ext_clock, muted, has_volume, has_screen;   // has_*: the field was there
     float tempo, volume_db;
     int time_sig, note_len, sound;      // indexes into the app's lists (NANO_TIME_SIGS ...)
 } nano_tempo_t;

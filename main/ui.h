@@ -176,6 +176,19 @@ void ui_fx_editor_close(void);
 // Library for the capture / cab pickers (owned by the caller, must stay valid).
 void ui_set_library(const nano_library_t *library);
 
+// Listening to a library item without loading it: kind 'C' capture / 'I' cab, 0 = nothing (picker rows, bar).
+// The picker's play buttons send '.' with (1 = IR) << 16 | position, '.' -1 stops (also when the picker closes).
+void ui_set_listening(char kind, int position, const char *name, bool pending);
+
+// Tempo button (top bar) and the tempo / metronome dialog (NanOS 2.3.0). The dialog sends '\'' what << 24 | value
+// (see metro_command in main.c); open: the dialog shows (also when the Nano opened its own tempo screen).
+typedef struct {
+    bool supported, open, global, ext_clock, muted;
+    float tempo, volume_db;
+    int time_sig, note_len, sound;
+} ui_tempo_t;
+void ui_set_tempo(const ui_tempo_t *t);
+
 // USB playback volume (dB, -40 = off) read from the Nano's settings.
 void ui_set_usb_gain(float db);
 

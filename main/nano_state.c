@@ -1,6 +1,7 @@
 #include "nano_state.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 
 const char *const NANO_FX_SLOT_NAMES[NANO_FX_SLOTS] = { "Pre FX 1", "Pre FX 2", "Post FX 1", "Post FX 2", "Post FX 3" };
@@ -110,7 +111,7 @@ void nano_tempo_read(nano_tempo_t *t, const uint8_t *payload, size_t len)
         if (f.wire == 5) memcpy(&v, f.data, sizeof(float));
         uint64_t n = f.wire == 0 ? f.value : 0;
         switch (f.field) {
-        case 3: t->screen_active = n != 0; break;
+        case 3: t->screen_active = n != 0; t->has_screen = true; break;
         case 4: t->global = n != 0; break;
         case 5: t->tempo = v; break;
         case 6: t->ext_clock = n != 0; break;
@@ -136,14 +137,19 @@ static size_t put_float(uint8_t *out, uint32_t field, float v)
 size_t nano_tempo_message(const nano_tempo_t *t, uint8_t *out)
 {
     size_t n = 0;
+    if (!t->screen_active) {   // leaving the tempo screen: the app sends only { 3: false }
+        out[n++] = 3 << 3;
+        out[n++] = 0;
+        return n;
+    }
+    // Opening the screen and every change: the whole message with every field set, as the app builds it
+    // (_buildTempoMessage, its protobuf writes fields that are set, false and 0 included)
     const struct { uint32_t field; uint64_t value; } ints[] = {
         { 3, t->screen_active }, { 4, t->global }, { 6, t->ext_clock }, { 8, t->muted },
         { 9, (uint64_t)t->time_sig }, { 10, (uint64_t)t->note_len }, { 11, (uint64_t)t->sound } };
-    // (proto3: a value of 0 is left out, as the app's library does)
     for (size_t i = 0; i < sizeof(ints) / sizeof(ints[0]); i++) {
-        if (i == 2 && t->tempo != 0) n += put_float(out + n, 5, t->tempo);   // tag order 3, 4, 5, 6, 7 ...
-        if (i == 3 && t->volume_db != 0) n += put_float(out + n, 7, t->volume_db);
-        if (!ints[i].value) continue;
+        if (i == 2) n += put_float(out + n, 5, t->tempo);   // tag order 3, 4, 5, 6, 7 ...
+        if (i == 3) n += put_float(out + n, 7, t->volume_db);
         out[n++] = (uint8_t)(ints[i].field << 3);
         n += put_varint(out + n, ints[i].value);
     }
@@ -164,7 +170,8 @@ uint64_t nano_field_varint(const uint8_t *payload, size_t len, uint32_t field)
 // 13 currentPresetIndex, 14/15/38/39 presets on slots A1/B1/A2/B2, 18 presets[] { 1 name },
 // 31 fxBypass (5 bytes, 0 = on), 32 current capture { 2 name }, 33 current cab { 2 short name },
 // 41 currentPresetDirty, 44 capture volume (0-255), 46 tunerBaseFrequency (float32), 48-52 FX model type per slot,
-// 63 tunerModeMuted,
+// 63 tunerModeMuted, 24 firmwareVersion, 55 tempoIsGlobal, 56 tempo (float32), 61 externalMidiClockRunning,
+// 64 / 65 captureAuditioningActive / irAuditioningActive,
 // 3-7 amp knobs of the capture (gain, level, bass, mid, treble, 0-255).
 // The Nano omits fields whose value is 0.
 bool nano_payload_complete(const uint8_t *payload, size_t len)
@@ -182,6 +189,7 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
     int amp[NANO_AMP_KNOBS] = { 0 };
     bool dirty = false, fx_seen = false, names_seen = false, capture_seen = false, cab_seen = false, tuner_muted = false;
     bool capture_names_seen = false, cab_names_seen = false;
+    bool tempo_global = false, ext_clock = false, listen_capture = false, listen_ir = false;
     uint32_t types[NANO_FX_SLOTS] = { 0 };
     char capture[sizeof(st->capture)] = "", cab[sizeof(st->cab)] = "";
 
@@ -215,6 +223,18 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
         case 39: slots[3] = (int)field_number(&f); break;
         case 41: dirty = field_number(&f) != 0; break;
         case 63: tuner_muted = field_number(&f) != 0; break;
+        case 55: tempo_global = field_number(&f) != 0; break;
+        case 61: ext_clock = field_number(&f) != 0; break;
+        case 64: listen_capture = field_number(&f) != 0; break;
+        case 65: listen_ir = field_number(&f) != 0; break;
+        case 24:
+            if (f.wire == 2) {
+                char version[24];
+                copy_string(version, sizeof(version), f.data, f.len);
+                int major = -1, minor = -1;
+                if (sscanf(version, "%d.%d", &major, &minor) == 2) { st->fw_major = major; st->fw_minor = minor; }
+            }
+            break;
         case 44: capture_volume = (int)field_number(&f); break;
         case 3: case 4: case 5: case 6: case 7: amp[f.field - 3] = (int)field_number(&f); break;
         case 46:
@@ -270,6 +290,10 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
     memcpy(st->slot_preset, slots, sizeof(slots));
     st->dirty = dirty;
     st->tuner_muted = tuner_muted;   // omitted by the Nano when off
+    st->tempo_global = tempo_global;
+    st->ext_clock = ext_clock;
+    st->listening_capture = listen_capture;
+    st->listening_ir = listen_ir;
     if (bank < 1 || bank > 5) bank = 1;
     st->capture_slot = capture_position > 0 ? (bank - 1) * 5 + capture_position : 0;
     st->cab_slot = cab_selector >= 0 && cab_selector <= NANO_CAB_SLOTS ? cab_selector : 0;

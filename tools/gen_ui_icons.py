@@ -38,11 +38,15 @@ OWN = {   # not in the editor's set
     'chevron-down': '<path d="M6 9l6 6 6-6"/>',
     'plus': '<path d="M12 5v14M5 12h14"/>',
     'scenes': '<path d="M12 4l8 4.3-8 4.3-8-4.3z"/><path d="M4 12.3l8 4.3 8-4.3"/><path d="M4 16l8 4.3 8-4.3"/>',
+    'metronome': '<path d="M9 3h6l4 18H5L9 3z"/><path d="M12 17l5-11"/><path d="M8 17h8"/>',
+    'play': '<path d="M8 5.5v13l11-6.5z" fill="#000"/>',
+    'stop': '<rect x="6" y="6" width="12" height="12" rx="2" fill="#000"/>',
 }
 KEYS = ['refresh', 'volume', 'midi', 'usb', 'save', 'close',
         'cap-amp-head', 'cap-amp-combo', 'cap-amp-cab', 'cap-cab', 'cap-pedal', 'cap-overdrive',
         'back', 'chevron-down', 'plus',   # FX editor
-        'scenes', 'exp']                  # scenes and expression pedal buttons
+        'scenes', 'exp',                  # scenes and expression pedal buttons
+        'metronome', 'play', 'stop']      # tempo button, listening in the library
 CAPTURE_KEYS = KEYS[6:12]
 
 

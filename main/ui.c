@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
@@ -93,6 +94,18 @@ static uint32_t s_tile_head[TILES];   // colour of a tile that is not active, di
 static lv_obj_t *s_capture_square, *s_capture_slot_label, *s_cab_square, *s_cab_slot_label;
 static lv_obj_t *s_picker, *s_picker_title, *s_picker_list, *s_picker_tab[2], *s_picker_chips, *s_picker_chip[LIB_CATEGORY_COUNT];
 static lv_obj_t *s_picker_pager, *s_picker_page_label, *s_picker_info, *s_confirm, *s_confirm_text;
+static lv_obj_t *s_listen_bar, *s_listen_name, *s_listen_note;
+static char s_listen_kind, s_listen_name_text[64];   // what is being listened to ('C' / 'I', 0 = nothing)
+static int s_listen_pos;
+static bool s_listen_pending;
+static lv_obj_t *s_tempo_button, *s_tempo_button_icon, *s_tempo_button_text;
+static lv_obj_t *s_metro, *s_metro_bpm, *s_metro_scope[2], *s_metro_switch, *s_metro_vol, *s_metro_vol_text, *s_metro_sig;
+static lv_obj_t *s_metro_note[4], *s_metro_sound[2], *s_metro_dots, *s_metro_hint;
+static lv_timer_t *s_metro_beat_timer;
+static ui_tempo_t s_tempo_ui = { .tempo = 120, .muted = true, .time_sig = 2 };
+static int s_metro_beat;
+static uint32_t s_metro_taps[6];
+static int s_metro_tap_count;
 static lv_obj_t *s_bank_editor, *s_bank_title, *s_bank_swatch[UI_BANK_COLOR_COUNT], *s_bank_list;
 static lv_obj_t *s_toast;
 static lv_obj_t *s_usb, *s_usb_slider, *s_usb_value, *s_usb_info, *s_usb_minus, *s_usb_plus, *s_usb_reset;
@@ -1190,6 +1203,7 @@ static void show_tile_extras(void)
 static void on_picker_close(lv_event_t *e)
 {
     lv_obj_set_hidden(s_picker, true);
+    if (s_listen_kind) send('.', -1);   // as the app: leaving the library ends the listening
 }
 
 static void on_picker_choice(lv_event_t *e)
@@ -1245,6 +1259,59 @@ static const lib_list_t *picker_library_list(void)
 
 static void on_library_entry(lv_event_t *e);
 
+static void on_listen_play(lv_event_t *e)
+{
+    int position = (int)(intptr_t)lv_event_get_user_data(e);
+    bool ir = s_picker_kind == 'I';
+    if (s_listen_kind == (ir ? 'I' : 'C') && s_listen_pos == position) send('.', -1);
+    else send('.', (ir ? 1 << 16 : 0) | position);
+}
+
+// A library row: the name (with USER), a round play button on the right; green while it is listened to.
+static lv_obj_t *library_row(const lib_item_t *item, int position)
+{
+    bool playing = s_listen_kind == (s_picker_kind == 'I' ? 'I' : 'C') && s_listen_pos == position;
+    lv_obj_t *btn = picker_entry(item->name, NULL, false);
+    lv_obj_t *name = lv_obj_get_child(btn, 0);
+    lv_obj_set_width(name, item->user ? 400 : 470);
+    if (item->user) {
+        lv_obj_t *t = label(btn, &ui_font_14, GREEN);
+        lv_label_set_text(t, "USER");
+        lv_obj_align(t, LV_ALIGN_RIGHT_MID, -54, 0);
+    }
+    if (playing) {
+        lv_obj_set_style_bg_color(btn, lv_color_hex(0x16301C), 0);
+        lv_obj_set_style_border_width(btn, 2, 0);
+        lv_obj_set_style_text_color(name, lv_color_hex(0xFFFFFF), 0);
+    }
+    lv_obj_t *play = lv_button_create(btn);
+    lv_obj_set_size(play, 40, 40);
+    lv_obj_align(play, LV_ALIGN_RIGHT_MID, 6, 0);
+    lv_obj_set_ext_click_area(play, 6);
+    lv_obj_set_style_radius(play, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_shadow_width(play, 0, 0);
+    lv_obj_set_style_border_width(play, playing ? 0 : 2, 0);
+    lv_obj_set_style_border_color(play, lv_color_hex(0x4A4E53), 0);
+    lv_obj_set_style_bg_color(play, lv_color_hex(playing ? GREEN : 0x1A1D20), 0);
+    lv_obj_set_style_bg_color(play, lv_color_hex(playing ? 0x7FF593 : 0x34383C), LV_STATE_PRESSED);
+    lv_obj_set_style_opa(play, s_listen_pending && playing ? LV_OPA_60 : LV_OPA_COVER, 0);
+    lv_obj_center(ui_icon(play, playing ? UI_ICON_STOP : UI_ICON_PLAY, playing ? 16 : 18, playing ? INK : TEXT));
+    lv_obj_add_event_cb(play, on_listen_play, LV_EVENT_CLICKED, (void *)(intptr_t)position);
+    lv_obj_add_event_cb(btn, on_library_entry, LV_EVENT_CLICKED, (void *)(intptr_t)position);
+    return btn;
+}
+
+// The bar at the bottom of the library while something is listened to (in place of Prev / Next)
+static void update_listen_bar(void)
+{
+    bool show = s_listen_kind && s_picker_library && s_listen_kind == (s_picker_kind == 'I' ? 'I' : 'C');
+    lv_obj_set_hidden(s_listen_bar, !show);
+    lv_obj_set_hidden(s_picker_pager, !s_picker_library || show);
+    if (!show) return;
+    lv_label_set_text(s_listen_name, s_listen_name_text);
+    lv_label_set_text(s_listen_note, s_listen_pending ? "Starting ..." : "Listening - slot and preset stay");
+}
+
 static void fill_picker(void)
 {
     char text[80];
@@ -1255,7 +1322,7 @@ static void fill_picker(void)
     style_tab(s_picker_tab[0], !s_picker_library);
     style_tab(s_picker_tab[1], s_picker_library);
     lv_obj_set_hidden(s_picker_chips, !s_picker_library || cab);
-    lv_obj_set_hidden(s_picker_pager, !s_picker_library);
+    update_listen_bar();
     lv_obj_set_hidden(s_picker_info, !s_picker_library);
     int top = s_picker_library ? (cab ? 92 : 136) : 60;
     lv_obj_set_pos(s_picker_list, 10, top);
@@ -1303,8 +1370,7 @@ static void fill_picker(void)
     for (int i = 0; i < list->count; i++) {
         if (!cab && s_picker_category != LIB_ALL && list->items[i].category != s_picker_category) continue;
         if (matches >= first && shown < LIB_PAGE) {
-            lv_obj_t *btn = picker_entry(list->items[i].name, list->items[i].user ? "USER" : NULL, false);
-            lv_obj_add_event_cb(btn, on_library_entry, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+            library_row(&list->items[i], i);
             shown++;
         }
         matches++;
@@ -1360,6 +1426,41 @@ static void on_library_entry(lv_event_t *e)
     lv_label_set_text(s_confirm_text, text);
     s_confirm_code = (s_picker_kind == 'I' ? 1 << 16 : 0) | position;
     lv_obj_set_hidden(s_confirm, false);
+}
+
+static void on_listen_stop(lv_event_t *e) { send('.', -1); }
+
+static void on_listen_load(lv_event_t *e)
+{
+    if (!s_listen_kind) return;
+    char text[120];
+    snprintf(text, sizeof(text), "Load \"%.60s\" into this slot?", s_listen_name_text);
+    int slot = s_listen_kind == 'I' ? s_cab_slot : s_capture_slot;
+    if (!slot) {
+        ui_show_message("Choose a slot first - the library loads into the active slot.");
+        return;
+    }
+    lv_label_set_text(s_confirm_text, text);
+    s_confirm_code = (s_listen_kind == 'I' ? 1 << 16 : 0) | s_listen_pos;
+    lv_obj_set_hidden(s_confirm, false);
+    lv_obj_move_foreground(s_confirm);
+}
+
+void ui_set_listening(char kind, int position, const char *name, bool pending)
+{
+    lvgl_port_lock(0);
+    s_listen_kind = kind;
+    s_listen_pos = position;
+    s_listen_pending = pending;
+    strlcpy(s_listen_name_text, name ? name : "", sizeof(s_listen_name_text));
+    if (!lv_obj_is_hidden(s_picker) && s_picker_library) {
+        lv_coord_t y = lv_obj_get_scroll_y(s_picker_list);   // the list stays where it is
+        fill_picker();
+        lv_obj_scroll_to_y(s_picker_list, y, LV_ANIM_OFF);
+    } else if (s_listen_bar) {
+        update_listen_bar();
+    }
+    lvgl_port_unlock();
 }
 
 static void on_confirm(lv_event_t *e)
@@ -1436,6 +1537,30 @@ static void build_picker(lv_obj_t *screen)
     s_picker_page_label = label(s_picker_pager, &ui_font_20, MUTED);
     lv_obj_align(s_picker_page_label, LV_ALIGN_CENTER, 0, 0);
 
+    // Listening: what plays, Stop and Load (in place of Prev / Next)
+    s_listen_bar = card(s_picker, 10, 384, 580, 58);
+    lv_obj_set_style_bg_color(s_listen_bar, lv_color_hex(0x122417), 0);
+    lv_obj_set_style_bg_grad_dir(s_listen_bar, LV_GRAD_DIR_NONE, 0);
+    lv_obj_set_style_border_width(s_listen_bar, 2, 0);
+    lv_obj_set_style_border_color(s_listen_bar, lv_color_hex(GREEN), 0);
+    lv_obj_t *stop = lv_button_create(s_listen_bar);
+    lv_obj_set_size(stop, 40, 40);
+    lv_obj_set_pos(stop, 7, 7);
+    lv_obj_set_style_radius(stop, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_shadow_width(stop, 0, 0);
+    lv_obj_set_style_bg_color(stop, lv_color_hex(GREEN), 0);
+    lv_obj_center(ui_icon(stop, UI_ICON_STOP, 16, INK));
+    lv_obj_add_event_cb(stop, on_listen_stop, LV_EVENT_CLICKED, NULL);
+    s_listen_name = label(s_listen_bar, &ui_font_20, TEXT);
+    lv_obj_set_width(s_listen_name, 290);
+    lv_label_set_long_mode(s_listen_name, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(s_listen_name, 58, 4);
+    s_listen_note = label(s_listen_bar, &ui_font_12, MUTED);
+    lv_obj_set_pos(s_listen_note, 58, 32);
+    small_button(s_listen_bar, 354, 6, 100, 42, "Stop", on_listen_stop, 0);
+    primary(small_button(s_listen_bar, 462, 6, 106, 42, "Load", on_listen_load, 0));
+    lv_obj_set_hidden(s_listen_bar, true);
+
     // Confirmation before a library item replaces the slot content
     s_confirm = card(s_picker, 10, 330, 580, 110);
     lv_obj_set_style_bg_color(s_confirm, lv_color_hex(0x1A1D20), 0);
@@ -1450,6 +1575,250 @@ static void build_picker(lv_obj_t *screen)
     lv_obj_set_hidden(s_confirm, true);
 
     lv_obj_set_hidden(s_picker, true);
+}
+
+// ---- tempo and metronome (NanOS 2.3.0): the button in the top bar, the dialog ----
+
+#define METRO_SIGS NANO_TIME_SIGS   // (nano_state.c: the app's list)
+
+static void metro(int what, int value) { send('\'', (what << 24) | (value & 0xFFFFFF)); }
+
+static void on_tempo_button(lv_event_t *e)
+{
+    metro(0, 0);
+    s_tempo_ui.open = true;
+    lv_obj_set_hidden(s_metro, false);   // at once; main confirms with ui_set_tempo
+    lv_obj_move_foreground(s_metro);
+}
+static void on_metro_close(lv_event_t *e)
+{
+    lv_obj_set_hidden(s_metro, true);
+    s_tempo_ui.open = false;
+    metro(1, 0);
+}
+static void on_metro_step(lv_event_t *e) { metro(3, (int)(intptr_t)lv_event_get_user_data(e)); }
+static void on_metro_scope(lv_event_t *e) { metro(9, (int)(intptr_t)lv_event_get_user_data(e)); }
+static void on_metro_switch(lv_event_t *e) { metro(4, 0); }
+static void on_metro_note(lv_event_t *e) { metro(7, (int)(intptr_t)lv_event_get_user_data(e)); }
+static void on_metro_sound(lv_event_t *e) { metro(8, (int)(intptr_t)lv_event_get_user_data(e)); }
+static void on_metro_sig(lv_event_t *e)
+{
+    int step = (int)(intptr_t)lv_event_get_user_data(e);
+    metro(6, (s_tempo_ui.time_sig + step + NANO_TIME_SIG_COUNT) % NANO_TIME_SIG_COUNT);
+}
+
+// TAP: the mean of the last intervals (40-240 BPM as the app; a pause of 2 s starts again)
+static void on_metro_tap(lv_event_t *e)
+{
+    uint32_t now = lv_tick_get();
+    if (s_metro_tap_count && now - s_metro_taps[s_metro_tap_count - 1] > 2000) s_metro_tap_count = 0;
+    if (s_metro_tap_count == 6) {
+        memmove(s_metro_taps, s_metro_taps + 1, 5 * sizeof(s_metro_taps[0]));
+        s_metro_tap_count = 5;
+    }
+    s_metro_taps[s_metro_tap_count++] = now;
+    if (s_metro_tap_count < 2) return;
+    float ms = (float)(s_metro_taps[s_metro_tap_count - 1] - s_metro_taps[0]) / (float)(s_metro_tap_count - 1);
+    float bpm = 60000.0f / ms;
+    if (bpm < 40 || bpm > 240) return;
+    metro(2, (int)lroundf(bpm * 10));
+}
+
+static void metro_vol_text(int half_db)
+{
+    lv_label_set_text_fmt(s_metro_vol_text, "%s%d.%d dB", half_db < 0 ? "\xE2\x88\x92" : "", abs(half_db) / 2, abs(half_db) % 2 ? 5 : 0);
+}
+static void on_metro_vol(lv_event_t *e)
+{
+    int v = lv_slider_get_value(s_metro_vol);
+    metro_vol_text(v);
+    if (lv_event_get_code(e) == LV_EVENT_RELEASED) metro(5, v);
+}
+
+// the dots: the beats of a bar, moving with the tempo while the metronome is on (a picture only)
+static int metro_beats(void)
+{
+    int beats = atoi(METRO_SIGS[s_tempo_ui.time_sig]);
+    return beats < 1 ? 1 : beats > 8 ? 8 : beats;
+}
+static void metro_beat(lv_timer_t *t)
+{
+    int beats = metro_beats();
+    s_metro_beat = (s_metro_beat + 1) % beats;
+    for (int i = 0; i < 8; i++) {
+        lv_obj_t *dot = lv_obj_get_child(s_metro_dots, i);
+        lv_obj_set_style_bg_opa(dot, i == s_metro_beat ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+    }
+}
+
+static void metro_dots_update(void)
+{
+    int beats = metro_beats();
+    for (int i = 0; i < 8; i++) {
+        lv_obj_t *dot = lv_obj_get_child(s_metro_dots, i);
+        lv_obj_set_hidden(dot, i >= beats);
+        lv_obj_set_style_bg_opa(dot, LV_OPA_TRANSP, 0);
+    }
+    bool run = !s_tempo_ui.muted && !s_tempo_ui.ext_clock && s_tempo_ui.open;
+    if (run) {
+        int denominator = atoi(strchr(METRO_SIGS[s_tempo_ui.time_sig], '/') + 1);   // x/8 counts eighths
+        float per_minute = s_tempo_ui.tempo * (float)denominator / 4;
+        lv_timer_set_period(s_metro_beat_timer, (uint32_t)(60000.0f / (per_minute > 1 ? per_minute : 1)));
+        lv_timer_resume(s_metro_beat_timer);
+    } else {
+        lv_timer_pause(s_metro_beat_timer);
+    }
+}
+
+void ui_set_tempo(const ui_tempo_t *t)
+{
+    lvgl_port_lock(0);
+    s_tempo_ui = *t;
+    // the button: symbol and tempo, green while the metronome is on (filled = on)
+    lv_obj_set_hidden(s_tempo_button, !t->supported);
+    lv_label_set_text_fmt(s_tempo_button_text, "%d", (int)lroundf(t->tempo));
+    lv_obj_set_style_border_color(s_tempo_button, lv_color_hex(t->muted ? 0x3A3D40 : GREEN), 0);
+    lv_obj_set_style_border_width(s_tempo_button, t->muted ? 1 : 2, 0);
+    lv_obj_set_style_bg_color(s_tempo_button, lv_color_hex(t->muted ? 0x191B1D : 0x122417), 0);
+    lv_obj_set_style_bg_grad_dir(s_tempo_button, t->muted ? LV_GRAD_DIR_VER : LV_GRAD_DIR_NONE, 0);
+    set_color_prop(s_tempo_button_icon, LV_STYLE_IMAGE_RECOLOR, t->muted ? 0xC8CCD1 : GREEN);
+    lv_obj_set_style_text_color(s_tempo_button_text, lv_color_hex(t->muted ? 0x9AA0A6 : TEXT), 0);
+    // the dialog
+    if (t->open && t->supported) {
+        lv_obj_set_hidden(s_metro, false);
+        lv_obj_move_foreground(s_metro);
+    } else {
+        lv_obj_set_hidden(s_metro, true);
+    }
+    lv_label_set_text_fmt(s_metro_bpm, "%d.%d", (int)(t->tempo * 10 + 0.5f) / 10, (int)(t->tempo * 10 + 0.5f) % 10);
+    style_tab(s_metro_scope[0], t->global);
+    style_tab(s_metro_scope[1], !t->global);
+    if (t->muted) lv_obj_remove_state(s_metro_switch, LV_STATE_CHECKED);
+    else lv_obj_add_state(s_metro_switch, LV_STATE_CHECKED);
+    int half_db = (int)lroundf(t->volume_db * 2);
+    if (!lv_obj_has_state(s_metro_vol, LV_STATE_PRESSED)) {
+        lv_slider_set_value(s_metro_vol, half_db, LV_ANIM_OFF);
+        metro_vol_text(half_db);
+    }
+    lv_label_set_text(s_metro_sig, METRO_SIGS[t->time_sig < NANO_TIME_SIG_COUNT ? t->time_sig : 2]);
+    for (int i = 0; i < 4; i++) style_tab(s_metro_note[i], i == t->note_len);
+    for (int i = 0; i < 2; i++) style_tab(s_metro_sound[i], i == t->sound);
+    lv_label_set_text(s_metro_hint, t->ext_clock ? "The tempo comes from an external MIDI clock." : "Plays on the Nano's outputs.");
+    metro_dots_update();
+    lvgl_port_unlock();
+}
+
+static lv_obj_t *metro_caption(lv_obj_t *parent, int x, int y, const char *text)
+{
+    lv_obj_t *l = label(parent, CAPTION_FONT, MUTED);
+    lv_obj_set_style_text_letter_space(l, 2, 0);
+    lv_label_set_text(l, text);
+    lv_obj_set_pos(l, x, y);
+    return l;
+}
+
+static void build_metro(lv_obj_t *screen)
+{
+    s_metro = panel(screen, 100, 20, 600, 450);
+    dialog_title(s_metro, "Tempo");
+    s_metro_scope[0] = small_button(s_metro, 220, 12, 120, 44, "Global", on_metro_scope, 1);
+    s_metro_scope[1] = small_button(s_metro, 348, 12, 120, 44, "Preset", on_metro_scope, 0);
+    close_button(s_metro, 540, 12, on_metro_close, 0);
+
+    // left: - tempo +, the beat, TAP
+    lv_obj_t *minus = small_button(s_metro, 20, 82, 60, 58, "\xE2\x88\x92", on_metro_step, -10);
+    lv_obj_set_style_text_font(lv_obj_get_child(minus, 0), &ui_font_28, 0);
+    lv_obj_t *plus = small_button(s_metro, 230, 82, 60, 58, "+", on_metro_step, 10);
+    lv_obj_set_style_text_font(lv_obj_get_child(plus, 0), &ui_font_28, 0);
+    s_metro_bpm = label(s_metro, &ui_font_title_40, 0xFFFFFF);
+    lv_obj_set_width(s_metro_bpm, 146);
+    lv_obj_set_style_text_align(s_metro_bpm, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(s_metro_bpm, 82, 84);
+    lv_obj_t *bpm = metro_caption(s_metro, 0, 136, "BPM");
+    lv_obj_set_width(bpm, 146);
+    lv_obj_set_style_text_align(bpm, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_x(bpm, 82);
+    s_metro_dots = lv_obj_create(s_metro);
+    lv_obj_remove_style_all(s_metro_dots);
+    lv_obj_set_size(s_metro_dots, 270, 16);
+    lv_obj_set_pos(s_metro_dots, 20, 166);
+    lv_obj_set_flex_flow(s_metro_dots, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(s_metro_dots, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(s_metro_dots, 10, 0);
+    for (int i = 0; i < 8; i++) {
+        lv_obj_t *dot = lv_obj_create(s_metro_dots);
+        lv_obj_remove_style_all(dot);
+        lv_obj_set_size(dot, i == 0 ? 14 : 12, i == 0 ? 14 : 12);
+        lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_width(dot, 2, 0);
+        lv_obj_set_style_border_color(dot, lv_color_hex(0x4A4E53), 0);
+        lv_obj_set_style_bg_color(dot, lv_color_hex(GREEN), 0);
+    }
+    s_metro_beat_timer = lv_timer_create(metro_beat, 500, NULL);
+    lv_timer_pause(s_metro_beat_timer);
+    lv_obj_t *tap = button(s_metro, 20, 198, 270, 186, on_metro_tap);
+    lv_obj_remove_event_cb(tap, on_metro_tap);
+    lv_obj_add_event_cb(tap, on_metro_tap, LV_EVENT_PRESSED, NULL);   // the moment of the touch, not of the release
+    lv_obj_set_style_radius(tap, 14, 0);
+    lv_obj_t *tap_label = label(tap, &ui_font_24, TEXT);
+    lv_obj_set_style_text_letter_space(tap_label, 6, 0);
+    lv_label_set_text(tap_label, "TAP");
+    lv_obj_center(tap_label);
+    s_metro_hint = label(s_metro, &ui_font_12, MUTED);
+    lv_obj_set_pos(s_metro_hint, 20, 400);
+
+    // right: metronome, volume, time signature, note, sound
+    metro_caption(s_metro, 312, 86, "METRONOME");
+    s_metro_switch = lv_switch_create(s_metro);
+    lv_obj_set_size(s_metro_switch, 72, 38);
+    lv_obj_set_pos(s_metro_switch, 508, 76);
+    lv_obj_set_ext_click_area(s_metro_switch, 8);
+    lv_obj_set_style_bg_color(s_metro_switch, lv_color_hex(0x2A2D30), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_metro_switch, lv_color_hex(GREEN), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(s_metro_switch, lv_color_hex(0xF2F2F2), LV_PART_KNOB);
+    lv_obj_set_style_bg_color(s_metro_switch, lv_color_hex(INK), LV_PART_KNOB | LV_STATE_CHECKED);
+    lv_obj_set_style_pad_all(s_metro_switch, -3, LV_PART_KNOB);
+    lv_obj_add_event_cb(s_metro_switch, on_metro_switch, LV_EVENT_VALUE_CHANGED, NULL);
+
+    s_metro_vol = lv_slider_create(s_metro);   // a fill bar: drag anywhere on it
+    lv_obj_set_size(s_metro_vol, 268, 48);
+    lv_obj_set_pos(s_metro_vol, 312, 124);
+    lv_slider_set_range(s_metro_vol, -120, 18);   // dB x 2
+    lv_obj_set_style_radius(s_metro_vol, 10, LV_PART_MAIN);
+    lv_obj_set_style_radius(s_metro_vol, 0, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(s_metro_vol, lv_color_hex(0x0B0C0D), LV_PART_MAIN);
+    lv_obj_set_style_border_width(s_metro_vol, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(s_metro_vol, lv_color_hex(0x3A3D40), LV_PART_MAIN);
+    lv_obj_set_style_clip_corner(s_metro_vol, true, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_metro_vol, lv_color_hex(0x1E4A28), LV_PART_INDICATOR);
+    lv_obj_set_style_border_side(s_metro_vol, LV_BORDER_SIDE_RIGHT, LV_PART_INDICATOR);
+    lv_obj_set_style_border_width(s_metro_vol, 4, LV_PART_INDICATOR);
+    lv_obj_set_style_border_color(s_metro_vol, lv_color_hex(GREEN), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(s_metro_vol, LV_OPA_TRANSP, LV_PART_KNOB);
+    lv_obj_set_style_pad_all(s_metro_vol, 0, LV_PART_KNOB);
+    lv_obj_add_event_cb(s_metro_vol, on_metro_vol, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(s_metro_vol, on_metro_vol, LV_EVENT_RELEASED, NULL);
+    lv_obj_t *vol_label = label(s_metro_vol, &ui_font_16, TEXT);
+    lv_label_set_text(vol_label, "Volume");
+    lv_obj_align(vol_label, LV_ALIGN_LEFT_MID, 14, 0);
+    s_metro_vol_text = label(s_metro_vol, &ui_font_16, TEXT);
+    lv_obj_align(s_metro_vol_text, LV_ALIGN_RIGHT_MID, -14, 0);
+
+    metro_caption(s_metro, 312, 184, "TIME SIGNATURE");
+    small_button(s_metro, 312, 204, 60, 46, LV_SYMBOL_LEFT, on_metro_sig, -1);
+    small_button(s_metro, 520, 204, 60, 46, LV_SYMBOL_RIGHT, on_metro_sig, 1);
+    s_metro_sig = label(s_metro, &ui_font_20, TEXT);
+    lv_obj_set_width(s_metro_sig, 140);
+    lv_obj_set_style_text_align(s_metro_sig, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(s_metro_sig, 376, 214);
+
+    metro_caption(s_metro, 312, 262, "NOTE");
+    static const char *const NOTES[4] = { "1/4", "1/8", "1/8T", "1/16" };
+    for (int i = 0; i < 4; i++) s_metro_note[i] = small_button(s_metro, 312 + i * 68, 282, 64, 44, NOTES[i], on_metro_note, i);
+    metro_caption(s_metro, 312, 338, "SOUND");
+    s_metro_sound[0] = small_button(s_metro, 312, 358, 132, 44, "Blip", on_metro_sound, 0);
+    s_metro_sound[1] = small_button(s_metro, 448, 358, 132, 44, "Digital", on_metro_sound, 1);
+    lv_obj_set_hidden(s_metro, true);
 }
 
 // ---- own banks: preset and colour per switch (long press on a preset tile) ----
@@ -3493,6 +3862,12 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
         if (TOP[i].icon == UI_ICON_MIDI) s_midi_icon = img;
     }
     s_midi_label = NULL;
+    // Tempo (NanOS 2.3.0): metronome symbol and BPM, green while the metronome is on; hidden on older firmware
+    s_tempo_button = button(preset, 258, 4, 56, 44, on_tempo_button);
+    s_tempo_button_icon = ui_icon(s_tempo_button, UI_ICON_METRONOME, 20, 0xC8CCD1);
+    top_word(s_tempo_button, s_tempo_button_icon, "120");
+    s_tempo_button_text = lv_obj_get_child(s_tempo_button, -1);
+    lv_obj_set_hidden(s_tempo_button, true);
 
     lv_obj_t *status_row = lv_obj_create(preset);
     lv_obj_remove_style_all(status_row);
@@ -3644,6 +4019,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     for (int i = 0; i < TILES; i++) build_tile(s_main, i);
     build_pedals(s_main);
     build_picker(screen);
+    build_metro(screen);
     build_bank_editor(screen);
     build_looper_editor(screen);
     build_editor(screen);

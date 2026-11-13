@@ -161,6 +161,7 @@ static int s_scene_last = -1;   // recalled last: the lit one if two scenes are 
 #define SCENE_MODE_KEY "scenemode"
 #define LAYOUT_KEY "layout"   // { count, order[8] }
 #define PEDALS_KEY "pedals"   // 1 = the full-screen view shows the FX slots as pedals
+#define METRO_KEY "metro"     // metronome settings: muted, time signature, note, sound, volume (dB x 2, signed)
 
 // Tile layout: footswitch / CC 50+p-1 / Chocolate switch p presses the switch s_layout[p - 1] (1-8) - for p up to
 // s_layout_count (6 or 8); the switches themselves keep their numbers everywhere else. Set in the layout dialog.
@@ -3689,8 +3690,11 @@ static void library_when_quiet(void)
 }
 
 // Loads library item `position` (alphabetical) into the active capture or cab slot. arg = kind << 16 | position.
+static void listen_stop(const char *why);
+
 static void load_library_item(int arg)
 {
+    listen_stop(NULL);   // what was being listened to ends: the slot load follows
     app_sync_later();
     bool cab = (arg >> 16) & 1;
     int position = arg & 0xFFFF;
@@ -3717,6 +3721,196 @@ static void load_library_item(int arg)
             sizeof(s_state.capture_names[0]));
     strlcpy(cab ? s_state.cab : s_state.capture, item->name, sizeof(s_state.capture));
     show();
+}
+
+// ---- Listening to a library capture / IR without loading it (as Cortex Cloud 2.8.3; picker's play buttons) ----
+// One message plays it in place of the preset's capture / cab, no slot and no preset changes; the next one follows
+// without switching off; 148 ends it. The reply's status 3 = 1 is success; the state tells in 64 / 65 whether the
+// Nano is still listening (a preset change on the Nano ends it).
+static struct { bool on, ir, pending; int position; int64_t started_us; } s_listen;
+
+static void listen_show(void)
+{
+    const lib_list_t *list = s_library ? (s_listen.ir ? &s_library->cabs : &s_library->captures) : NULL;
+    const char *name = s_listen.on && list && s_listen.position < list->count ? list->items[s_listen.position].name : "";
+    ui_set_listening(s_listen.on ? (s_listen.ir ? 'I' : 'C') : 0, s_listen.position, name, s_listen.pending);
+}
+
+static void listen_stop(const char *why)
+{
+    if (!s_listen.on) return;
+    bool ir = s_listen.ir;
+    s_listen.on = s_listen.pending = false;
+    if (!why) {   // ours: tell the Nano (else it ended there)
+        uint8_t buf[16];
+        send(ir ? "Listening off (IR)" : "Listening off", NANO_MSG_LISTEN_OFF, buf, nano_listen_off(ir, (uint64_t)(esp_timer_get_time() / 1000), buf));
+    } else {
+        ESP_LOGI(TAG, "Listening ended: %s", why);
+        ui_show_message(why);
+    }
+    listen_show();
+}
+
+// arg: (1 = IR) << 16 | position in the library list, or -1: stop
+static void listen_command(int arg)
+{
+    if (arg < 0) { listen_stop(NULL); return; }
+    bool ir = (arg >> 16) & 1;
+    int position = arg & 0xFFFF;
+    const lib_list_t *list = s_library ? (ir ? &s_library->cabs : &s_library->captures) : NULL;
+    if (!list || position >= list->count) return;
+    if (s_listen.on && s_listen.ir != ir) listen_stop(NULL);   // one at a time
+    uint8_t buf[200];
+    size_t n = nano_library_listen(&list->items[position], buf, sizeof(buf));
+    if (!n) { ui_show_message("This name is too long to listen to."); return; }
+    char label[96];
+    snprintf(label, sizeof(label), "Listen to %s %.60s", ir ? "IR" : "capture", list->items[position].name);
+    if (!send(label, ir ? NANO_MSG_LISTEN_IR : NANO_MSG_LISTEN_CAPTURE, buf, n)) return;
+    s_listen = (typeof(s_listen)){ .on = true, .ir = ir, .pending = true, .position = position, .started_us = esp_timer_get_time() };
+    listen_show();
+}
+
+static void listen_reply(bool ir, const uint8_t *payload, size_t len)
+{
+    uint64_t status = nano_field_varint(payload, len, 3);
+    ESP_LOGI(TAG, "Listen %s reply: status %u", ir ? "IR" : "capture", (unsigned)status);
+    if (!s_listen.on || s_listen.ir != ir) return;
+    if (status != 1) {
+        s_listen.on = s_listen.pending = false;   // nothing plays: no off needed
+        ui_show_message(ir ? "The Nano did not play this IR." : "The Nano did not play this capture.");
+    } else {
+        s_listen.pending = false;
+    }
+    listen_show();
+}
+
+// after a state: the Nano ended the listening by itself
+static void listen_state(void)
+{
+    if (!s_listen.on || esp_timer_get_time() - s_listen.started_us < 2000000) return;
+    if (!(s_listen.ir ? s_state.listening_ir : s_state.listening_capture)) listen_stop("The Nano ended the listening.");
+}
+
+// ---- Tempo and metronome (NanOS 2.3.0; TempoScreenMessage 145 as Cortex Cloud 2.8.3 uses it) ----
+// Tempo, global / preset and MIDI clock come with the state (56, 55, 61). Opening the dialog sends the whole
+// message with tempoScreenActive, every change sends it again, closing sends { 3: false }. A 145 from the Nano with
+// the screen active (its own tempo screen) opens the dialog without sending and brings its metronome settings.
+static nano_tempo_t s_metro = { .muted = true, .time_sig = 2 };   // the app's defaults: off, 0 dB, 4/4, 1/4, Blip
+static bool s_metro_open, s_metro_dirty;
+
+static bool metro_supported(void)
+{
+    return s_state.fw_major > 2 || (s_state.fw_major == 2 && s_state.fw_minor >= 3);
+}
+
+static void metro_show(void)
+{
+    ui_tempo_t t = { .supported = metro_supported(), .open = s_metro_open, .global = s_state.tempo_global, .ext_clock = s_state.ext_clock,
+                     .muted = s_metro.muted, .tempo = s_state.tempo > 0 ? s_state.tempo : 120, .volume_db = s_metro.volume_db,
+                     .time_sig = s_metro.time_sig, .note_len = s_metro.note_len, .sound = s_metro.sound };
+    ui_set_tempo(&t);
+}
+
+static void metro_load(void)
+{
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
+    int8_t stored[5];
+    size_t size = sizeof(stored);
+    if (nvs_get_blob(nvs, METRO_KEY, stored, &size) == ESP_OK && size == sizeof(stored)) {
+        s_metro.muted = stored[0] != 0;
+        if (stored[1] >= 0 && stored[1] < NANO_TIME_SIG_COUNT) s_metro.time_sig = stored[1];
+        if (stored[2] >= 0 && stored[2] < NANO_NOTE_LEN_COUNT) s_metro.note_len = stored[2];
+        if (stored[3] >= 0 && stored[3] < NANO_METRO_SOUND_COUNT) s_metro.sound = stored[3];
+        if (stored[4] >= -120 && stored[4] <= 18) s_metro.volume_db = stored[4] / 2.0f;
+    }
+    nvs_close(nvs);
+}
+
+static void metro_store(void)
+{
+    if (!s_metro_dirty) return;
+    s_metro_dirty = false;
+    int8_t stored[5] = { s_metro.muted, (int8_t)s_metro.time_sig, (int8_t)s_metro.note_len, (int8_t)s_metro.sound,
+                         (int8_t)lroundf(s_metro.volume_db * 2) };
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
+        if (nvs_set_blob(nvs, METRO_KEY, stored, sizeof(stored)) == ESP_OK) nvs_commit(nvs);
+        nvs_close(nvs);
+    }
+}
+
+static void metro_send(void)
+{
+    nano_tempo_t t = s_metro;
+    t.screen_active = s_metro_open;
+    t.tempo = s_state.tempo > 0 ? s_state.tempo : 120;
+    t.global = s_state.tempo_global;
+    t.ext_clock = s_state.ext_clock;
+    uint8_t buf[64];
+    char label[96];
+    if (s_metro_open) {
+        snprintf(label, sizeof(label), "Tempo %.1f BPM %s, metronome %s %.1f dB %s %s %s", (double)t.tempo, t.global ? "global" : "preset",
+                 t.muted ? "off" : "on", (double)t.volume_db, NANO_TIME_SIGS[t.time_sig], NANO_NOTE_LENS[t.note_len], NANO_METRO_SOUNDS[t.sound]);
+    } else {
+        snprintf(label, sizeof(label), "Tempo screen off");
+    }
+    send(label, NANO_MSG_TEMPO_SCREEN, buf, nano_tempo_message(&t, buf));
+}
+
+// arg: what << 24 | value (24 bits, signed): 0 open, 1 close, 2 tempo x 10, 3 tempo step x 10, 4 metronome on / off,
+// 5 volume x 2 (dB), 6 time signature, 7 note, 8 sound, 9 global (1) / preset (0)
+static void metro_command(int arg)
+{
+    int what = (arg >> 24) & 0xFF, value = (arg << 8) >> 8;
+    if (!metro_supported()) return;
+    switch (what) {
+    case 0: if (s_metro_open) return; s_metro_open = true; break;
+    case 1:
+        if (!s_metro_open) return;
+        s_metro_open = false;
+        metro_send();
+        metro_store();
+        metro_show();
+        schedule_refresh(300);   // the preset may be marked edited now (a preset tempo)
+        return;
+    case 2: s_state.tempo = (float)value / 10; break;
+    case 3: s_state.tempo = (float)lroundf(s_state.tempo * 10 + value) / 10; break;
+    case 4: s_metro.muted = !s_metro.muted; s_metro_dirty = true; break;
+    case 5: s_metro.volume_db = value / 2.0f; s_metro_dirty = true; break;
+    case 6: if (value >= 0 && value < NANO_TIME_SIG_COUNT) { s_metro.time_sig = value; s_metro_dirty = true; } break;
+    case 7: if (value >= 0 && value < NANO_NOTE_LEN_COUNT) { s_metro.note_len = value; s_metro_dirty = true; } break;
+    case 8: if (value >= 0 && value < NANO_METRO_SOUND_COUNT) { s_metro.sound = value; s_metro_dirty = true; } break;
+    case 9: s_state.tempo_global = value != 0; break;
+    default: return;
+    }
+    if (s_state.tempo < 40) s_state.tempo = 40;
+    if (s_state.tempo > 240) s_state.tempo = 240;
+    if (s_metro.volume_db < -60) s_metro.volume_db = -60;
+    if (s_metro.volume_db > 9) s_metro.volume_db = 9;
+    if (s_metro_open) metro_send();
+    metro_show();
+}
+
+// A 145 from the Nano: its tempo screen opened / closed, and its metronome settings when it sends them
+static void metro_from_nano(const nano_tempo_t *t, bool has_screen)
+{
+    if (t->tempo >= 20 && t->tempo <= 400) s_state.tempo = t->tempo;
+    s_state.tempo_global = t->global;
+    s_state.ext_clock = t->ext_clock;
+    if (t->has_volume) {
+        s_metro.muted = t->muted;
+        s_metro.volume_db = t->volume_db;
+        if (t->time_sig < NANO_TIME_SIG_COUNT) s_metro.time_sig = t->time_sig;
+        if (t->note_len < NANO_NOTE_LEN_COUNT) s_metro.note_len = t->note_len;
+        if (t->sound < NANO_METRO_SOUND_COUNT) s_metro.sound = t->sound;
+        s_metro_dirty = true;
+    }
+    if (has_screen && metro_supported()) {
+        if (t->screen_active && !s_metro_open) s_metro_open = true;   // the Nano shows its tempo screen: nothing to send
+        else if (!t->screen_active && s_metro_open) { s_metro_open = false; metro_store(); }
+    }
+    metro_show();
 }
 
 static void looper_set(bool on)
@@ -4148,6 +4342,8 @@ static void handle_command(char c, int arg)
     case 'S': save_preset(); break;
     case 'k': step_bank(arg); break;
     case 'L': load_library_item(arg); break;
+    case '.': listen_command(arg); break;
+    case '\'': metro_command(arg); break;
     case 'Y': if (!s_library) request_library(); break;
     case 'I': select_cab(arg); break;
     case 'T': editor_throttle_done(); break;
@@ -4293,6 +4489,8 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         }
         bool names = nano_state_apply(&s_state, payload, len);
         fx_follow_switches();
+        listen_state();
+        metro_show();
         // Right after an A/B swap a reply sent before the model change still names the previous model: the slot
         // holds the loaded one. Later a different model was chosen elsewhere (editor, app): it becomes A or B.
         for (int i = 0; i < AB_COUNT; i++) {
@@ -4517,6 +4715,9 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         s_rename_preset = 0;
         break;
     }
+    case NANO_MSG_LISTEN_CAPTURE_RESPONSE: listen_reply(false, payload, len); break;
+    case NANO_MSG_LISTEN_IR_RESPONSE: listen_reply(true, payload, len); break;
+    case NANO_MSG_LISTEN_OFF_RESPONSE: ESP_LOGI(TAG, "Listening off: status %u", (unsigned)nano_field_varint(payload, len, 3)); break;
     case NANO_MSG_CAPTURE_LOAD_RESPONSE:
     case NANO_MSG_CAB_LOAD_RESPONSE: {
         bool ok = nano_field_varint(payload, len, 3) == 1;
@@ -4669,6 +4870,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         char bytes[3 * 48 + 1] = "";
         for (size_t i = 0; i < len && i < 48; i++) snprintf(bytes + 3 * i, 4, "%02X ", payload[i]);
         ESP_LOGI(TAG, "Tempo message bytes: %s", bytes);
+        metro_from_nano(t, t->has_screen);
         break;
     }
     default:
@@ -5242,6 +5444,11 @@ static void app_event(app_event_t ev)
         esp_timer_stop(s_pair_hint_timer);
         esp_timer_start_once(s_pair_hint_timer, PAIR_HINT_US);
         s_tuner_on = false;
+        s_listen.on = s_listen.pending = false;   // nothing plays on a Nano that is gone
+        listen_show();
+        if (s_metro_open) { s_metro_open = false; metro_store(); }
+        s_state.fw_major = s_state.fw_minor = -1;   // (read again with the next state; the tempo button hides meanwhile)
+        metro_show();
         s_last_preset = 0;
         s_exp_asked_count = 0;
         s_exp.write = s_exp.verify = EXP_WRITE_NONE;
@@ -5542,6 +5749,7 @@ void app_main(void)
 
     s_events = xQueueCreate(64, sizeof(app_event_t));
     s_state.tuner_base_hz = 440;
+    s_state.fw_major = s_state.fw_minor = -1;
     const esp_timer_create_args_t timer = { .callback = refresh_cb, .name = "refresh" };
     ESP_ERROR_CHECK(esp_timer_create(&timer, &s_refresh_timer));
     const esp_timer_create_args_t param_timer = { .callback = param_timer_cb, .name = "param" };
@@ -5578,6 +5786,7 @@ void app_main(void)
     setlist_load();
     looper_tiles_load();
     layout_load();
+    metro_load();
     s_scenes = heap_caps_calloc(UI_SCENES, sizeof(scene_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     configASSERT(s_scenes);
     const esp_timer_create_args_t scene_timer = { .callback = scene_timer_cb, .name = "scene" };

@@ -161,17 +161,24 @@ static size_t put_varint(uint8_t *out, uint32_t v)
 }
 
 // { 3: slot (0-based), 4: factory id | 5: user id } with id { 1: index, 2: name }.
-static size_t slot_load(int slot, const lib_item_t *item, uint8_t *out, size_t max)
+// A library identifier { 1: index, 2: name } (factory and user, captures and IRs alike). 0 if it does not fit.
+static size_t library_id(const lib_item_t *item, uint8_t *id, size_t size)
 {
-    uint8_t id[96];
     size_t name_len = strlen(item->name), n = 0;
     id[n++] = 0x08;
     n += put_varint(id + n, item->index);
     id[n++] = 0x12;
     n += put_varint(id + n, (uint32_t)name_len);
-    if (n + name_len > sizeof(id)) return 0;
+    if (n + name_len > size) return 0;
     memcpy(id + n, item->name, name_len);
-    n += name_len;
+    return n + name_len;
+}
+
+static size_t slot_load(int slot, const lib_item_t *item, uint8_t *out, size_t max)
+{
+    uint8_t id[96];
+    size_t n = library_id(item, id, sizeof(id));
+    if (!n) return 0;
 
     size_t m = 0;
     if (n + 8 > max) return 0;
@@ -191,4 +198,26 @@ size_t nano_capture_load(int slot, const lib_item_t *item, uint8_t *out, size_t 
 size_t nano_cab_load(int slot, const lib_item_t *item, uint8_t *out, size_t max)
 {
     return slot_load(slot, item, out, max);
+}
+
+size_t nano_library_listen(const lib_item_t *item, uint8_t *out, size_t max)
+{
+    uint8_t id[96];
+    size_t n = library_id(item, id, sizeof(id)), m = 0;
+    if (!n || n + 4 > max) return 0;
+    out[m++] = item->user ? 0x22 : 0x1A;   // 4 user / 3 factory
+    m += put_varint(out + m, (uint32_t)n);
+    memcpy(out + m, id, n);
+    return m + n;
+}
+
+size_t nano_listen_off(bool ir, uint64_t request_id, uint8_t *out)
+{
+    size_t n = 0;
+    out[n++] = 0x10;   // 2 requestId (the app: the time in ms)
+    while (request_id > 0x7F) { out[n++] = (uint8_t)(request_id | 0x80); request_id >>= 7; }
+    out[n++] = (uint8_t)request_id;
+    out[n++] = ir ? 0x20 : 0x18;   // 4 enableIrAuditioning / 3 enableCaptureAuditioning
+    out[n++] = 0;
+    return n;
 }

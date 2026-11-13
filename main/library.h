@@ -43,3 +43,9 @@ nano_library_t *nano_library_parse(const uint8_t *payload, size_t len);
 // Returns 0 if the name is too long for one message.
 size_t nano_capture_load(int slot, const lib_item_t *item, uint8_t *out, size_t max);
 size_t nano_cab_load(int slot, const lib_item_t *item, uint8_t *out, size_t max);
+
+// Listening without loading (as Cortex Cloud 2.8.3): AuditioningListenCaptureRequest (150) for a capture,
+// AuditioningListenImpulseResponseRequest (158) for an IR - the same payload { 3 factory | 4 user { 1 index, 2 name } }.
+// The next item simply follows; nano_listen_off (148, out: 16 bytes) ends it. 0 if the name does not fit.
+size_t nano_library_listen(const lib_item_t *item, uint8_t *out, size_t max);
+size_t nano_listen_off(bool ir, uint64_t request_id, uint8_t *out);

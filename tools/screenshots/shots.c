@@ -151,7 +151,7 @@ static void close_all(void)
 {
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
                                    s_layout, s_volume, s_cab_settings, s_amp, s_toast, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
-                                   s_setlist, s_scene_cap, s_system };
+                                   s_setlist, s_scene_cap, s_system, s_metro };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) lv_obj_set_hidden(overlays[i], true);
     update_main_hidden();
 }
@@ -424,7 +424,23 @@ int main(void)
     s_picker_library = true;
     fill_picker();
     shot("06-capture-library");
+    ui_set_listening('C', 1, s_library->captures.items[1].name, false);   // listening without loading
+    shot("43-capture-listening");
+    ui_set_listening(0, 0, "", false);
     close_all();
+
+    {   // tempo and metronome (NanOS 2.3.0)
+        ui_tempo_t tempo = { .supported = true, .global = true, .muted = false, .tempo = 120, .volume_db = -6, .time_sig = 2 };
+        ui_set_tempo(&tempo);
+        shot("44-tempo-button");
+        tempo.open = true;
+        ui_set_tempo(&tempo);
+        shot("45-tempo-dialog");
+        tempo.open = false;
+        tempo.supported = false;
+        ui_set_tempo(&tempo);
+        close_all();
+    }
 
     view.fx_mode = true;
     ui_show_state(&st, &view);
