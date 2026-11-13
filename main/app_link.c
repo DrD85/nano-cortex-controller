@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -56,14 +57,86 @@ static int gap_event(struct ble_gap_event *event, void *arg);
 
 // ---- GATT service (as on the Nano) ----
 
+// A long message from the app (Cortex Cloud saving a capture or IR into the Nano's library: SaveCaptureRequest 13
+// with the file, tens of KB) comes in packets of up to 512 bytes. They are collected as they are (headers kept) in
+// PSRAM, each behind its size, and go on to the Nano together, once the last one is here.
+#define LONG_MESSAGE_MAX (2 * 1024 * 1024)
+static uint8_t *s_long;
+static size_t s_long_len, s_long_cap;
+static uint8_t s_long_tail[4];   // the last 4 data bytes so far: the message type once the last packet is in
+static size_t s_long_data;
+
+static void long_reset(void)
+{
+    free(s_long);
+    s_long = NULL;
+    s_long_len = s_long_cap = s_long_data = 0;
+    memset(s_long_tail, 0, sizeof(s_long_tail));
+}
+
+static void long_packet(const uint8_t *packet, uint16_t n)
+{
+    uint8_t flags = packet[1] & 0xC0;
+    if (flags & 0x40) long_reset();          // the first packet of a message
+    else if (!s_long) return;                // a middle / last packet without its start: ignored
+    if (s_long_len + 2 + n > LONG_MESSAGE_MAX) {
+        ESP_LOGW(TAG, "Message from the app larger than %d bytes - dropped", LONG_MESSAGE_MAX);
+        long_reset();
+        return;
+    }
+    if (s_long_len + 2 + n > s_long_cap) {
+        size_t cap = s_long_cap ? s_long_cap * 2 : 64 * 1024;
+        while (cap < s_long_len + 2 + n) cap *= 2;
+        if (cap > LONG_MESSAGE_MAX) cap = LONG_MESSAGE_MAX;
+        uint8_t *grown = heap_caps_realloc(s_long, cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!grown) {
+            ESP_LOGW(TAG, "No memory for a long message from the app (%u bytes) - dropped", (unsigned)(s_long_len + 2 + n));
+            long_reset();
+            return;
+        }
+        s_long = grown;
+        s_long_cap = cap;
+    }
+    s_long[s_long_len] = (uint8_t)n;          // each packet: its size (2 bytes), then the packet as the app sent it
+    s_long[s_long_len + 1] = (uint8_t)(n >> 8);
+    memcpy(s_long + s_long_len + 2, packet, n);
+    s_long_len += 2 + n;
+    size_t in_packet = (size_t)(packet[0] | (packet[1] & 0x3F) << 8);   // the data length in the packet's header
+    if (in_packet > (size_t)n - 2) in_packet = n - 2;                     // (the app may pad a packet; never past its end)
+    for (size_t i = 2; i < 2 + in_packet; i++) {
+        memmove(s_long_tail, s_long_tail + 1, 3);
+        s_long_tail[3] = packet[i];
+    }
+    s_long_data += in_packet;
+    if (!(flags & 0x80)) return;             // more to come
+    uint32_t type = s_long_tail[0] | (s_long_tail[1] << 8) | (s_long_tail[2] << 16) | ((uint32_t)s_long_tail[3] << 24);
+    ESP_LOGI(TAG, "App -> Nano: long message type %lu (%u bytes, last packet %u bytes, header %02X %02X)",
+             (unsigned long)type, (unsigned)s_long_data, n, packet[0], packet[1]);
+    uint8_t *packets = s_long;
+    size_t len = s_long_len, data = s_long_data;
+    s_long = NULL;                           // handed over to the writer
+    long_reset();
+    if (data < 4 || type >= APP_LINK_CONTROLLER_TYPE) {
+        free(packets);
+        return;
+    }
+    nano_link_send_packets(packets, len, type);
+    if (s_on_write) s_on_write(type, NULL, 0);
+}
+
 static int chr_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
     if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) return 0;
-    uint8_t frame[300];
+    static uint8_t frame[MAX_PACKET_DATA + 2];   // (the NimBLE host task only)
     uint16_t n = 0;
     if (OS_MBUF_PKTLEN(ctxt->om) > sizeof(frame)) return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
     if (ble_hs_mbuf_to_flat(ctxt->om, frame, sizeof(frame), &n) != 0) return BLE_ATT_ERR_UNLIKELY;
-    if (n < 6 || frame[1] != 0xC0) return 0;
+    if (n < 2) return 0;
+    if ((frame[1] & 0xC0) != 0xC0) {             // part of a longer message
+        long_packet(frame, n);
+        return 0;
+    }
+    if (n < 6) return 0;
     uint32_t type = frame[n - 4] | (frame[n - 3] << 8) | (frame[n - 2] << 16) | ((uint32_t)frame[n - 1] << 24);
     if (type == 30) return 0;   // preset change acknowledgement: the controller answers the Nano itself
     if (type >= APP_LINK_CONTROLLER_TYPE) {   // for the controller itself: the Nano never sees it
@@ -221,6 +294,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
             ESP_LOGI(TAG, "App disconnected (reason 0x%X)", event->disconnect.reason);
             s_conn = BLE_HS_CONN_HANDLE_NONE;
             s_subscribed = false;
+            long_reset();   // a long message cut off by the disconnect
             if (s_on_state) s_on_state(false);
         }
         phone_midi_disconnected(conn);

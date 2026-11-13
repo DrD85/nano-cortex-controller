@@ -34,6 +34,10 @@ enum { NANO_OWNER_BOARD, NANO_OWNER_APP, NANO_OWNER_BOTH };
 // A complete framed message from the app ([len] C0 payload type), sent on to the Nano. Its reply goes back to the app.
 bool nano_link_send_frame(const uint8_t *frame, size_t len);
 
+// A long message from the app as its packets back to back (each: its size in 2 bytes little endian, then the packet as
+// the app sent it), sent on to the Nano in one go. The buffer (heap_caps_malloc / malloc) is handed over and freed here.
+bool nano_link_send_packets(uint8_t *packets, size_t len, uint32_t type);
+
 // Messages for the app (replies to its requests and messages the Nano sends on its own): payload + u32 type.
 // Called from the NimBLE host task.
 typedef void (*nano_forward_cb)(const uint8_t *message, size_t len);

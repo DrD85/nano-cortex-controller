@@ -34,10 +34,12 @@ void ble_store_config_init(void);
 
 typedef struct {
     char label[40];
-    uint16_t len;
+    uint32_t len;
     uint8_t *data;                      // NULL: send the newest value of s_values[value]
+    uint32_t type;                      // packets: the message type (it is at the end of the last packet)
     uint8_t owner;                      // NANO_OWNER_BOARD / NANO_OWNER_APP
     int8_t value;                       // index in s_values, -1 = none
+    bool packets;                       // data holds several packets of one long message (from the app)
 } write_job_t;
 
 // Replies carry no request id. The Nano answers in order, so every request with a known reply type is noted
@@ -52,6 +54,7 @@ typedef struct {
 #define PENDING_TIMEOUT_US (5 * 1000 * 1000)
 static pending_t s_pending[PENDING_MAX];
 static int s_pending_count;
+static int64_t s_last_reply_us;   // the Nano's last message: a request waits from then on (it answers in order)
 static SemaphoreHandle_t s_pending_lock;
 static nano_forward_cb s_forward;
 
@@ -455,7 +458,10 @@ static int route(uint32_t type)
     xSemaphoreTake(s_pending_lock, portMAX_DELAY);
     int keep = 0;
     for (int i = 0; i < s_pending_count; i++) {   // drop requests that never got an answer
-        if (now - s_pending[i].at_us < PENDING_TIMEOUT_US) s_pending[keep++] = s_pending[i];
+        // (counted from the Nano's last message, not from the request: a request behind a long reply - the library,
+        // 3 s - would else expire while the Nano is still busy, and its reply would go to the wrong side)
+        int64_t since = s_pending[i].at_us > s_last_reply_us ? s_pending[i].at_us : s_last_reply_us;
+        if (now - since < PENDING_TIMEOUT_US) s_pending[keep++] = s_pending[i];
     }
     s_pending_count = keep;
     for (int i = 0; i < s_pending_count; i++) {
@@ -465,6 +471,7 @@ static int route(uint32_t type)
         s_pending_count--;
         break;
     }
+    s_last_reply_us = now;
     xSemaphoreGive(s_pending_lock);
     return owner;
 }
@@ -521,11 +528,12 @@ static uint32_t frame_type(const uint8_t *d, size_t n)
     return n < 6 ? 0 : d[n - 4] | (d[n - 3] << 8) | (d[n - 2] << 16) | ((uint32_t)d[n - 1] << 24);
 }
 
-static void write_frame(const char *label, const uint8_t *data, size_t len, uint8_t owner, bool log)
+// One packet with response. request: the message type it completes (0 = none, a middle packet of a long message).
+static bool write_packet(const char *label, const uint8_t *data, size_t len, uint8_t owner, bool log, uint32_t request)
 {
     if (!s_ready) {
         ESP_LOGW(TAG, "Not connected - dropped: %s", label);
-        return;
+        return false;
     }
     xSemaphoreTake(s_write_done, 0);
     if (log) log_hex(label, data, len);
@@ -536,10 +544,39 @@ static void write_frame(const char *label, const uint8_t *data, size_t len, uint
         vTaskDelay(pdMS_TO_TICKS(5));
     }
     if (tries) ESP_LOGW(TAG, "%s: sent after %d ms (the host was out of buffers)", label, tries * 5);
-    if (rc == 0) note_request(frame_type(data, len), owner);   // (only a request that went out waits for a reply)
+    if (rc == 0) note_request(request, owner);   // (only a request that went out waits for a reply)
     if (rc != 0) ESP_LOGE(TAG, "Write not started (%d): %s", rc, label);
     else if (xSemaphoreTake(s_write_done, pdMS_TO_TICKS(3000)) != pdTRUE) ESP_LOGW(TAG, "No write response: %s", label);
     else if (s_write_status != 0) ESP_LOGW(TAG, "Write failed (%d): %s", s_write_status, label);
+    else return true;
+    return false;
+}
+
+static void write_frame(const char *label, const uint8_t *data, size_t len, uint8_t owner, bool log)
+{
+    write_packet(label, data, len, owner, log, frame_type(data, len));
+}
+
+// A long message from the app (a capture or IR for the Nano's library), its packets one after the other as the app
+// cut them (in data: each packet's size in 2 bytes, then the packet). Nothing else goes to the Nano in between: the Nano puts the
+// packets together and a foreign message in the middle would spoil the message.
+static void write_packets(const write_job_t *job)
+{
+    int64_t start = esp_timer_get_time();
+    size_t count = 0;
+    for (size_t off = 0; off + 2 <= job->len;) {
+        size_t n = (size_t)(job->data[off] | job->data[off + 1] << 8);
+        off += 2;
+        if (n == 0 || off + n > job->len) break;
+        bool last = off + n >= job->len;
+        if (!write_packet(job->label, job->data + off, n, job->owner, false, last ? job->type : 0)) {
+            ESP_LOGW(TAG, "%s: stopped after %u of its packets", job->label, (unsigned)count);
+            return;
+        }
+        count++;
+        off += n;
+    }
+    ESP_LOGI(TAG, "%s: %u packets sent in %lld ms", job->label, (unsigned)count, (esp_timer_get_time() - start) / 1000);
 }
 
 // A value without waiting for the Nano's response (if C304 allows it): the next one can follow at once.
@@ -626,7 +663,8 @@ static void writer_task(void *arg)
             write_value(label, value, value_len);   // values are not logged (there are many of them)
             continue;
         }
-        write_frame(job.label, job.data, job.len, job.owner, job.owner == NANO_OWNER_BOARD);
+        if (job.packets) write_packets(&job);
+        else write_frame(job.label, job.data, job.len, job.owner, job.owner == NANO_OWNER_BOARD);
         free(job.data);
     }
 }
@@ -634,7 +672,7 @@ static void writer_task(void *arg)
 bool nano_link_send(const char *label, uint32_t type, const uint8_t *payload, size_t len)
 {
     if (len + 6 > 257) return false;   // the length byte covers everything after the first two bytes
-    write_job_t job = { .len = (uint16_t)(len + 6), .value = -1 };
+    write_job_t job = { .len = (uint32_t)(len + 6), .value = -1 };
     job.data = malloc(job.len);
     if (!job.data) return false;
     job.data[0] = (uint8_t)(job.len - 2);
@@ -657,13 +695,13 @@ bool nano_link_send(const char *label, uint32_t type, const uint8_t *payload, si
 
 bool nano_link_send_frame(const uint8_t *frame, size_t len)
 {
-    if (len < 6 || len > 300) return false;
+    if (len < 6 || len > MAX_PACKET) return false;
     uint32_t type = frame_type(frame, len);
     char label[40];
     snprintf(label, sizeof(label), "App message %lu", (unsigned long)type);
     int queued = queue_value(frame, len, label, NANO_OWNER_APP);   // values: only the newest per control
     if (queued) return queued > 0;
-    write_job_t job = { .len = (uint16_t)len, .owner = NANO_OWNER_APP, .value = -1 };
+    write_job_t job = { .len = (uint32_t)len, .owner = NANO_OWNER_APP, .value = -1 };
     job.data = malloc(len);
     if (!job.data) return false;
     memcpy(job.data, frame, len);
@@ -671,6 +709,19 @@ bool nano_link_send_frame(const uint8_t *frame, size_t len)
     if (!enqueue(&job)) {
         free(job.data);
         ESP_LOGW(TAG, "Write queue full - app message %lu dropped", (unsigned long)type);
+        return false;
+    }
+    return true;
+}
+
+bool nano_link_send_packets(uint8_t *packets, size_t len, uint32_t type)
+{
+    write_job_t job = { .len = (uint32_t)len, .data = packets, .type = type, .owner = NANO_OWNER_APP, .value = -1,
+                        .packets = true };
+    snprintf(job.label, sizeof(job.label), "App message %lu (%u bytes)", (unsigned long)type, (unsigned)len);
+    if (!enqueue(&job)) {
+        free(packets);
+        ESP_LOGW(TAG, "Write queue full - long app message %lu dropped", (unsigned long)type);
         return false;
     }
     return true;

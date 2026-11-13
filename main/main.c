@@ -5110,6 +5110,11 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         metro_from_nano(t, t->has_screen);
         break;
     }
+    case 14:   // SaveCaptureResponse: Cortex Cloud saved a capture into the Nano's library through the controller
+        ESP_LOGI(TAG, "Capture saved into the Nano's library (status %lu) - reading the library again",
+                 (unsigned long)nano_field_varint(payload, len, 3));
+        request_library();
+        break;
     default:
         ESP_LOGI(TAG, "Message type %lu (%u bytes)", (unsigned long)type, (unsigned)len);
         break;
