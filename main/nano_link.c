@@ -704,6 +704,14 @@ static void reset_link(void)
     s_rx_active = false;
 }
 
+// No scan response from the Nano within the wait: scan anew (see BLE_GAP_EVENT_DISC)
+static void rescan_for_nano(void *arg)
+{
+    if (s_conn != BLE_HS_CONN_HANDLE_NONE || s_connecting) return;
+    ble_gap_disc_cancel();
+    start_scan();
+}
+
 static int gap_event(struct ble_gap_event *event, void *arg)
 {
     switch (event->type) {
@@ -712,7 +720,33 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         if (ble_hs_adv_parse_fields(&fields, event->disc.data, event->disc.length_data) != 0) return 0;
         log_seen(&fields, &event->disc.addr, event->disc.rssi);
         if (is_nano(&fields)) keep_nano_mfg(&fields);
-        if (s_conn == BLE_HS_CONN_HANDLE_NONE && !s_connecting && is_nano(&fields) && esp_timer_get_time() < s_hold_until_us) {
+        // The Nano sends its identity (manufacturer data, for the Cortex Cloud mode of the app bridge) in the scan
+        // response, which comes a moment after its advertisement: until it is known, wait for it - at most 300 ms -
+        // before connecting.
+        static ble_addr_t wait_addr;
+        static int64_t wait_until_us;
+        // (the scan response carries no name and no service: it is the Nano's by its address)
+        bool nano_rsp = event->disc.event_type == BLE_HCI_ADV_RPT_EVTYPE_SCAN_RSP && wait_until_us &&
+                        ble_addr_cmp(&wait_addr, &event->disc.addr) == 0;
+        if (nano_rsp) keep_nano_mfg(&fields);
+        if (!s_nano_mfg_len && s_conn == BLE_HS_CONN_HANDLE_NONE && !s_connecting && is_nano(&fields) &&
+            event->disc.event_type != BLE_HCI_ADV_RPT_EVTYPE_SCAN_RSP) {
+            if (!wait_until_us || ble_addr_cmp(&wait_addr, &event->disc.addr) != 0) {
+                wait_addr = event->disc.addr;
+                wait_until_us = esp_timer_get_time() + 300 * 1000;
+                // (the scan filters repeated advertisements: if no response comes, a new scan brings the
+                // advertisement back after the wait, and it connects then)
+                static esp_timer_handle_t rescan;
+                if (!rescan) {
+                    const esp_timer_create_args_t args = { .callback = rescan_for_nano, .name = "rescan" };
+                    esp_timer_create(&args, &rescan);
+                }
+                esp_timer_stop(rescan);
+                esp_timer_start_once(rescan, 400 * 1000);
+            }
+            if (esp_timer_get_time() < wait_until_us) return 0;
+        }
+        if (s_conn == BLE_HS_CONN_HANDLE_NONE && !s_connecting && (is_nano(&fields) || nano_rsp) && esp_timer_get_time() < s_hold_until_us) {
             static int64_t said_us;   // (seen, but the pause is not over: the Nano is still advertising)
             if (esp_timer_get_time() - said_us > 5000000) {
                 said_us = esp_timer_get_time();
@@ -720,7 +754,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
             }
             return 0;
         }
-        if (s_conn == BLE_HS_CONN_HANDLE_NONE && !s_connecting && is_nano(&fields)) {
+        if (s_conn == BLE_HS_CONN_HANDLE_NONE && !s_connecting && (is_nano(&fields) || nano_rsp)) {
             ESP_LOGI(TAG, "Nano Cortex found - connecting");
             ble_gap_disc_cancel();
             s_scan_mode = 0;
