@@ -318,6 +318,16 @@ static void on_status_tap(lv_event_t *e)
     if (!s_splash) open_setlist_at(-1);
 }
 
+// Shown on the screen: neither it nor a parent hidden. (MIDI, USB audio and System are pages inside the settings:
+// closing the settings hides only the settings, the page that was open stays "not hidden" inside them.)
+static bool shown(lv_obj_t *obj)
+{
+    for (; obj; obj = lv_obj_get_parent(obj)) {
+        if (lv_obj_is_hidden(obj)) return false;
+    }
+    return true;
+}
+
 static void on_gesture(lv_event_t *e)
 {
     s_gesture_tick = lv_tick_get();
@@ -327,7 +337,7 @@ static void on_gesture(lv_event_t *e)
                                    s_settings, s_cab_settings, s_amp, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
                                    s_setlist, s_scene_cap, s_system, s_metro, s_rot };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
-        if (overlays[i] && !lv_obj_is_hidden(overlays[i])) return;
+        if (overlays[i] && shown(overlays[i])) return;
     }
     // A swipe is not a tap: whatever is under the finger gets no click (nor a long press) when it lifts. Before, only
     // the tiles ignored it, and only for 150 ms - a swipe up ended with a button going off.
@@ -3080,7 +3090,7 @@ void ui_set_midi(const ui_midi_t *midi)
     s_midi_state = *midi;
     if (s_midi_icon) lv_obj_set_style_image_recolor(s_midi_icon, lv_color_hex(midi->connected ? GREEN : 0xC8CCD1), 0);
     if (s_set_badge[SET_MIDI]) lv_label_set_text(s_set_badge[SET_MIDI], midi->connected ? "ON" : "");
-    if (!lv_obj_is_hidden(s_midi)) fill_midi();
+    if (shown(s_midi)) fill_midi();
     lvgl_port_unlock();
 }
 
