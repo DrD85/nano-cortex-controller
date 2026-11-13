@@ -822,7 +822,12 @@ static void on_app_write(uint32_t type, const uint8_t *payload, size_t len)
         if (slot >= 0 && slot < NANO_FX_SLOTS) command('%', slot << 1 | (nano_field_varint(payload, len, 4) == 0));
     }
     switch (type) {
-    case 3: case 111:                               // save, rename: names may have changed
+    case 3: {                                       // save: names may have changed; A / B as they are now go with it
+        int preset = (int)nano_field_varint(payload, len, 3) + 1;
+        command('i', 1 | 4 | preset << 8);
+        break;
+    }
+    case 111:                                       // rename: names may have changed
         command('i', 1);
         break;
     case 26: case 28: case 29: case 31: case 67: case 78: case 80: case 136:
@@ -3018,6 +3023,21 @@ static void ab_store(ab_t *ab)
     nvs_close(nvs);
 }
 
+// The preset was saved (here, or by the editor / the app through the controller): which of A and B each slot was
+// playing then is what the preset brings back when it is loaded again - kept with B (bit 0 of b.reserved).
+static void ab_note_saved(int preset)
+{
+    for (int i = 0; i < AB_COUNT; i++) {
+        ab_t *ab = &s_ab[i];
+        if (ab->preset != preset || !ab->b.type) continue;
+        uint8_t with_b = ab->active == 1 ? 1 : 0;
+        if ((ab->b.reserved & 1) == with_b) continue;
+        ab->b.reserved = (uint8_t)((ab->b.reserved & ~1) | with_b);
+        ab_store(ab);
+        ESP_LOGI(TAG, "%s: preset %d saved with %c", ab_name(ab), preset, with_b ? 'B' : 'A');
+    }
+}
+
 // Keeps the values of A for this preset (read while A was on), so a later swap needs no reading.
 static void ab_store_a(ab_t *ab)
 {
@@ -3063,11 +3083,18 @@ static void ab_load(int preset)
         size = sizeof(buf);
         int slot = i;
         ab_key(ab, true, key);
+        uint32_t now = s_state.fx_type[slot];
         if (open && ab->b.type && nvs_get_blob(nvs, key, buf, &size) == ESP_OK && fx_a_unpack(buf, size, &a) &&
-            a.type == s_state.fx_type[slot]) {
+            (a.type == now || (now && now == ab->b.type))) {
             ab->a_type = a.type;
             ab->a_count = a.count;
             for (int n = 0; n < a.count; n++) ab->a_values[n] = a.values[n] / 65535.0f;
+            // The preset was saved while B ran: B is what plays, A is kept for the swap back. Known from the save
+            // (ab_note_saved), else from the model (A and B of different models).
+            if (a.type != now || (ab->b.reserved & 1)) {
+                ab->active = 1;
+                ESP_LOGI(TAG, "%s: B (%s) runs - the preset was saved with it; A is %s", ab_name(ab), nano_fx_name(now), nano_fx_name(a.type));
+            }
         }
     }
     if (open) nvs_close(nvs);
@@ -3260,6 +3287,32 @@ static void ab_values_read(int slot, const float *values, int count)
     if (count <= 0) {
         ab_read_failed(ab, "Not switched: the Nano sent no values.");
         return;
+    }
+    // A and B of the same model, the board taking A for running: values that are B's (and not A's) mean the preset
+    // was saved while B ran - B is what plays. A's kept values are not overwritten; a swap goes to A.
+    if (ab->active == 0 && ab->a_type == ab->b.type && ab->b.count == count && ab->a_count == count) {
+        bool is_b = true, is_a = true;
+        for (int i = 0; i < count; i++) {
+            is_b &= fabsf(values[i] - ab->b.values[i]) <= RP_MATCH;
+            is_a &= fabsf(values[i] - ab->a_values[i]) <= RP_MATCH;
+        }
+        if (is_b && !is_a) {
+            ESP_LOGI(TAG, "%s: B runs - its values are what the Nano plays (the preset was saved with B)", ab_name(ab));
+            ab->active = 1;
+            if (ab->target == 1) ab->target = 0;   // (a swap that was asked for goes to A)
+            if (ab->cache_only) {
+                ab->cache_only = false;
+                ab->phase = AB_IDLE;
+                show();
+                return;
+            }
+            if (ab->restore_off) {
+                ab->restore_off = false;
+                if (s_state.fx_on[ab->slot]) toggle_fx(ab->slot);
+            }
+            ab_load_target(ab);
+            return;
+        }
     }
     if (ab->active == 0) {
         if (!ab->a_type) ab->a_type = s_state.fx_type[ab->slot];   // the preset's effect, kept from now on
@@ -3868,6 +3921,7 @@ static void save_preset(void)
     snprintf(label, sizeof(label), "Save preset %d", preset);
     send(label, NANO_MSG_SAVE_PRESET, buf, n);
     s_save_pending = preset;
+    ab_note_saved(preset);
     schedule_refresh(400);
 }
 
@@ -4639,6 +4693,7 @@ static void handle_command(char c, int arg)
     case 'u': source_throttle_done(); break;
     case 'y': cab_settings_command(arg); break;
     case 'i':   // the app changed something: read it shortly after (once for several changes)
+        if ((arg & 4) && (arg >> 8) == s_state.current_preset) ab_note_saved(arg >> 8);   // (the app saved this preset)
         if (arg & 1) s_app_names_changed = true;
         if (arg & 2) s_app_exp_changed = true;
         esp_timer_stop(s_app_read_timer);
