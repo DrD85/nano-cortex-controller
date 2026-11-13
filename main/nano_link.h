@@ -41,6 +41,9 @@ void nano_link_set_forward(nano_forward_cb cb);
 
 uint8_t nano_link_own_addr_type(void);
 
+// The Nano's manufacturer data from its advertisement (0 bytes until it was seen).
+size_t nano_link_nano_mfg(uint8_t *out, size_t max);
+
 // ---- shared with other Bluetooth clients (MIDI) ----
 
 // Every advertisement seen while scanning. Called from the NimBLE host task.

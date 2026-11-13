@@ -267,6 +267,29 @@ static bool is_nano(const struct ble_hs_adv_fields *f)
 }
 
 // Logs every named device once, so a Nano with an unexpected name can still be identified.
+// The Nano's manufacturer data as it advertises it (Cortex Cloud takes the device's identity from it): kept for the
+// app bridge's "Cortex Cloud" mode, which advertises the same.
+static uint8_t s_nano_mfg[27];
+static uint8_t s_nano_mfg_len;
+
+size_t nano_link_nano_mfg(uint8_t *out, size_t max)
+{
+    size_t n = s_nano_mfg_len < max ? s_nano_mfg_len : max;
+    memcpy(out, s_nano_mfg, n);
+    return n;
+}
+
+static void keep_nano_mfg(const struct ble_hs_adv_fields *f)
+{
+    if (!f->mfg_data || !f->mfg_data_len || f->mfg_data_len > sizeof(s_nano_mfg)) return;
+    if (f->mfg_data_len == s_nano_mfg_len && !memcmp(f->mfg_data, s_nano_mfg, s_nano_mfg_len)) return;
+    memcpy(s_nano_mfg, f->mfg_data, f->mfg_data_len);
+    s_nano_mfg_len = f->mfg_data_len;
+    char hex[3 * sizeof(s_nano_mfg) + 1] = "";
+    for (int i = 0; i < s_nano_mfg_len; i++) snprintf(hex + 3 * i, 4, "%02X ", s_nano_mfg[i]);
+    ESP_LOGI(TAG, "Nano's manufacturer data (%u bytes): %s", (unsigned)s_nano_mfg_len, hex);
+}
+
 static void log_seen(const struct ble_hs_adv_fields *f, const ble_addr_t *addr, int8_t rssi)
 {
     static ble_addr_t seen[24];
@@ -688,6 +711,7 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         struct ble_hs_adv_fields fields;
         if (ble_hs_adv_parse_fields(&fields, event->disc.data, event->disc.length_data) != 0) return 0;
         log_seen(&fields, &event->disc.addr, event->disc.rssi);
+        if (is_nano(&fields)) keep_nano_mfg(&fields);
         if (s_conn == BLE_HS_CONN_HANDLE_NONE && !s_connecting && is_nano(&fields) && esp_timer_get_time() < s_hold_until_us) {
             static int64_t said_us;   // (seen, but the pause is not over: the Nano is still advertising)
             if (esp_timer_get_time() - said_us > 5000000) {

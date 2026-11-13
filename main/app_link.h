@@ -32,6 +32,10 @@ void app_link_start(app_write_cb on_write, app_state_cb on_state);
 // Offer the controller to the app (only while the Nano is connected); false also disconnects the app.
 void app_link_enable(bool enabled);
 
+// Cortex Cloud mode: advertise the Nano's manufacturer data too, so the official app finds the Nano through the
+// controller (Bluetooth MIDI for a phone is not offered meanwhile).
+void app_link_set_cloud(bool on);
+
 // Offer Bluetooth MIDI to a phone (phone_midi); false only stops offering it - a connected phone stays.
 void app_link_allow_phone(bool allowed);
 

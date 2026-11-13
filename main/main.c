@@ -161,6 +161,8 @@ static int s_scene_last = -1;   // recalled last: the lit one if two scenes are 
 #define SCENE_MODE_KEY "scenemode"
 #define LAYOUT_KEY "layout"   // { count, order[8] }
 #define PEDALS_KEY "pedals"   // 1 = the full-screen view shows the FX slots as pedals
+#define CLOUD_KEY "cloud"     // 1 = Cortex Cloud mode of the app bridge (the Nano's identity in the advertisement)
+static bool s_cloud;   // (loaded at the start, see cloud_load)
 #define METRO_KEY "metro"     // metronome settings: muted, time signature, note, sound, volume (dB x 2, signed)
 
 // Tile layout: footswitch / CC 50+p-1 / Chocolate switch p presses the switch s_layout[p - 1] (1-8) - for p up to
@@ -4005,6 +4007,38 @@ static void metro_show(void)
                      .time_sig = s_metro.time_sig, .note_len = s_metro.note_len, .sound = s_metro.sound };
     ui_set_tempo(&t);
     ui_set_nano_firmware(s_state.fw_major, s_state.fw_minor);
+    ui_set_cloud(s_cloud);
+}
+
+// ---- Cortex Cloud through the controller (settings, Nano page) ----
+
+static void cloud_set(bool on, bool store)
+{
+    s_cloud = on;
+    app_link_set_cloud(on);
+    ui_set_cloud(on);
+    if (!store) return;
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
+        uint8_t v = on;
+        if (nvs_set_blob(nvs, CLOUD_KEY, &v, 1) == ESP_OK) nvs_commit(nvs);
+        nvs_close(nvs);
+    }
+    ESP_LOGI(TAG, "Cortex Cloud through the controller: %s", on ? "on" : "off");
+    ui_show_message(on ? "Cortex Cloud: open the app on the phone - it finds your Nano through the controller."
+                       : "Cortex Cloud through the controller is off.");
+}
+
+static void cloud_load(void)
+{
+    nvs_handle_t nvs;
+    uint8_t v = 0;
+    size_t size = 1;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs) == ESP_OK) {
+        if (nvs_get_blob(nvs, CLOUD_KEY, &v, &size) != ESP_OK || size != 1) v = 0;
+        nvs_close(nvs);
+    }
+    s_cloud = v == 1;   // (only the flag: Bluetooth and the screen are not up yet - see metro_show / the link)
 }
 
 static void metro_load(void)
@@ -4392,6 +4426,7 @@ static void handle_command(char c, int arg)
     }
 #endif
     if (c == ')') { system_page(); return; }           // (also without the Nano: that is when it is looked at)
+    if (c == '\\') { cloud_set(arg != 0, true); return; }   // settings, Nano page: Cortex Cloud through the controller
     if (c == 'h') { print_help(); return; }
     if (c == 'l') { print_presets(); return; }
     if (c == 'D' || c == 'Z') { footswitch_learn(c, arg); return; }   // works without the Nano
@@ -5989,6 +6024,7 @@ void app_main(void)
     looper_tiles_load();
     layout_load();
     metro_load();
+    cloud_load();
     fxp_compact_store();
     s_scenes = heap_caps_calloc(UI_SCENES, sizeof(scene_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     configASSERT(s_scenes);
@@ -6017,6 +6053,7 @@ void app_main(void)
     // otherwise take (they move to PSRAM when internal RAM runs short). Its events wait in the queue until the
     // app task runs, after the screen is built.
     app_link_start(on_app_write, on_app_state);
+    app_link_set_cloud(s_cloud);   // (the setting loaded above)
     nano_link_start(on_message, on_link);
     midi_ble_start(on_midi, on_midi_change);
     midi_ble_allow(false);   // first the Nano and its presets

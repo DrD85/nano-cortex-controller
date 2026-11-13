@@ -115,7 +115,7 @@ static lv_obj_t *s_rot;   // the wheel while a rotary footswitch of the Nano is 
 // Settings screen (1.17.0): topics on the left, the chosen one on the right; MIDI, USB audio and System are its pages
 enum { SET_NANO, SET_MIDI, SET_USB, SET_LAYOUT, SET_SWITCHES, SET_SYSTEM, SET_COUNT };
 static lv_obj_t *s_settings, *s_set_content, *s_set_item[SET_COUNT], *s_set_item_label[SET_COUNT], *s_set_item_icon[SET_COUNT];
-static lv_obj_t *s_set_badge[SET_COUNT], *s_set_page[SET_COUNT], *s_set_nano_text, *s_set_layout_text;
+static lv_obj_t *s_set_badge[SET_COUNT], *s_set_page[SET_COUNT], *s_set_nano_text, *s_set_layout_text, *s_set_cloud;
 static int s_set_topic = SET_NANO;
 static bool s_nano_connected;
 static int s_nano_fw_major = -1, s_nano_fw_minor = -1;
@@ -3690,6 +3690,17 @@ static void close_settings(lv_event_t *e)
 static void on_settings_layout(lv_event_t *e) { open_layout(NULL); lv_obj_move_foreground(s_layout); }
 static void on_settings_learn(lv_event_t *e) { open_learn(1); lv_obj_move_foreground(s_learn); }
 static void on_settings_reload(lv_event_t *e) { send('r', 0); }
+static void on_settings_cloud(lv_event_t *e) { send('\\', lv_obj_has_state(s_set_cloud, LV_STATE_CHECKED) ? 1 : 0); }
+
+void ui_set_cloud(bool on)
+{
+    lvgl_port_lock(0);
+    if (s_set_cloud) {
+        if (on) lv_obj_add_state(s_set_cloud, LV_STATE_CHECKED);
+        else lv_obj_remove_state(s_set_cloud, LV_STATE_CHECKED);
+    }
+    lvgl_port_unlock();
+}
 
 // A dialog of before becomes a page: no frame, no close button
 static void settings_embed(int topic, lv_obj_t *dialog, lv_obj_t *close)
@@ -3792,8 +3803,29 @@ static void build_settings(lv_obj_t *screen)
     lv_obj_set_width(nano_hint, 540);
     lv_label_set_long_mode(nano_hint, LV_LABEL_LONG_WRAP);
     lv_label_set_text(nano_hint, "Not found? Press EXIT + CAPTURE on the Nano: it can be found for a few seconds then.");
-    lv_obj_set_pos(nano_hint, 20, 190);
-    small_button(nano, 20, 250, 260, 50, "Read everything again", on_settings_reload, 0);
+    lv_obj_set_pos(nano_hint, 20, 170);
+    small_button(nano, 20, 220, 260, 50, "Read everything again", on_settings_reload, 0);
+    // Cortex Cloud on the phone through the controller (the board offers itself with the Nano's identity)
+    lv_obj_t *cloud = label(nano, &ui_font_20, TEXT);
+    lv_label_set_text(cloud, "Cortex Cloud through the board");
+    lv_obj_set_pos(cloud, 20, 306);
+    lv_obj_t *cloud_hint = label(nano, &ui_font_14, MUTED);
+    lv_obj_set_width(cloud_hint, 440);
+    lv_label_set_long_mode(cloud_hint, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(cloud_hint, "The app on the phone finds your Nano through the board - load captures without "
+                                  "switching the board off. Meanwhile the phone's Bluetooth MIDI (looper) is not offered. "
+                                  "No firmware updates this way.");
+    lv_obj_set_pos(cloud_hint, 20, 336);
+    s_set_cloud = lv_switch_create(nano);
+    lv_obj_set_size(s_set_cloud, 72, 38);
+    lv_obj_set_pos(s_set_cloud, 494, 300);
+    lv_obj_set_ext_click_area(s_set_cloud, 8);
+    lv_obj_set_style_bg_color(s_set_cloud, lv_color_hex(0x2A2D30), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_set_cloud, lv_color_hex(GREEN), LV_PART_INDICATOR | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(s_set_cloud, lv_color_hex(0xF2F2F2), LV_PART_KNOB);
+    lv_obj_set_style_bg_color(s_set_cloud, lv_color_hex(INK), LV_PART_KNOB | LV_STATE_CHECKED);
+    lv_obj_set_style_pad_all(s_set_cloud, -3, LV_PART_KNOB);
+    lv_obj_add_event_cb(s_set_cloud, on_settings_cloud, LV_EVENT_VALUE_CHANGED, NULL);
 
     settings_embed(SET_MIDI, s_midi, s_midi_close);
     for (int i = 0; i < 2; i++) lv_obj_set_hidden(s_midi_more[i], true);   // (the list on the left has them)

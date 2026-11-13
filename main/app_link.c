@@ -36,7 +36,12 @@ static volatile uint16_t s_peer[PEERS] = { BLE_HS_CONN_HANDLE_NONE, BLE_HS_CONN_
 static int64_t s_peer_since[PEERS];
 static esp_timer_handle_t s_guest_timer;
 static volatile bool s_phone_allowed;
-static bool s_adv_app, s_adv_phone;   // what the running advertisement offers
+static bool s_adv_app, s_adv_phone, s_adv_cloud;   // what the running advertisement offers
+// Cortex Cloud mode: the app finds a Nano by the service A002 *and* reads its identity from the manufacturer data
+// (Cortex Cloud 2.8.3, BluePlusAdapter.startScan) - the board then advertises the Nano's own manufacturer data, so
+// the app sees "its" Nano and connects through the board. Bluetooth MIDI for a phone is not offered meanwhile (both
+// do not fit into one advertisement).
+static volatile bool s_cloud;
 
 static app_write_cb s_on_write;
 static app_state_cb s_on_state;
@@ -112,8 +117,12 @@ static void advertise(void)
     bool app = s_enabled && s_conn == BLE_HS_CONN_HANDLE_NONE;
     bool phone = s_phone_allowed && phone_midi_conn() == BLE_HS_CONN_HANDLE_NONE;
     if (peer_slot(BLE_HS_CONN_HANDLE_NONE) < 0) app = phone = false;   // no room for another connection
+    static uint8_t mfg[27];
+    size_t mfg_len = s_cloud && app ? nano_link_nano_mfg(mfg, sizeof(mfg)) : 0;
+    bool cloud = mfg_len > 0;
+    if (cloud) phone = false;
     if (ble_gap_adv_active()) {
-        if (app == s_adv_app && phone == s_adv_phone) return;
+        if (app == s_adv_app && phone == s_adv_phone && cloud == s_adv_cloud) return;
         ble_gap_adv_stop();
     }
     if (!app && !phone) return;
@@ -124,6 +133,10 @@ static void advertise(void)
         fields.uuids16 = &service;
         fields.num_uuids16 = 1;
         fields.uuids16_is_complete = 1;
+    }
+    if (cloud) {
+        fields.mfg_data = mfg;
+        fields.mfg_data_len = (uint8_t)mfg_len;
     }
     if (phone) {
         fields.uuids128 = &PHONE_MIDI_SERVICE_UUID;
@@ -151,6 +164,7 @@ static void advertise(void)
     }
     s_adv_app = app;
     s_adv_phone = phone;
+    s_adv_cloud = cloud;
     ESP_LOGI(TAG, "Offered as \"%s\" to%s%s%s", NAME, app ? " the app" : "", app && phone ? " and" : "", phone ? " a phone (MIDI)" : "");
 }
 
@@ -344,6 +358,14 @@ void app_link_allow_phone(bool allowed)
 {
     s_phone_allowed = allowed;
     advertise();
+}
+
+void app_link_set_cloud(bool on)
+{
+    s_cloud = on;
+    // Only while something is offered (the host is running then); at the start only the flag is set - the
+    // advertisement takes it when the Nano is connected (app_link_enable) or the phone is allowed.
+    if (s_enabled || s_phone_allowed) advertise();
 }
 
 bool app_link_connected(void)

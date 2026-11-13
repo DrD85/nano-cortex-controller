@@ -199,6 +199,9 @@ typedef struct {
 } ui_rotate_t;
 void ui_show_rotate(const ui_rotate_t *r);
 
+// Cortex Cloud through the controller: the switch on the settings screen's Nano page ('\\' 0 / 1 sets it).
+void ui_set_cloud(bool on);
+
 // NanOS version from the state (-1 = unknown), for the settings screen's Nano page.
 void ui_set_nano_firmware(int major, int minor);
 
