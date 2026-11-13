@@ -48,6 +48,16 @@
 #define TILE_OFF_BG 0x111315
 #define PANEL_BG 0x121416
 #define GREEN 0x45F862
+// The calm look of the P4 board (user, 2026-11-13: also on this board): one surface, one hairline, one radius, flat
+// buttons and dialogs without shadows; tiles off = their colour dimmed behind white text, on = the bright colour.
+#define SURF 0x121416
+#define SURF_ON 0x262A2F      // pressed / chosen
+#define HAIRLINE 0x25292D
+#define RADIUS 12
+#define FILL_LINE 0x3A3F45    // the edge of a dialog
+#define TILE_DIM 0.30f        // share of the colour behind a tile that is off
+#define BUTTON_BG 0x1A1D20    // buttons on a panel
+#define BUTTON_LINE 0x30353A
 #define ORANGE 0xFFB02E       // unsaved changes (the dot next to the name)
 
 static ui_command_cb s_on_command;
@@ -343,13 +353,12 @@ static lv_obj_t *button(lv_obj_t *parent, int x, int y, int w, int h, lv_event_c
     lv_obj_t *btn = lv_button_create(parent);
     lv_obj_set_size(btn, w, h);
     lv_obj_set_pos(btn, x, y);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x191B1D), 0);
-    lv_obj_set_style_bg_grad_color(btn, lv_color_hex(0x111315), 0);
-    lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_VER, 0);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x34383C), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(BUTTON_BG), 0);   // flat, one step lighter than the panels
+    lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_NONE, 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(SURF_ON), LV_STATE_PRESSED);
     lv_obj_set_style_border_width(btn, 1, 0);
-    lv_obj_set_style_border_color(btn, lv_color_hex(0x3A3D40), 0);
-    lv_obj_set_style_radius(btn, 9, 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(BUTTON_LINE), 0);
+    lv_obj_set_style_radius(btn, RADIUS, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
     lv_obj_set_style_opa(btn, LV_OPA_50, LV_STATE_DISABLED);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
@@ -398,11 +407,7 @@ static lv_obj_t *close_button(lv_obj_t *parent, int x, int y, lv_event_cb_t cb, 
     lv_obj_t *btn = button(parent, x - 8, y - 4, 52, 52, cb);   // x, y: where a 44 px button would sit
     lv_obj_remove_event_cb(btn, cb);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, (void *)(intptr_t)data);
-    lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(btn, lv_color_hex(0x1D2024), 0);
-    lv_obj_set_style_bg_grad_dir(btn, LV_GRAD_DIR_NONE, 0);
-    lv_obj_set_style_border_color(btn, lv_color_hex(0x33383E), 0);
-    lv_obj_center(ui_icon(btn, UI_ICON_CLOSE, 20, 0xC8CCD1));
+    lv_obj_center(ui_icon(btn, UI_ICON_CLOSE, 20, TEXT));   // a calm button like the others
     return btn;
 }
 
@@ -433,12 +438,11 @@ static lv_obj_t *card(lv_obj_t *parent, int x, int y, int w, int h)
     lv_obj_t *c = lv_obj_create(parent);
     lv_obj_set_size(c, w, h);
     lv_obj_set_pos(c, x, y);
-    lv_obj_set_style_bg_color(c, lv_color_hex(CARD_TOP), 0);
-    lv_obj_set_style_bg_grad_color(c, lv_color_hex(CARD_BOTTOM), 0);
-    lv_obj_set_style_bg_grad_dir(c, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_bg_color(c, lv_color_hex(SURF), 0);
+    lv_obj_set_style_bg_grad_dir(c, LV_GRAD_DIR_NONE, 0);
     lv_obj_set_style_border_width(c, 1, 0);
-    lv_obj_set_style_border_color(c, lv_color_hex(CARD_BORDER), 0);
-    lv_obj_set_style_radius(c, 12, 0);
+    lv_obj_set_style_border_color(c, lv_color_hex(HAIRLINE), 0);
+    lv_obj_set_style_radius(c, RADIUS, 0);
     lv_obj_set_style_pad_all(c, 0, 0);
     lv_obj_set_scrollable(c, false);
     return c;
@@ -447,14 +451,8 @@ static lv_obj_t *card(lv_obj_t *parent, int x, int y, int w, int h)
 // Dialog sheet over the screen.
 static lv_obj_t *panel(lv_obj_t *parent, int x, int y, int w, int h)
 {
-    lv_obj_t *c = card(parent, x, y, w, h);
-    lv_obj_set_style_bg_color(c, lv_color_hex(PANEL_BG), 0);
-    lv_obj_set_style_bg_grad_dir(c, LV_GRAD_DIR_NONE, 0);
-    lv_obj_set_style_border_color(c, lv_color_hex(CARD_BORDER), 0);
-    lv_obj_set_style_radius(c, 18, 0);
-    lv_obj_set_style_shadow_width(c, 40, 0);
-    lv_obj_set_style_shadow_color(c, lv_color_black(), 0);
-    lv_obj_set_style_shadow_opa(c, LV_OPA_70, 0);
+    lv_obj_t *c = card(parent, x, y, w, h);   // flat, a slightly lighter edge, no shadow
+    lv_obj_set_style_border_color(c, lv_color_hex(FILL_LINE), 0);
     return c;
 }
 
@@ -1056,10 +1054,11 @@ void ui_flash_tile(int i)
 static void set_tile(int i, const char *caption, const char *name, uint32_t color, bool active, bool empty,
                      const lv_image_dsc_t *icon, const char *symbol)
 {
-    uint32_t bg = empty ? 0x0D0E10 : active ? color : TILE_OFF_BG;
-    uint32_t border = empty ? 0x24272B : active ? color : blend(color, TILE_OFF_BG, 0.62f);
+    // (user, 2026-11-13, from the P4: "aus gedimmt farbig hinterlegt, an hell farbig hinterlegt - live gut lesbar")
+    uint32_t bg = empty ? 0x0D0E10 : active ? color : blend(color, SURF, TILE_DIM);
+    uint32_t border = empty ? 0x24272B : active ? color : blend(color, SURF, TILE_DIM + 0.14f);
     uint32_t ink = empty ? 0x5D6267 : active ? ink_for(color) : TEXT;
-    uint32_t mark = empty ? 0x3A3F45 : active ? ink : color;   // symbol colour
+    uint32_t mark = empty ? 0x3A3F45 : active ? ink : blend(color, 0xFFFFFF, 0.7f);   // symbol colour
     s_tile_ink[i] = ink;
     s_tile_accent[i] = mark;
     s_tile_color[i] = color;
@@ -1074,7 +1073,7 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     s_tile_marks[i] = 0;        // set again by show_scene_tiles
     memset(&s_tile_pair[i], 0, sizeof(s_tile_pair[i]));   // set again for the reverb switch with two settings
     lv_obj_t *t = s_tile[i];
-    uint32_t head = empty || active ? 0 : color;
+    uint32_t head = 0;   // no coloured head band: the colour is in the fill, the symbol and the border
     if (head != s_tile_head[i]) {
         s_tile_head[i] = head;
         lv_obj_invalidate(t);
@@ -1082,7 +1081,7 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     set_color_prop(t, LV_STYLE_BG_COLOR, bg);
     set_num_prop(t, LV_STYLE_BG_GRAD_DIR, LV_GRAD_DIR_NONE);
     set_color_prop(t, LV_STYLE_BORDER_COLOR, border);
-    set_num_prop(t, LV_STYLE_SHADOW_WIDTH, active ? 24 : 0);
+    set_num_prop(t, LV_STYLE_SHADOW_WIDTH, 0);   // (calm: no glow)
     set_color_prop(t, LV_STYLE_SHADOW_COLOR, color);
     set_num_prop(t, LV_STYLE_SHADOW_OPA, LV_OPA_40);
 
