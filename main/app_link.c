@@ -81,6 +81,10 @@ static const struct ble_gatt_svc_def SERVICES[] = {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
         .uuid = BLE_UUID16_DECLARE(0xA002),
         .characteristics = (struct ble_gatt_chr_def[]){
+            // C303 as on the Nano (write without response): Cortex Cloud never writes to it, but counts a device as
+            // connected only when it found C303 and C305 (BluePlusDevice.isConnected) - without it the app stays
+            // at "connecting" and never asks for the state.
+            { .uuid = BLE_UUID16_DECLARE(0xC303), .access_cb = chr_access, .flags = BLE_GATT_CHR_F_WRITE_NO_RSP },
             { .uuid = BLE_UUID16_DECLARE(0xC304), .access_cb = chr_access,
               .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_NO_RSP },
             { .uuid = BLE_UUID16_DECLARE(0xC305), .access_cb = chr_access, .val_handle = &s_c305_handle,
