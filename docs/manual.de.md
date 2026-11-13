@@ -571,16 +571,17 @@ gestartet ist, wie lange der Nano verbunden ist und wie oft (und warum) die Verb
 internen Speicher und wie voll der Einstellungsspeicher ist.
 
 - **Einstellungsspeicher.** Alles, was der Controller behält – Bänke, Szenen, zweite Effekte, die Setlist – liegt in
-  einem kleinen Speicher. Ab 85 % meldet der Controller das nach dem Start. Szenen mit Einstellungen brauchen am
-  meisten.
+  einem eigenen Speicher (ab 1.19: 512 KB, vorher 24 KB). Ab 85 % meldet der Controller das nach dem Start.
+  Beim ersten Start von 1.19 zieht er alles aus dem alten, kleinen Speicher dort hinein; der alte bleibt unverändert
+  als Kopie liegen.
 - **Sicherung.** Den [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) (ab 1.13) über den
   Controller verbinden: Im **…**-Menü stehen *Back up controller settings…* (eine Datei mit allen Einträgen) und
   *Restore controller settings…* (schreibt eine solche Datei zurück; sie ersetzt, was der Controller gespeichert hat,
   und der Controller startet neu).
 - **Wenn der Speicher selbst beschädigt ist.** Findet der Controller seinen Einstellungsspeicher beim Start
   unbrauchbar, muss er ihn leeren – und kopiert ihn vorher, so wie er ist, in einen Teil des Flash-Speichers, den
-  sonst nichts benutzt. Ein Computer liest diese Kopie mit `esptool read-flash 0xF00000 0x6000 store.bin` und
-  schreibt sie mit `esptool write-flash 0x9000 store.bin` zurück. Der Controller meldet das nach so einem Start.
+  sonst nichts benutzt. Ein Computer liest diese Kopie mit `esptool read-flash 0xF00000 0x80000 store.bin` und
+  schreibt sie mit `esptool write-flash 0x610000 store.bin` zurück. Der Controller meldet das nach so einem Start.
 - Was eine frühere Firmware auf demselben Board im Speicher hinterlassen hat (WLAN-Einstellungen und Ähnliches), wird
   einmalig entfernt: Auf einem Board, auf dem vorher eine andere Controller-Firmware lief, macht das etwa ein Fünftel
   des Speichers frei.

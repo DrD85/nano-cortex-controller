@@ -5751,14 +5751,15 @@ static void system_page(void)
 #ifdef NANO_WEB
 static void store_rescue(void) { }
 static void store_cleanup(void) { }
+static void store_move(void) { }
 #else
-// A raw copy of the settings store in flash memory that nothing else uses (the board has 16 MB, the firmware ends at
-// 0x610000). Made only before the store has to be emptied; a computer reads it back with
-// "esptool read-flash 0xF00000 0x6000 store.bin" and can write it to 0x9000 again.
+// A raw copy of the settings store in flash memory that nothing else uses (the board has 16 MB; firmware, store and
+// pedal pictures end before it). Made only before the store has to be emptied; a computer reads it back with
+// "esptool read-flash 0xF00000 0x80000 store.bin" and can write it to 0x610000 again.
 #define STORE_RESCUE_ADDRESS 0xF00000
 static void store_rescue(void)
 {
-    const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);
+    const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NVS_DEFAULT_PART_NAME);
     uint32_t chip = 0;
     if (!part || esp_flash_get_size(NULL, &chip) != ESP_OK || chip < STORE_RESCUE_ADDRESS + part->size) return;
     uint8_t *page = heap_caps_malloc(4096, MALLOC_CAP_DEFAULT);
@@ -5794,6 +5795,96 @@ static void store_cleanup(void)
         ESP_LOGW(TAG, "Settings store: leftovers of an earlier firmware removed - %u entries free again",
                  (unsigned)(before.used_entries - after.used_entries));
     }
+}
+
+// Up to 1.18 the store was the 24 KB "nvs" at 0x9000 (630 usable entries, full after a few weeks of use). Since 1.19 it
+// is 512 KB at 0x610000 (free flash between the firmware and the pedal pictures); the old one is now "nvs_old". At the
+// first start everything in it is copied over once - every namespace (the controller's settings, the Bluetooth
+// bonds, ...), each value read back and compared. A key the new store already has is left alone, so a second try never
+// overwrites a newer value. The old store itself is not changed: it stays as a copy of the settings before the move.
+#define OLD_STORE_PART "nvs_old"
+#define MOVE_NAMESPACE "nvsmove"
+static esp_err_t store_copy_entry(nvs_handle_t src, nvs_handle_t dst, const nvs_entry_info_t *e)
+{
+    union { uint8_t u8; int8_t i8; uint16_t u16; int16_t i16; uint32_t u32; int32_t i32; uint64_t u64; int64_t i64; } v, back;
+    esp_err_t err;
+    switch (e->type) {
+#define COPY_INT(T, field, get, set) case T: \
+        if ((err = get(src, e->key, &v.field)) != ESP_OK || (err = set(dst, e->key, v.field)) != ESP_OK) return err; \
+        if ((err = get(dst, e->key, &back.field)) != ESP_OK) return err; \
+        return back.field == v.field ? ESP_OK : ESP_ERR_INVALID_CRC;
+    COPY_INT(NVS_TYPE_U8, u8, nvs_get_u8, nvs_set_u8)
+    COPY_INT(NVS_TYPE_I8, i8, nvs_get_i8, nvs_set_i8)
+    COPY_INT(NVS_TYPE_U16, u16, nvs_get_u16, nvs_set_u16)
+    COPY_INT(NVS_TYPE_I16, i16, nvs_get_i16, nvs_set_i16)
+    COPY_INT(NVS_TYPE_U32, u32, nvs_get_u32, nvs_set_u32)
+    COPY_INT(NVS_TYPE_I32, i32, nvs_get_i32, nvs_set_i32)
+    COPY_INT(NVS_TYPE_U64, u64, nvs_get_u64, nvs_set_u64)
+    COPY_INT(NVS_TYPE_I64, i64, nvs_get_i64, nvs_set_i64)
+#undef COPY_INT
+    case NVS_TYPE_STR:
+    case NVS_TYPE_BLOB: {
+        const bool str = e->type == NVS_TYPE_STR;
+        size_t len = 0;
+        err = str ? nvs_get_str(src, e->key, NULL, &len) : nvs_get_blob(src, e->key, NULL, &len);
+        if (err != ESP_OK) return err;
+        uint8_t *buf = heap_caps_malloc(len * 2 + 2, MALLOC_CAP_SPIRAM);
+        if (!buf) return ESP_ERR_NO_MEM;
+        uint8_t *chk = buf + len + 1;
+        size_t n = len, m = len;
+        err = str ? nvs_get_str(src, e->key, (char *)buf, &n) : nvs_get_blob(src, e->key, buf, &n);
+        if (err == ESP_OK) err = str ? nvs_set_str(dst, e->key, (const char *)buf) : nvs_set_blob(dst, e->key, buf, n);
+        if (err == ESP_OK) err = str ? nvs_get_str(dst, e->key, (char *)chk, &m) : nvs_get_blob(dst, e->key, chk, &m);
+        if (err == ESP_OK && (m != n || memcmp(buf, chk, n) != 0)) err = ESP_ERR_INVALID_CRC;
+        heap_caps_free(buf);
+        return err;
+    }
+    default:
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+}
+
+static void store_move(void)
+{
+    nvs_handle_t mark;
+    uint8_t done = 0;
+    if (nvs_open(MOVE_NAMESPACE, NVS_READONLY, &mark) == ESP_OK) {
+        nvs_get_u8(mark, "done", &done);
+        nvs_close(mark);
+    }
+    if (done || !esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, OLD_STORE_PART)) return;
+    esp_err_t err = nvs_flash_init_partition(OLD_STORE_PART);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Settings store: the old store cannot be read (0x%X) - nothing moved", err);
+        return;
+    }
+    int copied = 0, kept = 0, failed = 0;
+    nvs_iterator_t it = NULL;
+    for (err = nvs_entry_find(OLD_STORE_PART, NULL, NVS_TYPE_ANY, &it); err == ESP_OK; err = nvs_entry_next(&it)) {
+        nvs_entry_info_t e;
+        if (nvs_entry_info(it, &e) != ESP_OK || strcmp(e.namespace_name, MOVE_NAMESPACE) == 0) continue;
+        nvs_handle_t src, dst;
+        if (nvs_open_from_partition(OLD_STORE_PART, e.namespace_name, NVS_READONLY, &src) != ESP_OK) { failed++; continue; }
+        if (nvs_open(e.namespace_name, NVS_READWRITE, &dst) != ESP_OK) { nvs_close(src); failed++; continue; }
+        if (nvs_find_key(dst, e.key, NULL) == ESP_OK) {
+            kept++;
+        } else {
+            esp_err_t e2 = store_copy_entry(src, dst, &e);
+            if (e2 == ESP_OK) e2 = nvs_commit(dst);
+            if (e2 == ESP_OK) copied++;
+            else { failed++; ESP_LOGE(TAG, "Settings store: %s/%s not moved (0x%X)", e.namespace_name, e.key, e2); }
+        }
+        nvs_close(dst);
+        nvs_close(src);
+    }
+    nvs_release_iterator(it);
+    nvs_flash_deinit_partition(OLD_STORE_PART);
+    if (!failed && nvs_open(MOVE_NAMESPACE, NVS_READWRITE, &mark) == ESP_OK) {
+        if (nvs_set_u8(mark, "done", 1) != ESP_OK || nvs_commit(mark) != ESP_OK) failed++;
+        nvs_close(mark);
+    }
+    if (failed) ESP_LOGE(TAG, "Settings store moved to the larger store: %d entries copied, %d already there, %d FAILED (tried again at the next start)", copied, kept, failed);
+    else ESP_LOGW(TAG, "Settings store moved to the larger store: %d entries copied, %d already there", copied, kept);
 }
 #endif
 
@@ -6157,6 +6248,7 @@ void app_main(void)
         store_reset = true;
     }
     ESP_ERROR_CHECK(err);
+    store_move();   // (once: the settings out of the small store of 1.18 and earlier, before anything reads them)
     store_cleanup();
     store_compact();
 #ifdef NANO_WDTEST

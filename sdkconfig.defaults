@@ -68,3 +68,6 @@ CONFIG_BT_NIMBLE_ROLE_BROADCASTER=y
 CONFIG_BT_NIMBLE_GATT_SERVER=y
 CONFIG_BT_NIMBLE_MAX_CONNECTIONS=4
 CONFIG_BT_NIMBLE_SVC_GAP_DEVICE_NAME="Nano Cortex Controller"
+
+# The settings store is 512 KB (partitions.csv): its page cache goes to PSRAM, not the scarce internal RAM
+CONFIG_NVS_ALLOCATE_CACHE_IN_SPIRAM=y

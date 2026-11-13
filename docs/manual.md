@@ -545,14 +545,15 @@ and why it started, how long the Nano has been connected and how often (and why)
 internal memory, and how full the settings memory is.
 
 - **Settings memory.** Everything the controller keeps – banks, scenes, second effects, the set list – is in one
-  small store. From 85 % on the controller says so after the start. Scenes with settings take most.
+  store of its own (since 1.19: 512 KB, before 24 KB). From 85 % on the controller says so after the start. At the
+  first start of 1.19 it moves everything over from the old, small store, which stays unchanged as a copy.
 - **Backup.** Connect the [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) (1.13 or later)
   through the controller: the **…** menu has *Back up controller settings…* (a file with every entry) and *Restore
   controller settings…* (writes such a file back; it replaces what the controller stores, and the controller restarts).
 - **If the store itself is damaged.** Should the controller find its settings memory unusable at the start, it has
   to empty it – and first copies it, as it is, into a part of the flash memory nothing else uses. A computer reads
-  that copy with `esptool read-flash 0xF00000 0x6000 store.bin` and writes it back with
-  `esptool write-flash 0x9000 store.bin`. The controller says so after such a start.
+  that copy with `esptool read-flash 0xF00000 0x80000 store.bin` and writes it back with
+  `esptool write-flash 0x610000 store.bin`. The controller says so after such a start.
 - What an earlier firmware on the same board left in the store (Wi-Fi settings and the like) is removed once: on a
   board that ran another controller firmware before, that frees about a fifth of the store.
 - From 1.15 second effects and mix positions take less room. What an earlier version stored is rewritten once at

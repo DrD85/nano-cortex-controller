@@ -1,5 +1,8 @@
-# 16 MB flash: NVS and PHY data as in the default table (keeps stored banks), 6 MB for the app.
-# Name,   Type, SubType, Offset,  Size
-nvs,      data, nvs,     0x9000,  0x6000
-phy_init, data, phy,     0xf000,  0x1000
-factory,  app,  factory, 0x10000, 6M
+# 16 MB flash. Since 1.19 the settings store is "nvs", 512 KB at 0x610000 (free flash between the firmware and the
+# pedal pictures at 0x700000); the small store of 1.18 and earlier stays at 0x9000 as "nvs_old" - the firmware copies it
+# over once at the first start and leaves it unchanged. PHY data as in the default table, 6 MB for the app.
+# Name,   Type, SubType, Offset,   Size
+nvs_old,  data, nvs,     0x9000,   0x6000
+phy_init, data, phy,     0xf000,   0x1000
+factory,  app,  factory, 0x10000,  6M
+nvs,      data, nvs,     0x610000, 0x80000
