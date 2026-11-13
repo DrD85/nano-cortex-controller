@@ -88,8 +88,6 @@ static uint32_t s_tile_accent[TILES];   // colour of the pedal drawing on the ti
 static lv_obj_t *s_preset_number, *s_preset_name, *s_capture, *s_cab;
 static lv_obj_t *s_tile[TILES], *s_tile_caption[TILES], *s_tile_name[TILES], *s_tile_number[TILES];
 static lv_obj_t *s_tile_square[TILES], *s_tile_pedal[TILES];
-static lv_obj_t *s_tile_square_b[TILES];   // top right: the symbol of B, on the tile of a slot with a second effect
-static bool s_tile_ab_pedal[TILES];        // ... and next to its number the pedal symbol: the Nano's pedal has this effect
 static lv_obj_t *s_system;                 // the system page
 static lv_obj_t *s_tile_other[TILES];   // second line under the caption: the other effect of an A/B slot
 static uint32_t s_tile_ink[TILES];
@@ -180,6 +178,17 @@ static bool s_linked;         // connected to the Nano
 // The reverb switch with two settings: both names as rows on the tile, the one that is on filled (draw_pair).
 typedef struct { bool shown, on; int active; char names[2][16]; uint32_t color; } tile_pair_t;   // active: 0 / 1, -1 = neither
 static tile_pair_t s_tile_pair[TILES];
+// A slot with a second effect (and the reverb switch with two settings): the tile in two halves, A above and B below,
+// each with its symbol and name; the one that runs in its colour, the other one dimmed (user, 2026-11-13: "E geteilt")
+static bool s_tile_hint[TILES];   // the tile's line is a hint on holding its footswitch (not shown in the gig view)
+typedef struct {
+    bool shown, on;
+    int runs;                              // 0 = A, 1 = B
+    uint32_t color[2];
+    const lv_image_dsc_t *icon[2];
+    char names[2][24];
+} tile_split_t;
+static tile_split_t s_tile_split[TILES];
 static int s_tile_marks[TILES];                 // 0 = none, else 0x200 | 0x100 if the tile is filled | bit n = FX slot n on
                                                 // | bit 16 + n = the scene carries settings for slot n
 static uint32_t s_slot_type[NANO_FX_SLOTS];     // effects of the current preset (filled by ui_show_state)
@@ -738,10 +747,92 @@ static void draw_pair(lv_layer_t *layer, const lv_area_t *tile, int i)
     }
 }
 
+// A slot with a second effect as a tile in two halves: A above, B below, each with its symbol and name; the one that
+// runs in its colour (bright when the slot is on, dimmed when off), the other one barely tinted.
+static void draw_split(lv_layer_t *layer, const lv_area_t *tile, int i)
+{
+    const tile_split_t *sp = &s_tile_split[i];
+    const int pad = 4, gap = 4;
+    int mid = (tile->y1 + tile->y2) / 2;
+    for (int n = 0; n < 2; n++) {
+        lv_area_t a = { tile->x1 + pad, n ? mid + gap / 2 : tile->y1 + pad, tile->x2 - pad, n ? tile->y2 - pad : mid - gap / 2 };
+        bool runs = sp->runs == n;
+        uint32_t c = sp->color[n];
+        uint32_t lit = blend(c, SURF, 0.80f);   // (as the other tiles when on)
+        uint32_t bg = runs ? (sp->on ? lit : blend(c, SURF, TILE_DIM + 0.1f)) : blend(c, SURF, 0.10f);
+        uint32_t ink = runs ? (sp->on ? ink_for(lit) : TEXT) : 0x8E949B;
+        uint32_t mark = runs ? (sp->on ? ink : blend(c, 0xFFFFFF, 0.7f)) : blend(c, SURF, 0.45f);
+        lv_draw_rect_dsc_t r;
+        lv_draw_rect_dsc_init(&r);
+        r.radius = 9;
+        r.bg_color = lv_color_hex(bg);
+        if (!runs) {
+            r.border_width = 1;
+            r.border_color = lv_color_hex(blend(c, SURF, 0.22f));
+        }
+        lv_draw_rect(layer, &r, &a);
+        int h = lv_area_get_height(&a), x = a.x1 + 8;
+        if (sp->icon[n]) {   // the symbol at 28 px (scaled from 36)
+            const int size = h >= 80 ? 36 : 28, w = sp->icon[n]->header.w, ih = sp->icon[n]->header.h;
+            int cx = x + size / 2, cy = a.y1 + h / 2;
+            lv_draw_image_dsc_t d;
+            lv_draw_image_dsc_init(&d);
+            d.src = sp->icon[n];
+            d.recolor = lv_color_hex(mark);
+            d.recolor_opa = LV_OPA_COVER;
+            d.scale_x = d.scale_y = (int32_t)(256 * size / w);
+            d.pivot.x = w / 2;
+            d.pivot.y = ih / 2;
+            lv_area_t ia = { cx - w / 2, cy - ih / 2, cx - w / 2 + w - 1, cy - ih / 2 + ih - 1 };
+            lv_draw_image(layer, &d, &ia);
+            x += size + 6;
+        }
+        // The letter at the right edge (A's half: under the number)
+        lv_draw_label_dsc_t l;
+        lv_draw_label_dsc_init(&l);
+        l.font = &ui_font_16;
+        l.text = n ? "B" : "A";
+        l.color = lv_color_hex(runs && sp->on ? ink : 0xB9BDC2);
+        l.align = LV_TEXT_ALIGN_RIGHT;
+        int llh = lv_font_get_line_height(l.font);
+        lv_area_t la = { a.x2 - 30, a.y2 - llh - 4, a.x2 - 9, a.y2 - 4 };
+        lv_draw_label(layer, &l, &la);
+        // The name in up to two lines: the largest font it fits in
+        static const lv_font_t *const FONTS[] = { &ui_font_title_30, &ui_font_title_26, &ui_font_title_22, &ui_font_20, &ui_font_16 };
+        int room = a.x2 - 24 - x;   // (the letter)
+        int first = h >= 90 ? 0 : h >= 70 ? 1 : 2;
+        const lv_font_t *font = FONTS[4];
+        lv_point_t size;
+        for (int f = first; f < 5; f++) {
+            int ls = -lv_font_get_line_height(FONTS[f]) / 6;
+            lv_text_get_size(&size, sp->names[n], FONTS[f], 0, ls, room, LV_TEXT_FLAG_NONE);
+            if (size.y <= h - 8 && words_fit(sp->names[n], FONTS[f], room)) {
+                font = FONTS[f];
+                break;
+            }
+        }
+        lv_draw_label_dsc_t d;
+        lv_draw_label_dsc_init(&d);
+        d.font = font;
+        d.text = sp->names[n];
+        d.color = lv_color_hex(ink);
+        d.line_space = -lv_font_get_line_height(font) / 6;
+        lv_text_get_size(&size, sp->names[n], font, 0, d.line_space, room, LV_TEXT_FLAG_NONE);
+        lv_area_t t = { x, a.y1 + (h - size.y) / 2, x + room, a.y1 + (h - size.y) / 2 + size.y };
+        lv_draw_label(layer, &d, &t);
+    }
+}
+
 // A tile that is not active: its top row (symbol, caption, number) lies on the dimmed colour.
 static void on_tile_draw(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
+    if (s_tile_split[i].shown) {
+        lv_area_t a;
+        lv_obj_get_coords(lv_event_get_current_target_obj(e), &a);
+        draw_split(lv_event_get_layer(e), &a, i);
+        return;
+    }
     if (!s_tile_head[i] && !s_tile_marks[i] && !s_tile_pair[i].shown) return;
     lv_area_t a;
     lv_obj_get_coords(lv_event_get_current_target_obj(e), &a);
@@ -996,10 +1087,6 @@ static void build_tile(lv_obj_t *parent, int i)
     lv_obj_set_pos(s_tile_square[i], 8, 8);
     lv_obj_set_style_bg_opa(s_tile_square[i], LV_OPA_TRANSP, 0);
 
-    s_tile_square_b[i] = icon_square(tile, 40);
-    lv_obj_align(s_tile_square_b[i], LV_ALIGN_TOP_RIGHT, -8, 8);
-    lv_obj_set_style_bg_opa(s_tile_square_b[i], LV_OPA_TRANSP, 0);
-    lv_obj_set_hidden(s_tile_square_b[i], true);
 
     // (14 px and light grey: the 12 px captions and notes could not be read from standing height)
     s_tile_caption[i] = label(tile, &ui_font_14, TEXT);
@@ -1065,9 +1152,10 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
                      const lv_image_dsc_t *icon, const char *symbol)
 {
     // (user, 2026-11-13, from the P4: "aus gedimmt farbig hinterlegt, an hell farbig hinterlegt - live gut lesbar")
-    uint32_t bg = empty ? 0x0D0E10 : active ? color : blend(color, SURF, TILE_DIM);
-    uint32_t border = empty ? 0x24272B : active ? color : blend(color, SURF, TILE_DIM + 0.14f);
-    uint32_t ink = empty ? 0x5D6267 : active ? ink_for(color) : TEXT;
+    uint32_t lit = blend(color, SURF, 0.80f);   // on: the colour a little less glaring (calm tiles, 2026-11-13)
+    uint32_t bg = empty ? 0x0D0E10 : active ? lit : blend(color, SURF, TILE_DIM);
+    uint32_t border = empty ? 0x24272B : active ? lit : blend(color, SURF, TILE_DIM + 0.14f);
+    uint32_t ink = empty ? 0x5D6267 : active ? ink_for(lit) : TEXT;
     uint32_t mark = empty ? 0x3A3F45 : active ? ink : blend(color, 0xFFFFFF, 0.7f);   // symbol colour
     s_tile_ink[i] = ink;
     s_tile_accent[i] = mark;
@@ -1077,11 +1165,12 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     s_tiles_drawn = true;
     s_tile_pedal_type[i] = 0;   // set again by set_tile_pedal / set_tile_other, shown by show_tile_extras
     s_tile_other_type[i] = 0;
-    s_tile_ab_pedal[i] = false;
+    s_tile_hint[i] = false;
     s_tile_note[i] = NULL;
     s_tile_note_icon[i] = NULL;
     s_tile_marks[i] = 0;        // set again by show_scene_tiles
     memset(&s_tile_pair[i], 0, sizeof(s_tile_pair[i]));   // set again for the reverb switch with two settings
+    memset(&s_tile_split[i], 0, sizeof(s_tile_split[i]));
     lv_obj_t *t = s_tile[i];
     uint32_t head = 0;   // no coloured head band: the colour is in the fill, the symbol and the border
     if (head != s_tile_head[i]) {
@@ -1108,10 +1197,8 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     set_num_prop(s_tile_caption[i], LV_STYLE_X, (icon || symbol) ? 56 : 14);
     set_num_prop(s_tile_caption[i], LV_STYLE_Y, 10);
     set_num_prop(s_tile_caption[i], LV_STYLE_WIDTH, (icon || symbol) ? s_tile_w - 98 : s_tile_w - 56);
-    // (set_tile_ab changes these for a slot with a second effect)
     set_num_prop(s_tile_caption[i], LV_STYLE_TEXT_ALIGN, LV_TEXT_ALIGN_LEFT);
     set_align_if(s_tile_number[i], LV_ALIGN_TOP_RIGHT, -12, 6);
-    set_hidden(s_tile_square_b[i], true);
     set_num_prop(sq, LV_STYLE_BG_OPA, LV_OPA_TRANSP);
     set_num_prop(sq, LV_STYLE_BORDER_WIDTH, 0);
     set_num_prop(img, LV_STYLE_IMAGE_OPA, LV_OPA_COVER);
@@ -1128,44 +1215,9 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
 
     set_text(s_tile_name[i], name);
     set_color_prop(s_tile_name[i], LV_STYLE_TEXT_COLOR, ink);
-}
-
-// One of the two symbols on the tile of a slot with a second effect: the one that runs on a filled square, the
-// other one in a frame (strong enough to be seen from standing height).
-static void style_ab_square(lv_obj_t *sq, const nano_fx_model_t *model, const char *letter, bool running, uint32_t mark, uint32_t back)
-{
-    lv_obj_t *img = lv_obj_get_child(sq, 0), *sym = lv_obj_get_child(sq, 1);
-    const lv_image_dsc_t *icon = model ? NANO_ICONS[model->icon] : NULL;
-    uint32_t ink = running ? back : mark;
-    set_hidden(sq, false);
-    set_color_prop(sq, LV_STYLE_BG_COLOR, mark);
-    set_num_prop(sq, LV_STYLE_BG_OPA, running ? LV_OPA_COVER : LV_OPA_TRANSP);
-    set_num_prop(sq, LV_STYLE_BORDER_WIDTH, running ? 0 : 2);
-    set_color_prop(sq, LV_STYLE_BORDER_COLOR, mark);
-    set_num_prop(sq, LV_STYLE_BORDER_OPA, 215);
-    set_hidden(img, icon == NULL);
-    if (icon) {
-        set_image(img, icon);
-        set_color_prop(img, LV_STYLE_IMAGE_RECOLOR, ink);
-        set_num_prop(img, LV_STYLE_IMAGE_OPA, running ? LV_OPA_COVER : 230);
-    }
-    set_text(sym, icon ? "" : letter);   // (a model without a symbol, or A not read yet: its letter)
-    set_color_prop(sym, LV_STYLE_TEXT_COLOR, ink);
-}
-
-// The tile of a slot with a second effect (after set_tile): A's symbol at the left edge, B's at the right, the one
-// that runs filled; between them the footswitch number and a short caption ("PRE 1").
-static void set_tile_ab(int i, const char *caption, uint32_t a_type, uint32_t b_type, bool b_runs, bool active, uint32_t color)
-{
-    uint32_t mark = s_tile_accent[i], back = active ? color : TILE_OFF_BG;
-    style_ab_square(s_tile_square[i], nano_fx_model(a_type), "A", !b_runs, mark, back);
-    style_ab_square(s_tile_square_b[i], nano_fx_model(b_type), "B", b_runs, mark, back);
-    set_text(s_tile_caption[i], caption);
-    set_num_prop(s_tile_caption[i], LV_STYLE_X, 52);
-    set_num_prop(s_tile_caption[i], LV_STYLE_Y, 31);
-    set_num_prop(s_tile_caption[i], LV_STYLE_WIDTH, s_tile_w - 104 - 4);   // (- 4: the tile's border)
-    set_num_prop(s_tile_caption[i], LV_STYLE_TEXT_ALIGN, LV_TEXT_ALIGN_CENTER);
-    set_align_if(s_tile_number[i], LV_ALIGN_TOP_MID, 0, 2);
+    // Calm tiles (2026-11-13): symbol, big name, small number - no caption (the colour and the symbol say what it is)
+    set_ptr_prop(s_tile_number[i], LV_STYLE_TEXT_FONT, &ui_font_20);
+    if (!empty) set_text(s_tile_caption[i], "");
 }
 
 // After the tiles are set: the pedal drawings (FX tiles), the A/B lines and the marks of the scenes.
@@ -1178,12 +1230,16 @@ static void show_tile_extras(void)
     memcpy(drawn_types, s_slot_type, sizeof(drawn_types));
     for (int i = 0; i < TILES; i++) {
         static tile_pair_t drawn_pair[TILES];
-        if (s_tile_marks[i] != drawn_marks[i] || (types_changed && s_tile_marks[i]) || memcmp(&s_tile_pair[i], &drawn_pair[i], sizeof(drawn_pair[i]))) {
+        static tile_split_t drawn_split[TILES];
+        if (s_tile_marks[i] != drawn_marks[i] || (types_changed && s_tile_marks[i]) || memcmp(&s_tile_pair[i], &drawn_pair[i], sizeof(drawn_pair[i]))
+            || memcmp(&s_tile_split[i], &drawn_split[i], sizeof(drawn_split[i]))) {
             drawn_marks[i] = s_tile_marks[i];
             drawn_pair[i] = s_tile_pair[i];
+            drawn_split[i] = s_tile_split[i];
             lv_obj_invalidate(s_tile[i]);
         }
-        const lv_image_dsc_t *pedal = s_tile_pedal_type[i] ? nano_fx_pedal_tile(s_tile_pedal_type[i]) : NULL;
+        const lv_image_dsc_t *pedal = NULL;   // (calm tiles: no pedal drawing behind the name)
+        if (s_fullscreen && s_tile_hint[i]) s_tile_note[i] = NULL;   // the gig view: no hints on holding
         set_hidden(s_tile_pedal[i], pedal == NULL);
         if (pedal) {
             set_image(s_tile_pedal[i], pedal);
@@ -1193,13 +1249,9 @@ static void show_tile_extras(void)
         const lv_image_dsc_t *note_icon = s_tile_note[i] ? s_tile_note_icon[i] : NULL;
         bool line = other || s_tile_note[i];
         set_hidden(s_tile_other[i], !line);
-        set_hidden(s_tile_note_image[i], note_icon == NULL && !s_tile_ab_pedal[i]);
-        set_num_prop(s_tile_note_image[i], LV_STYLE_X, s_tile_ab_pedal[i] ? s_tile_w / 2 + 6 : 55);
-        set_num_prop(s_tile_note_image[i], LV_STYLE_Y, s_tile_ab_pedal[i] ? 8 : 30);
-        if (s_tile_ab_pedal[i]) {   // (a tile with two symbols has no line under its caption)
-            set_image(s_tile_note_image[i], UI_ICONS[UI_ICON_EXP]);
-            set_color_prop(s_tile_note_image[i], LV_STYLE_IMAGE_RECOLOR, s_tile_ink[i] == TEXT ? 0xC8CCD1 : s_tile_ink[i]);
-        }
+        set_hidden(s_tile_note_image[i], note_icon == NULL);
+        set_num_prop(s_tile_note_image[i], LV_STYLE_X, 55);
+        set_num_prop(s_tile_note_image[i], LV_STYLE_Y, 20);
         if (line) {
             if (s_tile_note[i]) snprintf(text, sizeof(text), "%s", s_tile_note[i]);
             else snprintf(text, sizeof(text), LV_SYMBOL_SHUFFLE " %.40s", nano_fx_name(other));
@@ -1208,6 +1260,8 @@ static void show_tile_extras(void)
             set_color_prop(s_tile_other[i], LV_STYLE_TEXT_COLOR, color);
             set_num_prop(s_tile_other[i], LV_STYLE_TEXT_OPA, 230);
             set_num_prop(s_tile_other[i], LV_STYLE_X, note_icon ? 77 : 56);
+            set_num_prop(s_tile_other[i], LV_STYLE_Y, 19);   // (no caption above it: beside the symbol)
+            set_num_prop(s_tile_other[i], LV_STYLE_WIDTH, s_tile_w - (note_icon ? 77 : 56) - 30);   // (up to the number)
             if (note_icon) {
                 set_image(s_tile_note_image[i], note_icon);
                 set_color_prop(s_tile_note_image[i], LV_STYLE_IMAGE_RECOLOR, color);
@@ -4472,6 +4526,7 @@ static void show_fixed_tiles(const ui_view_t *view)
     s_tile_note[0] = LV_SYMBOL_LOOP " Hold: Looper";
     s_tile_note[1] = view->scenes && !view->fx_mode ? "Hold: Presets" : "Hold: Scenes";
     s_tile_note_icon[1] = UI_ICONS[UI_ICON_SCENES];
+    s_tile_hint[0] = s_tile_hint[1] = true;
 }
 
 static const char *const WAH_NOTES[2][UI_WAH_RATES] = {
@@ -4497,13 +4552,25 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
         // The Nano's expression pedal moves or switches this effect (an assignment of the preset): said on the tile,
         // because what the pedal sets comes back whenever the Nano loads a model - whatever was set by hand
         bool pedal_amount = !empty && ((view->exp_amount >> slot) & 1), pedal_switch = !empty && ((view->exp_switch >> slot) & 1);
-        if (has_b) {
-            static const char *const SHORT[NANO_FX_SLOTS] = { "PRE 1", "PRE 2", "POST 1", "POST 2", "POST 3" };
-            set_tile_ab(2 + slot, SHORT[slot], b_runs ? view->ab_a_type[slot] : st->fx_type[slot], view->ab_b_type[slot], b_runs, on, color);
-            if (pedal_amount || pedal_switch) {
-                s_tile_ab_pedal[2 + slot] = true;
-                set_align_if(s_tile_number[2 + slot], LV_ALIGN_TOP_MID, -11, 2);
-            }
+        if (has_b) {   // the tile in two halves: A above, B below, the one that runs in its colour
+            uint32_t a_type = b_runs ? view->ab_a_type[slot] : st->fx_type[slot], b_type = view->ab_b_type[slot];
+            const nano_fx_model_t *ma = nano_fx_model(a_type), *mb = nano_fx_model(b_type);
+            const char *a_name = a_type ? nano_fx_name(a_type) : "A", *b_name = a_type == b_type ? "2nd setting" : nano_fx_name(b_type);
+            set_tile(2 + slot, "", "", color, on, false, NULL, NULL);
+            tile_split_t *sp = &s_tile_split[2 + slot];
+            sp->shown = true;
+            sp->on = on;
+            sp->runs = b_runs ? 1 : 0;
+            sp->color[0] = ma ? ma->color : 0x6A6A6A;
+            sp->color[1] = mb ? (a_type == b_type ? blend(mb->color, 0xFFFFFF, 0.5f) : mb->color) : 0x6A6A6A;
+            sp->icon[0] = ma ? NANO_ICONS[ma->icon] : NULL;
+            sp->icon[1] = mb ? NANO_ICONS[mb->icon] : NULL;
+            snprintf(sp->names[0], sizeof(sp->names[0]), "%s", a_name);
+            snprintf(sp->names[1], sizeof(sp->names[1]), "%s", b_name);
+            bool top_lit = !b_runs && on;   // the number sits on A's half
+            set_color_prop(s_tile_number[2 + slot], LV_STYLE_TEXT_COLOR, top_lit ? ink_for(blend(sp->color[0], SURF, 0.80f)) : 0x9AA0A6);
+            set_color_prop(s_tile[2 + slot], LV_STYLE_BG_COLOR, 0x0D0E10);
+            set_color_prop(s_tile[2 + slot], LV_STYLE_BORDER_COLOR, 0x24272B);
         }
         // A wah with auto-wah: under the caption how it moves ("Hold": while its footswitch is held)
         else if (!empty && view->wah_mode[slot] && view->wah_rate[slot] < UI_WAH_RATES) {
@@ -4568,6 +4635,26 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
         }
     }
     if (view->mix_slot >= 0 && view->mix_known) set_tile_pedal(7, st->fx_type[view->mix_slot]);
+    if (s_tile_pair[7].shown) {   // the switch as a tile in two halves too (as the A / B slots)
+        const tile_pair_t *pr = &s_tile_pair[7];
+        tile_split_t sp = { .shown = true, .on = pr->on, .runs = pr->active == 1 ? 1 : 0 };
+        for (int k = 0; k < 2; k++) {
+            const char *nm = pr->names[k];
+            bool lettered = nm[0] && nm[1] == ' ' && nm[2] == ' ';
+            snprintf(sp.names[k], sizeof(sp.names[k]), "%s", lettered ? nm + 3 : nm);
+            sp.icon[k] = NANO_ICONS[NANO_ICON_REVERB];
+        }
+        sp.color[0] = pr->color;
+        sp.color[1] = view->rev_b_type && !view->rp_used ? (nano_fx_model(view->rev_b_type) ? nano_fx_model(view->rev_b_type)->color : pr->color) : blend(pr->color, 0xFFFFFF, 0.5f);
+        set_text(s_tile_caption[7], "");
+        set_text(s_tile_name[7], "");
+        set_hidden(s_tile_square[7], true);
+        s_tile_pair[7].shown = false;
+        s_tile_split[7] = sp;
+        set_color_prop(s_tile_number[7], LV_STYLE_TEXT_COLOR, sp.runs == 0 && sp.on ? ink_for(blend(sp.color[0], SURF, 0.80f)) : 0x9AA0A6);
+        set_color_prop(s_tile[7], LV_STYLE_BG_COLOR, 0x0D0E10);   // (the halves carry the colour, as on the A / B slots)
+        set_color_prop(s_tile[7], LV_STYLE_BORDER_COLOR, 0x24272B);
+    }
 }
 
 // Looper mode: tile 1 is the mode (filled while the phone is connected), 2-8 the switches of the looper app with
@@ -4783,6 +4870,8 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     fit_names();
     // The pedal view: its field in the full-screen bar is filled while it is chosen; the pedals take the tiles' place
     // in FX mode
+    // (the field only where the pedals can be shown - FX mode, not the looper: in preset mode it did nothing)
+    set_hidden(s_gig_view, !view->fx_mode || view->looper);
     set_num_prop(s_gig_view, LV_STYLE_BG_OPA, s_pedal_view ? LV_OPA_COVER : LV_OPA_TRANSP);
     set_color_prop(s_gig_view, LV_STYLE_TEXT_COLOR, s_pedal_view ? INK : TEXT);
     bool pedals = s_pedal_view && s_fullscreen && view->fx_mode && !view->looper;
