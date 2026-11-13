@@ -827,7 +827,7 @@ static void on_app_write(uint32_t type, const uint8_t *payload, size_t len)
     switch (type) {
     case 3: {                                       // save: names may have changed; A / B as they are now go with it
         int preset = (int)nano_field_varint(payload, len, 3) + 1;
-        command('i', 1 | 4 | preset << 8);
+        command('i', 1 | 4 | preset << 8 | s_state.current_preset << 16);   // (the preset that is on: the copy's source)
         break;
     }
     case 111:                                       // rename: names may have changed
@@ -4518,6 +4518,56 @@ static void handle_midi(int arg)
 
 static void system_page(void);
 
+// A preset was saved into another place (the editor's "Copy preset", or the app saving under another number): the
+// Nano copies only its own preset, so what the controller keeps for it goes along - second effects (A / B), the two
+// reverb settings, scenes, auto-wah, Pos 1 / Pos 2. Before, the copy got what the replaced preset had left there.
+// Entries the source does not have are removed at the target.
+static void preset_extras_copy(int from, int to)
+{
+    if (from < 1 || from > NANO_PRESETS || to < 1 || to > NANO_PRESETS || from == to) return;
+    static const char *const FORMATS[] = { "pf1%02d", "pfa%02d", "rvb%02d", "rva%02d", "ab1%02d", "ab2%02d", "ab3%02d",
+        "ab4%02d", "aa1%02d", "aa2%02d", "aa3%02d", "aa4%02d", "rvp%02d", "rvq%02d", SCENE_STORE_KEY, SCENE_VALUES_KEY,
+        SCENE_CAPTURE_KEY, WAH_STORE_KEY };
+    nvs_handle_t nvs;
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
+    int copied = 0, removed = 0;
+    bool ok = true;
+    for (size_t i = 0; i < sizeof(FORMATS) / sizeof(FORMATS[0]); i++) {
+        char src[16], dst[16];
+        snprintf(src, sizeof(src), FORMATS[i], from);
+        snprintf(dst, sizeof(dst), FORMATS[i], to);
+        size_t size = 0;
+        if (nvs_get_blob(nvs, src, NULL, &size) != ESP_OK || !size) {
+            if (nvs_erase_key(nvs, dst) == ESP_OK) removed++;
+            continue;
+        }
+        uint8_t *buf = malloc(size);
+        if (!buf) { ok = false; continue; }
+        if (nvs_get_blob(nvs, src, buf, &size) == ESP_OK && nvs_set_blob(nvs, dst, buf, size) == ESP_OK) copied++;
+        else ok = false;
+        free(buf);
+    }
+    int f = from - 1, t = to - 1;
+    memcpy(s_mixes.pos[t], s_mixes.pos[f], sizeof(s_mixes.pos[t]));
+    if (s_mixes.set[f / 8] & (1u << (f % 8))) s_mixes.set[t / 8] |= (uint8_t)(1u << (t % 8));
+    else s_mixes.set[t / 8] &= (uint8_t)~(1u << (t % 8));
+    if (nvs_set_blob(nvs, MIX_ALL_KEY, &s_mixes, sizeof(s_mixes)) != ESP_OK) ok = false;
+    if (nvs_commit(nvs) != ESP_OK) ok = false;
+    nvs_close(nvs);
+    // The source is the preset that is on: its A / B as they are now (which of the two plays, the A values read)
+    for (int i = 0; i < AB_COUNT; i++) {
+        if (s_ab[i].preset != from || !s_ab[i].b.type) continue;
+        ab_t copy = s_ab[i];
+        copy.preset = to;
+        copy.b.reserved = (uint8_t)((copy.b.reserved & ~1) | (copy.active == 1 ? 1 : 0));
+        ab_store(&copy);
+        if (copy.a_count) ab_store_a(&copy);   // (without A values read here the copied entry stays)
+    }
+    ESP_LOGI(TAG, "Preset %d saved as %d: the controller's entries went along (%d copied, %d old ones removed)", from, to,
+             copied, removed);
+    if (!ok) ui_show_message("Not all of the controller's settings went with the copy (memory full?).");
+}
+
 static void handle_command(char c, int arg)
 {
     if (c == ':') {                                    // the pedal's position (see on_message)
@@ -4697,7 +4747,8 @@ static void handle_command(char c, int arg)
     case 'u': source_throttle_done(); break;
     case 'y': cab_settings_command(arg); break;
     case 'i':   // the app changed something: read it shortly after (once for several changes)
-        if ((arg & 4) && (arg >> 8) == s_state.current_preset) ab_note_saved(arg >> 8);   // (the app saved this preset)
+        if ((arg & 4) && ((arg >> 8) & 0xFF) == s_state.current_preset) ab_note_saved(s_state.current_preset);   // (the app saved this preset)
+        else if (arg & 4) preset_extras_copy((arg >> 16) & 0xFF, (arg >> 8) & 0xFF);   // ... into another place: a copy
         if (arg & 1) s_app_names_changed = true;
         if (arg & 2) s_app_exp_changed = true;
         esp_timer_stop(s_app_read_timer);
