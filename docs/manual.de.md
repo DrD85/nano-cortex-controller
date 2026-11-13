@@ -2,7 +2,7 @@
 
 Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../README.de.md); wie die Firmware gebaut wird und wie sie mit dem Nano spricht, steht in [development.de.md](development.de.md).
 
-**Inhalt:** [Der Bildschirm](#der-bildschirm) · [Fußschalter und Kacheln](#fußschalter-und-kacheln) · [Lange drücken](#lange-drücken) · [Eigene Bänke](#eigene-bänke) · [Setlist](#setlist) · [Szenen](#szenen) · [Expression-Pedal](#expression-pedal) · [Capture und Cab/IR](#capture-und-cabir) · [FX-Editor](#fx-editor) · [Reverb-Schalter](#reverb-schalter-fußschalter-8) · [Zweiter Effekt (A / B)](#zweiter-effekt-a-und-b-auf-einem-fx-slot) · [Auto-Wah](#auto-wah) · [Stimmgerät](#stimmgerät) · [USB-Audio-Lautstärke](#usb-audio-lautstärke) · [Bluetooth-MIDI](#bluetooth-midi) · [Looper-Modus](#looper-modus-eine-looper-app-auf-dem-telefon) · [Editor über den Controller](#nano-cortex-editor-über-den-controller) · [Fußschalter-Learn](#fußschalter-learn) · [Fußschalter (Verkabelung)](#fußschalter) · [System](#system-speicher-sicherung-und-selbst-neustart) · [Was wo gespeichert ist](#was-wo-gespeichert-ist)
+**Inhalt:** [Der Bildschirm](#der-bildschirm) · [Fußschalter und Kacheln](#fußschalter-und-kacheln) · [Lange drücken](#lange-drücken) · [Eigene Bänke](#eigene-bänke) · [Setlist](#setlist) · [Szenen](#szenen) · [Expression-Pedal](#expression-pedal) · [Capture und Cab/IR](#capture-und-cabir) · [FX-Editor](#fx-editor) · [Reverb-Schalter](#reverb-schalter-fußschalter-8) · [Zweiter Effekt (A / B)](#zweiter-effekt-a-und-b-auf-einem-fx-slot) · [Auto-Wah](#auto-wah) · [Stimmgerät](#stimmgerät) · [USB-Audio-Lautstärke](#usb-audio-lautstärke) · [Bluetooth-MIDI](#bluetooth-midi) · [Looper-Modus](#looper-modus-eine-looper-app-auf-dem-telefon) · [Editor über den Controller](#nano-cortex-editor-über-den-controller) · [Cortex Cloud](#cortex-cloud-über-den-controller) · [Fußschalter-Learn](#fußschalter-learn) · [Fußschalter (Verkabelung)](#fußschalter) · [System](#system-speicher-sicherung-und-selbst-neustart) · [Was wo gespeichert ist](#was-wo-gespeichert-ist)
 
 ## Der Bildschirm
 
@@ -227,6 +227,10 @@ Play-Knopf einer Library-Zeile spielt dieses Capture oder IR anstelle des Preset
 Leiste unten hat **Stop** und **Load**, Schließen der Library beendet es. **Cab-Einstellungen**: lange auf das CAB / IR-Feld drücken – **OUTPUT** (−96 dB bis +12 dB),
 **HIGH PASS** (20–800 Hz) und **LOW PASS** (1–20 kHz) des aktiven Cabs, beim Öffnen vom Nano gelesen.
 Alles gehört zum Preset: Änderungen sind sofort zu hören, **SAVE** behält sie.
+
+**Die Drehschalter des Nano**: Drehst du am Nano Fußschalter I (Capture-Slots) oder II (Cab-Slots), zeigt der
+Controller, was er wählt – den Slot davor, den jetzigen (groß) und den danach, die Bank und *Back to* den Slot, bei dem
+das Drehen begann. Zwei Sekunden nach dem letzten Schritt schließt die Anzeige.
 
 ## FX-Editor
 
@@ -501,6 +505,16 @@ Ohne Controller (oder bevor er verbunden ist) verbindet sich die App wie bisher 
   den verbundenen Editor. Er nimmt sie als die Controller, die der Looper-Modus sendet (102–108 auf Kanal 16) –
   ab Werk startet und pausiert Fußschalter 2 seinen Jamtrack-Player, 7 geht zum vorigen Track und 8 zum nächsten;
   mit MIDI Learn im Editor legst du sie auf etwas anderes. Ein Telefon braucht es dafür nicht.
+
+## Cortex Cloud über den Controller
+
+*Settings › Nano › Cortex Cloud through the board* (ab Werk aus) lässt die **Cortex-Cloud-App** auf dem Telefon den
+Nano über den Controller nutzen, während der Controller verbunden bleibt: Der Controller zeigt sich dann mit der
+Kennung des Nano, und die App hält ihn für den Nano. Alles, was die App tut, geht an den Nano weiter – Einstellungen,
+Presets und das Laden von Captures und IRs aus der Cloud in die Bibliothek des Nano. Schließe die App (oder schalte
+die Einstellung aus), wenn du fertig bist; die Fußschalter des Controllers arbeiten die ganze Zeit. Mit der
+Einstellung bietet sich der Controller der Cortex-Cloud-App und dem Bluetooth-MIDI eines Telefons (dem Looper)
+abwechselnd an.
 
 ## Kachel-Anordnung: 6 oder 8 Felder
 

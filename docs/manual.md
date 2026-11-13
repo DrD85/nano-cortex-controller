@@ -2,7 +2,7 @@
 
 Every function in detail. The short illustrated guide is in the [README](../README.md); building the firmware and how it talks to the Nano are in [development.md](development.md).
 
-**Contents:** [The screen](#the-screen) · [Footswitches and tiles](#footswitches-and-tiles) · [Long presses](#long-presses) · [Own banks](#own-banks) · [Set list](#set-list) · [Scenes](#scenes) · [Expression pedal](#expression-pedal) · [Capture and Cab/IR](#capture-and-cabir) · [FX editor](#fx-editor) · [Reverb switch](#reverb-switch-footswitch-8) · [Second effect (A / B)](#second-effect-a-and-b-on-an-fx-slot) · [Auto-wah](#auto-wah) · [Tuner](#tuner) · [USB audio volume](#usb-audio-volume) · [Bluetooth MIDI](#bluetooth-midi) · [Looper mode](#looper-mode-a-looper-app-on-a-phone) · [Editor through the controller](#nano-cortex-editor-through-the-controller) · [Footswitch learn](#footswitch-learn) · [Footswitches (wiring)](#footswitches) · [System](#system-memory-backup-and-self-restart) · [What is stored where](#what-is-stored-where)
+**Contents:** [The screen](#the-screen) · [Footswitches and tiles](#footswitches-and-tiles) · [Long presses](#long-presses) · [Own banks](#own-banks) · [Set list](#set-list) · [Scenes](#scenes) · [Expression pedal](#expression-pedal) · [Capture and Cab/IR](#capture-and-cabir) · [FX editor](#fx-editor) · [Reverb switch](#reverb-switch-footswitch-8) · [Second effect (A / B)](#second-effect-a-and-b-on-an-fx-slot) · [Auto-wah](#auto-wah) · [Tuner](#tuner) · [USB audio volume](#usb-audio-volume) · [Bluetooth MIDI](#bluetooth-midi) · [Looper mode](#looper-mode-a-looper-app-on-a-phone) · [Editor through the controller](#nano-cortex-editor-through-the-controller) · [Cortex Cloud](#cortex-cloud-through-the-controller) · [Footswitch learn](#footswitch-learn) · [Footswitches (wiring)](#footswitches) · [System](#system-memory-backup-and-self-restart) · [What is stored where](#what-is-stored-where)
 
 ## The screen
 
@@ -214,6 +214,10 @@ of a library row plays that capture or IR in place of the preset's one, without 
 has **Stop** and **Load**, closing the library ends it. **Cab settings**: a long press on the CAB / IR card – **OUTPUT** (−96 dB to +12 dB),
 **HIGH PASS** (20–800 Hz) and **LOW PASS** (1–20 kHz) of the active cab, read from the Nano when the dialog opens.
 All of them are part of the preset: changes are heard at once, **SAVE** keeps them.
+
+**The Nano's rotary footswitches**: turning footswitch I (capture slots) or II (cab slots) on the Nano shows on the
+controller what it selects – the slot before, the one now (large) and the one after, the bank, and *Back to* the slot
+the turning started from. It closes two seconds after the last step.
 
 ## FX editor
 
@@ -477,6 +481,15 @@ Without the controller (or before it has connected) the app connects to the Nano
   on to the connected editor. It takes them as the controllers the looper mode sends (102–108 on channel 16) – by
   default footswitch 2 plays and pauses its jam track player, 7 goes to the previous track and 8 to the next; MIDI
   Learn in the editor assigns them to anything else. No phone is needed for this.
+
+## Cortex Cloud through the controller
+
+*Settings › Nano › Cortex Cloud through the board* (off by default) lets the **Cortex Cloud app** on the phone use
+the Nano through the controller, while the controller stays connected: the controller then shows itself with the
+Nano's own identity, and the app takes it for the Nano. Everything the app does goes on to the Nano – settings,
+presets, and downloading captures and IRs from the cloud into the Nano's library. Close the app (or switch the
+setting off) when you are done; the controller's footswitches work all the while. With the setting on the
+controller offers itself to the Cortex Cloud app and to a phone's Bluetooth MIDI (the looper) in turns.
 
 ## Tile layout: 6 or 8 fields
 
