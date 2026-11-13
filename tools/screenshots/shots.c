@@ -151,7 +151,7 @@ static void close_all(void)
 {
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_mix_editor, s_learn,
                                    s_layout, s_settings, s_cab_settings, s_amp, s_toast, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
-                                   s_setlist, s_scene_cap, s_metro };
+                                   s_setlist, s_scene_cap, s_metro, s_rot };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) lv_obj_set_hidden(overlays[i], true);
     update_main_hidden();
 }
@@ -428,6 +428,14 @@ int main(void)
     shot("43-capture-listening");
     ui_set_listening(0, 0, "", false);
     close_all();
+
+    {   // the wheel while footswitch I of the Nano is turned
+        ui_rotate_t rot = { .cab = false, .slot = 3, .from = 2, .prev = st.capture_names[1], .name = st.capture_names[2],
+                            .next = st.capture_names[3], .from_name = st.capture_names[1] };
+        ui_show_rotate(&rot);
+        shot("48-rotate-capture");
+        close_all();
+    }
 
     {   // tempo and metronome (NanOS 2.3.0)
         ui_tempo_t tempo = { .supported = true, .global = true, .muted = false, .tempo = 120, .volume_db = -6, .time_sig = 2 };

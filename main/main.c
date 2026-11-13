@@ -3692,6 +3692,81 @@ static void select_cab(int slot)
     schedule_refresh(300);
 }
 
+// ---- the Nano's rotary footswitches on the screen (1.17.0) ----
+// Turning footswitch I steps through the capture slots, II through the cab slots - inside the Nano, which has no
+// display. It reports each step as a SelectorValue (28) { 3: selector, 4: value }; the board shows a wheel with the
+// capture / cab before, now and after, and "Back to" the one the turning started from. A selector that does not say
+// which (or one with another selector) is shown after the state read that follows it. Not after a preset change on
+// the Nano (that changes the capture too) and not for the echo of our own selections.
+static struct { bool on, cab, pending; int from, before_capture, before_cab; int64_t last_us, quiet_until_us; } s_rot;
+
+static const char *rot_name(bool cab, int slot)
+{
+    if (slot == 0) return "Bypass";
+    if (cab) return slot <= NANO_CAB_SLOTS && s_state.cab_names[slot - 1][0] ? s_state.cab_names[slot - 1] : "-";
+    return slot <= NANO_CAPTURE_SLOTS && s_state.capture_names[slot - 1][0] ? s_state.capture_names[slot - 1] : "-";
+}
+
+static void rotate_show(bool cab, int slot)
+{
+    int64_t now = esp_timer_get_time();
+    if (!s_rot.on || s_rot.cab != cab || now - s_rot.last_us > 2500 * 1000) s_rot.from = cab ? s_rot.before_cab : s_rot.before_capture;
+    s_rot.on = true;
+    s_rot.cab = cab;
+    s_rot.last_us = now;
+    int last = cab ? NANO_CAB_SLOTS : NANO_CAPTURE_SLOTS;
+    ui_rotate_t r = { .cab = cab, .slot = slot, .from = s_rot.from,
+                      .prev = slot > 1 ? rot_name(cab, slot - 1) : "", .name = rot_name(cab, slot),
+                      .next = slot >= 1 && slot < last ? rot_name(cab, slot + 1) : "", .from_name = rot_name(cab, s_rot.from) };
+    ESP_LOGI(TAG, "Turned on the Nano: %s slot %d (%s)", cab ? "cab" : "capture", slot, r.name);
+    ui_show_rotate(&r);
+}
+
+static void rotate_selector(const uint8_t *payload, size_t len)
+{
+    int64_t now = esp_timer_get_time();
+    if (now - s_last_change_us < 700 * 1000 || now < s_rot.quiet_until_us) return;   // our own / a preset change
+    s_rot.before_capture = s_state.capture_slot;
+    s_rot.before_cab = s_state.cab_slot;
+    int which = (int)nano_field_varint(payload, len, 3), value = (int)nano_field_varint(payload, len, 4);
+    int bank = s_state.capture_slot ? (s_state.capture_slot - 1) / 5 + 1 : 1, slot;
+    bool cab;
+    switch (which) {
+    case 1: cab = false; slot = value ? (bank - 1) * 5 + value : 0; break;   // position in the active bank
+    case 4: cab = false; slot = value + 1; break;                            // slot 0-24 over all banks
+    case 3: cab = true; slot = value; break;
+    default: s_rot.pending = true; return;                                   // shown after the state read
+    }
+    if (slot < 0 || slot > (cab ? NANO_CAB_SLOTS : NANO_CAPTURE_SLOTS)) return;
+    if (cab) {
+        s_state.cab_slot = slot;
+        if (slot) strlcpy(s_state.cab, s_state.cab_names[slot - 1], sizeof(s_state.cab));
+    } else {
+        s_state.capture_slot = slot;
+        if (slot) strlcpy(s_state.capture, s_state.capture_names[slot - 1], sizeof(s_state.capture));
+    }
+    show();
+    rotate_show(cab, slot);
+}
+
+// after a state read that followed a selector we could not place
+static void rotate_after_state(void)
+{
+    if (!s_rot.pending) return;
+    s_rot.pending = false;
+    if (esp_timer_get_time() < s_rot.quiet_until_us) return;
+    if (s_state.capture_slot != s_rot.before_capture) rotate_show(false, s_state.capture_slot);
+    else if (s_state.cab_slot != s_rot.before_cab) rotate_show(true, s_state.cab_slot);
+}
+
+// "Back to": the slot the turning started from
+static void rotate_back(int arg)
+{
+    if (arg >> 8) select_cab(arg & 0xFF);
+    else select_capture(arg & 0xFF);
+    s_rot.on = false;
+}
+
 // Long press on a preset tile: arg = bank << 14 | slot << 11 | colour << 7 | preset (0 = back to default).
 static void set_bank_slot(int arg)
 {
@@ -4453,6 +4528,7 @@ static void handle_command(char c, int arg)
     case 'k': step_bank(arg); break;
     case 'L': load_library_item(arg); break;
     case '.': listen_command(arg); break;
+    case '"': rotate_back(arg); break;
     case '\'': metro_command(arg); break;
     case 'Y': if (!s_library) request_library(); break;
     case 'I': select_cab(arg); break;
@@ -4599,6 +4675,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         }
         bool names = nano_state_apply(&s_state, payload, len);
         fx_follow_switches();
+        rotate_after_state();
         listen_state();
         metro_show();
         // Right after an A/B swap a reply sent before the model change still names the previous model: the slot
@@ -4861,6 +4938,8 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         break;
     }
     case NANO_MSG_SET_PRESET_SLOTS: {   // preset changed on the Nano itself
+        s_rot.quiet_until_us = esp_timer_get_time() + 1500 * 1000;   // (its capture change is no turning)
+        s_rot.pending = false;
         ab_leave_preset();   // (before the number changes: edits belong to the preset that was on)
         s_read_busy_until_us = esp_timer_get_time() + PARAM_BUSY_US;   // the Nano is loading: no value reads meanwhile
         nano_state_apply_preset_change(&s_state, payload, len);
@@ -4955,6 +5034,8 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         break;
     }
     case NANO_MSG_SELECTOR:
+        rotate_selector(payload, len);
+        // fall through
     case NANO_MSG_BYPASS:
     case NANO_MSG_CAB_SETTING:
     case NANO_MSG_FX_VALUE:

@@ -111,6 +111,7 @@ static lv_obj_t *s_toast;
 static lv_obj_t *s_usb, *s_usb_slider, *s_usb_value, *s_usb_info, *s_usb_minus, *s_usb_plus, *s_usb_reset;
 static float s_usb_db;
 static lv_obj_t *s_cab_settings, *s_cab_info, *s_amp, *s_amp_info;
+static lv_obj_t *s_rot;   // the wheel while a rotary footswitch of the Nano is turned
 // Settings screen (1.17.0): topics on the left, the chosen one on the right; MIDI, USB audio and System are its pages
 enum { SET_NANO, SET_MIDI, SET_USB, SET_LAYOUT, SET_SWITCHES, SET_SYSTEM, SET_COUNT };
 static lv_obj_t *s_settings, *s_set_content, *s_set_item[SET_COUNT], *s_set_item_label[SET_COUNT], *s_set_item_icon[SET_COUNT];
@@ -314,7 +315,7 @@ static void on_gesture(lv_event_t *e)
     // Swipes work only on the main screen, not in an open dialog.
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi, s_layout,
                                    s_settings, s_cab_settings, s_amp, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
-                                   s_setlist, s_scene_cap, s_system, s_metro };
+                                   s_setlist, s_scene_cap, s_system, s_metro, s_rot };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
         if (overlays[i] && !lv_obj_is_hidden(overlays[i])) return;
     }
@@ -1827,6 +1828,105 @@ static void build_metro(lv_obj_t *screen)
     s_metro_sound[0] = small_button(s_metro, 312, 358, 132, 44, "Blip", on_metro_sound, 0);
     s_metro_sound[1] = small_button(s_metro, 448, 358, 132, 44, "Digital", on_metro_sound, 1);
     lv_obj_set_hidden(s_metro, true);
+}
+
+// ---- the wheel while a rotary footswitch of the Nano is turned (1.17.0) ----
+static lv_obj_t *s_rot_square, *s_rot_title, *s_rot_where, *s_rot_dots[5], *s_rot_prev, *s_rot_now, *s_rot_name, *s_rot_next;
+static lv_obj_t *s_rot_back, *s_rot_back_label;
+static lv_timer_t *s_rot_timer;
+static int s_rot_back_code;
+
+static void rot_close(lv_timer_t *t) { lv_obj_set_hidden(s_rot, true); lv_timer_pause(s_rot_timer); }
+static void on_rot_back(lv_event_t *e)
+{
+    lv_obj_set_hidden(s_rot, true);
+    lv_timer_pause(s_rot_timer);
+    send('"', s_rot_back_code);
+}
+
+void ui_show_rotate(const ui_rotate_t *r)
+{
+    lvgl_port_lock(0);
+    set_icon_square(s_rot_square, TEXT, NANO_ICONS[r->cab ? NANO_ICON_CAB : NANO_ICON_CAPTURE], true);
+    lv_label_set_text(s_rot_title, r->cab ? "CAB / IR  \xC2\xB7  FOOTSWITCH II" : "CAPTURE  \xC2\xB7  FOOTSWITCH I");
+    int position = r->cab ? r->slot : (r->slot ? (r->slot - 1) % 5 + 1 : 0);
+    if (!r->slot) lv_label_set_text(s_rot_where, "Bypass");
+    else if (r->cab) lv_label_set_text_fmt(s_rot_where, "Slot %d of 5", r->slot);
+    else lv_label_set_text_fmt(s_rot_where, "Bank %d  \xC2\xB7  slot %d", (r->slot - 1) / 5 + 1, position);
+    for (int i = 0; i < 5; i++) {
+        bool on = i + 1 == position;
+        lv_obj_set_style_bg_opa(s_rot_dots[i], on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_color(s_rot_dots[i], lv_color_hex(on ? GREEN : 0x4A4E53), 0);
+    }
+    lv_label_set_text(s_rot_prev, r->prev);
+    lv_label_set_text(s_rot_name, r->name);
+    lv_label_set_text(s_rot_next, r->next);
+    bool back = r->from != r->slot;
+    lv_obj_set_hidden(s_rot_back, !back);
+    if (back) lv_label_set_text_fmt(s_rot_back_label, "Back to %.40s", r->from_name);
+    s_rot_back_code = (r->cab ? 1 << 8 : 0) | (r->from & 0xFF);
+    lv_obj_set_hidden(s_rot, false);
+    lv_obj_move_foreground(s_rot);
+    lv_timer_reset(s_rot_timer);
+    lv_timer_resume(s_rot_timer);
+    lvgl_port_unlock();
+}
+
+static void build_rotate(lv_obj_t *screen)
+{
+    s_rot = panel(screen, 110, 70, 580, 340);
+    s_rot_square = icon_square(s_rot, 44);
+    lv_obj_set_pos(s_rot_square, 22, 20);
+    s_rot_title = label(s_rot, CAPTION_FONT, MUTED);
+    lv_obj_set_style_text_letter_space(s_rot_title, 2, 0);
+    lv_obj_set_pos(s_rot_title, 78, 20);
+    s_rot_where = label(s_rot, &ui_font_20, TEXT);
+    lv_obj_set_pos(s_rot_where, 78, 40);
+    for (int i = 0; i < 5; i++) {
+        lv_obj_t *dot = lv_obj_create(s_rot);
+        lv_obj_remove_style_all(dot);
+        lv_obj_set_size(dot, 14, 14);
+        lv_obj_set_pos(dot, 470 + i * 20, 32);
+        lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_width(dot, 2, 0);
+        lv_obj_set_style_bg_color(dot, lv_color_hex(GREEN), 0);
+        s_rot_dots[i] = dot;
+    }
+    s_rot_prev = label(s_rot, &ui_font_20, 0x5E6369);
+    lv_obj_set_width(s_rot_prev, 536);
+    lv_obj_set_style_text_align(s_rot_prev, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(s_rot_prev, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(s_rot_prev, 22, 96);
+    s_rot_now = lv_obj_create(s_rot);   // the one now: large, on green
+    lv_obj_remove_style_all(s_rot_now);
+    lv_obj_set_size(s_rot_now, 536, 74);
+    lv_obj_set_pos(s_rot_now, 22, 132);
+    lv_obj_set_style_radius(s_rot_now, 14, 0);
+    lv_obj_set_style_bg_color(s_rot_now, lv_color_hex(0x122417), 0);
+    lv_obj_set_style_bg_opa(s_rot_now, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_rot_now, 2, 0);
+    lv_obj_set_style_border_color(s_rot_now, lv_color_hex(GREEN), 0);
+    s_rot_name = label(s_rot_now, &ui_font_title_30, 0xFFFFFF);
+    lv_obj_set_width(s_rot_name, 510);
+    lv_obj_set_style_text_align(s_rot_name, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(s_rot_name, LV_LABEL_LONG_DOT);
+    lv_obj_center(s_rot_name);
+    s_rot_next = label(s_rot, &ui_font_20, 0x5E6369);
+    lv_obj_set_width(s_rot_next, 536);
+    lv_obj_set_style_text_align(s_rot_next, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(s_rot_next, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(s_rot_next, 22, 218);
+    lv_obj_t *hint = label(s_rot, &ui_font_12, 0x7C8187);
+    lv_label_set_text(hint, "closes by itself after 2 s");
+    lv_obj_set_pos(hint, 22, 296);
+    s_rot_back = small_button(s_rot, 300, 278, 258, 46, "Back", on_rot_back, 0);
+    s_rot_back_label = lv_obj_get_child(s_rot_back, 0);
+    lv_obj_set_width(s_rot_back_label, 240);
+    lv_label_set_long_mode(s_rot_back_label, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(s_rot_back_label, LV_TEXT_ALIGN_CENTER, 0);
+    s_rot_timer = lv_timer_create(rot_close, 2000, NULL);
+    lv_timer_pause(s_rot_timer);
+    lv_obj_set_hidden(s_rot, true);
 }
 
 // ---- own banks: preset and colour per switch (long press on a preset tile) ----
@@ -4233,6 +4333,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     build_setlist(screen);
     build_system(screen);
     build_settings(screen);   // (after MIDI, USB and System: it takes them in)
+    build_rotate(screen);
     build_scene_capture(screen);
     build_toast(screen);
     build_splash(screen);

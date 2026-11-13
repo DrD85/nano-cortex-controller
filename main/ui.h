@@ -189,6 +189,15 @@ typedef struct {
 } ui_tempo_t;
 void ui_set_tempo(const ui_tempo_t *t);
 
+// The wheel while a rotary footswitch of the Nano is turned: before / now / after; "Back to" sends '"' with
+// (cab ? 1 : 0) << 8 | from. It closes by itself 2 s after the last call.
+typedef struct {
+    bool cab;
+    int slot, from;            // capture 1-25 / cab 1-5, 0 = bypass
+    const char *prev, *name, *next, *from_name;
+} ui_rotate_t;
+void ui_show_rotate(const ui_rotate_t *r);
+
 // NanOS version from the state (-1 = unknown), for the settings screen's Nano page.
 void ui_set_nano_firmware(int major, int minor);
 
