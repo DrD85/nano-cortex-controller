@@ -110,7 +110,15 @@ static lv_obj_t *s_bank_editor, *s_bank_title, *s_bank_swatch[UI_BANK_COLOR_COUN
 static lv_obj_t *s_toast;
 static lv_obj_t *s_usb, *s_usb_slider, *s_usb_value, *s_usb_info, *s_usb_minus, *s_usb_plus, *s_usb_reset;
 static float s_usb_db;
-static lv_obj_t *s_volume, *s_volume_info, *s_cab_settings, *s_cab_info, *s_amp, *s_amp_info;
+static lv_obj_t *s_cab_settings, *s_cab_info, *s_amp, *s_amp_info;
+// Settings screen (1.17.0): topics on the left, the chosen one on the right; MIDI, USB audio and System are its pages
+enum { SET_NANO, SET_MIDI, SET_USB, SET_LAYOUT, SET_SWITCHES, SET_SYSTEM, SET_COUNT };
+static lv_obj_t *s_settings, *s_set_content, *s_set_item[SET_COUNT], *s_set_item_label[SET_COUNT], *s_set_item_icon[SET_COUNT];
+static lv_obj_t *s_set_badge[SET_COUNT], *s_set_page[SET_COUNT], *s_set_nano_text, *s_set_layout_text;
+static int s_set_topic = SET_NANO;
+static bool s_nano_connected;
+static int s_nano_fw_major = -1, s_nano_fw_minor = -1;
+static lv_obj_t *s_midi_close, *s_midi_more[2], *s_usb_close, *s_system_close;
 static int s_capture_volume = NANO_CAPTURE_VOLUME_0DB;
 static int s_amp_values[NANO_AMP_KNOBS];
 static uint32_t s_volume_tick, s_amp_tick;
@@ -305,8 +313,8 @@ static void on_gesture(lv_event_t *e)
     if (s_splash) return;   // start screen
     // Swipes work only on the main screen, not in an open dialog.
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi, s_layout,
-                                   s_volume, s_cab_settings, s_amp, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
-                                   s_setlist, s_scene_cap, s_system };
+                                   s_settings, s_cab_settings, s_amp, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
+                                   s_setlist, s_scene_cap, s_system, s_metro };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
         if (overlays[i] && !lv_obj_is_hidden(overlays[i])) return;
     }
@@ -2306,13 +2314,6 @@ static void on_midi_device(lv_event_t *e)
 
 static void fill_midi(void);
 
-static void open_midi(lv_event_t *e)
-{
-    fill_midi();
-    lv_obj_set_hidden(s_midi, false);
-    lv_obj_move_foreground(s_midi);
-    send('X', 1);
-}
 
 // ---- USB playback volume ----
 
@@ -2374,16 +2375,6 @@ static void on_usb_button(lv_event_t *e)
     else usb_changed(s_usb_db + (what > 0 ? 1.0f : -1.0f), true);
 }
 
-static void open_usb(lv_event_t *e)
-{
-    // The value can also be changed in the app: read it each time.
-    set_usb_enabled(false);
-    lv_label_set_text(s_usb_value, "");
-    lv_label_set_text(s_usb_info, "Reading the Nano's settings...");
-    lv_obj_set_hidden(s_usb, false);
-    lv_obj_move_foreground(s_usb);
-    send('V', 0);
-}
 
 void ui_set_usb_gain(float db)
 {
@@ -2406,7 +2397,7 @@ static void build_usb(lv_obj_t *screen)
     lv_obj_set_width(s_usb_value, 160);
     lv_obj_set_style_text_align(s_usb_value, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_align(s_usb_value, LV_ALIGN_TOP_RIGHT, -76, 16);
-    close_button(s_usb, 460, 12, on_usb_button, 0);
+    s_usb_close = close_button(s_usb, 460, 12, on_usb_button, 0);
 
     s_usb_minus = small_button(s_usb, 20, 80, 60, 52, "", on_usb_button, -1);
     lv_obj_t *minus = lv_obj_get_child(s_usb_minus, 0);
@@ -2538,43 +2529,14 @@ static void build_level_row(lv_obj_t *parent, int row, int x, int y, int w)
     lv_label_set_text(plus, LV_SYMBOL_PLUS);
 }
 
+// The capture volume: the first row of the capture dialog (1.17.0; it had a dialog and a top bar button of its own)
 static void show_capture_volume(void)
 {
     lv_slider_set_value(s_level_slider[0], s_capture_volume, LV_ANIM_OFF);
     show_level_value(0);
-    lv_label_set_text(s_volume_info, s_capture_slot ? lv_label_get_text(s_capture) : "The capture is bypassed.");
 }
 
-static void on_volume_button(lv_event_t *e)
-{
-    if ((int)(intptr_t)lv_event_get_user_data(e) == 0) lv_obj_set_hidden(s_volume, true);
-    else level_changed(0, NANO_CAPTURE_VOLUME_0DB, true);
-}
-
-static void open_volume(lv_event_t *e)
-{
-    show_capture_volume();
-    lv_obj_set_hidden(s_volume, false);
-    lv_obj_move_foreground(s_volume);
-}
-
-static void build_volume(lv_obj_t *screen)
-{
-    s_volume = panel(screen, 140, 128, 520, 214);
-    dialog_title(s_volume, "Capture volume");
-    s_volume_info = label(s_volume, HINT_FONT, MUTED);
-    lv_obj_set_width(s_volume_info, 260);
-    lv_label_set_long_mode(s_volume_info, LV_LABEL_LONG_DOT);
-    lv_obj_set_pos(s_volume_info, 20, 46);
-    s_level_value[0] = label(s_volume, &ui_font_28, 0xFFFFFF);
-    lv_obj_set_width(s_level_value[0], 150);
-    lv_obj_set_style_text_align(s_level_value[0], LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_align(s_level_value[0], LV_ALIGN_TOP_RIGHT, -76, 16);
-    close_button(s_volume, 460, 12, on_volume_button, 0);
-    build_level_row(s_volume, 0, 20, 82, 480);
-    small_button(s_volume, 20, 152, 150, 46, "0 dB", on_volume_button, 1);
-    lv_obj_set_hidden(s_volume, true);
-}
+static void on_volume_zero(lv_event_t *e) { level_changed(0, NANO_CAPTURE_VOLUME_0DB, true); }
 
 static void on_cab_settings_close(lv_event_t *e)
 {
@@ -2652,6 +2614,7 @@ static void on_amp_close(lv_event_t *e)
 
 static void open_amp(lv_event_t *e)
 {
+    show_capture_volume();
     show_amp_values();
     lv_obj_set_hidden(s_amp, false);
     lv_obj_move_foreground(s_amp);
@@ -2660,15 +2623,34 @@ static void open_amp(lv_event_t *e)
 static void build_amp(lv_obj_t *screen)
 {
     static const char *const NAMES[AMP_ROWS] = { "GAIN", "BASS", "MID", "TREBLE" };
-    s_amp = panel(screen, 100, 20, 600, 440);
+    s_amp = panel(screen, 100, 12, 600, 458);
     dialog_title(s_amp, "Capture");
     s_amp_info = label(s_amp, HINT_FONT, MUTED);
-    lv_obj_set_width(s_amp_info, 480);
+    lv_obj_set_width(s_amp_info, 380);
     lv_label_set_long_mode(s_amp_info, LV_LABEL_LONG_DOT);
     lv_obj_set_pos(s_amp_info, 20, 46);
     close_button(s_amp, 540, 12, on_amp_close, 0);
+    small_button(s_amp, 420, 18, 100, 40, "0 dB", on_volume_zero, 0);
+    // the volume first, on green (it is what is reached for most)
+    lv_obj_t *vol_bg = lv_obj_create(s_amp);
+    lv_obj_remove_style_all(vol_bg);
+    lv_obj_set_size(vol_bg, 584, 88);
+    lv_obj_set_pos(vol_bg, 8, 70);
+    lv_obj_set_style_radius(vol_bg, 12, 0);
+    lv_obj_set_style_bg_color(vol_bg, lv_color_hex(0x16301C), 0);
+    lv_obj_set_style_bg_opa(vol_bg, LV_OPA_COVER, 0);
+    lv_obj_t *vol_name = label(s_amp, CAPTION_FONT, MUTED);
+    lv_obj_set_style_text_letter_space(vol_name, 2, 0);
+    lv_label_set_text(vol_name, "VOLUME");
+    lv_obj_set_pos(vol_name, 20, 76);
+    s_level_value[0] = label(s_amp, &ui_font_20, 0xFFFFFF);
+    lv_obj_set_width(s_level_value[0], 200);
+    lv_obj_set_style_text_align(s_level_value[0], LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_align(s_level_value[0], LV_ALIGN_TOP_RIGHT, -20, 73);
+    build_level_row(s_amp, 0, 20, 98, 560);
+    style_slider(s_level_slider[0], GREEN);
     for (int i = 0; i < AMP_ROWS; i++) {
-        int row = AMP_ROW + i, y = 78 + i * 88;
+        int row = AMP_ROW + i, y = 164 + i * 73;
         lv_obj_t *name = label(s_amp, CAPTION_FONT, MUTED);
         lv_obj_set_style_text_letter_space(name, 2, 0);
         lv_label_set_text(name, NAMES[i]);
@@ -2677,7 +2659,7 @@ static void build_amp(lv_obj_t *screen)
         lv_obj_set_width(s_level_value[row], 200);
         lv_obj_set_style_text_align(s_level_value[row], LV_TEXT_ALIGN_RIGHT, 0);
         lv_obj_align(s_level_value[row], LV_ALIGN_TOP_RIGHT, -20, y - 3);
-        build_level_row(s_amp, row, 20, y + 22, 560);
+        build_level_row(s_amp, row, 20, y + 20, 560);
     }
     lv_obj_set_hidden(s_amp, true);
 }
@@ -2996,7 +2978,8 @@ void ui_set_midi(const ui_midi_t *midi)
 {
     lvgl_port_lock(0);
     s_midi_state = *midi;
-    lv_obj_set_style_image_recolor(s_midi_icon, lv_color_hex(midi->connected ? GREEN : 0xC8CCD1), 0);
+    if (s_midi_icon) lv_obj_set_style_image_recolor(s_midi_icon, lv_color_hex(midi->connected ? GREEN : 0xC8CCD1), 0);
+    if (s_set_badge[SET_MIDI]) lv_label_set_text(s_set_badge[SET_MIDI], midi->connected ? "ON" : "");
     if (!lv_obj_is_hidden(s_midi)) fill_midi();
     lvgl_port_unlock();
 }
@@ -3419,7 +3402,7 @@ static void system_rows(const char *text)
         if (!card) {
             card = lv_obj_create(s_system_rows);
             lv_obj_remove_style_all(card);
-            lv_obj_set_size(card, 620, LV_SIZE_CONTENT);
+            lv_obj_set_size(card, LV_PCT(100), LV_SIZE_CONTENT);
             lv_obj_set_style_radius(card, 12, 0);
             lv_obj_set_style_bg_color(card, lv_color_hex(0x1A1D20), 0);
             lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
@@ -3432,7 +3415,7 @@ static void system_rows(const char *text)
         if (value) { *value = 0; value += 2; }
         lv_obj_t *row = lv_obj_create(card);
         lv_obj_remove_style_all(row);
-        lv_obj_set_size(row, 588, 32);
+        lv_obj_set_size(row, LV_PCT(100), 32);
         if (lv_obj_get_index(row) > 0) {   // a hairline between rows
             lv_obj_set_style_border_width(row, 1, 0);
             lv_obj_set_style_border_side(row, LV_BORDER_SIDE_TOP, 0);
@@ -3449,12 +3432,17 @@ static void system_rows(const char *text)
     }
 }
 
+static void settings_select(int topic, bool ask);
+
 void ui_show_system(const char *text)
 {
     lvgl_port_lock(0);
     system_rows(text);
-    lv_obj_set_hidden(s_system, false);
-    lv_obj_move_foreground(s_system);
+    if (lv_obj_is_hidden(s_settings) || s_set_topic != SET_SYSTEM) {   // (the console's ')' opens it from anywhere)
+        lv_obj_set_hidden(s_settings, false);
+        lv_obj_move_foreground(s_settings);
+        settings_select(SET_SYSTEM, false);
+    }
     lvgl_port_unlock();
 }
 
@@ -3462,7 +3450,7 @@ static void build_system(lv_obj_t *screen)
 {
     s_system = panel(screen, 70, 40, 660, 400);
     dialog_title(s_system, "System");
-    close_button(s_system, 600, 12, on_system_button, 0);
+    s_system_close = close_button(s_system, 600, 12, on_system_button, 0);
     s_system_rows = lv_obj_create(s_system);
     lv_obj_remove_style_all(s_system_rows);
     lv_obj_set_size(s_system_rows, 620, 276);
@@ -3491,7 +3479,7 @@ static void build_midi(lv_obj_t *screen)
     dialog_title(s_midi, MIDI_TITLE);
     s_midi_status = label(s_midi, HINT_FONT, MUTED);
     lv_obj_align(s_midi_status, LV_ALIGN_TOP_RIGHT, -76, 22);
-    close_button(s_midi, 520, 12, on_midi_button, 0);
+    s_midi_close = close_button(s_midi, 520, 12, on_midi_button, 0);
     lv_obj_t *info = label(s_midi, HINT_FONT, MUTED);
     lv_obj_set_width(info, 540);
     lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
@@ -3514,9 +3502,217 @@ static void build_midi(lv_obj_t *screen)
     lv_obj_set_scroll_dir(s_midi_list, LV_DIR_VER);
 
     small_button(s_midi, 20, 336, 180, 46, "Forget device", on_midi_button, -1);
-    small_button(s_midi, 210, 336, 180, 46, "Tile layout", open_layout, 0);
-    small_button(s_midi, 400, 336, 160, 46, "System", on_system_button, 1);
+    s_midi_more[0] = small_button(s_midi, 210, 336, 180, 46, "Tile layout", open_layout, 0);
+    s_midi_more[1] = small_button(s_midi, 400, 336, 160, 46, "System", on_system_button, 1);
     lv_obj_set_hidden(s_midi, true);
+}
+
+// ---- settings screen (1.17.0): one place for what was spread over the top bar's dialogs ----
+// Topics on the left with their state, the chosen one on the right. MIDI, USB audio and System are the dialogs of
+// before, placed into the page (their close buttons hidden); tile layout and the footswitch learning open their
+// dialogs from a page. Back to playing with the arrow at the top left.
+
+static void settings_nano_text(void)
+{
+    char text[160];
+    if (s_nano_connected && s_nano_fw_major >= 0) {
+        snprintf(text, sizeof(text), "Connected\nNanOS %d.%d", s_nano_fw_major, s_nano_fw_minor);
+    } else {
+        snprintf(text, sizeof(text), "%s", s_nano_connected ? "Connected" : "Searching for the Nano ...");
+    }
+    lv_label_set_text(s_set_nano_text, text);
+    lv_label_set_text(s_set_badge[SET_NANO], s_nano_connected ? "ON" : "");
+}
+
+void ui_set_nano_firmware(int major, int minor)
+{
+    lvgl_port_lock(0);
+    s_nano_fw_major = major;
+    s_nano_fw_minor = minor;
+    if (s_set_nano_text) settings_nano_text();
+    lvgl_port_unlock();
+}
+
+// ask: start what the page needs from the controller (MIDI scan, USB volume, system values)
+static void settings_select(int topic, bool ask)
+{
+    if (s_set_topic == SET_MIDI && topic != SET_MIDI && !lv_obj_is_hidden(s_settings)) send('X', 0);   // MIDI scan off
+    s_set_topic = topic;
+    for (int i = 0; i < SET_COUNT; i++) {
+        bool on = i == topic;
+        lv_obj_set_style_bg_opa(s_set_item[i], on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+        lv_obj_set_style_text_color(s_set_item_label[i], lv_color_hex(on ? INK : 0xC8CCD1), 0);
+        set_color_prop(s_set_item_icon[i], LV_STYLE_IMAGE_RECOLOR, on ? INK : 0xC8CCD1);
+        lv_obj_set_style_text_color(s_set_badge[i], lv_color_hex(on ? 0x2A7A3A : GREEN), 0);
+        lv_obj_set_hidden(s_set_page[i], !on);
+    }
+    switch (topic) {
+    case SET_NANO: settings_nano_text(); break;
+    case SET_MIDI:
+        fill_midi();
+        if (ask) send('X', 1);
+        break;
+    case SET_USB:
+        if (ask) {   // the value can also be changed in the app: read it each time
+            set_usb_enabled(false);
+            lv_label_set_text(s_usb_value, "");
+            lv_label_set_text(s_usb_info, "Reading the Nano's settings...");
+            send('V', 0);
+        }
+        break;
+    case SET_LAYOUT:
+        lv_label_set_text_fmt(s_set_layout_text, "%d fields on the screen\n%s", s_layout_count,
+                              SWITCH1_NAMES[s_switch1 >= 0 && s_switch1 < UI_SWITCH1_COUNT ? s_switch1 : 0]);
+        break;
+    case SET_SYSTEM:
+        if (ask) send(')', 0);
+        break;
+    default: break;
+    }
+}
+
+static void on_settings_item(lv_event_t *e) { settings_select((int)(intptr_t)lv_event_get_user_data(e), true); }
+
+static void open_settings(lv_event_t *e)
+{
+    lv_obj_set_hidden(s_settings, false);
+    lv_obj_move_foreground(s_settings);
+    settings_select(s_set_topic, true);
+}
+
+static void close_settings(lv_event_t *e)
+{
+    if (s_set_topic == SET_MIDI) send('X', 0);
+    lv_obj_set_hidden(s_settings, true);
+}
+
+static void on_settings_layout(lv_event_t *e) { open_layout(NULL); lv_obj_move_foreground(s_layout); }
+static void on_settings_learn(lv_event_t *e) { open_learn(1); lv_obj_move_foreground(s_learn); }
+static void on_settings_reload(lv_event_t *e) { send('r', 0); }
+
+// A dialog of before becomes a page: no frame, no close button
+static void settings_embed(int topic, lv_obj_t *dialog, lv_obj_t *close)
+{
+    lv_obj_set_parent(dialog, s_set_content);
+    lv_obj_set_pos(dialog, 0, 0);
+    lv_obj_set_size(dialog, 586, 480);
+    lv_obj_set_style_bg_opa(dialog, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(dialog, 0, 0);
+    lv_obj_set_style_shadow_width(dialog, 0, 0);
+    lv_obj_set_style_radius(dialog, 0, 0);
+    if (close) lv_obj_set_hidden(close, true);
+    s_set_page[topic] = dialog;
+}
+
+// A page of its own: title, text, buttons
+static lv_obj_t *settings_page(int topic, const char *title, const char *hint)
+{
+    lv_obj_t *p = lv_obj_create(s_set_content);
+    lv_obj_remove_style_all(p);
+    lv_obj_set_size(p, 586, 480);
+    lv_obj_set_scrollable(p, false);
+    dialog_title(p, title);
+    lv_obj_t *h = label(p, HINT_FONT, MUTED);
+    lv_obj_set_width(h, 540);
+    lv_label_set_long_mode(h, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(h, hint);
+    lv_obj_set_pos(h, 20, 50);
+    s_set_page[topic] = p;
+    return p;
+}
+
+static void build_settings(lv_obj_t *screen)
+{
+    s_settings = lv_obj_create(screen);
+    lv_obj_remove_style_all(s_settings);
+    lv_obj_set_size(s_settings, 800, 480);
+    lv_obj_set_style_bg_color(s_settings, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_settings, LV_OPA_COVER, 0);
+    lv_obj_set_scrollable(s_settings, false);
+    lv_obj_add_flag(s_settings, LV_OBJ_FLAG_CLICKABLE);   // (taps do not reach the screen below)
+
+    lv_obj_t *side = lv_obj_create(s_settings);
+    lv_obj_remove_style_all(side);
+    lv_obj_set_size(side, 214, 480);
+    lv_obj_set_style_bg_color(side, lv_color_hex(0x0D0F11), 0);
+    lv_obj_set_style_bg_opa(side, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(side, 1, 0);
+    lv_obj_set_style_border_side(side, LV_BORDER_SIDE_RIGHT, 0);
+    lv_obj_set_style_border_color(side, lv_color_hex(0x23272B), 0);
+    lv_obj_set_scrollable(side, false);
+
+    lv_obj_t *back = lv_button_create(side);   // back to playing
+    lv_obj_remove_style_all(back);
+    lv_obj_set_size(back, 198, 50);
+    lv_obj_set_pos(back, 8, 6);
+    lv_obj_set_style_radius(back, 9, 0);
+    lv_obj_set_style_bg_color(back, lv_color_hex(0x24282D), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(back, LV_OPA_COVER, LV_STATE_PRESSED);
+    lv_obj_add_event_cb(back, close_settings, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *back_icon = ui_icon(back, UI_ICON_BACK, 24, TEXT);
+    lv_obj_align(back_icon, LV_ALIGN_LEFT_MID, 4, 0);
+    lv_obj_t *back_label = label(back, &ui_font_title_22, TEXT);
+    lv_label_set_text(back_label, "Settings");
+    lv_obj_align(back_label, LV_ALIGN_LEFT_MID, 34, 0);
+
+    static const struct { int icon; const char *name; } ITEMS[SET_COUNT] = {
+        { UI_ICON_NANO, "Nano" }, { UI_ICON_MIDI, "MIDI" }, { UI_ICON_USB, "USB audio" },
+        { UI_ICON_GRID, "Tile layout" }, { UI_ICON_FOOTSWITCH, "Footswitches" }, { UI_ICON_INFO, "System" } };
+    for (int i = 0; i < SET_COUNT; i++) {
+        lv_obj_t *it = lv_button_create(side);
+        lv_obj_remove_style_all(it);
+        lv_obj_set_size(it, 198, 46);
+        lv_obj_set_pos(it, 8, 64 + i * 50);
+        lv_obj_set_style_radius(it, 9, 0);
+        lv_obj_set_style_bg_color(it, lv_color_hex(0xECECEC), 0);
+        lv_obj_set_style_bg_opa(it, LV_OPA_TRANSP, 0);
+        lv_obj_add_event_cb(it, on_settings_item, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        s_set_item[i] = it;
+        s_set_item_icon[i] = ui_icon(it, ITEMS[i].icon, 22, 0xC8CCD1);
+        lv_obj_align(s_set_item_icon[i], LV_ALIGN_LEFT_MID, 10, 0);
+        s_set_item_label[i] = label(it, &ui_font_16, 0xC8CCD1);
+        lv_label_set_text(s_set_item_label[i], ITEMS[i].name);
+        lv_obj_align(s_set_item_label[i], LV_ALIGN_LEFT_MID, 42, 0);
+        s_set_badge[i] = label(it, &ui_font_12, GREEN);
+        lv_obj_set_style_text_letter_space(s_set_badge[i], 1, 0);
+        lv_obj_align(s_set_badge[i], LV_ALIGN_RIGHT_MID, -10, 0);
+    }
+
+    s_set_content = lv_obj_create(s_settings);
+    lv_obj_remove_style_all(s_set_content);
+    lv_obj_set_size(s_set_content, 586, 480);
+    lv_obj_set_pos(s_set_content, 214, 0);
+    lv_obj_set_scrollable(s_set_content, false);
+
+    lv_obj_t *nano = settings_page(SET_NANO, "Nano", "The connection to the Nano Cortex.");
+    s_set_nano_text = label(nano, &ui_font_24, TEXT);
+    lv_obj_set_pos(s_set_nano_text, 20, 96);
+    lv_obj_t *nano_hint = label(nano, HINT_FONT, MUTED);
+    lv_obj_set_width(nano_hint, 540);
+    lv_label_set_long_mode(nano_hint, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(nano_hint, "Not found? Press EXIT + CAPTURE on the Nano: it can be found for a few seconds then.");
+    lv_obj_set_pos(nano_hint, 20, 190);
+    small_button(nano, 20, 250, 260, 50, "Read everything again", on_settings_reload, 0);
+
+    settings_embed(SET_MIDI, s_midi, s_midi_close);
+    for (int i = 0; i < 2; i++) lv_obj_set_hidden(s_midi_more[i], true);   // (the list on the left has them)
+    lv_obj_align(s_midi_status, LV_ALIGN_TOP_RIGHT, -20, 22);
+    settings_embed(SET_USB, s_usb, s_usb_close);
+    lv_obj_align(s_usb_value, LV_ALIGN_TOP_RIGHT, -20, 16);
+
+    lv_obj_t *layout = settings_page(SET_LAYOUT, "Tile layout", "6 or 8 fields on the screen, in any order, and what footswitch 1 does.");
+    s_set_layout_text = label(layout, &ui_font_20, TEXT);
+    lv_obj_set_pos(s_set_layout_text, 20, 110);
+    primary(small_button(layout, 20, 190, 260, 50, "Change the layout ...", on_settings_layout, 0));
+
+    lv_obj_t *switches = settings_page(SET_SWITCHES, "Footswitches",
+                                       "After the wiring changed: teach the board which footswitch is which, one after the other.");
+    primary(small_button(switches, 20, 130, 260, 50, "Learn the order ...", on_settings_learn, 0));
+
+    settings_embed(SET_SYSTEM, s_system, s_system_close);
+    lv_obj_set_size(s_system_rows, 546, 276);
+
+    lv_obj_set_hidden(s_settings, true);
 }
 
 void ui_set_library(const nano_library_t *library)
@@ -3851,19 +4047,18 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_size(preset, 800, 122);
     lv_obj_set_scrollable(preset, false);
     s_preset_card = preset;
-    static const struct { int icon; lv_event_cb_t cb; } TOP[] = {
-        { UI_ICON_REFRESH, on_refresh }, { UI_ICON_VOLUME, open_volume }, { UI_ICON_MIDI, open_midi }, { UI_ICON_USB, open_usb },
+    // (1.17.0: Capture volume, MIDI and USB moved into the capture dialog and the settings screen)
+    static const struct { int icon; lv_event_cb_t cb; const char *word; } TOP[] = {
+        { UI_ICON_REFRESH, on_refresh, "Reload" }, { UI_ICON_GEAR, open_settings, "Settings" },
     };
-    static const char *const TOP_WORDS[4] = { "Reload", "Capture", "MIDI", "USB" };
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 2; i++) {
         lv_obj_t *b = button(preset, 10 + i * 62, 4, 56, 44, TOP[i].cb);
-        lv_obj_t *img = ui_icon(b, TOP[i].icon, 20, 0xC8CCD1);
-        top_word(b, img, TOP_WORDS[i]);
-        if (TOP[i].icon == UI_ICON_MIDI) s_midi_icon = img;
+        top_word(b, ui_icon(b, TOP[i].icon, 20, 0xC8CCD1), TOP[i].word);
     }
+    s_midi_icon = NULL;
     s_midi_label = NULL;
     // Tempo (NanOS 2.3.0): metronome symbol and BPM, green while the metronome is on; hidden on older firmware
-    s_tempo_button = button(preset, 258, 4, 56, 44, on_tempo_button);
+    s_tempo_button = button(preset, 134, 4, 56, 44, on_tempo_button);
     s_tempo_button_icon = ui_icon(s_tempo_button, UI_ICON_METRONOME, 20, 0xC8CCD1);
     top_word(s_tempo_button, s_tempo_button_icon, "120");
     s_tempo_button_text = lv_obj_get_child(s_tempo_button, -1);
@@ -4029,7 +4224,6 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     build_ask(screen);
     build_rename(screen);
     build_usb(screen);
-    build_volume(screen);
     build_cab_settings(screen);
     build_amp(screen);
     build_mix_editor(screen);
@@ -4038,6 +4232,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     build_layout(screen);
     build_setlist(screen);
     build_system(screen);
+    build_settings(screen);   // (after MIDI, USB and System: it takes them in)
     build_scene_capture(screen);
     build_toast(screen);
     build_splash(screen);
@@ -4069,6 +4264,8 @@ void ui_set_app(bool connected)
 
 void ui_set_link(bool connected)
 {
+    s_nano_connected = connected;
+    if (s_set_nano_text) settings_nano_text();
     lvgl_port_lock(0);
     s_linked = connected;
     lv_obj_set_style_bg_color(s_status_dot, lv_color_hex(connected ? GREEN : 0x555555), 0);
@@ -4084,8 +4281,7 @@ void ui_set_link(bool connected)
         lv_obj_set_hidden(s_edited, true);
         lv_obj_set_hidden(s_preset_number, true);
         lv_obj_set_hidden(s_preset_chip, true);
-        lv_obj_set_hidden(s_usb, true);
-        lv_obj_set_hidden(s_volume, true);
+        set_usb_enabled(false);   // (the settings screen stays: MIDI and the rest work without the Nano)
         lv_obj_set_hidden(s_cab_settings, true);
         lv_obj_set_hidden(s_amp, true);
         lv_obj_set_hidden(s_mix_editor, true);
@@ -4424,10 +4620,10 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     else snprintf(text, sizeof(text), "BYPASS");
     set_text(s_cab_slot_label, text);
     // Capture volume: not while the slider is held or right after a change on the board (older replies).
-    if (lv_obj_is_hidden(s_volume) ||
+    if (lv_obj_is_hidden(s_amp) ||
         (lv_tick_elaps(s_volume_tick) > VOLUME_HOLD_MS && !lv_obj_has_state(s_level_slider[0], LV_STATE_PRESSED))) {
         s_capture_volume = st->capture_volume;
-        if (!lv_obj_is_hidden(s_volume)) show_capture_volume();
+        if (!lv_obj_is_hidden(s_amp)) show_capture_volume();
     }
     bool amp_held = false;
     for (int i = 0; i < AMP_ROWS; i++) amp_held |= lv_obj_has_state(s_level_slider[AMP_ROW + i], LV_STATE_PRESSED);

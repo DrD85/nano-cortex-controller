@@ -3918,6 +3918,7 @@ static void metro_show(void)
                      .muted = s_metro.muted, .tempo = s_state.tempo > 0 ? s_state.tempo : 120, .volume_db = s_metro.volume_db,
                      .time_sig = s_metro.time_sig, .note_len = s_metro.note_len, .sound = s_metro.sound };
     ui_set_tempo(&t);
+    ui_set_nano_firmware(s_state.fw_major, s_state.fw_minor);
 }
 
 static void metro_load(void)

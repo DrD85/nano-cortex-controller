@@ -14,8 +14,8 @@ Every function in detail. The short illustrated guide is in the [README](../READ
   shows from across the stage. All
   names use one size.
 - The buttons of the top bar carry their word under the symbol. **Reload** (top left) reads everything from the
-  Nano again: preset names, the current preset and the library. **Capture** next to it sets the capture volume of
-  the current preset; **MIDI** and **USB** follow.
+  Nano again: preset names, the current preset and the library. **Settings** next to it opens the
+  [settings screen](#settings); **Tempo** (NanOS 2.3) shows the tempo and opens the metronome.
 - **Swipe left / right**: next / previous preset.
 - **Swipe up – gig view**: the tiles fill the screen with larger names, and a slim bar on top shows the
   connection, preset number, bank, preset name, unsaved changes and the mode (PRESETS / SCENES / FX). **Swipe down**: back.
@@ -202,14 +202,16 @@ soon as it loads a model or the preset – for a compressor on the pedal that is
 
 <img src="images/06-capture-library.png" alt="" width="49%"> <img src="images/14-capture-amp.png" alt="" width="49%">
 
-<img src="images/12-cab-settings.png" alt="" width="49%"> <img src="images/11-capture-volume.png" alt="" width="49%">
+<img src="images/12-cab-settings.png" alt="" width="49%"> <img src="images/43-capture-listening.png" alt="" width="49%">
 
 Tap the CAPTURE or CAB / IR card. **SLOTS** lists the 25 capture slots (5 banks × 5) or 5 cab slots;
 **LIBRARY** shows all captures or IRs stored on the Nano with category filters (AMP = head or combo, AMP+CAB, CAB, PEDAL, OTHER).
 A library item is loaded into the active slot after a confirmation.
 
-**Capture volume**: **VOL** in the preset card, −24 dB to +12 dB (**0 dB** resets). **Capture tone**: a long press
-on the CAPTURE card – **GAIN**, **BASS**, **MID** and **TREBLE** of the capture, 0–10. **Cab settings**: a long press on the CAB / IR card – **OUTPUT** (−96 dB to +12 dB),
+**Capture dialog**: a long press on the CAPTURE card – first the **VOLUME** of the capture, −24 dB to +12 dB
+(**0 dB** resets), then **GAIN**, **BASS**, **MID** and **TREBLE** of the capture, 0–10. **Listening**: the play button
+of a library row plays that capture or IR in place of the preset's one, without loading it; the bar at the bottom
+has **Stop** and **Load**, closing the library ends it. **Cab settings**: a long press on the CAB / IR card – **OUTPUT** (−96 dB to +12 dB),
 **HIGH PASS** (20–800 Hz) and **LOW PASS** (1–20 kHz) of the active cab, read from the Nano when the dialog opens.
 All of them are part of the preset: changes are heard at once, **SAVE** keeps them.
 
@@ -364,18 +366,26 @@ tune, orange = off), a scale with a tick every 10 cents and a glowing needle, th
 **Reference A4** sets the reference pitch (400-480 Hz, hold − / + to run) and **Mute output** silences the Nano while
 tuning. Tap the screen or press footswitch 2 again to close it.
 
+## Settings
+
+**Settings** in the top bar: one screen with the topics on the left – **Nano** (connection, NanOS version, read
+everything again), **MIDI**, **USB audio**, **Tile layout**, **Footswitches** (learn their order) and **System** –
+and the chosen one on the right. The arrow at the top left goes back to playing.
+
+<img src="images/46-settings-nano.png" alt="" width="440">
+
 ## USB audio volume
 
 <img src="images/09-usb-volume.png" alt="" width="440">
 
-**USB** in the preset card: volume of the audio played from the computer over USB, −40 dB (OFF) to 0 dB,
+**USB audio** in the settings: volume of the audio played from the computer over USB, −40 dB (OFF) to 0 dB,
 as in the official app. The value is read from the Nano each time.
 
 ## Bluetooth MIDI
 
 <img src="images/10-bluetooth-midi.png" alt="" width="440">
 
-**MIDI** in the preset card opens the device list. It shows Bluetooth MIDI devices nearby – for example a
+**MIDI** in the settings shows the device list. It shows Bluetooth MIDI devices nearby – for example a
 CME WIDI adapter on the MIDI port of a Morningstar MC6, or a Bluetooth MIDI
 footswitch. Tap one to connect it; the controller remembers it and connects again by itself whenever it is
 switched on. **FORGET DEVICE** disconnects and forgets it. The Nano stays connected at the same time.
@@ -463,7 +473,7 @@ Without the controller (or before it has connected) the app connects to the Nano
 
 ## Tile layout: 6 or 8 fields
 
-**Tile layout** in the Bluetooth MIDI dialog (MIDI button in the top bar). Choose **6 fields** (2 × 3, larger tiles)
+**Tile layout** in the settings, **Change the layout**. Choose **6 fields** (2 × 3, larger tiles)
 or **8 fields**, then tap two fields to swap them – for example the tuner to another place, or Post FX 3 and the
 reverb switch out of the six. **Save** stores the layout on the controller, **Default** brings back 8 fields in
 the usual order, and footswitch 1 changes between FX and presets again.

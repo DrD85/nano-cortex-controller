@@ -149,9 +149,9 @@ static void example_scene_names(int preset, char names[UI_SCENES][UI_SCENE_NAME]
 
 static void close_all(void)
 {
-    lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi,
-                                   s_layout, s_volume, s_cab_settings, s_amp, s_toast, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
-                                   s_setlist, s_scene_cap, s_system, s_metro };
+    lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_mix_editor, s_learn,
+                                   s_layout, s_settings, s_cab_settings, s_amp, s_toast, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
+                                   s_setlist, s_scene_cap, s_metro };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) lv_obj_set_hidden(overlays[i], true);
     update_main_hidden();
 }
@@ -457,7 +457,12 @@ int main(void)
 
     view.fx_mode = false;
     ui_show_state(&st, &view);
-    open_usb(NULL);
+    ui_set_link(true);
+    ui_set_nano_firmware(2, 3);
+    open_settings(NULL);   // the settings screen (1.17.0): Nano, MIDI, USB audio, tile layout, footswitches, system
+    settings_select(SET_NANO, false);
+    shot("46-settings-nano");
+    settings_select(SET_USB, false);
     ui_set_usb_gain(-6.0f);
     shot("09-usb-volume");
     close_all();
@@ -469,12 +474,11 @@ int main(void)
     snprintf(midi.devices[1].name, sizeof(midi.devices[1].name), "MIDI Footswitch");
     midi.devices[1].rssi = -71;
     ui_set_midi(&midi);
-    open_midi(NULL);
+    open_settings(NULL);
+    settings_select(SET_MIDI, false);
     shot("10-bluetooth-midi");
-    close_all();
-
-    open_volume(NULL);
-    shot("11-capture-volume");
+    settings_select(SET_LAYOUT, false);
+    shot("47-settings-layout");
     close_all();
 
     st.amp[NANO_AMP_GAIN] = 140; st.amp[NANO_AMP_BASS] = 115; st.amp[NANO_AMP_MID] = 150; st.amp[NANO_AMP_TREBLE] = 128;

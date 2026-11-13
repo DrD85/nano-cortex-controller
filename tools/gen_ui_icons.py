@@ -41,12 +41,23 @@ OWN = {   # not in the editor's set
     'metronome': '<path d="M9 3h6l4 18H5L9 3z"/><path d="M12 17l5-11"/><path d="M8 17h8"/>',
     'play': '<path d="M8 5.5v13l11-6.5z" fill="#000"/>',
     'stop': '<rect x="6" y="6" width="12" height="12" rx="2" fill="#000"/>',
+    'gear': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 '
+            '1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 '
+            '.3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 '
+            '1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 '
+            '1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+    'nano': '<rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="12" r="2.2"/><circle cx="15" cy="12" r="2.2"/>',
+    'grid': '<rect x="3" y="5" width="8" height="6" rx="1"/><rect x="13" y="5" width="8" height="6" rx="1"/>'
+            '<rect x="3" y="13" width="8" height="6" rx="1"/><rect x="13" y="13" width="8" height="6" rx="1"/>',
+    'footswitch': '<rect x="6" y="3" width="12" height="18" rx="2"/><circle cx="12" cy="15" r="3"/>',
+    'info': '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
 }
 KEYS = ['refresh', 'volume', 'midi', 'usb', 'save', 'close',
         'cap-amp-head', 'cap-amp-combo', 'cap-amp-cab', 'cap-cab', 'cap-pedal', 'cap-overdrive',
         'back', 'chevron-down', 'plus',   # FX editor
         'scenes', 'exp',                  # scenes and expression pedal buttons
-        'metronome', 'play', 'stop']      # tempo button, listening in the library
+        'metronome', 'play', 'stop',      # tempo button, listening in the library
+        'gear', 'nano', 'grid', 'footswitch', 'info']   # settings screen
 CAPTURE_KEYS = KEYS[6:12]
 
 

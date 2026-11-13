@@ -14,8 +14,8 @@ Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../R
   auch von weiter weg gut zu unterscheiden.
   Alle Namen haben dieselbe Größe.
 - Die Knöpfe der oberen Leiste tragen ihr Wort unter dem Symbol. **Reload** (oben links) liest alles neu vom Nano:
-  Preset-Namen, aktuelles Preset und die Library. **Capture** daneben stellt die Capture-Lautstärke des aktuellen
-  Presets ein, danach **MIDI** und **USB**.
+  Preset-Namen, aktuelles Preset und die Library. **Settings** daneben öffnet die
+  [Einstellungen](#einstellungen); **Tempo** (NanOS 2.3) zeigt das Tempo und öffnet das Metronom.
 - **Nach links / rechts wischen**: nächstes / vorheriges Preset.
 - **Nach oben wischen – Gig-Ansicht**: die Kacheln füllen den Bildschirm mit größeren Namen, eine schmale Leiste
   oben zeigt Verbindung, Preset-Nummer, Bank, Preset-Name, ungespeicherte Änderungen und den Modus (PRESETS / SCENES / FX).
@@ -215,14 +215,16 @@ Pedal ist das sein Eingangspegel.
 
 <img src="images/06-capture-library.png" alt="" width="49%"> <img src="images/14-capture-amp.png" alt="" width="49%">
 
-<img src="images/12-cab-settings.png" alt="" width="49%"> <img src="images/11-capture-volume.png" alt="" width="49%">
+<img src="images/12-cab-settings.png" alt="" width="49%"> <img src="images/43-capture-listening.png" alt="" width="49%">
 
 Auf das Feld CAPTURE oder CAB / IR tippen. **SLOTS** zeigt die 25 Capture-Slots (5 Bänke × 5) bzw. die 5 Cab-Slots,
 **LIBRARY** alle auf dem Nano gespeicherten Captures bzw. IRs mit Kategorie-Filtern (AMP = Topteil oder Combo, AMP+CAB, CAB, PEDAL, OTHER).
 Ein Library-Eintrag wird nach einer Rückfrage in den aktiven Slot geladen.
 
-**Capture-Lautstärke**: **VOL** im Preset-Feld, −24 dB bis +12 dB (**0 dB** setzt zurück). **Capture-Klang**: lange
-auf das CAPTURE-Feld drücken – **GAIN**, **BASS**, **MID** und **TREBLE** des Captures, 0–10. **Cab-Einstellungen**: lange auf das CAB / IR-Feld drücken – **OUTPUT** (−96 dB bis +12 dB),
+**Capture-Dialog**: lange auf das CAPTURE-Feld drücken – zuerst die **VOLUME** des Captures, −24 dB bis +12 dB
+(**0 dB** setzt zurück), dann **GAIN**, **BASS**, **MID** und **TREBLE** des Captures, 0–10. **Vorhören**: der
+Play-Knopf einer Library-Zeile spielt dieses Capture oder IR anstelle des Preset-eigenen, ohne es zu laden; die
+Leiste unten hat **Stop** und **Load**, Schließen der Library beendet es. **Cab-Einstellungen**: lange auf das CAB / IR-Feld drücken – **OUTPUT** (−96 dB bis +12 dB),
 **HIGH PASS** (20–800 Hz) und **LOW PASS** (1–20 kHz) des aktiven Cabs, beim Öffnen vom Nano gelesen.
 Alles gehört zum Preset: Änderungen sind sofort zu hören, **SAVE** behält sie.
 
@@ -385,18 +387,26 @@ gestimmt, orange = daneben), eine Skala mit einem Strich alle 10 Cent und eine l
 in Cent. Unten stellt **Reference A4** den Kammerton ein (400–480 Hz, − / + gedrückt halten läuft durch), und
 **Mute output** schaltet den Nano beim Stimmen stumm. Bildschirm antippen oder Fußschalter 2 erneut drücken zum Schließen.
 
+## Einstellungen
+
+**Settings** in der oberen Leiste: eine Seite mit den Themen links – **Nano** (Verbindung, NanOS-Version, alles neu
+lesen), **MIDI**, **USB audio**, **Tile layout**, **Footswitches** (ihre Reihenfolge lernen) und **System** – und dem
+gewählten rechts. Der Pfeil oben links führt zurück zum Spielen.
+
+<img src="images/46-settings-nano.png" alt="" width="440">
+
 ## USB-Audio-Lautstärke
 
 <img src="images/09-usb-volume.png" alt="" width="440">
 
-**USB** im Preset-Feld: Lautstärke des Audios, das der Computer über USB abspielt, −40 dB (OFF) bis 0 dB,
+**USB audio** in den Einstellungen: Lautstärke des Audios, das der Computer über USB abspielt, −40 dB (OFF) bis 0 dB,
 wie in der offiziellen App. Der Wert wird jedes Mal frisch vom Nano gelesen.
 
 ## Bluetooth-MIDI
 
 <img src="images/10-bluetooth-midi.png" alt="" width="440">
 
-**MIDI** im Preset-Feld öffnet die Geräteliste. Sie zeigt Bluetooth-MIDI-Geräte in der Nähe – zum Beispiel einen
+**MIDI** in den Einstellungen zeigt die Geräteliste. Sie zeigt Bluetooth-MIDI-Geräte in der Nähe – zum Beispiel einen
 CME-WIDI-Adapter an der MIDI-Buchse eines Morningstar MC6 oder einen
 Bluetooth-MIDI-Fußschalter. Antippen verbindet; der Controller merkt sich das Gerät und verbindet sich wieder von
 selbst, sobald es eingeschaltet ist. **FORGET DEVICE** trennt und vergisst es. Der Nano bleibt dabei verbunden.
@@ -487,7 +497,7 @@ Ohne Controller (oder bevor er verbunden ist) verbindet sich die App wie bisher 
 
 ## Kachel-Anordnung: 6 oder 8 Felder
 
-**Tile layout** im Bluetooth-MIDI-Fenster (MIDI-Knopf oben). **6 fields** (2 × 3, größere Kacheln) oder **8 fields**
+**Tile layout** in den Einstellungen, **Change the layout**. **6 fields** (2 × 3, größere Kacheln) oder **8 fields**
 wählen, dann zwei Felder antippen, um sie zu tauschen – etwa das Stimmgerät an eine andere Stelle oder Post FX 3 und
 den Reverb-Schalter aus den sechs heraus. **Save** speichert die Anordnung auf dem Controller, **Default** stellt 8
 Felder in der gewohnten Reihenfolge wieder her, und Fußschalter 1 wechselt wieder zwischen FX und Presets.

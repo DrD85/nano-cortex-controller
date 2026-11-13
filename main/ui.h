@@ -189,6 +189,9 @@ typedef struct {
 } ui_tempo_t;
 void ui_set_tempo(const ui_tempo_t *t);
 
+// NanOS version from the state (-1 = unknown), for the settings screen's Nano page.
+void ui_set_nano_firmware(int major, int minor);
+
 // USB playback volume (dB, -40 = off) read from the Nano's settings.
 void ui_set_usb_gain(float db);
 
