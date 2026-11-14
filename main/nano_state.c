@@ -188,7 +188,7 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
     int bank = 1, capture_position = 0, cab_selector = 0, capture_volume = 0;
     int amp[NANO_AMP_KNOBS] = { 0 };
     bool dirty = false, fx_seen = false, names_seen = false, capture_seen = false, cab_seen = false, tuner_muted = false;
-    bool capture_names_seen = false, cab_names_seen = false;
+    bool capture_names_seen = false, cab_names_seen = false, context_seen = false;
     bool tempo_global = false, ext_clock = false, listen_capture = false, listen_ir = false;
     uint32_t types[NANO_FX_SLOTS] = { 0 };
     char capture[sizeof(st->capture)] = "", cab[sizeof(st->cab)] = "";
@@ -226,6 +226,8 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
         case 55: tempo_global = field_number(&f) != 0; break;
         case 61: ext_clock = field_number(&f) != 0; break;
         case 64: listen_capture = field_number(&f) != 0; break;
+        case 23: st->context = (int)field_number(&f); context_seen = true; break;
+        case 28: st->user_captures = (int)field_number(&f); break;
         case 65: listen_ir = field_number(&f) != 0; break;
         case 24:
             if (f.wire == 2) {
@@ -286,6 +288,7 @@ bool nano_state_apply(nano_state_t *st, const uint8_t *payload, size_t len)
         }
     }
 
+    if (!context_seen) st->context = 0;   // (omitted in play mode)
     st->current_preset = preset_index + 1;
     memcpy(st->slot_preset, slots, sizeof(slots));
     st->dirty = dirty;
@@ -559,6 +562,112 @@ void nano_metering(const uint8_t *payload, size_t len, int *what, int *value)
 {
     *what = (int)nano_field_varint(payload, len, 3);
     *value = (int)nano_field_varint(payload, len, 4);
+}
+
+// ---- Neural Capture V1 ----
+
+int nano_state_context(const uint8_t *payload, size_t len)
+{
+    return (int)nano_field_varint(payload, len, 23);
+}
+
+// In capture mode the state's gain (3) and level (4) are CAPTURE IN and OUTPUT LEVEL (as Cortex Cloud reads them).
+void nano_capture_values(nano_state_t *st, const uint8_t *payload, size_t len)
+{
+    st->context = nano_state_context(payload, len);
+    int gain = (int)nano_field_varint(payload, len, 3), level = (int)nano_field_varint(payload, len, 4);
+    st->capture_gain = gain <= 255 ? gain : 255;
+    st->capture_level = level <= 255 ? level : 255;
+    int users = (int)nano_field_varint(payload, len, 28);
+    if (users) st->user_captures = users;
+}
+
+size_t nano_capture_mode_value(int which, int raw, uint8_t *out)
+{
+    if (raw < 0) raw = 0;
+    if (raw > 255) raw = 255;
+    size_t n = 0;
+    out[n++] = 0x18; out[n++] = (uint8_t)(which ? 1 : 0);   // 3 type: 0 Gain, 1 Level
+    out[n++] = 0x20; n += put_varint(out + n, (uint64_t)raw);
+    out[n++] = 0x28; out[n++] = NANO_CONTEXT_CAPTURE;      // 5 context
+    return n;
+}
+
+size_t nano_capture_exit(uint8_t *out)
+{
+    out[0] = 0x20; out[1] = NANO_CONTEXT_CAPTURE;            // 3 type Exit (0) left out, as the app sends it
+    return 2;
+}
+
+size_t nano_compare_cab(int slot, uint8_t *out)
+{
+    if (slot < 0 || slot > NANO_CAB_SLOTS) slot = 0;
+    out[0] = 0x18; out[1] = (uint8_t)slot;
+    return 2;
+}
+
+size_t nano_ab_listen(bool source, uint8_t *out)
+{
+    out[0] = 0x18; out[1] = source ? 1 : 0;
+    return 2;
+}
+
+static size_t put_string_field(uint8_t *out, uint32_t field, const char *s)
+{
+    size_t len = strlen(s), n = 0;
+    out[n++] = (uint8_t)(field << 3 | 2);
+    n += put_varint(out + n, len);
+    memcpy(out + n, s, len);
+    return n + len;
+}
+
+size_t nano_capture_save(const char *name, const char *type, uint8_t *out, size_t max)
+{
+    uint8_t record[160];
+    if (strlen(name) > 64 || strlen(type) > 24) return 0;
+    size_t r = 0;
+    r += put_string_field(record + r, 2, name);             // 2 name
+    r += put_string_field(record + r, 6, type);             // 6 captureType
+    r += put_string_field(record + r, 10, "guitar");        // 10 preferredInstrument
+    if (r + 4 > max) return 0;
+    size_t n = 0;
+    out[n++] = 0x22;                                         // 4 capture (NeuralCaptureSummaryRecord)
+    n += put_varint(out + n, r);
+    memcpy(out + n, record, r);
+    return n + r;
+}
+
+size_t nano_capture_to_slot(int slot, const uint8_t *id, size_t id_len, uint8_t *out, size_t max)
+{
+    if (slot < 1 || slot > NANO_CAPTURE_SLOTS || id_len + 8 > max) return 0;
+    size_t n = 0;
+    out[n++] = 0x18; out[n++] = (uint8_t)(slot - 1);         // 3 captureSlot 0-24
+    out[n++] = 0x2A;                                         // 5 libraryUserCaptureId
+    n += put_varint(out + n, id_len);
+    memcpy(out + n, id, id_len);
+    return n + id_len;
+}
+
+bool nano_field_bytes(const uint8_t *payload, size_t len, uint32_t field, const uint8_t **data, size_t *data_len)
+{
+    pb_reader_t r = { payload, payload + len };
+    pb_field_t f;
+    while (pb_next(&r, &f)) {
+        if (f.field == field && f.wire == 2) {
+            *data = f.data;
+            *data_len = f.len;
+            return true;
+        }
+    }
+    return false;
+}
+
+// The app's sliders: value = min + (max - min) * p^(1 / skew), p = raw / 255 (a JUCE-style skewed range).
+float nano_capture_db(int which, int raw)
+{
+    float p = (raw < 0 ? 0 : raw > 255 ? 255 : raw) / 255.0f;
+    if (which == 0) return 24.0f * powf(p, 1.0f / 0.9f);
+    return -60.0f + 72.0f * powf(p, 1.0f / 3.8018f);
 }
 
 // SaveExpressionPedalCalibrationRequest { 3: min, 4: max }.

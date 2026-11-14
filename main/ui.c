@@ -66,6 +66,8 @@ static ui_text_cb s_on_text;
 static lv_obj_t *s_save_button, *s_ask, *s_ask_text, *s_ask_ok, *s_rename, *s_rename_title, *s_rename_area;
 static lv_obj_t *s_rename_ok;
 static char s_rename_kind = 'N';   // 'N' preset name, '1'-'4' FX preset
+static lv_obj_t *s_cap;   // the capture assistant (Settings > Capture)
+static void cap_named(const char *text);
 static char s_ask_command;
 static int s_ask_arg;
 static int s_current_preset;
@@ -121,7 +123,7 @@ static float s_usb_db;
 static lv_obj_t *s_cab_settings, *s_cab_info, *s_amp, *s_amp_info;
 static lv_obj_t *s_rot;   // the wheel while a rotary footswitch of the Nano is turned
 // Settings screen (1.17.0): topics on the left, the chosen one on the right; MIDI, USB audio and System are its pages
-enum { SET_NANO, SET_MIDI, SET_USB, SET_LAYOUT, SET_SWITCHES, SET_SYSTEM, SET_COUNT };
+enum { SET_NANO, SET_MIDI, SET_USB, SET_LAYOUT, SET_SWITCHES, SET_SYSTEM, SET_CAPTURE, SET_COUNT };
 static lv_obj_t *s_settings, *s_set_content, *s_set_item[SET_COUNT], *s_set_item_label[SET_COUNT], *s_set_item_icon[SET_COUNT];
 static lv_obj_t *s_set_badge[SET_COUNT], *s_set_page[SET_COUNT], *s_set_nano_text, *s_set_layout_text, *s_set_cloud;
 static int s_set_topic = SET_NANO;
@@ -352,7 +354,7 @@ static void on_gesture(lv_event_t *e)
     // Swipes work only on the main screen, not in an open dialog.
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi, s_layout,
                                    s_settings, s_cab_settings, s_amp, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
-                                   s_setlist, s_scene_cap, s_system, s_metro, s_rot };
+                                   s_setlist, s_scene_cap, s_system, s_metro, s_rot, s_cap };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
         if (overlays[i] && shown(overlays[i])) return;
     }
@@ -2416,6 +2418,15 @@ static void submit_rename(void)
         ui_show_message("Preset names need at least 4 characters.");
         return;
     }
+    if (s_rename_kind == 'c') {   // the capture's name (sent with Save)
+        if (strlen(text) < 4) {
+            ui_show_message("Capture names need at least 4 characters.");
+            return;
+        }
+        cap_named(text);
+        close_rename();
+        return;
+    }
     if (s_rename_kind == 'L') looper_editor_named(text);   // into the looper tile's dialog, sent with its Save
     else if (s_rename_kind == 'S') scene_editor_named(text);   // the same for a scene
     else if (s_rename_kind == 'R' || s_rename_kind == 'r') {   // a reverb setting: "<1 / 2>name"
@@ -3885,6 +3896,707 @@ static lv_obj_t *settings_page(int topic, const char *title, const char *hint)
     return p;
 }
 
+// ---- Neural Capture V1 assistant (Settings > Capture) ----
+// Steps as approved in drafts/entwurf-capture-v1-schritte.png: Connect, Levels, Capture, Compare & save, Done. The
+// texts follow Neural DSP's guide to capturing on the Nano. The controller side (main.c) moves the steps on what the
+// Nano reports; Connect <-> Levels is the assistant's own.
+#define CAP_W 776
+#define CAP_H 460
+#define CAP_ORANGE 0xFFB02E
+#define CAP_BLUE 0x4AA3FF
+#define CAP_RED 0xFF5A4E
+enum { CAP_TYPE_AMP_CAB, CAP_TYPE_HEAD, CAP_TYPE_PEDAL, CAP_TYPE_COUNT };
+enum { CAP_SAVE_AMP, CAP_SAVE_AMP_CAB, CAP_SAVE_CAB, CAP_SAVE_PEDAL, CAP_SAVE_OTHER, CAP_SAVE_COUNT };
+static const char *const CAP_SAVE_NAMES[CAP_SAVE_COUNT] = { "Amp", "Amp + cab", "Cab", "Pedal", "Other" };
+static const char *const CAP_SAVE_TYPES[CAP_SAVE_COUNT] = { "amp_head", "amp_and_cab", "cab", "pedal", "default" };
+static const char *const CAP_STEP_NAMES[4] = { "Connect", "Levels", "Capture", "Compare & save" };
+static const char *const CAP_CONNECT[CAP_TYPE_COUNT] = {
+    "1   Guitar into INPUT 1.\n"
+    "2   OUTPUT 2R (CAPTURE OUT) to the amp's input.\n"
+    "3   A mic in front of the speaker into CAPTURE INPUT: about 1 inch (2-3 cm) from the grill, at the centre of "
+    "the cone, straight on. Dynamic mics plug in directly, condenser mics need a preamp.\n"
+    "4   Headphones into HP OUTPUT, or a monitor on OUTPUT 1L.",
+    "1   Guitar into INPUT 1.\n"
+    "2   OUTPUT 2R (CAPTURE OUT) to the amp's input.\n"
+    "3   Reactive load box: the amp's speaker output into the load box, its line output into CAPTURE INPUT. "
+    "Or the amp's D.I. out into CAPTURE INPUT - with a cabinet still connected to the amp.\n"
+    "4   Headphones into HP OUTPUT, or a monitor on OUTPUT 1L.",
+    "1   Guitar into INPUT 1.\n"
+    "2   OUTPUT 2R (CAPTURE OUT) to the pedal's input.\n"
+    "3   The pedal's output into CAPTURE INPUT.\n"
+    "4   Headphones into HP OUTPUT, or a monitor on OUTPUT 1L.",
+};
+
+static lv_obj_t *s_cap_panel, *s_cap_page[UI_CAP_DONE + 1], *s_cap_step_box[4], *s_cap_step_label[4], *s_cap_step_check[4];
+static lv_obj_t *s_cap_type_btn[CAP_TYPE_COUNT], *s_cap_connect_text;
+static lv_obj_t *s_cap_value[2], *s_cap_fill[2], *s_cap_peak[2], *s_cap_cab_btn[2][NANO_CAB_SLOTS + 1];
+static lv_obj_t *s_cap_msg[UI_CAP_DONE + 1];
+static lv_obj_t *s_cap_progress_title, *s_cap_progress_bar, *s_cap_progress_left, *s_cap_stop;
+static lv_obj_t *s_cap_listen_btn[2], *s_cap_auto_btn[4], *s_cap_name, *s_cap_save_btn[CAP_SAVE_COUNT];
+static lv_obj_t *s_cap_lib_button, *s_cap_slot_button, *s_cap_discard;
+static lv_obj_t *s_cap_slots, *s_cap_slot_btn[NANO_CAPTURE_SLOTS], *s_cap_slot_ok;
+static lv_obj_t *s_cap_done_title, *s_cap_done_text;
+static lv_obj_t *s_set_cap_count;
+static lv_timer_t *s_cap_auto_timer, *s_cap_stop_timer;
+static struct {
+    int step, type, save_type, cab, auto_index, slot, user_captures;
+    bool source, busy, stop_armed;
+    int peak[2];
+    uint32_t peak_tick[2];
+    char name[33];
+} s_capui = { .user_captures = -1 };
+
+static void cap_command(int action, int value) { send('0', action << 16 | (value & 0xFFFF)); }   // (CAPC_* in main.c)
+
+static void cap_choose(lv_obj_t *btn, bool on)   // filled = chosen (a segment of a row)
+{
+    lv_obj_set_style_bg_color(btn, lv_color_hex(on ? 0xECECEC : BUTTON_BG), 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(on ? 0xECECEC : BUTTON_LINE), 0);
+    lv_obj_t *l = lv_obj_get_child(btn, 0);
+    if (l) lv_obj_set_style_text_color(l, lv_color_hex(on ? INK : 0xC8CCD1), 0);
+}
+
+static void cap_go(lv_obj_t *btn)   // the green main action (Start capture, Save to slot)
+{
+    lv_obj_set_style_bg_color(btn, lv_color_hex(GREEN), 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(GREEN), 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x7BFF92), LV_STATE_PRESSED);
+    lv_obj_t *l = lv_obj_get_child(btn, 0);
+    if (l) lv_obj_set_style_text_color(l, lv_color_hex(INK), 0);
+}
+
+static void cap_outline(lv_obj_t *btn)   // Cancel / Back: only the frame
+{
+    lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, LV_STATE_PRESSED);
+}
+
+static lv_obj_t *cap_text(lv_obj_t *parent, int x, int y, int w, const lv_font_t *font, uint32_t color, const char *text)
+{
+    lv_obj_t *l = label(parent, font, color);
+    lv_obj_set_pos(l, x, y);
+    if (w > 0) {
+        lv_obj_set_width(l, w);
+        lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+    }
+    lv_label_set_text(l, text);
+    return l;
+}
+
+static lv_obj_t *cap_dot(lv_obj_t *parent, int x, int y, uint32_t color)
+{
+    lv_obj_t *d = lv_obj_create(parent);
+    lv_obj_remove_style_all(d);
+    lv_obj_set_size(d, 12, 12);
+    lv_obj_set_pos(d, x, y);
+    lv_obj_set_style_radius(d, 6, 0);
+    lv_obj_set_style_bg_color(d, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
+    return d;
+}
+
+static lv_obj_t *cap_page(void)
+{
+    lv_obj_t *p = lv_obj_create(s_cap_panel);
+    lv_obj_remove_style_all(p);
+    lv_obj_set_pos(p, 0, 104);
+    lv_obj_set_size(p, CAP_W, CAP_H - 104);
+    lv_obj_set_scrollable(p, false);
+    return p;
+}
+
+static lv_obj_t *cap_message_label(lv_obj_t *page, int x, int y, int w)
+{
+    lv_obj_t *m = cap_text(page, x, y, w, &ui_font_14, CAP_ORANGE, "");
+    return m;
+}
+
+static void cap_show_step(void)
+{
+    int step = s_capui.step;
+    for (int i = 0; i <= UI_CAP_DONE; i++) if (s_cap_page[i]) lv_obj_set_hidden(s_cap_page[i], i != step);
+    for (int i = 0; i < 4; i++) {
+        int number = i + 1;   // UI_CAP_CONNECT .. UI_CAP_COMPARE
+        bool on = number == step, done = number < step;
+        lv_obj_set_style_bg_color(s_cap_step_box[i], lv_color_hex(on ? 0xECECEC : SURF), 0);
+        lv_obj_set_style_border_color(s_cap_step_box[i], lv_color_hex(on ? 0xECECEC : BUTTON_LINE), 0);
+        lv_obj_set_style_text_color(s_cap_step_label[i], lv_color_hex(on ? INK : done ? TEXT : MUTED), 0);
+        if (done) lv_label_set_text(s_cap_step_label[i], CAP_STEP_NAMES[i]);
+        else lv_label_set_text_fmt(s_cap_step_label[i], "%d  %s", number, CAP_STEP_NAMES[i]);
+        lv_obj_set_hidden(s_cap_step_check[i], !done);
+        lv_obj_align(s_cap_step_label[i], LV_ALIGN_CENTER, done ? 10 : 0, 0);
+        lv_obj_align_to(s_cap_step_check[i], s_cap_step_label[i], LV_ALIGN_OUT_LEFT_MID, -6, 0);
+    }
+    lv_obj_set_hidden(s_cap_slots, true);
+    if (step != UI_CAP_COMPARE && s_cap_auto_timer) lv_timer_pause(s_cap_auto_timer);
+}
+
+static void cap_type_show(void)
+{
+    for (int i = 0; i < CAP_TYPE_COUNT; i++) cap_choose(s_cap_type_btn[i], i == s_capui.type);
+    lv_label_set_text(s_cap_connect_text, CAP_CONNECT[s_capui.type]);
+}
+
+static void cap_save_type_show(void)
+{
+    for (int i = 0; i < CAP_SAVE_COUNT; i++) cap_choose(s_cap_save_btn[i], i == s_capui.save_type);
+}
+
+static void cap_values_show(int gain, int level)
+{
+    char text[24];
+    snprintf(text, sizeof(text), "%.1f dB", (double)nano_capture_db(0, gain));
+    lv_label_set_text(s_cap_value[0], text);
+    float out = nano_capture_db(1, level);
+    snprintf(text, sizeof(text), "%s%.1f dB", out < 0 ? "\xE2\x88\x92" : "", (double)fabsf(out));
+    lv_label_set_text(s_cap_value[1], text);
+}
+
+static void cap_cab_show(void)
+{
+    for (int r = 0; r < 2; r++)
+        for (int i = 0; i <= NANO_CAB_SLOTS; i++) cap_choose(s_cap_cab_btn[r][i], i == s_capui.cab);
+}
+
+static void cap_listen_show(void)
+{
+    cap_choose(s_cap_listen_btn[0], !s_capui.source);
+    cap_choose(s_cap_listen_btn[1], s_capui.source);
+    for (int i = 0; i < 4; i++) cap_choose(s_cap_auto_btn[i], i == s_capui.auto_index);
+}
+
+static void cap_name_show(void)
+{
+    lv_obj_t *l = lv_obj_get_child(s_cap_name, 0);
+    lv_label_set_text(l, s_capui.name[0] ? s_capui.name : "Tap to name it (at least 4 characters)");
+    lv_obj_set_style_text_color(l, lv_color_hex(s_capui.name[0] ? TEXT : MUTED), 0);
+    bool ok = strlen(s_capui.name) >= 4 && !s_capui.busy;
+    if (ok) {
+        lv_obj_remove_state(s_cap_lib_button, LV_STATE_DISABLED);
+        lv_obj_remove_state(s_cap_slot_button, LV_STATE_DISABLED);
+    } else {
+        lv_obj_add_state(s_cap_lib_button, LV_STATE_DISABLED);
+        lv_obj_add_state(s_cap_slot_button, LV_STATE_DISABLED);
+    }
+}
+
+static void cap_close_assistant(void)
+{
+    lv_obj_set_hidden(s_cap, true);
+    if (s_cap_auto_timer) lv_timer_pause(s_cap_auto_timer);
+}
+
+// ---- events ----
+
+static void on_cap_close(lv_event_t *e)
+{
+    cap_close_assistant();
+    cap_command(2, 0);   // CAPC_EXIT: out of capture mode (the controller goes on until the Nano is back in play mode)
+}
+
+static void on_cap_type(lv_event_t *e)
+{
+    s_capui.type = (int)(intptr_t)lv_event_get_user_data(e);
+    s_capui.save_type = s_capui.type == CAP_TYPE_HEAD ? CAP_SAVE_AMP : s_capui.type == CAP_TYPE_PEDAL ? CAP_SAVE_PEDAL : CAP_SAVE_AMP_CAB;
+    cap_type_show();
+    cap_save_type_show();
+}
+
+static void on_cap_next(lv_event_t *e)
+{
+    s_capui.step = (int)(intptr_t)lv_event_get_user_data(e);
+    cap_command(12, s_capui.step);   // CAPC_STEP
+    cap_show_step();
+}
+
+static int s_cap_raw[2];
+
+static void on_cap_step_value(lv_event_t *e)   // - / + (held: repeats)
+{
+    int data = (int)(intptr_t)lv_event_get_user_data(e), which = data >> 1, dir = data & 1 ? 1 : -1;
+    int v = s_cap_raw[which] + dir * 3;
+    if (v < 0) v = 0;
+    if (v > 255) v = 255;
+    if (v == s_cap_raw[which]) return;
+    s_cap_raw[which] = v;
+    cap_values_show(s_cap_raw[0], s_cap_raw[1]);
+    cap_command(which ? 4 : 3, v);   // CAPC_LEVEL / CAPC_GAIN
+}
+
+static void on_cap_cab(lv_event_t *e)
+{
+    s_capui.cab = (int)(intptr_t)lv_event_get_user_data(e);
+    cap_cab_show();
+    cap_command(5, s_capui.cab);   // CAPC_CAB
+}
+
+static void on_cap_start(lv_event_t *e) { cap_command(6, 0); }   // CAPC_TRAIN
+
+static void cap_stop_disarm(lv_timer_t *t)
+{
+    s_capui.stop_armed = false;
+    lv_label_set_text(lv_obj_get_child(s_cap_stop, 0), "Stop capture");
+    lv_timer_pause(t);
+}
+
+static void on_cap_stop(lv_event_t *e)   // twice: the capture so far is lost
+{
+    if (!s_capui.stop_armed) {
+        s_capui.stop_armed = true;
+        lv_label_set_text(lv_obj_get_child(s_cap_stop, 0), "Tap again to stop");
+        lv_timer_reset(s_cap_stop_timer);
+        lv_timer_resume(s_cap_stop_timer);
+        return;
+    }
+    cap_stop_disarm(s_cap_stop_timer);
+    cap_command(7, 0);   // CAPC_STOP
+}
+
+static void cap_listen(bool source)
+{
+    s_capui.source = source;
+    cap_listen_show();
+    cap_command(8, source);   // CAPC_LISTEN
+}
+
+static void on_cap_listen(lv_event_t *e)
+{
+    s_capui.auto_index = 0;
+    if (s_cap_auto_timer) lv_timer_pause(s_cap_auto_timer);
+    cap_listen((int)(intptr_t)lv_event_get_user_data(e) != 0);
+}
+
+static void cap_auto_cb(lv_timer_t *t) { cap_listen(!s_capui.source); }
+
+static void on_cap_auto(lv_event_t *e)   // switch between capture and original every 2 / 4 / 8 s
+{
+    static const int SECONDS[4] = { 0, 2, 4, 8 };
+    s_capui.auto_index = (int)(intptr_t)lv_event_get_user_data(e);
+    cap_listen_show();
+    if (!s_capui.auto_index) {
+        lv_timer_pause(s_cap_auto_timer);
+        return;
+    }
+    lv_timer_set_period(s_cap_auto_timer, (uint32_t)SECONDS[s_capui.auto_index] * 1000);
+    lv_timer_reset(s_cap_auto_timer);
+    lv_timer_resume(s_cap_auto_timer);
+}
+
+static void on_cap_name(lv_event_t *e) { show_rename('c', "Name of the new capture", "OK", s_capui.name, 32); }
+
+static void cap_named(const char *text)   // from the keyboard
+{
+    snprintf(s_capui.name, sizeof(s_capui.name), "%.32s", text);
+    cap_name_show();
+}
+
+static void on_cap_save_type(lv_event_t *e)
+{
+    s_capui.save_type = (int)(intptr_t)lv_event_get_user_data(e);
+    cap_save_type_show();
+}
+
+static void cap_save(int slot)
+{
+    char text[64];
+    snprintf(text, sizeof(text), "%d|%s|%s", slot, CAP_SAVE_TYPES[s_capui.save_type], s_capui.name);
+    if (s_on_text) s_on_text('c', text);
+}
+
+static void on_cap_save_library(lv_event_t *e) { cap_save(0); }
+
+static void cap_slots_show(void)
+{
+    for (int i = 0; i < NANO_CAPTURE_SLOTS; i++) {
+        char text[64];
+        snprintf(text, sizeof(text), "%d-%d  %.40s", i / 5 + 1, i % 5 + 1, s_capture_names[i][0] ? s_capture_names[i] : "-");
+        lv_label_set_text(lv_obj_get_child(s_cap_slot_btn[i], 0), text);
+        cap_choose(s_cap_slot_btn[i], i + 1 == s_capui.slot);
+    }
+    if (s_capui.slot) {
+        lv_label_set_text_fmt(lv_obj_get_child(s_cap_slot_ok, 0), "Save into %d-%d", (s_capui.slot - 1) / 5 + 1, (s_capui.slot - 1) % 5 + 1);
+        lv_obj_remove_state(s_cap_slot_ok, LV_STATE_DISABLED);
+    } else {
+        lv_label_set_text(lv_obj_get_child(s_cap_slot_ok, 0), "Choose a slot");
+        lv_obj_add_state(s_cap_slot_ok, LV_STATE_DISABLED);
+    }
+}
+
+static void on_cap_save_slot(lv_event_t *e)   // first the slot (the capture in it stays in the library)
+{
+    s_capui.slot = 0;
+    cap_slots_show();
+    lv_obj_set_hidden(s_cap_slots, false);
+    lv_obj_move_foreground(s_cap_slots);
+}
+
+static void on_cap_slot(lv_event_t *e)
+{
+    s_capui.slot = (int)(intptr_t)lv_event_get_user_data(e);
+    cap_slots_show();
+}
+
+static void on_cap_slot_button(lv_event_t *e)
+{
+    lv_obj_set_hidden(s_cap_slots, true);
+    if ((int)(intptr_t)lv_event_get_user_data(e) && s_capui.slot) cap_save(s_capui.slot);
+}
+
+static void on_cap_discard(lv_event_t *e) { cap_command(11, 0); }   // CAPC_DISCARD: back to the levels
+static void on_cap_again(lv_event_t *e) { cap_command(9, 0); }      // CAPC_AGAIN
+
+static void on_cap_done(lv_event_t *e)
+{
+    cap_command(2, 0);   // CAPC_EXIT
+    cap_close_assistant();
+}
+
+static void on_settings_capture(lv_event_t *e)
+{
+    s_capui.name[0] = 0;
+    s_capui.step = UI_CAP_CONNECT;
+    s_capui.cab = 0;
+    s_capui.source = false;
+    s_capui.auto_index = 0;
+    cap_type_show();
+    cap_save_type_show();
+    cap_cab_show();
+    cap_listen_show();
+    cap_name_show();
+    cap_show_step();
+    for (int i = 0; i <= UI_CAP_DONE; i++) if (s_cap_msg[i]) lv_label_set_text(s_cap_msg[i], "");
+    lv_obj_set_hidden(s_cap, false);
+    lv_obj_move_foreground(s_cap);
+    cap_command(1, 0);   // CAPC_OPEN: into capture mode
+}
+
+// ---- from the controller ----
+
+void ui_capture_show(const ui_capture_t *c)
+{
+    lvgl_port_lock(0);
+    s_capui.user_captures = c->user_captures;
+    if (s_set_cap_count) {
+        if (c->user_captures >= 0) lv_label_set_text_fmt(s_set_cap_count, "The new capture goes to My Neural Captures - %d of 256 used.", c->user_captures);
+        else lv_label_set_text(s_set_cap_count, "The new capture goes to My Neural Captures (up to 256).");
+    }
+    if (c->step == UI_CAP_CLOSED) {
+        s_capui.step = UI_CAP_CLOSED;
+        cap_close_assistant();
+        lvgl_port_unlock();
+        return;
+    }
+    bool opened = lv_obj_is_hidden(s_cap);
+    if (opened) {   // the Nano went into capture mode by itself
+        s_capui.name[0] = 0;
+        cap_type_show();
+        cap_save_type_show();
+    }
+    s_capui.step = c->step;
+    s_capui.busy = c->busy;
+    s_capui.cab = c->cab;
+    if (s_capui.auto_index == 0) s_capui.source = c->source;
+    s_cap_raw[0] = c->gain;
+    s_cap_raw[1] = c->level;
+    cap_values_show(c->gain, c->level);
+    cap_cab_show();
+    cap_listen_show();
+    cap_name_show();
+    lv_label_set_text_fmt(s_cap_progress_title, "Capturing \xC2\xB7 %d %%", c->progress);
+    lv_bar_set_value(s_cap_progress_bar, c->progress, LV_ANIM_ON);
+    int left = (100 - c->progress) * 3;   // about 5 minutes in all
+    if (c->progress <= 0) lv_label_set_text(s_cap_progress_left, "Starting ...");
+    else if (left >= 90) lv_label_set_text_fmt(s_cap_progress_left, "About %d minutes left.", (left + 30) / 60);
+    else lv_label_set_text(s_cap_progress_left, "Almost done.");
+    if (c->saved && c->saved[0]) {
+        const char *nl = strchr(c->saved, '\n');
+        lv_label_set_text_fmt(s_cap_done_title, "%.*s", nl ? (int)(nl - c->saved) : (int)strlen(c->saved), c->saved);
+        lv_label_set_text(s_cap_done_text, nl ? nl + 1 : "");
+    }
+    for (int i = 0; i <= UI_CAP_DONE; i++) {
+        if (!s_cap_msg[i]) continue;
+        if (i == c->step && c->message) lv_label_set_text(s_cap_msg[i], c->message);
+        else if (i != c->step) lv_label_set_text(s_cap_msg[i], "");
+    }
+    if (c->step == UI_CAP_COMPARE && c->busy) lv_label_set_text(s_cap_msg[UI_CAP_COMPARE], "Saving ...");
+    cap_show_step();
+    if (opened || !lv_obj_is_hidden(s_cap)) {
+        lv_obj_set_hidden(s_cap, false);
+        lv_obj_move_foreground(s_cap);
+        if (!lv_obj_is_hidden(s_rename)) lv_obj_move_foreground(s_rename);
+    }
+    lvgl_port_unlock();
+}
+
+// The meters: the Nano's raw value, shown on 0-255 (its scale is still to be confirmed on the Nano) with a hold.
+void ui_capture_meter(int which, int value)
+{
+    if (which < 0 || which > 1) return;
+    lvgl_port_lock(0);
+    if (value < 0) value = 0;
+    if (value > 255) value = 255;
+    int w = 420 * value / 255;
+    lv_obj_set_width(s_cap_fill[which], w > 0 ? w : 1);
+    uint32_t now = lv_tick_get();
+    if (value >= s_capui.peak[which] || now - s_capui.peak_tick[which] > 1500) {
+        s_capui.peak[which] = value;
+        s_capui.peak_tick[which] = now;
+        lv_obj_set_x(s_cap_peak[which], 420 * value / 255);
+    }
+    uint32_t color = value > 240 ? CAP_RED : GREEN;
+    lv_obj_set_style_bg_color(s_cap_fill[which], lv_color_hex(color), 0);
+    lv_obj_set_style_bg_color(s_cap_peak[which], lv_color_hex(color), 0);
+    lvgl_port_unlock();
+}
+
+// ---- building ----
+
+static lv_obj_t *cap_button(lv_obj_t *parent, int x, int y, int w, int h, const char *text, lv_event_cb_t cb, int data)
+{
+    lv_obj_t *b = small_button(parent, x, y, w, h, text, cb, data);
+    return b;
+}
+
+static void cap_meter_row(lv_obj_t *page, int which, int y, const char *caption)
+{
+    cap_text(page, 18, y, 0, &ui_font_12, MUTED, caption);
+    s_cap_value[which] = cap_text(page, 18, y + 16, 0, &ui_font_24, TEXT, "");
+    lv_obj_t *bar = lv_obj_create(page);
+    lv_obj_remove_style_all(bar);
+    lv_obj_set_pos(bar, 168, y + 6);
+    lv_obj_set_size(bar, 424, 32);
+    lv_obj_set_style_bg_color(bar, lv_color_hex(0x0B0C0D), 0);
+    lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(bar, 1, 0);
+    lv_obj_set_style_border_color(bar, lv_color_hex(CARD_BORDER), 0);
+    lv_obj_set_style_radius(bar, 6, 0);
+    lv_obj_set_scrollable(bar, false);
+    lv_obj_t *zone = lv_obj_create(bar);   // where it should be (the Nano's green)
+    lv_obj_remove_style_all(zone);
+    lv_obj_set_pos(zone, 230, 0);
+    lv_obj_set_size(zone, 140, 30);
+    lv_obj_set_style_bg_color(zone, lv_color_hex(GREEN), 0);
+    lv_obj_set_style_bg_opa(zone, LV_OPA_10, 0);
+    lv_obj_set_style_border_width(zone, 1, 0);
+    lv_obj_set_style_border_side(zone, LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_RIGHT, 0);
+    lv_obj_set_style_border_color(zone, lv_color_hex(0x5B6168), 0);
+    s_cap_fill[which] = lv_obj_create(bar);
+    lv_obj_remove_style_all(s_cap_fill[which]);
+    lv_obj_set_pos(s_cap_fill[which], 1, 4);
+    lv_obj_set_size(s_cap_fill[which], 1, 22);
+    lv_obj_set_style_radius(s_cap_fill[which], 3, 0);
+    lv_obj_set_style_bg_color(s_cap_fill[which], lv_color_hex(GREEN), 0);
+    lv_obj_set_style_bg_opa(s_cap_fill[which], LV_OPA_COVER, 0);
+    s_cap_peak[which] = lv_obj_create(bar);
+    lv_obj_remove_style_all(s_cap_peak[which]);
+    lv_obj_set_pos(s_cap_peak[which], 0, 2);
+    lv_obj_set_size(s_cap_peak[which], 3, 26);
+    lv_obj_set_style_bg_color(s_cap_peak[which], lv_color_hex(GREEN), 0);
+    lv_obj_set_style_bg_opa(s_cap_peak[which], LV_OPA_COVER, 0);
+    for (int d = 0; d < 2; d++) {
+        lv_obj_t *b = cap_button(page, 606 + d * 64, y, 56, 46, d ? "+" : "\xE2\x88\x92", on_cap_step_value, which << 1 | d);
+        lv_obj_set_style_text_font(lv_obj_get_child(b, 0), &ui_font_28, 0);
+        lv_obj_add_event_cb(b, on_cap_step_value, LV_EVENT_LONG_PRESSED_REPEAT, (void *)(intptr_t)(which << 1 | d));
+    }
+}
+
+static void cap_cab_row(lv_obj_t *page, int row, int x, int y)
+{
+    for (int i = 0; i <= NANO_CAB_SLOTS; i++) {
+        char text[4];
+        snprintf(text, sizeof(text), "%d", i);
+        s_cap_cab_btn[row][i] = cap_button(page, x + (i ? 64 + (i - 1) * 46 : 0), y, i ? 42 : 60, 42, i ? text : "Off", on_cap_cab, i);
+    }
+}
+
+static void build_capture(lv_obj_t *screen)
+{
+    s_cap = lv_obj_create(screen);   // dark over the whole screen, the sheet on it
+    lv_obj_remove_style_all(s_cap);
+    lv_obj_set_size(s_cap, 800, 480);
+    lv_obj_set_style_bg_color(s_cap, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_cap, LV_OPA_COVER, 0);
+    lv_obj_set_scrollable(s_cap, false);
+    lv_obj_set_clickable(s_cap, true);   // (taps do not reach the screen below)
+    s_cap_panel = panel(s_cap, 12, 10, CAP_W, CAP_H);
+    lv_obj_set_style_bg_color(s_cap_panel, lv_color_hex(PANEL_BG), 0);
+    dialog_title(s_cap_panel, "New Neural Capture");
+    close_button(s_cap_panel, CAP_W - 64, 12, on_cap_close, 0);
+    for (int i = 0; i < 4; i++) {   // the steps
+        lv_obj_t *box = lv_obj_create(s_cap_panel);
+        lv_obj_remove_style_all(box);
+        lv_obj_set_pos(box, 18 + i * 187, 62);
+        lv_obj_set_size(box, 179, 36);
+        lv_obj_set_style_radius(box, 8, 0);
+        lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(box, 1, 0);
+        s_cap_step_box[i] = box;
+        s_cap_step_label[i] = label(box, &ui_font_14, MUTED);
+        s_cap_step_check[i] = label(box, &lv_font_montserrat_14, GREEN);
+        lv_label_set_text(s_cap_step_check[i], LV_SYMBOL_OK);
+    }
+
+    // 1 Connect
+    lv_obj_t *p = s_cap_page[UI_CAP_CONNECT] = cap_page();
+    static const char *const TYPES[CAP_TYPE_COUNT] = { "Amp + cab (mic)", "Amp head", "Pedal" };
+    static const int TYPE_W[CAP_TYPE_COUNT] = { 190, 140, 110 };
+    for (int i = 0, x = 18; i < CAP_TYPE_COUNT; x += TYPE_W[i] + 6, i++) s_cap_type_btn[i] = cap_button(p, x, 2, TYPE_W[i], 42, TYPES[i], on_cap_type, i);
+    s_cap_connect_text = cap_text(p, 18, 58, 740, &ui_font_16, TEXT, "");
+    lv_obj_set_style_text_line_space(s_cap_connect_text, 7, 0);
+    lv_obj_t *warn = card(p, 18, 292, 430, 52);
+    lv_obj_set_style_bg_color(warn, lv_color_hex(0x1D1609), 0);
+    lv_obj_set_style_border_color(warn, lv_color_hex(0x6B4A12), 0);
+    lv_obj_t *wl = cap_text(warn, 10, 6, 410, &ui_font_14, 0xFFD38A,
+                            "Tube amps: never connect the speaker output to the Nano without a reactive load box - it can damage both.");
+    (void)wl;
+    cap_outline(cap_button(p, 470, 294, 130, 50, "Cancel", on_cap_close, 0));
+    primary(cap_button(p, 610, 294, 148, 50, "Next", on_cap_next, UI_CAP_LEVELS));
+    s_cap_msg[UI_CAP_CONNECT] = cap_message_label(p, 18, 262, 740);
+
+    // 2 Levels
+    p = s_cap_page[UI_CAP_LEVELS] = cap_page();
+    cap_meter_row(p, 0, 0, "CAPTURE IN");
+    cap_meter_row(p, 1, 56, "OUTPUT LEVEL");
+    cap_dot(p, 18, 120, GREEN);
+    cap_text(p, 38, 116, 410, &ui_font_14, TEXT, "Strum hard. Green = good.");
+    cap_dot(p, 18, 144, CAP_BLUE);
+    cap_text(p, 38, 140, 410, &ui_font_14, TEXT, "Too low: raise CAPTURE IN. Still low at +24 dB? Set it to 0 and switch BOOST on at the Nano (+26 dB).");
+    cap_dot(p, 18, 186, CAP_RED);
+    cap_text(p, 38, 182, 410, &ui_font_14, TEXT, "Clipping: BOOST off, or turn the amp's / pedal's output down.");
+    cap_text(p, 470, 116, 290, &ui_font_14, MUTED, "Output level is only what you hear (headphones, OUTPUT 1L).");
+    cap_text(p, 470, 160, 0, &ui_font_14, MUTED, "Listen through cab");
+    cap_cab_row(p, 0, 470, 182);
+    s_cap_msg[UI_CAP_LEVELS] = cap_message_label(p, 18, 232, 740);
+    cap_outline(cap_button(p, 470, 294, 130, 50, "Back", on_cap_next, UI_CAP_CONNECT));
+    cap_go(cap_button(p, 610, 294, 148, 50, "Start capture", on_cap_start, 0));
+
+    // 3 Capturing
+    p = s_cap_page[UI_CAP_TRAINING] = cap_page();
+    s_cap_progress_title = cap_text(p, 18, 6, 0, &ui_font_title_30, TEXT, "Capturing");
+    s_cap_progress_bar = lv_bar_create(p);
+    lv_obj_set_pos(s_cap_progress_bar, 18, 58);
+    lv_obj_set_size(s_cap_progress_bar, 740, 16);
+    lv_bar_set_range(s_cap_progress_bar, 0, 100);
+    lv_obj_set_style_bg_color(s_cap_progress_bar, lv_color_hex(0x0B0C0D), LV_PART_MAIN);
+    lv_obj_set_style_border_width(s_cap_progress_bar, 1, LV_PART_MAIN);
+    lv_obj_set_style_border_color(s_cap_progress_bar, lv_color_hex(CARD_BORDER), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_cap_progress_bar, lv_color_hex(GREEN), LV_PART_INDICATOR);
+    s_cap_progress_left = cap_text(p, 18, 84, 0, &ui_font_14, MUTED, "");
+    lv_obj_t *tips = card(p, 18, 118, 740, 112);
+    static const char *const TIPS[3] = { "The Nano plays test tones through your amp - keep the volume where it is.",
+                                         "Don't play, don't touch the amp, the mic or the cables until it is done.",
+                                         "Keep the room quiet - the mic hears everything." };
+    for (int i = 0; i < 3; i++) {
+        cap_dot(tips, 14, 18 + i * 32, CAP_ORANGE);
+        cap_text(tips, 36, 13 + i * 32, 690, &ui_font_16, TEXT, TIPS[i]);
+    }
+    s_cap_msg[UI_CAP_TRAINING] = cap_message_label(p, 18, 244, 740);
+    s_cap_stop = cap_button(p, 560, 294, 198, 50, "Stop capture", on_cap_stop, 0);
+    cap_outline(s_cap_stop);
+    s_cap_stop_timer = lv_timer_create(cap_stop_disarm, 3000, NULL);
+    lv_timer_pause(s_cap_stop_timer);
+
+    // 4 Compare & save
+    p = s_cap_page[UI_CAP_COMPARE] = cap_page();
+    cap_text(p, 18, 12, 0, &ui_font_14, MUTED, "Listen");
+    s_cap_listen_btn[0] = cap_button(p, 100, 2, 112, 42, "Capture", on_cap_listen, 0);
+    s_cap_listen_btn[1] = cap_button(p, 218, 2, 112, 42, "Original", on_cap_listen, 1);
+    cap_text(p, 360, 12, 0, &ui_font_14, MUTED, "Auto");
+    static const char *const AUTO[4] = { "Off", "2 s", "4 s", "8 s" };
+    for (int i = 0; i < 4; i++) s_cap_auto_btn[i] = cap_button(p, 408 + i * 64, 2, 60, 42, AUTO[i], on_cap_auto, i);
+    cap_text(p, 18, 62, 0, &ui_font_14, MUTED, "Cab");
+    cap_cab_row(p, 1, 100, 52);
+    cap_text(p, 420, 54, 340, &ui_font_14, MUTED, "Captured a cab too? Listen without a cab (Off) to compare fairly.");
+    cap_text(p, 18, 120, 0, &ui_font_14, MUTED, "Name");
+    s_cap_name = cap_button(p, 100, 106, 658, 48, "", on_cap_name, 0);
+    lv_obj_set_style_border_color(s_cap_name, lv_color_hex(GREEN), 0);
+    lv_obj_set_style_bg_color(s_cap_name, lv_color_hex(0x0D0F11), 0);
+    lv_obj_align(lv_obj_get_child(s_cap_name, 0), LV_ALIGN_LEFT_MID, 4, 0);
+    cap_text(p, 18, 178, 0, &ui_font_14, MUTED, "Type");
+    for (int i = 0; i < CAP_SAVE_COUNT; i++) s_cap_save_btn[i] = cap_button(p, 100 + i * 118, 166, 112, 42, CAP_SAVE_NAMES[i], on_cap_save_type, i);
+    s_cap_msg[UI_CAP_COMPARE] = cap_message_label(p, 18, 228, 740);
+    s_cap_discard = cap_button(p, 18, 294, 130, 50, "Discard", on_cap_discard, 0);
+    cap_outline(s_cap_discard);
+    s_cap_lib_button = cap_button(p, 420, 294, 180, 50, "Save to library", on_cap_save_library, 0);
+    s_cap_slot_button = cap_button(p, 610, 294, 148, 50, "Save to slot ...", on_cap_save_slot, 0);
+    cap_go(s_cap_slot_button);
+    s_cap_auto_timer = lv_timer_create(cap_auto_cb, 2000, NULL);
+    lv_timer_pause(s_cap_auto_timer);
+
+    // the slot for "Save to slot": 5 banks x 5 (what is in it now stays in the library)
+    s_cap_slots = lv_obj_create(s_cap_panel);
+    lv_obj_remove_style_all(s_cap_slots);
+    lv_obj_set_pos(s_cap_slots, 0, 56);
+    lv_obj_set_size(s_cap_slots, CAP_W, CAP_H - 56);
+    lv_obj_set_style_bg_color(s_cap_slots, lv_color_hex(PANEL_BG), 0);
+    lv_obj_set_style_bg_opa(s_cap_slots, LV_OPA_COVER, 0);
+    lv_obj_set_clickable(s_cap_slots, true);
+    lv_obj_set_scrollable(s_cap_slots, false);
+    cap_text(s_cap_slots, 18, 4, 740, &ui_font_14, MUTED, "Which capture slot? (bank - slot) The capture in it now stays in My Neural Captures.");
+    for (int i = 0; i < NANO_CAPTURE_SLOTS; i++) {
+        s_cap_slot_btn[i] = cap_button(s_cap_slots, 18 + (i % 5) * 148, 30 + (i / 5) * 54, 142, 48, "", on_cap_slot, i + 1);
+        lv_obj_t *l = lv_obj_get_child(s_cap_slot_btn[i], 0);
+        lv_obj_set_style_text_font(l, &ui_font_14, 0);
+        lv_obj_set_width(l, 130);
+        lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+        lv_obj_center(l);
+    }
+    cap_outline(cap_button(s_cap_slots, 420, 342, 180, 50, "Cancel", on_cap_slot_button, 0));
+    s_cap_slot_ok = cap_button(s_cap_slots, 610, 342, 148, 50, "", on_cap_slot_button, 1);
+    cap_go(s_cap_slot_ok);
+    lv_obj_set_hidden(s_cap_slots, true);
+
+    // Done
+    p = s_cap_page[UI_CAP_DONE] = cap_page();
+    lv_obj_t *ok = lv_obj_create(p);
+    lv_obj_remove_style_all(ok);
+    lv_obj_set_size(ok, 74, 74);
+    lv_obj_align(ok, LV_ALIGN_TOP_MID, 0, 24);
+    lv_obj_set_style_radius(ok, 37, 0);
+    lv_obj_set_style_bg_color(ok, lv_color_hex(GREEN), 0);
+    lv_obj_set_style_bg_opa(ok, LV_OPA_COVER, 0);
+    lv_obj_t *mark = label(ok, &lv_font_montserrat_28, INK);
+    lv_label_set_text(mark, LV_SYMBOL_OK);
+    lv_obj_center(mark);
+    s_cap_done_title = label(p, &ui_font_title_26, TEXT);
+    lv_obj_set_width(s_cap_done_title, 740);
+    lv_obj_set_style_text_align(s_cap_done_title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(s_cap_done_title, 18, 116);
+    s_cap_done_text = label(p, &ui_font_16, MUTED);
+    lv_obj_set_width(s_cap_done_text, 740);
+    lv_obj_set_style_text_align(s_cap_done_text, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(s_cap_done_text, LV_LABEL_LONG_WRAP);
+    lv_obj_set_pos(s_cap_done_text, 18, 160);
+    s_cap_msg[UI_CAP_DONE] = NULL;
+    cap_button(p, 400, 294, 200, 50, "Another capture", on_cap_again, 0);
+    primary(cap_button(p, 610, 294, 148, 50, "Done", on_cap_done, 0));
+
+    s_capui.type = CAP_TYPE_AMP_CAB;
+    s_capui.save_type = CAP_SAVE_AMP_CAB;
+    cap_type_show();
+    cap_save_type_show();
+    cap_values_show(0, 0);
+    lv_obj_set_hidden(s_cap, true);
+}
+
+// Settings > Capture
+static void build_settings_capture(void)
+{
+    lv_obj_t *page = settings_page(SET_CAPTURE, "Neural Capture",
+                                   "Capture an amp, a cab or a pedal with the Nano (Neural Capture V1). The Nano learns on its own - "
+                                   "no computer, no internet.");
+    lv_obj_t *box = card(page, 20, 112, 546, 150);
+    cap_dot(box, 14, 16, GREEN);
+    cap_text(box, 36, 11, 496, &ui_font_14, TEXT, "Takes about 5 minutes.");
+    cap_dot(box, 14, 44, GREEN);
+    cap_text(box, 36, 39, 496, &ui_font_14, TEXT, "You need: the amp or pedal, a dynamic mic or a load box / D.I. out, two instrument cables, headphones.");
+    cap_dot(box, 14, 92, GREEN);
+    s_set_cap_count = cap_text(box, 36, 87, 496, &ui_font_14, TEXT, "The new capture goes to My Neural Captures (up to 256).");
+    cap_text(page, 20, 280, 546, &ui_font_14, MUTED, "The board stays in the capture assistant until you close it. Footswitches, "
+                                                    "presets and scenes do nothing meanwhile.");
+    cap_go(small_button(page, 386, 400, 180, 50, "New capture", on_settings_capture, 0));
+}
+
 static void build_settings(lv_obj_t *screen)
 {
     s_settings = lv_obj_create(screen);
@@ -3921,7 +4633,8 @@ static void build_settings(lv_obj_t *screen)
 
     static const struct { int icon; const char *name; } ITEMS[SET_COUNT] = {
         { UI_ICON_NANO, "Nano" }, { UI_ICON_MIDI, "MIDI" }, { UI_ICON_USB, "USB audio" },
-        { UI_ICON_GRID, "Tile layout" }, { UI_ICON_FOOTSWITCH, "Footswitches" }, { UI_ICON_INFO, "System" } };
+        { UI_ICON_GRID, "Tile layout" }, { UI_ICON_FOOTSWITCH, "Footswitches" }, { UI_ICON_INFO, "System" },
+        { UI_ICON_CAP_AMP_CAB, "Capture" } };
     for (int i = 0; i < SET_COUNT; i++) {
         lv_obj_t *it = lv_button_create(side);
         lv_obj_remove_style_all(it);
@@ -3996,6 +4709,7 @@ static void build_settings(lv_obj_t *screen)
 
     settings_embed(SET_SYSTEM, s_system, s_system_close);
     lv_obj_set_size(s_system_rows, 546, 276);
+    build_settings_capture();
 
     lv_obj_set_hidden(s_settings, true);
 }
@@ -4518,6 +5232,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     build_setlist(screen);
     build_system(screen);
     build_settings(screen);   // (after MIDI, USB and System: it takes them in)
+    build_capture(screen);
     build_rotate(screen);
     build_scene_capture(screen);
     build_toast(screen);

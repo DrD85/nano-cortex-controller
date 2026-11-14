@@ -280,6 +280,22 @@ void ui_splash_done(void);
 
 // Short message at the top of the screen.
 void ui_show_message(const char *text);
+
+// ---- Neural Capture V1 assistant (Settings > Capture) ----
+typedef enum { UI_CAP_CLOSED, UI_CAP_CONNECT, UI_CAP_LEVELS, UI_CAP_TRAINING, UI_CAP_COMPARE, UI_CAP_DONE } ui_cap_step_t;
+typedef struct {
+    int step;              // ui_cap_step_t
+    int gain, level;       // CAPTURE IN / OUTPUT LEVEL, 0-255
+    int progress;          // 0-100
+    int cab;               // listening through cab 0-5
+    bool source;           // listening to the original
+    int user_captures;     // in My Neural Captures, -1 = not known
+    const char *message;   // a hint to show once, NULL = none
+    const char *saved;     // the done step's text
+    bool busy;             // waiting for the Nano (saving, leaving)
+} ui_capture_t;
+void ui_capture_show(const ui_capture_t *c);
+void ui_capture_meter(int which, int value);   // which 0 = CAPTURE IN, 1 = OUTPUT; the Nano's raw value
 // The system page (the System button of the MIDI dialog sent ')'): these lines.
 void ui_show_system(const char *text);
 // Footswitch tile 0-7 lights up for a moment (the press arrived).

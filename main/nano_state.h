@@ -53,6 +53,19 @@
 #define NANO_MSG_LISTEN_CAPTURE_RESPONSE 151  // { 1 action, 2 requestId, 3 status (1 = success), 5 message }
 #define NANO_MSG_LISTEN_IR 158                // AuditioningListenImpulseResponseRequest, the same shape
 #define NANO_MSG_LISTEN_IR_RESPONSE 159
+// Neural Capture V1 (the Nano learns by itself), as Cortex Cloud 2.8.3 guides it - see the capture section below
+#define NANO_MSG_SAVE_CAPTURE 13              // SaveCaptureRequest { 4 NeuralCaptureSummaryRecord } (no data: the new capture)
+#define NANO_MSG_SAVE_CAPTURE_RESPONSE 14     // { 3 status, 4 libraryUserCaptureId { 1 index, 2 name, 3 hash }, 5 message }
+#define NANO_MSG_BUTTON 27                    // ButtonPress { 3 type (0 Exit, 1 Capture, 2 Save), 4 context (1 = capture mode) }
+#define NANO_MSG_START_TRAINING 39            // StartTraining {}: the capture itself
+#define NANO_MSG_TRAINING_PROGRESS 40         // { 3 progress 0-100 }
+#define NANO_MSG_TRAINING_DONE 41             // {}
+#define NANO_MSG_AB_COMPARE 42                // ABComparison { 3 listenTo: 0 the capture, 1 the source (amp / pedal) }
+#define NANO_MSG_COMPARE_CAB 43               // ComparisonCabinet { 3 cabinetSlot, 0 = none }
+#define NANO_MSG_START_CAPTURE 73             // StartCaptureCalibration {}: into capture mode (flow 0 = V1 on the Nano)
+#define NANO_MSG_CAPTURE_STATE_REQUEST 87     // CaptureStateRequest {}
+#define NANO_MSG_CAPTURE_STATE 88             // { 3 step, 4 progress, 7 listenTo, 8 cabinetSelector }
+#define NANO_MSG_CAPTURE_SANITY 93            // CaptureSanityCheck { 3 status: 0 too low / missing, 1 too hot, 2 ok }
 #define NANO_MAX_PARAMS 24
 
 #define NANO_PRESETS 64
@@ -87,6 +100,9 @@ typedef struct {
     int fw_major, fw_minor;             // NanOS version from field 24 ("2.3.0+05c36621"), -1 = not reported
     bool tuner_muted;                   // output muted while the tuner is open (state field 63)
     bool names_loaded;
+    int context;                        // state field 23: 0 play mode, 1 capture mode (NANO_CONTEXT_CAPTURE)
+    int capture_gain, capture_level;    // capture mode: CAPTURE IN gain / OUTPUT LEVEL, 0-255 (fields 3 / 4 then)
+    int user_captures;                  // field 28: captures in "My Neural Captures" (up to 256)
     char preset_names[NANO_PRESETS][65];
 } nano_state_t;
 
@@ -204,6 +220,27 @@ void nano_exp_assignments(const uint8_t *payload, size_t len, nano_exp_range_t r
 // SaveExpAssignments: all assignments of the preset (the save replaces them). Returns 0 if they do not fit.
 size_t nano_exp_save(int preset, const nano_exp_range_t ranges[NANO_EXP_RANGES], const nano_exp_switch_t switches[NANO_EXP_SWITCHES],
                      uint8_t *out, size_t max);
+
+// ---- Neural Capture V1 ----
+#define NANO_CONTEXT_CAPTURE 1
+#define NANO_USER_CAPTURES_MAX 256
+// State reply in capture mode (field 23 = 1): only the capture values are taken, the preset stays as it was.
+// Returns the reply's context.
+int nano_state_context(const uint8_t *payload, size_t len);
+void nano_capture_values(nano_state_t *st, const uint8_t *payload, size_t len);
+// ValueMessage in capture mode: which 0 = CAPTURE IN gain, 1 = OUTPUT LEVEL; raw 0-255.
+size_t nano_capture_mode_value(int which, int raw, uint8_t *out);
+size_t nano_capture_exit(uint8_t *out);                  // ButtonPress Exit in capture mode (the Nano goes back one step)
+size_t nano_compare_cab(int slot, uint8_t *out);         // 0 = no cab, 1-5
+size_t nano_ab_listen(bool source, uint8_t *out);        // false = the capture, true = the original
+// SaveCaptureRequest for the capture just made: name (4+ characters), type as the Nano names it ("amp_head" ...).
+size_t nano_capture_save(const char *name, const char *type, uint8_t *out, size_t max);
+// SetCaptureSlotContent (80) with the id from the save reply (field 4, kept as it came): slot 1-25.
+size_t nano_capture_to_slot(int slot, const uint8_t *id, size_t id_len, uint8_t *out, size_t max);
+// The nested field 'field' of a message as bytes (pointer into payload), false if missing.
+bool nano_field_bytes(const uint8_t *payload, size_t len, uint32_t field, const uint8_t **data, size_t *data_len);
+// Capture value shown in dB: CAPTURE IN 0..24 dB, OUTPUT LEVEL -60..+12 dB (the app's ranges and skews).
+float nano_capture_db(int which, int raw);
 
 // Metering from the Nano: what (NANO_METER_*) and its value.
 enum { NANO_METER_CAPTURE_IN, NANO_METER_CAPTURE_OUT, NANO_METER_PEDAL };

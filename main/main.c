@@ -607,13 +607,26 @@ static void post(app_event_t ev)
     }
 }
 
+// Capture assistant commands ('0', action << 16 | value; see the capture section) and its meters from the Nano.
+enum { CAPC_OPEN = 1, CAPC_EXIT, CAPC_GAIN, CAPC_LEVEL, CAPC_CAB, CAPC_TRAIN, CAPC_STOP, CAPC_LISTEN, CAPC_AGAIN,
+       CAPC_METER, CAPC_DISCARD, CAPC_STEP, CAPC_CHECK };
+static volatile int s_cap_meter[2] = { -1, -1 };
+static volatile int s_cap_meter_event;
+
 static void on_message(uint32_t type, const uint8_t *payload, size_t len)
 {
     if (type == NANO_MSG_TUNER_METERING && !s_tuner_on) return;
     if (type == NANO_MSG_METERING) {
         int what, value;
         nano_metering(payload, len, &what, &value);
-        if (what != NANO_METER_PEDAL) return;   // (levels are not used)
+        if (what == NANO_METER_CAPTURE_IN || what == NANO_METER_CAPTURE_OUT) {   // capture mode: its two meters
+            s_cap_meter[what] = value;
+            if (__atomic_exchange_n(&s_cap_meter_event, 1, __ATOMIC_SEQ_CST)) return;
+            app_event_t ev = { .kind = EV_COMMAND, .command = '0', .arg = CAPC_METER << 16 };
+            if (xQueueSend(s_events, &ev, 0) != pdTRUE) __atomic_store_n(&s_cap_meter_event, 0, __ATOMIC_SEQ_CST);
+            return;
+        }
+        if (what != NANO_METER_PEDAL) return;
         s_pedal_value = value;
         if (s_pedal_collect && esp_timer_get_time() >= s_pedal_collect_from_us) {
             if (value < s_pedal_min) s_pedal_min = value;
@@ -1610,8 +1623,15 @@ static void editor_read_later(int ms)
 
 static int64_t s_last_change_us;   // the controller's own last change (the Nano answers it with change notices too)
 
+static bool cap_allowed(uint32_t type);
+static bool cap_in_mode(void);
+
 static bool send(const char *label, uint32_t type, const uint8_t *payload, size_t len)
 {
+    if (cap_in_mode() && !cap_allowed(type)) {   // the Nano is capturing: nothing may change it now
+        ESP_LOGW(TAG, "Capture mode - not sent: %s", label);
+        return false;
+    }
     switch (type) {
     case NANO_MSG_STATE_REQUEST: case NANO_MSG_EXP_REQUEST: case NANO_MSG_SETTINGS_REQUEST:
     case NANO_MSG_LIBRARY_REQUEST: case NANO_MSG_CAB_SETTINGS_REQUEST: case NANO_MSG_FX_PARAMS_REQUEST:
@@ -1653,6 +1673,11 @@ static void request_current_state(void)
 static void state_overdue(void)
 {
     if (!nano_link_ready()) return;
+    if (cap_in_mode()) {   // capturing: the Nano may be busy - no new connection in the middle of it
+        ESP_LOGW(TAG, "No state reply in capture mode - waiting");
+        s_state_retries = 0;
+        return;
+    }
     if (++s_state_retries > STATE_RETRIES) {
         ESP_LOGE(TAG, "The Nano does not answer - connecting again");
         s_state_retries = 0;
@@ -4483,6 +4508,7 @@ static void handle_midi(int arg)
 {
     uint8_t status = (uint8_t)(arg >> 16), d1 = (uint8_t)(arg >> 8), d2 = (uint8_t)arg;
     uint8_t type = status & 0xF0;
+    if (cap_in_mode()) return;   // capture mode: MIDI waits
     if (type == 0xB0 && d1 == 1) {
         int value = __atomic_exchange_n(&s_cc1, -1, __ATOMIC_SEQ_CST);
         if (value >= 0 && nano_link_ready()) midi_expression(value);
@@ -4573,6 +4599,454 @@ static void preset_extras_copy(int from, int to)
     if (!ok) ui_show_message("Not all of the controller's settings went with the copy (memory full?).");
 }
 
+// ---- Neural Capture V1 (Settings > Capture) ----
+// The board guides a capture as Cortex Cloud does (messages from the app 2.8.3, see nano_state.h): 73 puts the Nano
+// into capture mode, 26 (context 1) sets CAPTURE IN / OUTPUT LEVEL, 39 starts it, 40 / 41 report it, 42 / 43 compare,
+// 13 saves it into "My Neural Captures" (80 then loads it into a slot), 27 Exit goes back one step.
+// While the Nano is in capture mode the controller sends nothing else to it (cap_allowed): no preset, scene or effect
+// change, no auto-wah, no MIDI. Capture mode is also noticed when it was started on the Nano or in an app.
+static struct {
+    bool mode;                 // the Nano is in capture mode (or was asked to go there)
+    int step;                  // UI_CAP_*
+    int progress;              // 0-100 while it learns
+    int cab;                   // listening through cab 0-5
+    bool source;               // listening to the original
+    bool leaving;              // Exit until the Nano is back in play mode
+    int exit_tries;
+    bool saving;               // a SaveCapture (13) or the slot load (80) after it is out
+    int save_slot;             // 1-25, 0 = library only
+    char name[65];
+    char message[160];
+    char saved[160];
+    int meter_max[2];          // the highest meter values seen (log, to learn their scale)
+    bool context_seen;         // the Nano reported capture mode in a state reply (field 23) - then that decides
+    int exits_needed, exits_sent;
+    int64_t last_meter_us;     // capture meters come only in capture mode
+    int64_t started_us;
+} s_cap;
+static esp_timer_handle_t s_cap_timer;
+
+static bool cap_allowed(uint32_t type)   // what other parts of the controller may still send in capture mode
+{
+    return type == NANO_MSG_STATE_REQUEST || type == NANO_MSG_LIBRARY_REQUEST || type == NANO_MSG_SETTINGS_REQUEST ||
+           type == NANO_MSG_SET_PRESET_SLOTS_RESPONSE;
+}
+
+static bool cap_in_mode(void) { return s_cap.mode; }
+
+static void cap_timer_cb(void *arg) { command('0', CAPC_CHECK << 16); }
+
+static void cap_check_later(int ms)
+{
+    if (!s_cap_timer) {
+        const esp_timer_create_args_t args = { .callback = cap_timer_cb, .name = "capture" };
+        if (esp_timer_create(&args, &s_cap_timer) != ESP_OK) return;
+    }
+    esp_timer_stop(s_cap_timer);
+    esp_timer_start_once(s_cap_timer, (uint64_t)ms * 1000);
+}
+
+static bool cap_send(const char *label, uint32_t type, const uint8_t *payload, size_t len)
+{
+    s_last_change_us = esp_timer_get_time();
+    if (nano_link_send(label, type, payload, len)) return true;
+    ESP_LOGW(TAG, "Could not queue: %s", label);
+    return false;
+}
+
+static void cap_show(void)
+{
+    ui_capture_t c = {
+        .step = s_cap.leaving ? UI_CAP_CLOSED : s_cap.step, .gain = s_state.capture_gain, .level = s_state.capture_level, .progress = s_cap.progress,
+        .cab = s_cap.cab, .source = s_cap.source, .user_captures = s_state.names_loaded ? s_state.user_captures : -1,
+        .message = s_cap.message[0] ? s_cap.message : NULL, .saved = s_cap.saved, .busy = s_cap.saving || s_cap.leaving,
+    };
+    ui_capture_show(&c);
+    s_cap.message[0] = 0;
+}
+
+static void cap_step(int step, const char *message)
+{
+    s_cap.step = step;
+    if (message) snprintf(s_cap.message, sizeof(s_cap.message), "%s", message);
+    cap_show();
+}
+
+// The Nano is in capture mode without the board having asked (its CAPTURE button, an app): the assistant opens at
+// the levels, so that the board's footswitches stay away.
+static void cap_entered(const char *why)
+{
+    if (s_cap.mode) return;
+    ESP_LOGI(TAG, "Capture: the Nano is in capture mode (%s) - the controller stays quiet", why);
+    s_cap.mode = true;
+    s_cap.leaving = false;
+    s_cap.progress = 0;
+    s_cap.source = false;
+    if (s_cap.step == UI_CAP_CLOSED) s_cap.step = UI_CAP_LEVELS;
+    cap_show();
+}
+
+static void cap_left(void)
+{
+    if (!s_cap.mode && s_cap.step == UI_CAP_CLOSED) return;
+    ESP_LOGI(TAG, "Capture: the Nano is back in play mode (meters seen up to %d / %d)", s_cap.meter_max[0], s_cap.meter_max[1]);
+    bool was_leaving = s_cap.leaving;
+    s_cap.mode = false;
+    s_cap.leaving = false;
+    s_cap.saving = false;
+    if (s_cap.step != UI_CAP_CLOSED) {
+        s_cap.step = UI_CAP_CLOSED;
+        cap_show();
+        if (!was_leaving) ui_show_message("The Nano left capture mode.");
+    }
+    s_state.context = 0;
+    request_current_state();
+    schedule_refresh(600);
+}
+
+static void cap_exit_step(void)
+{
+    uint8_t buf[4];
+    cap_send("Capture: Exit", NANO_MSG_BUTTON, buf, nano_capture_exit(buf));
+}
+
+// Exit until the Nano reports play mode (from the compare page it goes back to the levels first).
+static void cap_leave(void)
+{
+    s_cap.exits_needed = s_cap.step >= UI_CAP_TRAINING ? 2 : 1;
+    s_cap.step = UI_CAP_CLOSED;   // the assistant closes at once; the guard stays until the Nano reports play mode
+    cap_show();
+    if (!s_cap.mode) return;
+    s_cap.leaving = true;
+    s_cap.exit_tries = 0;
+    s_cap.exits_sent = 1;   // (from the compare step the Nano goes back to the levels first)
+    cap_exit_step();
+    cap_check_later(900);
+}
+
+static bool cap_meters_running(void) { return esp_timer_get_time() - s_cap.last_meter_us < 1200000; }
+
+// (timer) Where is the Nano? With field 23 in its state replies that tells; without it, the Exits needed for the
+// step it was on are counted and its capture meters must have stopped.
+static void cap_check(void)
+{
+    if (!s_cap.mode) return;
+    if (s_cap.context_seen || !s_cap.leaving) {
+        request_current_state();
+        return;
+    }
+    if (s_cap.exits_sent < s_cap.exits_needed || (cap_meters_running() && s_cap.exits_sent < 4)) {
+        s_cap.exits_sent++;
+        cap_exit_step();
+        cap_check_later(900);
+        return;
+    }
+    cap_left();
+}
+
+static bool cap_name_taken(const char *name)
+{
+    if (!s_library) return false;
+    for (int i = 0; i < s_library->captures.count; i++) {
+        const lib_item_t *it = &s_library->captures.items[i];
+        if (it->user && strcasecmp(it->name, name) == 0) return true;
+    }
+    return false;
+}
+
+// Text from the save step: "<slot 0-25>|<type>|<name>", slot 0 = into the library only.
+static void cap_save(const char *text)
+{
+    if (!s_cap.mode || s_cap.saving) return;
+    int slot = atoi(text);
+    const char *a = strchr(text, '|'), *b = a ? strchr(a + 1, '|') : NULL;
+    if (!a || !b) return;
+    char type[24];
+    snprintf(type, sizeof(type), "%.*s", (int)(b - a - 1), a + 1);
+    const char *name = b + 1;
+    while (*name == ' ') name++;
+    if (strlen(name) < 4) {
+        cap_step(UI_CAP_COMPARE, "The name needs at least 4 characters.");
+        return;
+    }
+    if (cap_name_taken(name)) {
+        cap_step(UI_CAP_COMPARE, "A capture with this name is already in My Neural Captures.");
+        return;
+    }
+    if (s_state.user_captures >= NANO_USER_CAPTURES_MAX) {
+        cap_step(UI_CAP_COMPARE, "My Neural Captures is full (256). Delete one in the editor or the app first.");
+        return;
+    }
+    uint8_t buf[200];
+    size_t n = nano_capture_save(name, type, buf, sizeof(buf));
+    if (!n) return;
+    snprintf(s_cap.name, sizeof(s_cap.name), "%s", name);
+    s_cap.save_slot = slot >= 1 && slot <= NANO_CAPTURE_SLOTS ? slot : 0;
+    s_cap.saving = true;
+    ESP_LOGI(TAG, "Capture: saving \"%s\" (%s)%s", name, type, s_cap.save_slot ? " and loading it into a slot" : "");
+    cap_send("Capture: save", NANO_MSG_SAVE_CAPTURE, buf, n);
+    cap_show();
+}
+
+static void cap_saved(const uint8_t *payload, size_t len)   // SaveCaptureResponse (14)
+{
+    uint32_t status = (uint32_t)nano_field_varint(payload, len, 3);
+    ESP_LOGI(TAG, "Capture saved into the Nano's library (status %lu)", (unsigned long)status);
+    request_library();
+    if (!s_cap.saving) return;   // (Cortex Cloud saved one through the controller)
+    if (status != 1) {
+        char why[96] = "";
+        const uint8_t *m;
+        size_t m_len;
+        if (nano_field_bytes(payload, len, 5, &m, &m_len)) snprintf(why, sizeof(why), " (%.*s)", (int)(m_len < 80 ? m_len : 80), (const char *)m);
+        s_cap.saving = false;
+        snprintf(s_cap.message, sizeof(s_cap.message), "The Nano did not save the capture%s.", why);
+        cap_step(UI_CAP_COMPARE, NULL);
+        return;
+    }
+    const uint8_t *id;
+    size_t id_len;
+    if (s_cap.save_slot && nano_field_bytes(payload, len, 4, &id, &id_len)) {
+        uint8_t buf[160];
+        size_t n = nano_capture_to_slot(s_cap.save_slot, id, id_len, buf, sizeof(buf));
+        if (n) {
+            cap_send("Capture: into a slot", NANO_MSG_CAPTURE_LOAD, buf, n);
+            return;   // cap_slot_loaded
+        }
+    }
+    s_cap.saving = false;
+    snprintf(s_cap.saved, sizeof(s_cap.saved), "%s is saved\nMy Neural Captures%s", s_cap.name,
+             s_cap.save_slot ? " - not loaded into the slot (no id in the Nano's answer)" : "");
+    cap_step(UI_CAP_DONE, NULL);
+}
+
+static bool cap_slot_loaded(const uint8_t *payload, size_t len)   // SetCaptureSlotContentResponse (81) after a save
+{
+    if (!s_cap.saving) return false;
+    bool ok = nano_field_varint(payload, len, 3) == 1;
+    s_cap.saving = false;
+    int slot = s_cap.save_slot;
+    snprintf(s_cap.saved, sizeof(s_cap.saved), "%s is saved\nMy Neural Captures%s", s_cap.name, ok ? "" : " (the slot was not changed)");
+    if (ok) {
+        size_t n = strlen(s_cap.saved);
+        snprintf(s_cap.saved + n, sizeof(s_cap.saved) - n, " - capture bank %d, slot %d", (slot - 1) / 5 + 1, (slot - 1) % 5 + 1);
+    }
+    cap_step(UI_CAP_DONE, NULL);
+    return true;
+}
+
+// State reply: in capture mode only the capture's values count (true = handled, the preset stays as it was).
+static bool cap_state_reply(const uint8_t *payload, size_t len)
+{
+    int context = nano_state_context(payload, len);
+    if (context != NANO_CONTEXT_CAPTURE) {
+        if (!s_cap.mode) return false;
+        if (s_cap.context_seen) {   // the Nano says play mode
+            cap_left();
+            return false;
+        }
+        return true;   // no field 23 from this Nano: the meters and the Exits decide (cap_check); the preset stays
+    }
+    if (!s_cap.context_seen) ESP_LOGI(TAG, "Capture: the Nano reports capture mode in its state (field 23)");
+    s_cap.context_seen = true;
+    nano_capture_values(&s_state, payload, len);
+    cap_entered("state");
+    if (s_cap.leaving) {
+        if (++s_cap.exit_tries > 4) {
+            s_cap.leaving = false;
+            cap_step(UI_CAP_LEVELS, "The Nano stays in capture mode - press EXIT on the Nano.");
+            return true;
+        }
+        cap_exit_step();
+        cap_check_later(700);
+        return true;
+    }
+    cap_show();
+    return true;
+}
+
+static void cap_command(int arg)
+{
+    int action = arg >> 16, value = (int16_t)(arg & 0xFFFF);
+    uint8_t buf[16];
+    switch (action) {
+    case CAPC_METER: {
+        __atomic_store_n(&s_cap_meter_event, 0, __ATOMIC_SEQ_CST);
+        s_cap.last_meter_us = esp_timer_get_time();
+        for (int i = 0; i < 2; i++) {
+            int v = s_cap_meter[i];
+            if (v < 0) continue;
+            if (v > s_cap.meter_max[i]) {
+                s_cap.meter_max[i] = v;
+                ESP_LOGI(TAG, "Capture meter %s: new highest value %d", i ? "OUTPUT" : "IN", v);
+            }
+            ui_capture_meter(i, v);
+        }
+        if (!s_cap.mode && !s_cap.leaving) {
+            cap_entered("levels from the Nano");
+            request_current_state();
+        }
+        return;
+    }
+    case CAPC_CHECK: cap_check(); return;
+    case CAPC_STEP:   // the assistant moved between Connect and Levels by itself
+        s_cap.step = value;
+        if (value == UI_CAP_CLOSED && s_cap.mode) cap_leave();
+        return;
+    default: break;
+    }
+    if (!nano_link_ready()) {
+        cap_step(s_cap.step, "The Nano is not connected.");
+        return;
+    }
+    switch (action) {
+    case CAPC_OPEN:
+    case CAPC_AGAIN:
+        ESP_LOGI(TAG, "Capture: %s", action == CAPC_OPEN ? "new capture - into capture mode" : "another capture");
+        s_cap.mode = true;
+        s_cap.leaving = false;
+        s_cap.saving = false;
+        s_cap.progress = 0;
+        s_cap.source = false;
+        s_cap.saved[0] = 0;
+        s_cap.meter_max[0] = s_cap.meter_max[1] = 0;
+        s_cap.started_us = esp_timer_get_time();
+        cap_send("Capture: start capture mode", NANO_MSG_START_CAPTURE, buf, 0);
+        s_cap.step = action == CAPC_OPEN ? UI_CAP_CONNECT : UI_CAP_LEVELS;
+        cap_show();
+        cap_check_later(500);   // the state then has CAPTURE IN / OUTPUT LEVEL
+        break;
+    case CAPC_EXIT:
+        ESP_LOGI(TAG, "Capture: leaving capture mode");
+        cap_leave();
+        break;
+    case CAPC_GAIN:
+    case CAPC_LEVEL: {
+        int which = action == CAPC_LEVEL;
+        if (value < 0) value = 0;
+        if (value > 255) value = 255;
+        if (which) s_state.capture_level = value;
+        else s_state.capture_gain = value;
+        cap_send(which ? "Capture: output level" : "Capture: capture in", NANO_MSG_VALUE, buf, nano_capture_mode_value(which, value, buf));
+        break;
+    }
+    case CAPC_CAB:
+        s_cap.cab = value >= 0 && value <= NANO_CAB_SLOTS ? value : 0;
+        cap_send("Capture: listen through cab", NANO_MSG_COMPARE_CAB, buf, nano_compare_cab(s_cap.cab, buf));
+        cap_show();
+        break;
+    case CAPC_TRAIN:
+        ESP_LOGI(TAG, "Capture: start (IN %d, OUTPUT %d)", s_state.capture_gain, s_state.capture_level);
+        s_cap.progress = 0;
+        cap_send("Capture: start", NANO_MSG_START_TRAINING, buf, 0);
+        cap_step(UI_CAP_TRAINING, NULL);
+        break;
+    case CAPC_STOP:      // stop the capture: the Nano goes back to the levels
+    case CAPC_DISCARD:   // the capture is not kept: back to the levels
+        ESP_LOGI(TAG, "Capture: %s", action == CAPC_STOP ? "stopped" : "discarded");
+        cap_exit_step();
+        s_cap.progress = 0;
+        cap_step(UI_CAP_LEVELS, NULL);
+        cap_check_later(700);
+        break;
+    case CAPC_LISTEN:
+        s_cap.source = value != 0;
+        cap_send("Capture: A/B", NANO_MSG_AB_COMPARE, buf, nano_ab_listen(s_cap.source, buf));
+        cap_show();
+        break;
+    default: break;
+    }
+}
+
+// Messages of the capture (true = handled).
+static bool cap_message(uint32_t type, const uint8_t *payload, size_t len)
+{
+    switch (type) {
+    case NANO_MSG_BUTTON: {   // a button on the Nano
+        int button = (int)nano_field_varint(payload, len, 3);
+        ESP_LOGI(TAG, "Capture: %s pressed on the Nano", button == 1 ? "CAPTURE" : button == 2 ? "SAVE" : "EXIT");
+        if (button == 1) {
+            cap_entered("CAPTURE on the Nano");
+            request_current_state();
+        } else if (button == 2) {
+            if (s_cap.mode) cap_step(s_cap.step, "Saving on the Nano itself: choose the slot with its knobs, hold SAVE to confirm.");
+        } else if (s_cap.mode && !s_cap.leaving) {
+            // EXIT on the Nano: from the compare step back to the levels, from the levels out of capture mode.
+            if (s_cap.step >= UI_CAP_TRAINING && s_cap.step != UI_CAP_DONE) {
+                s_cap.progress = 0;
+                cap_step(UI_CAP_LEVELS, NULL);
+                cap_check_later(400);
+            } else {
+                s_cap.leaving = true;   // (no Exit of ours: exits_sent already reaches what is needed)
+                s_cap.exits_needed = s_cap.exits_sent = 1;
+                s_cap.step = UI_CAP_CLOSED;
+                cap_check_later(1500);
+            }
+        }
+        return true;
+    }
+    case NANO_MSG_TRAINING_PROGRESS:
+        s_cap.progress = (int)nano_field_varint(payload, len, 3);
+        cap_entered("capturing");
+        if (s_cap.step != UI_CAP_TRAINING || s_cap.progress % 10 == 0) ESP_LOGI(TAG, "Capture: %d %%", s_cap.progress);
+        s_cap.step = UI_CAP_TRAINING;
+        cap_show();
+        return true;
+    case NANO_MSG_TRAINING_DONE: {
+        ESP_LOGI(TAG, "Capture: done - compare and save");
+        s_cap.progress = 100;
+        s_cap.source = false;
+        uint8_t buf[2];
+        cap_send("Capture: state request", NANO_MSG_CAPTURE_STATE_REQUEST, buf, 0);
+        cap_step(UI_CAP_COMPARE, NULL);
+        return true;
+    }
+    case NANO_MSG_CAPTURE_STATE: {
+        int step = (int)nano_field_varint(payload, len, 3);
+        s_cap.progress = (int)nano_field_varint(payload, len, 4);
+        s_cap.source = nano_field_varint(payload, len, 7) == 1;
+        s_cap.cab = (int)nano_field_varint(payload, len, 8);
+        ESP_LOGI(TAG, "Capture state: step %d, %d %%, listening to the %s, cab %d", step, s_cap.progress,
+                 s_cap.source ? "original" : "capture", s_cap.cab);
+        if (step == 1) s_cap.step = UI_CAP_LEVELS;
+        else if (step == 2) s_cap.step = UI_CAP_TRAINING;
+        else if (step == 3 && s_cap.step != UI_CAP_DONE) s_cap.step = UI_CAP_COMPARE;
+        cap_show();
+        return true;
+    }
+    case NANO_MSG_CAPTURE_SANITY: {
+        int status = (int)nano_field_varint(payload, len, 3);
+        ESP_LOGW(TAG, "Capture: signal check %d", status);
+        if (status == 0) cap_step(UI_CAP_LEVELS, "No signal, or it was too low. Check the cables and raise CAPTURE IN, then start again.");
+        else if (status == 1) cap_step(UI_CAP_LEVELS, "The signal was too hot. Turn BOOST off or the amp's / pedal's output down, then start again.");
+        return true;
+    }
+    case NANO_MSG_AB_COMPARE:
+        s_cap.source = nano_field_varint(payload, len, 3) == 1;
+        cap_show();
+        return true;
+    case NANO_MSG_COMPARE_CAB:
+        s_cap.cab = (int)nano_field_varint(payload, len, 3);
+        cap_show();
+        return true;
+    case NANO_MSG_SAVE_CAPTURE_RESPONSE:
+        cap_saved(payload, len);
+        return true;
+    case NANO_MSG_CAPTURE_LOAD_RESPONSE:
+        return cap_slot_loaded(payload, len);
+    case NANO_MSG_VALUE:
+        if (nano_field_varint(payload, len, 5) != NANO_CONTEXT_CAPTURE) return false;
+        if (nano_field_varint(payload, len, 3) == 1) s_state.capture_level = (int)nano_field_varint(payload, len, 4);
+        else s_state.capture_gain = (int)nano_field_varint(payload, len, 4);
+        ESP_LOGI(TAG, "Capture: IN %d, OUTPUT %d (set on the Nano or in an app)", s_state.capture_gain, s_state.capture_level);
+        cap_entered("capture value");
+        cap_show();
+        return true;
+    default:
+        return false;
+    }
+}
+
 static void handle_command(char c, int arg)
 {
     if (c == ':') {                                    // the pedal's position (see on_message)
@@ -4644,8 +5118,16 @@ static void handle_command(char c, int arg)
         request_full_state();
         return;
     }
+    if (c == '0') { cap_command(arg); return; }   // Settings > Capture
     if (!nano_link_ready()) {
         ESP_LOGW(TAG, "Not connected yet");
+        return;
+    }
+    // In capture mode only reads and the app's notices go on; footswitches, swipes, timers that would change something
+    // on the Nano are dropped (send() refuses them too, this keeps the screen from showing what did not happen).
+    if (s_cap.mode && !strchr("s{(Yijf%VrV?", c)) {
+        ESP_LOGW(TAG, "Capture mode - command '%c' ignored", c);
+        if (c == 'w') ui_show_message("The Nano is in capture mode - footswitches are off until it is done.");
         return;
     }
     if (strchr("wnpgkabcdemtxCI$OMz", c)) s_last_action_us = esp_timer_get_time();   // somebody is playing or setting up
@@ -4862,6 +5344,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         if (len) ESP_LOG_BUFFER_HEX(TAG, payload, len < 96 ? len : 96);
     }
 #endif
+    if (cap_message(type, payload, len)) return;
     switch (type) {
     case NANO_MSG_STATE_RESPONSE: {
         if (!nano_payload_complete(payload, len) && s_incomplete_retries < 3) {
@@ -4885,7 +5368,9 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             s_expect_preset = 0;
             s_expect_ack = false;
         }
+        if (!s_waiting_full_state && cap_state_reply(payload, len)) break;   // capture mode: the preset stays as it was
         bool names = nano_state_apply(&s_state, payload, len);
+        if (s_state.context == NANO_CONTEXT_CAPTURE) cap_entered("full state");
         fx_follow_switches();
         rotate_after_state();
         listen_state();
@@ -5284,11 +5769,6 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         metro_from_nano(t, t->has_screen);
         break;
     }
-    case 14:   // SaveCaptureResponse: Cortex Cloud saved a capture into the Nano's library through the controller
-        ESP_LOGI(TAG, "Capture saved into the Nano's library (status %lu) - reading the library again",
-                 (unsigned long)nano_field_varint(payload, len, 3));
-        request_library();
-        break;
     default:
         ESP_LOGI(TAG, "Message type %lu (%u bytes)", (unsigned long)type, (unsigned)len);
         break;
@@ -5993,6 +6473,13 @@ static void app_event(app_event_t ev)
         s_tuner_on = false;
         s_listen.on = s_listen.pending = false;   // nothing plays on a Nano that is gone
         listen_show();
+        if (s_cap.mode || s_cap.step != UI_CAP_CLOSED) {   // the capture assistant cannot go on without the Nano
+            s_cap.mode = s_cap.leaving = s_cap.saving = false;
+            snprintf(s_cap.message, sizeof(s_cap.message), "The connection to the Nano was lost. If it is still in capture "
+                     "mode, press EXIT on the Nano.");
+            s_cap.step = UI_CAP_CONNECT;
+            cap_show();
+        }
         if (s_metro_open) { s_metro_open = false; metro_store(); }
         s_state.fw_major = s_state.fw_minor = -1;   // (read again with the next state; the tempo button hides meanwhile)
         metro_show();
@@ -6048,6 +6535,7 @@ static void app_event(app_event_t ev)
         else if (ev.command == '!') dbg_send((const char *)ev.data);
 #endif
         else if (ev.command == 'X') exp_dialog_save((const char *)ev.data);
+        else if (ev.command == 'c' && nano_link_ready()) cap_save((const char *)ev.data);
         free(ev.data);
         break;
     case EV_MIDI:
