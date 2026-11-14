@@ -15,15 +15,17 @@ Every function in detail. The short illustrated guide is in the [README](../READ
   names use one size.
 - The buttons of the top bar carry their word under the symbol. **Reload** (top left) reads everything from the
   Nano again: preset names, the current preset and the library. **Settings** next to it opens the
-  [settings screen](#settings); **Tempo** (NanOS 2.3) shows the tempo and opens the metronome.
+  [settings screen](#settings); **Tempo** (NanOS 2.3) shows the tempo and opens the metronome. Its dialog closes
+  by itself 5 seconds after the last touch or change; the metronome keeps playing.
 - **Swipe left / right**: next / previous preset.
 - **Swipe up – gig view**: the tiles fill the screen with larger names, and a slim bar on top shows the
   connection, preset number, bank, preset name, unsaved changes and the mode (PRESETS / SCENES / FX). **Swipe down**: back.
 - **Pedal view**: **PEDALS** in the gig view's bar shows the five FX slots as pedals on a shelf whenever the
   controller is in FX mode – in signal order, with the amp's place marked between Pre FX 2 and Post FX 1. Under each
   pedal are its light, its name and its footswitch, filled in the effect's colour while it is on; a pedal that is
-  off stands in the dark. A tap switches the effect, a long press opens its FX editor, as on a tile. Tap **PEDALS**
-  again for the tiles. Footswitches 1, 2 and 8 work as always, they just have no field in this view.
+  off stands in the dark. A tap switches the effect, a long press opens its FX editor, as on a tile. A slot with a
+  [second effect](#second-effect-a-and-b-on-an-fx-slot) names the one that waits in a field above the pedal, outlined
+  in its colour – a tap on the field swaps the two. Tap **PEDALS** again for the tiles. Footswitches 1, 2 and 8 work as always, they just have no field in this view.
 
   <img src="images/39-pedal-view.png" alt="" width="440">
 

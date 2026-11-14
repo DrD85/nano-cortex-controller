@@ -184,6 +184,7 @@ void ui_set_listening(char kind, int position, const char *name, bool pending);
 
 // Tempo button (top bar) and the tempo / metronome dialog (NanOS 2.3.0). The dialog sends '\'' what << 24 | value
 // (see metro_command in main.c); open: the dialog shows (also when the Nano opened its own tempo screen).
+// It closes by itself 5 s after it came up, after the last touch and after the last change (it sends what = 10 then).
 typedef struct {
     bool supported, open, global, ext_clock, muted;
     float tempo, volume_db;

@@ -15,7 +15,8 @@ Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../R
   Alle Namen haben dieselbe Größe.
 - Die Knöpfe der oberen Leiste tragen ihr Wort unter dem Symbol. **Reload** (oben links) liest alles neu vom Nano:
   Preset-Namen, aktuelles Preset und die Library. **Settings** daneben öffnet die
-  [Einstellungen](#einstellungen); **Tempo** (NanOS 2.3) zeigt das Tempo und öffnet das Metronom.
+  [Einstellungen](#einstellungen); **Tempo** (NanOS 2.3) zeigt das Tempo und öffnet das Metronom. Der Dialog
+  schließt sich von selbst, 5 Sekunden nach der letzten Berührung oder Änderung; das Metronom läuft weiter.
 - **Nach links / rechts wischen**: nächstes / vorheriges Preset.
 - **Nach oben wischen – Gig-Ansicht**: die Kacheln füllen den Bildschirm mit größeren Namen, eine schmale Leiste
   oben zeigt Verbindung, Preset-Nummer, Bank, Preset-Name, ungespeicherte Änderungen und den Modus (PRESETS / SCENES / FX).
@@ -24,7 +25,9 @@ Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../R
   sobald der Controller im FX-Modus ist – in Signalreihenfolge, der Platz des Amps ist zwischen Pre FX 2 und
   Post FX 1 markiert. Unter jedem Pedal stehen sein Licht, sein Name und sein Fußschalter, in der Effektfarbe gefüllt,
   solange es an ist; ein ausgeschaltetes Pedal steht im Dunkeln. Ein Tipp schaltet den Effekt, ein langer Druck öffnet
-  seinen FX-Editor, wie auf einer Kachel. **PEDALS** nochmal tippen bringt die Kacheln zurück. Fußschalter 1, 2 und 8
+  seinen FX-Editor, wie auf einer Kachel. Hat ein Slot einen
+  [zweiten Effekt](#zweiter-effekt-a-und-b-auf-einem-fx-slot), steht der wartende in einem Feld über dem Pedal,
+  umrandet in seiner Farbe – ein Tipp auf das Feld tauscht die beiden. **PEDALS** nochmal tippen bringt die Kacheln zurück. Fußschalter 1, 2 und 8
   arbeiten wie immer, sie haben in dieser Ansicht nur kein Feld.
 
   <img src="images/39-pedal-view.png" alt="" width="440">

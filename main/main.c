@@ -4133,6 +4133,7 @@ static void listen_state(void)
 // the screen active (its own tempo screen) opens the dialog without sending and brings its metronome settings.
 static nano_tempo_t s_metro = { .muted = true, .time_sig = 2 };   // the app's defaults: off, 0 dB, 4/4, 1/4, Blip
 static bool s_metro_open, s_metro_dirty;
+static bool s_metro_own;   // the controller sent "tempo screen on" itself: it also sends the "off" (not for the Nano's own screen)
 
 static bool metro_supported(void)
 {
@@ -4228,13 +4229,13 @@ static void metro_send(void)
 }
 
 // arg: what << 24 | value (24 bits, signed): 0 open, 1 close, 2 tempo x 10, 3 tempo step x 10, 4 metronome on / off,
-// 5 volume x 2 (dB), 6 time signature, 7 note, 8 sound, 9 global (1) / preset (0)
+// 5 volume x 2 (dB), 6 time signature, 7 note, 8 sound, 9 global (1) / preset (0), 10 the dialog closed by itself
 static void metro_command(int arg)
 {
     int what = (arg >> 24) & 0xFF, value = (arg << 8) >> 8;
     if (!metro_supported()) return;
     switch (what) {
-    case 0: if (s_metro_open) return; s_metro_open = true; break;
+    case 0: if (s_metro_open) return; s_metro_open = true; s_metro_own = true; break;
     case 1:
         if (!s_metro_open) return;
         s_metro_open = false;
@@ -4251,13 +4252,24 @@ static void metro_command(int arg)
     case 7: if (value >= 0 && value < NANO_NOTE_LEN_COUNT) { s_metro.note_len = value; s_metro_dirty = true; } break;
     case 8: if (value >= 0 && value < NANO_METRO_SOUND_COUNT) { s_metro.sound = value; s_metro_dirty = true; } break;
     case 9: s_state.tempo_global = value != 0; break;
+    case 10:   // the dialog went by itself (5 s without a touch or news): the Nano's own tempo screen stays as it is
+        if (!s_metro_open) return;
+        s_metro_open = false;
+        if (s_metro_own) metro_send();
+        metro_store();
+        metro_show();
+        schedule_refresh(300);
+        return;
     default: return;
     }
     if (s_state.tempo < 40) s_state.tempo = 40;
     if (s_state.tempo > 240) s_state.tempo = 240;
     if (s_metro.volume_db < -60) s_metro.volume_db = -60;
     if (s_metro.volume_db > 9) s_metro.volume_db = 9;
-    if (s_metro_open) metro_send();
+    if (s_metro_open) {
+        metro_send();
+        s_metro_own = true;
+    }
     metro_show();
 }
 
@@ -4276,7 +4288,10 @@ static void metro_from_nano(const nano_tempo_t *t, bool has_screen)
         s_metro_dirty = true;
     }
     if (has_screen && metro_supported()) {
-        if (t->screen_active && !s_metro_open) s_metro_open = true;   // the Nano shows its tempo screen: nothing to send
+        if (t->screen_active && !s_metro_open) {   // the Nano shows its tempo screen: nothing to send
+            s_metro_open = true;
+            s_metro_own = false;
+        }
         else if (!t->screen_active && s_metro_open) { s_metro_open = false; metro_store(); }
     }
     metro_show();

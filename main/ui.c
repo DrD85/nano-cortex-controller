@@ -83,6 +83,7 @@ static lv_obj_t *s_gig_bar, *s_gig_dot, *s_gig_number, *s_gig_bank, *s_gig_name,
 static lv_obj_t *s_pedals, *s_pv_slot[NANO_FX_SLOTS], *s_pv_image[NANO_FX_SLOTS], *s_pv_drawn[NANO_FX_SLOTS], *s_pv_icon[NANO_FX_SLOTS],
                 *s_pv_led[NANO_FX_SLOTS], *s_pv_name[NANO_FX_SLOTS], *s_pv_key[NANO_FX_SLOTS], *s_pv_cap[NANO_FX_SLOTS], *s_pv_num[NANO_FX_SLOTS],
                 *s_pv_rp, *s_pv_rp_name, *s_pv_rp_num;   // above the reverb's pedal: the setting the reverb switch is on
+static lv_obj_t *s_pv_ab[NANO_FX_SLOTS], *s_pv_ab_icon[NANO_FX_SLOTS], *s_pv_ab_name[NANO_FX_SLOTS];   // above a pedal: the slot's other effect (A / B)
 static bool s_pedal_view;     // chosen (kept by the controller)
 static bool s_pedals_shown;   // on the screen now: chosen, full screen, FX mode
 static lv_obj_t *s_capture_title;
@@ -111,7 +112,8 @@ static bool s_listen_pending;
 static lv_obj_t *s_tempo_button, *s_tempo_button_icon, *s_tempo_button_text;
 static lv_obj_t *s_metro, *s_metro_bpm, *s_metro_scope[2], *s_metro_switch, *s_metro_vol, *s_metro_vol_text, *s_metro_sig;
 static lv_obj_t *s_metro_note[4], *s_metro_sound[2], *s_metro_dots, *s_metro_hint;
-static lv_timer_t *s_metro_beat_timer;
+static lv_timer_t *s_metro_beat_timer, *s_metro_hide_timer;
+static uint32_t s_metro_news_tick;   // when the dialog came up or last got news (see metro_hide)
 static ui_tempo_t s_tempo_ui = { .tempo = 120, .muted = true, .time_sig = 2 };
 static int s_metro_beat;
 static uint32_t s_metro_taps[6];
@@ -923,6 +925,13 @@ static void pedals_show(bool shown)
     for (int i = 0; i < TILES; i++) place_tile(i);
 }
 
+// A tap on the field above a pedal: the slot's other effect (as A | B in the FX editor).
+static void on_pedal_swap(lv_event_t *e)
+{
+    if (lv_tick_elaps(s_gesture_tick) < 150) return;   // end of a swipe, not a tap
+    send('[', (int)(intptr_t)lv_event_get_user_data(e));
+}
+
 static void build_pedals(lv_obj_t *parent)
 {
     s_pedals = lv_obj_create(parent);
@@ -1024,6 +1033,31 @@ static void build_pedals(lv_obj_t *parent)
         s_pv_num[slot] = label(s_pv_key[slot], &ui_font_24, TEXT);
         lv_obj_align(s_pv_num[slot], LV_ALIGN_RIGHT_MID, -10, 0);
     }
+    // A slot with a second effect: the one that waits, above the pedal of the one that runs - a field like the
+    // footswitches', outlined in the waiting effect's colour, with its symbol and name. A tap swaps the two.
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
+        lv_obj_t *field = lv_obj_create(s_pedals);
+        s_pv_ab[slot] = field;
+        lv_obj_remove_style_all(field);
+        lv_obj_set_size(field, PV_SLOT_W - 20, 34);
+        lv_obj_set_style_radius(field, 9, 0);
+        lv_obj_set_style_border_width(field, 2, 0);
+        lv_obj_set_scrollable(field, false);
+        lv_obj_set_clickable(field, true);
+        lv_obj_set_ext_click_area(field, 8);
+        lv_obj_set_style_opa(field, 190, LV_STATE_PRESSED);
+        lv_obj_add_event_cb(field, on_pedal_swap, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)slot);
+        lv_obj_add_event_cb(field, on_tile_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)(2 + slot));
+        s_pv_ab_icon[slot] = lv_image_create(field);
+        lv_image_set_scale(s_pv_ab_icon[slot], 150);   // the 36 px symbol at 21 px
+        lv_obj_set_style_image_recolor_opa(s_pv_ab_icon[slot], LV_OPA_COVER, 0);
+        lv_obj_align(s_pv_ab_icon[slot], LV_ALIGN_LEFT_MID, 1, 0);
+        s_pv_ab_name[slot] = label(field, &ui_font_16, TEXT);
+        lv_obj_set_size(s_pv_ab_name[slot], PV_SLOT_W - 20 - 40, lv_font_get_line_height(&ui_font_16));
+        lv_label_set_long_mode(s_pv_ab_name[slot], LV_LABEL_LONG_DOT);
+        lv_obj_align(s_pv_ab_name[slot], LV_ALIGN_LEFT_MID, 34, 0);
+        lv_obj_set_hidden(field, true);
+    }
     // The reverb switch with two settings: the one that is on, above the reverb's pedal - a field like the pedals'
     // footswitches (filled while the reverb is on), with the switch's number. A tap is a press of that switch.
     s_pv_rp = lv_obj_create(s_pedals);
@@ -1109,6 +1143,26 @@ static void show_pedals(const nano_state_t *st, const ui_view_t *view)
         int p = tile_position(2 + slot);   // the footswitch that presses it (none: the slot is not on the six-field layout)
         snprintf(text, sizeof(text), "%d", p + 1);
         set_text(s_pv_num[slot], p >= 0 ? text : "");
+        // The slot's other effect (see s_pv_ab): the pedal is the one that runs, the field names the one that waits
+        bool has_b = type && view->ab_b_type[slot], b_runs = has_b && ((view->ab_active >> slot) & 1);
+        set_hidden(s_pv_ab[slot], !has_b);
+        if (has_b) {
+            uint32_t a_type = b_runs ? view->ab_a_type[slot] : type, b_type = view->ab_b_type[slot];
+            uint32_t other = b_runs ? a_type : b_type;   // (A's type is 0 until it has been read)
+            const nano_fx_model_t *waiting = nano_fx_model(other);
+            uint32_t other_color = waiting ? waiting->color : 0x8E9297;
+            const char *other_name = a_type == b_type ? (b_runs ? "1st setting" : "2nd setting") : other ? nano_fx_name(other) : "A";
+            // (the reverb's setting keeps the first row, see above)
+            lv_obj_set_pos(s_pv_ab[slot], slot * PV_SLOT_W + 10, rp && slot == rslot ? 76 : 36);
+            set_color_prop(s_pv_ab[slot], LV_STYLE_BORDER_COLOR, blend(other_color, PANEL_BG, on ? 0.60f : 0.40f));
+            set_hidden(s_pv_ab_icon[slot], waiting == NULL);
+            if (waiting) set_image(s_pv_ab_icon[slot], NANO_ICONS[waiting->icon]);
+            set_color_prop(s_pv_ab_icon[slot], LV_STYLE_IMAGE_RECOLOR, on ? other_color : blend(other_color, PANEL_BG, 0.6f));
+            lv_text_get_size(&size, other_name, &ui_font_16, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+            set_ptr_prop(s_pv_ab_name[slot], LV_STYLE_TEXT_FONT, size.x > PV_SLOT_W - 20 - 40 ? &ui_font_14 : &ui_font_16);
+            set_text(s_pv_ab_name[slot], other_name);
+            set_color_prop(s_pv_ab_name[slot], LV_STYLE_TEXT_COLOR, on ? 0xC8CCD1 : 0x969AA0);
+        }
     }
 }
 
@@ -1718,9 +1772,25 @@ static void build_picker(lv_obj_t *screen)
 
 static void metro(int what, int value) { send('\'', (what << 24) | (value & 0xFFFFFF)); }
 
+// The dialog goes by itself, as a volume display does: 5 s after it came up, after the last touch on the screen and
+// after the last news from the Nano. The controller is told with 10 (it leaves the Nano's own tempo screen alone).
+#define METRO_HIDE_MS 5000
+static void metro_keep(void) { s_metro_news_tick = lv_tick_get(); }
+static void metro_hide(lv_timer_t *t)
+{
+    (void)t;
+    if (lv_obj_is_hidden(s_metro)) return;
+    uint32_t idle = lv_tick_elaps(s_metro_news_tick), touch = lv_display_get_inactive_time(NULL);
+    if ((touch < idle ? touch : idle) < METRO_HIDE_MS) return;
+    lv_obj_set_hidden(s_metro, true);
+    s_tempo_ui.open = false;
+    metro(10, 0);
+}
+
 static void on_tempo_button(lv_event_t *e)
 {
     metro(0, 0);
+    metro_keep();
     s_tempo_ui.open = true;
     lv_obj_set_hidden(s_metro, false);   // at once; main confirms with ui_set_tempo
     lv_obj_move_foreground(s_metro);
@@ -1808,6 +1878,10 @@ static void metro_dots_update(void)
 void ui_set_tempo(const ui_tempo_t *t)
 {
     lvgl_port_lock(0);
+    // (news: the dialog comes up, or something in it changed - the state alone arrives every few seconds)
+    if (lv_obj_is_hidden(s_metro) || t->tempo != s_tempo_ui.tempo || t->volume_db != s_tempo_ui.volume_db || t->muted != s_tempo_ui.muted ||
+        t->global != s_tempo_ui.global || t->ext_clock != s_tempo_ui.ext_clock || t->time_sig != s_tempo_ui.time_sig ||
+        t->note_len != s_tempo_ui.note_len || t->sound != s_tempo_ui.sound) metro_keep();
     s_tempo_ui = *t;
     // the button: symbol and tempo, green while the metronome is on (filled = on)
     lv_obj_set_hidden(s_tempo_button, !t->supported);
@@ -1890,6 +1964,7 @@ static void build_metro(lv_obj_t *screen)
         lv_obj_set_style_bg_color(dot, lv_color_hex(GREEN), 0);
     }
     s_metro_beat_timer = lv_timer_create(metro_beat, 500, NULL);
+    s_metro_hide_timer = lv_timer_create(metro_hide, 250, NULL);
     lv_timer_pause(s_metro_beat_timer);
     lv_obj_t *tap = button(s_metro, 20, 198, 270, 186, on_metro_tap);
     lv_obj_remove_event_cb(tap, on_metro_tap);
