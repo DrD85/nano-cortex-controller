@@ -7,11 +7,12 @@ no decoding, no RAM, no longer start. Without the file every pedal is drawn (col
 firmware has no file.
 
 The pictures are private ones (third-party pedals): they are looked for
+  0. in the Nano Cortex Editor's img/ (its MODEL_IMAGES table) first, so board and editor show the same pedal; a picture
+     from Pedal Playground's set (img/pp/<file>) gets the pedal's real size from that set's pedals.json
   1. in main/private/fx_private.json, "board": {model name: {"pp": file in Pedal Playground's set | "file": path}}
   2. in Pedal Playground's set of the QC editor project (cortex-control-ipad/private/pedal-images + pedals.json, with
      the pedals' real sizes), by the name of the modelled device in that project's device list - the same search as
      the QC editor's (mac-app/app/js/board.js, matchPhoto); "photos": {model id: file} for those it does not find
-  3. in the Nano Cortex Editor's img/ (its MODEL_IMAGES table)
 Writes build/pedalboard.bin and build/pedalboard.png (all pictures, to look through).
 
 Run from the project folder:  python3 tools/gen_pedalboard.py
@@ -30,6 +31,7 @@ PX_PER_INCH = 50            # a 2.9 x 5.1 inch pedal is 145 x 255 px
 MAX_W, MAX_H = 150, 318     # a slot of the pedal view (wider or taller pictures are scaled down on their own)
 NOMINAL_H = 4.9             # inches, for pictures without a known size
 MANUAL_PHOTOS = {}          # model id -> picture of that set, from fx_private.json ("photos"), as the QC editor's table
+SIZES = {}                  # Pedal Playground picture file -> (width, height) in inches
 
 
 def sibling(name):
@@ -76,6 +78,12 @@ def match_photo(catalog, text):
     return None
 
 
+def pp_sizes():
+    """Pedal Playground's real sizes (inches) by picture file - for the whole set, also pictures only the editor has"""
+    path = QC / 'pedals.json'
+    return {p['Image']: (p['Width'], p['Height']) for p in json.loads(path.read_text())} if path.exists() else {}
+
+
 def editor_images():
     html = EDITOR / 'index.html'
     if not html.exists():
@@ -95,6 +103,11 @@ def choose(catalog, devices, private, images):
         other = name.replace('(ST)', '(M)') if '(ST)' in name else name.replace('(M)', '(ST)')
         pick = board.get(name) or board.get(other)
         entry, path, source = None, None, None
+        file = images.get(name) or images.get(other)
+        if file and (EDITOR / 'img' / file).exists():
+            size = SIZES.get(pathlib.Path(file).name) if file.startswith('pp/') else None
+            out.append((type_, name, EDITOR / 'img' / file, size, 'Nano editor: ' + pathlib.Path(file).name))
+            continue
         if pick and pick.get('pp') in by_image:
             entry, source = by_image[pick['pp']], 'chosen'
         elif pick and pick.get('file') and pathlib.Path(pick['file']).exists():
@@ -105,10 +118,6 @@ def choose(catalog, devices, private, images):
             device = by_qc.get(compact(name)) or by_qc.get(compact(re.sub(r'\s*\((M|ST)\)', '', name)))
             entry = match_photo(catalog, device['original']) if device else None
             source = 'device list' if entry else None
-        if not entry and not path:
-            file = images.get(name) or images.get(other)
-            if file and (EDITOR / 'img' / file).exists():
-                path, source = EDITOR / 'img' / file, 'Nano editor'
         if entry:
             out.append((type_, name, QC / 'pedal-images' / entry['Image'], (entry['Width'], entry['Height']), source + ': ' + entry['Brand'] + ' ' + entry['Name']))
         elif path:
@@ -147,6 +156,7 @@ def main():
     devices = QC / 'devicelist' / 'devices.json'
     devices = json.loads(devices.read_text()) if devices.exists() else {}
     MANUAL_PHOTOS.update({int(k): v for k, v in private.get('photos', {}).items()})
+    SIZES.update(pp_sizes())
     chosen = choose(load_catalog(), devices, private, editor_images())
     pictures = [(t, name, picture(path, inches), source) for t, name, path, inches, source in chosen if path]
     if not pictures:
