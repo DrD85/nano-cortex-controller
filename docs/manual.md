@@ -491,6 +491,29 @@ presets, and downloading captures and IRs from the cloud into the Nano's library
 setting off) when you are done; the controller's footswitches work all the while. With the setting on the
 controller offers itself to the Cortex Cloud app and to a phone's Bluetooth MIDI (the looper) in turns.
 
+## Neural Capture (V1): Settings > Capture
+
+From 1.20.0 the controller guides a capture on the Nano itself – amp, cab or pedal, Neural Capture V1, which the Nano
+learns on its own. **Settings > Capture > New capture** puts the Nano into capture mode and opens the assistant:
+
+1. **Connect** – *Amp + cab (mic)*, *Amp head* (reactive load box or D.I. out) or *Pedal*, with the cabling for it.
+   Never connect a tube amp's speaker output to the Nano without a reactive load box.
+2. **Levels** – CAPTURE IN and OUTPUT LEVEL with − / + (hold to repeat) and the Nano's live meters. Strum hard: green
+   is good. Too low at +24 dB? Set it to 0 and switch BOOST on at the Nano. Output level is only what you hear.
+   Listen through a cab (Off, 1–5) if you like.
+3. **Capture** – about 5 minutes, with the progress. Don't play, don't touch anything. *Stop capture* (tap twice)
+   goes back to the levels. If the Nano finds the signal too low or too hot, the assistant goes back there too.
+4. **Compare & save** – Capture / Original (also by itself every 2, 4 or 8 s), the cab to listen through, a name
+   (board keyboard, at least 4 characters, used once) and the type. **Save to library** puts it into My Neural
+   Captures; **Save to slot …** also loads it into a capture slot you choose (the capture that was there stays in
+   the library). **Discard** goes back to the levels.
+5. **Done** – *Another capture* (the cabling stays) or *Done*.
+
+While the Nano is in capture mode the controller sends it nothing else: footswitches, presets, scenes, MIDI and the
+auto-wah wait, and a missing state reply does not make it connect again. Capture mode started with the Nano's
+CAPTURE button or in Cortex Cloud is noticed too – the assistant opens at the levels. The × closes it and takes the
+Nano back to play mode. Not yet tried on a Nano.
+
 ## Tile layout: 6 or 8 fields
 
 **Tile layout** in the settings, **Change the layout**. Choose **6 fields** (2 × 3, larger tiles)

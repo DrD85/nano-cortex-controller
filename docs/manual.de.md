@@ -516,6 +516,30 @@ die Einstellung aus), wenn du fertig bist; die Fußschalter des Controllers arbe
 Einstellung bietet sich der Controller der Cortex-Cloud-App und dem Bluetooth-MIDI eines Telefons (dem Looper)
 abwechselnd an.
 
+## Neural Capture (V1): Einstellungen > Capture
+
+Ab 1.20.0 führt der Controller durch eine Capture am Nano selbst – Amp, Box oder Pedal, Neural Capture V1, die der
+Nano selbst lernt. **Einstellungen > Capture > New capture** schaltet den Nano in den Capture-Modus und öffnet den
+Assistenten (Texte auf Englisch):
+
+1. **Connect** – *Amp + cab (mic)*, *Amp head* (Reactive Load Box oder D.I.-Out) oder *Pedal*, mit der Verkabelung.
+   Nie den Lautsprecherausgang eines Röhrenverstärkers ohne Reactive Load Box an den Nano.
+2. **Levels** – CAPTURE IN und OUTPUT LEVEL mit − / + (halten = wiederholen) und den Live-Pegeln des Nano. Kräftig
+   anschlagen: Grün ist gut. Bei +24 dB noch zu leise? Auf 0 stellen und BOOST am Nano einschalten. Output Level ist
+   nur, was man hört. Auf Wunsch über eine Box mithören (Off, 1–5).
+3. **Capture** – etwa 5 Minuten, mit Fortschritt. Nicht spielen, nichts anfassen. *Stop capture* (zweimal tippen)
+   geht zurück zu den Pegeln; meldet der Nano zu leise oder zu heiß, ebenso.
+4. **Compare & save** – Capture / Original (auch selbsttätig alle 2, 4 oder 8 s), Mithör-Box, Name (Board-Tastatur,
+   mindestens 4 Zeichen, nur einmal vergeben) und Typ. **Save to library** legt sie in My Neural Captures ab,
+   **Save to slot …** lädt sie zusätzlich in einen Capture-Slot (die Capture, die dort war, bleibt in der Bibliothek).
+   **Discard** geht zurück zu den Pegeln.
+5. **Done** – *Another capture* (Verkabelung bleibt) oder *Done*.
+
+Solange der Nano im Capture-Modus ist, schickt ihm der Controller nichts anderes: Fußschalter, Presets, Szenen, MIDI
+und Auto-Wah warten, und eine ausbleibende Statusantwort führt nicht zu einer neuen Verbindung. Ein Capture-Modus,
+der mit der CAPTURE-Taste am Nano oder in Cortex Cloud begonnen wurde, wird ebenfalls erkannt – der Assistent öffnet
+bei den Pegeln. Das × schließt ihn und bringt den Nano in den Spielmodus zurück. Noch nicht am Nano ausprobiert.
+
 ## Kachel-Anordnung: 6 oder 8 Felder
 
 **Tile layout** in den Einstellungen, **Change the layout**. **6 fields** (2 × 3, größere Kacheln) oder **8 fields**
