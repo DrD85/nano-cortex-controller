@@ -6121,6 +6121,27 @@ static void storetest_line(const char *line)
         printf("K COPY %d -> %d\n", from, to);
         return;
     }
+    if (c == 'X') {   // "#X<40-45>": remove what the controller keeps for that test preset (not while it is on)
+        if (arg < 40 || arg > 45 || arg == s_state.current_preset) { printf("K DEL refused\n"); return; }
+        static const char *const FORMATS[] = { "pf1%02d", "pfa%02d", "rvb%02d", "rva%02d", "ab1%02d", "ab2%02d", "ab3%02d",
+            "ab4%02d", "aa1%02d", "aa2%02d", "aa3%02d", "aa4%02d", "rvp%02d", "rvq%02d", SCENE_STORE_KEY, SCENE_VALUES_KEY,
+            SCENE_CAPTURE_KEY, WAH_STORE_KEY };
+        nvs_handle_t nvs;
+        if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
+        int removed = 0;
+        for (size_t i = 0; i < sizeof(FORMATS) / sizeof(FORMATS[0]); i++) {
+            char key[16];
+            snprintf(key, sizeof(key), FORMATS[i], arg);
+            if (nvs_erase_key(nvs, key) == ESP_OK) removed++;
+        }
+        int t = arg - 1;
+        s_mixes.pos[t][0] = s_mixes.pos[t][1] = 0;
+        s_mixes.set[t / 8] &= (uint8_t)~(1u << (t % 8));
+        bool ok = nvs_set_blob(nvs, MIX_ALL_KEY, &s_mixes, sizeof(s_mixes)) == ESP_OK && nvs_commit(nvs) == ESP_OK;
+        nvs_close(nvs);
+        printf("K DEL %d removed %d %s\n", arg, removed, ok ? "ok" : "FAILED");
+        return;
+    }
     if (c == 'P') {   // "#P<slot>,<param>,<value x 1000>": a control moved in the FX editor (open it first with "#O<slot>")
         int slot = 0, param = 0, milli = 0;
         if (sscanf(line + 1, "%d,%d,%d", &slot, &param, &milli) == 3) on_param(slot, param, milli / 1000.0f);
