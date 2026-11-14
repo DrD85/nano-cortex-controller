@@ -5340,6 +5340,15 @@ static void store_warn(void)
 {
     int percent = store_percent(NULL, NULL);
     ESP_LOGI(TAG, "Settings store %d %% full", percent);
+#ifndef NANO_WEB
+    // Updated with the firmware alone (0x10000): the partition table of 1.18 and earlier still names the small store
+    const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NVS_DEFAULT_PART_NAME);
+    if (part && part->size < 0x10000) {
+        ESP_LOGW(TAG, "Settings store: still the small one (%u KB) - the partition table of 1.19 was not flashed", (unsigned)(part->size / 1024));
+        ui_show_message("Settings memory is still the small one: flash the partition table of this version at 0x8000 too (see the release notes).");
+        return;
+    }
+#endif
     if (percent < STORE_WARN_PERCENT) return;
     char text[120];
     snprintf(text, sizeof(text), "Settings memory %d %% full - back it up with the editor and remove scenes or second effects you do not need.", percent);
@@ -5753,6 +5762,7 @@ static void system_page(void)
 static void store_rescue(void) { }
 static void store_cleanup(void) { }
 static void store_move(void) { }
+static void store_check_foreign(void) { }
 #else
 // A raw copy of the settings store in flash memory that nothing else uses (the board has 16 MB; firmware, store and
 // pedal pictures end before it). Made only before the store has to be emptied; a computer reads it back with
@@ -5843,6 +5853,35 @@ static esp_err_t store_copy_entry(nvs_handle_t src, nvs_handle_t dst, const nvs_
     default:
         return ESP_ERR_NOT_SUPPORTED;
     }
+}
+
+// The flash at 0x610000 can hold something else from before 1.19 (on the board this was written on: picture data of
+// an earlier firmware), which the store must not start on. Each page of a store begins with one of a few states and
+// the format's version; a page that has never been used is empty. Anything else: not a store - it is copied aside
+// (store_rescue, in case) and emptied. Reads 128 page heads, so it costs nothing at the start.
+static void store_check_foreign(void)
+{
+    const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NVS_DEFAULT_PART_NAME);
+    if (!part) return;
+    int foreign = 0;
+    for (size_t off = 0; off + 4096 <= part->size; off += 4096) {
+        uint8_t head[64];
+        if (esp_partition_read_raw(part, off, head, sizeof(head)) != ESP_OK) return;
+        uint32_t state;
+        memcpy(&state, head, 4);
+        bool ok;
+        if (state == 0xFFFFFFFFu) {   // never used: its table of entries is empty
+            ok = true;
+            for (int i = 32; i < 64; i++) ok = ok && head[i] == 0xFF;
+        } else {
+            ok = (state == 0xFFFFFFFEu || state == 0xFFFFFFFCu || state == 0xFFFFFFF8u || state == 0) && (head[8] == 0xFE || head[8] == 0xFF);
+        }
+        if (!ok) foreign++;
+    }
+    if (!foreign) return;
+    ESP_LOGW(TAG, "Settings store: %d pages hold something else (from before 1.19) - copied aside and emptied", foreign);
+    store_rescue();
+    esp_partition_erase_range(part, 0, part->size);
 }
 
 static void store_move(void)
@@ -6337,6 +6376,7 @@ static void store_compact(void)
 
 void app_main(void)
 {
+    store_check_foreign();   // (before the store is opened)
     esp_err_t err = nvs_flash_init();
     bool store_reset = false;
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {

@@ -57,6 +57,7 @@ expression pedal's assignments, a tuner and a looper mode. It is the hardware co
    |---|---|---|
    | `nano-controller-<version>-full.bin` | `0x0` | the **first installation** (erases stored banks and settings) |
    | `nano-controller-<version>-update.bin` | `0x10000` | **updates** – your banks and settings stay |
+   | `nano-controller-<version>-partitions.bin` | `0x8000` | **with the update** when coming from 1.18 or earlier (since 1.19 the settings memory is larger); settings stay |
 
 4. Press **RESET** on the board.
 
