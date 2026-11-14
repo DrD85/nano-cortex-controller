@@ -7098,6 +7098,10 @@ void app_main(void)
         vTaskDelay(pdMS_TO_TICKS(2000));
         esp_restart();
     }
+    for (int i = 0; i < 20; i++) {   // safe mode reached: a sign of life every second, to see that it stays up
+        ESP_LOGW(TAG, "Crash guard test: safe mode, alive %d s (count %u)", i, (unsigned)s_guard_count);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
 #endif
 #endif
 }
