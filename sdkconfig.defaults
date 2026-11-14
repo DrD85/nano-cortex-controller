@@ -71,3 +71,6 @@ CONFIG_BT_NIMBLE_SVC_GAP_DEVICE_NAME="Nano Cortex Controller"
 
 # The settings store is 512 KB (partitions.csv): its page cache goes to PSRAM, not the scarce internal RAM
 CONFIG_NVS_ALLOCATE_CACHE_IN_SPIRAM=y
+
+# The start-up task loads every stored setting and builds the screen: 3584 bytes left it 348 bytes of reserve (1.21.0)
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192

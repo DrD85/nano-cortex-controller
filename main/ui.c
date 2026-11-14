@@ -3656,7 +3656,7 @@ static lv_obj_t *s_system_rows;
 static void system_rows(const char *text)
 {
     lv_obj_clean(s_system_rows);
-    char buf[512];
+    static char buf[768];   // (called with the screen's lock held; not on the caller's stack)
     snprintf(buf, sizeof(buf), "%s", text);
     lv_obj_t *card = NULL;
     for (char *line = buf, *next; line; line = next) {

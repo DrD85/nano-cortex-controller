@@ -47,6 +47,11 @@ endif()
 if(NANO_WDTEST)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_WDTEST=1)
 endif()
+# Development: -DNANO_GUARDTEST=1 restarts the controller 2 s after every start, as a firmware that crashes while it
+# starts would - until the crash guard starts it in safe mode (the third restart in a row).
+if(NANO_GUARDTEST)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_GUARDTEST=1)
+endif()
 
 if(NANO_BENCH)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_BENCH=1)

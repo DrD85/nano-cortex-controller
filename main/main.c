@@ -82,6 +82,7 @@ typedef struct {
 #define BANK_STORE_KEY "banks6"
 
 static QueueHandle_t s_events;
+static bool s_safe_mode;   // started without the extras after crashes at the start (crash guard, before app_main)
 static nano_state_t s_state;
 static esp_timer_handle_t s_refresh_timer;
 static bool s_waiting_full_state;
@@ -5102,6 +5103,7 @@ static void handle_command(char c, int arg)
 #ifndef NANO_WEB   // in the browser the start screen keeps asking to click CONNECT
         ui_splash_status("No Nano yet - switch it on or press EXIT + CAPTURE on it (tap to continue)", NULL);
 #endif
+        if (s_safe_mode) return;   // (safe mode: no Bluetooth MIDI, no phone)
         midi_ble_allow(true);
         app_link_allow_phone(true);
         return;
@@ -5290,9 +5292,11 @@ static void store_warn(void);
 static void link_usable(void)
 {
     esp_timer_stop(s_midi_gate_timer);
-    midi_ble_allow(true);
-    app_link_allow_phone(true);
-    app_link_enable(true);
+    if (!s_safe_mode) {   // (safe mode: no Bluetooth MIDI, no phone, no editor / Cortex Cloud through the controller)
+        midi_ble_allow(true);
+        app_link_allow_phone(true);
+        app_link_enable(true);
+    }
     ui_splash_done();
 }
 
@@ -6205,7 +6209,8 @@ static void backup_message(uint32_t type, const uint8_t *payload, size_t len)
 #endif
 
 // ---- system page ----
-static char s_start_reason[48] = "?";   // why the controller started (set in app_main)
+static char s_start_reason[64] = "?";   // why the controller started (set in app_main)
+static int s_start_stack_free = -1;     // bytes the start-up (main) task had left at its end, -1 = not known
 
 static void put_duration(char *out, size_t size, int64_t us)
 {
@@ -6216,9 +6221,27 @@ static void put_duration(char *out, size_t size, int64_t us)
 }
 
 // What the System button of the MIDI dialog shows: is everything well, and if not, since when.
+#ifndef NANO_WEB
+// The smallest stack reserve among the controller's tasks (bytes never used so far), and whose it is.
+#define STACK_WARN 512
+static int stack_reserve(const char **whose)
+{
+    static const char *const tasks[] = { "app", "console", "footswitch", "nano_tx", "app_tx", "taskLVGL", "nimble_host", "esp_timer" };
+    int lowest = -1;
+    for (size_t i = 0; i < sizeof(tasks) / sizeof(tasks[0]); i++) {
+        TaskHandle_t task = xTaskGetHandle(tasks[i]);
+        if (!task) continue;
+        int left = (int)uxTaskGetStackHighWaterMark(task);
+        if (lowest < 0 || left < lowest) { lowest = left; *whose = tasks[i]; }
+    }
+    return lowest;
+}
+#endif
+
 static void system_page(void)
 {
-    char text[520], up[24], link[24], ago[24];
+    static char text[760];   // (not on the stack: this runs in the app task)
+    char up[24], link[24], ago[24];
     int64_t now = esp_timer_get_time();
     nano_link_stats_t st;
     nano_link_stats(&st);
@@ -6228,8 +6251,9 @@ static void system_page(void)
     int used = 0, capacity = 0, percent = store_percent(&used, &capacity);
     // One line per row "what: value", a blank line between groups, '!' in front of what deserves a look (ui_show_system)
     bool hang = strstr(s_start_reason, "hang") != NULL;
-    int n = snprintf(text, sizeof(text), "Firmware: %s\nRunning for: %s\n%sStarted after: %s\n\n", esp_app_get_description()->version, up,
-                     hang ? "!" : "", s_start_reason);
+    int n = snprintf(text, sizeof(text), "Firmware: %s\nRunning for: %s\n%sStarted after: %s\n%s\n", esp_app_get_description()->version, up,
+                     hang || s_safe_mode ? "!" : "", s_start_reason,
+                     s_safe_mode ? "!Safe mode: on - no editor, MIDI, pictures\n" : "");
     n += snprintf(text + n, sizeof(text) - (size_t)n, st.ready_us ? "Nano: connected for %s\n" : "!Nano: not connected\n", link);
     if (!st.drops) n += snprintf(text + n, sizeof(text) - (size_t)n, "Connection lost: never since the start\n\n");
     else n += snprintf(text + n, sizeof(text) - (size_t)n, "!Connection lost: %d time%s\nLast time: %s ago (reason 0x%X)\n\n", st.drops, st.drops == 1 ? "" : "s",
@@ -6237,6 +6261,12 @@ static void system_page(void)
 #ifndef NANO_WEB
     n += snprintf(text + n, sizeof(text) - (size_t)n, "Internal memory: %u KB free, lowest %u KB\n",
                   (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024), (unsigned)(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL) / 1024));
+    // Stack reserve: the least any task has ever had left of its stack (a task that runs out of it crashes the
+    // controller - 2026-11-13 the start-up task did). Below STACK_WARN bytes it deserves a look.
+    const char *lowest_name = "?";
+    int lowest = stack_reserve(&lowest_name);
+    if (lowest >= 0) n += snprintf(text + n, sizeof(text) - (size_t)n, "%sStack reserve: %d bytes (%s)\n", lowest < STACK_WARN ? "!" : "", lowest, lowest_name);
+    if (s_start_stack_free >= 0) n += snprintf(text + n, sizeof(text) - (size_t)n, "%sStart-up stack: %d bytes left\n", s_start_stack_free < STACK_WARN ? "!" : "", s_start_stack_free);
 #endif
     if (percent >= 0) snprintf(text + n, sizeof(text) - (size_t)n, "%sSettings memory: %d %% full (%d of %d)%s", percent >= STORE_WARN_PERCENT ? "!" : "",
                                percent, used, capacity, percent >= STORE_WARN_PERCENT ? " - back up" : "");
@@ -6432,6 +6462,39 @@ static void watchdog_cb(void *arg)
     s_watchdog_magic = WATCHDOG_MAGIC;
     s_watchdog_cause = cause;
     esp_restart();
+}
+
+// ---- crash guard ----
+// A firmware that crashes while it starts would restart for ever - on stage the controller would be gone
+// (2026-11-13: a start step overflowed the start-up task's stack). Every start that follows a crash or a hang
+// counts; a run of GUARD_STABLE_US clears the count. The third such start in a row is a start in safe mode:
+// without the store's maintenance steps, the pedal pictures, the editor / Cortex Cloud bridge, Bluetooth MIDI
+// controllers and the phone - presets, footswitches, effects, scenes and the set list work as usual. Switching the
+// controller off and on starts it normally again (the count lives in memory that only survives a restart).
+#define GUARD_MAGIC 0x53414645u
+#define GUARD_LIMIT 3
+#define GUARD_STABLE_US (60 * 1000000LL)
+static RTC_NOINIT_ATTR uint32_t s_guard_magic, s_guard_count;
+static esp_timer_handle_t s_guard_timer;
+
+static void guard_stable_cb(void *arg)
+{
+    s_guard_count = 0;
+}
+
+// At the very start: counts, and says whether this start is one in safe mode.
+static void guard_check(void)
+{
+    esp_reset_reason_t r = esp_reset_reason();
+    bool crashed = r == ESP_RST_PANIC || r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT || r == ESP_RST_CPU_LOCKUP ||
+                   (r == ESP_RST_SW && s_watchdog_magic == WATCHDOG_MAGIC);   // (our own watchdog: a hang)
+#ifdef NANO_GUARDTEST
+    crashed = crashed || r == ESP_RST_SW;   // development: the test's own restarts count as crashes
+#endif
+    if (s_guard_magic != GUARD_MAGIC || !crashed) s_guard_count = 0;
+    s_guard_magic = GUARD_MAGIC;
+    if (crashed) s_guard_count++;
+    s_safe_mode = s_guard_count >= GUARD_LIMIT;
 }
 
 // After the start: 1 / 2 if the watchdog restarted the controller (which task hung), 0 otherwise.
@@ -6869,6 +6932,9 @@ static void store_compact(void)
 
 void app_main(void)
 {
+#ifndef NANO_WEB
+    guard_check();   // (first of all: is this the third crashed start in a row?)
+#endif
     store_check_foreign();   // (before the store is opened)
     esp_err_t err = nvs_flash_init();
     bool store_reset = false;
@@ -6882,9 +6948,11 @@ void app_main(void)
         store_reset = true;
     }
     ESP_ERROR_CHECK(err);
-    store_move();   // (once: the settings out of the small store of 1.18 and earlier, before anything reads them)
-    store_cleanup();
-    store_compact();
+    if (!s_safe_mode) {   // (safe mode: no maintenance of the store)
+        store_move();   // (once: the settings out of the small store of 1.18 and earlier, before anything reads them)
+        store_cleanup();
+        store_compact();
+    }
 #ifdef NANO_WDTEST
     store_rescue();   // development: write the copy now, to read it back and compare
 #endif
@@ -6930,7 +6998,7 @@ void app_main(void)
     layout_load();
     metro_load();
     cloud_load();
-    fxp_compact_store();
+    if (!s_safe_mode) fxp_compact_store();
     s_scenes = heap_caps_calloc(UI_SCENES, sizeof(scene_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     configASSERT(s_scenes);
     const esp_timer_create_args_t scene_timer = { .callback = scene_timer_cb, .name = "scene" };
@@ -6953,6 +7021,15 @@ void app_main(void)
                                            "power glitch", "CPU lockup" };
     esp_reset_reason_t reason = esp_reset_reason();
     strlcpy(s_start_reason, reason < sizeof(reasons) / sizeof(reasons[0]) ? reasons[reason] : "?", sizeof(s_start_reason));
+#ifndef NANO_WEB
+    if (s_safe_mode) {
+        strlcat(s_start_reason, " - safe mode", sizeof(s_start_reason));
+        ESP_LOGE(TAG, "SAFE MODE: %u crashes at the start in a row - starting without the store's maintenance, pedal pictures, "
+                 "editor / Cortex Cloud bridge, Bluetooth MIDI and phone. Switch off and on to start normally.", (unsigned)s_guard_count);
+    } else if (s_guard_count) {
+        ESP_LOGW(TAG, "Crash guard: start %u of %d after a crash (a run of 60 s clears the count)", (unsigned)s_guard_count, GUARD_LIMIT);
+    }
+#endif
     printf("\nNano Cortex Controller %s - started after: %s\n", esp_app_get_description()->version, s_start_reason);
     // Bluetooth first: its host task and buffers need internal RAM, which the screen's many small objects would
     // otherwise take (they move to PSRAM when internal RAM runs short). Its events wait in the queue until the
@@ -6968,7 +7045,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&pair_hint_timer, &s_pair_hint_timer));
     esp_timer_start_once(s_pair_hint_timer, PAIR_HINT_US);
 
-    pedal_assets_init();   // pictures for the pedal view, if the flash memory holds the file with them
+    if (!s_safe_mode) pedal_assets_init();   // pictures for the pedal view, if the flash memory holds the file with them
     ui_init(command, on_param, on_text);
     ui_set_scene_names_source(scene_names_read);
     uint8_t order[FOOTSWITCH_COUNT];
@@ -6990,6 +7067,10 @@ void app_main(void)
     const esp_timer_create_args_t watchdog_timer = { .callback = watchdog_cb, .name = "watchdog" };
     ESP_ERROR_CHECK(esp_timer_create(&watchdog_timer, &s_watchdog_timer));
     esp_timer_start_periodic(s_watchdog_timer, 1000 * 1000);
+    const esp_timer_create_args_t guard_timer = { .callback = guard_stable_cb, .name = "guard" };
+    ESP_ERROR_CHECK(esp_timer_create(&guard_timer, &s_guard_timer));
+    esp_timer_start_once(s_guard_timer, GUARD_STABLE_US);   // a run this long: the start was fine
+    if (s_safe_mode) ui_show_message("Safe mode after crashes at the start: no editor, MIDI controllers or pedal pictures. Switch off and on to start normally.");
     if (store_reset) ui_show_message("The settings memory could not be read and was emptied. A copy of the old one is kept - see the manual.");
     int hung = watchdog_restarted();
     if (hung) {
@@ -7008,5 +7089,15 @@ void app_main(void)
         ESP_LOGI(TAG, "Settings store: %u entries used, room for %u more (%d %% full)", (unsigned)stats.used_entries,
                  (unsigned)stats.available_entries, store_percent(NULL, NULL));
     }
+    s_start_stack_free = (int)uxTaskGetStackHighWaterMark(NULL);   // this task ends here: what it had left at most use
+    if (s_start_stack_free < STACK_WARN) ESP_LOGW(TAG, "Start-up stack: only %d bytes were left", s_start_stack_free);
+    else ESP_LOGI(TAG, "Start-up stack: %d bytes left", s_start_stack_free);
+#ifdef NANO_GUARDTEST
+    if (!s_safe_mode) {   // development: act like a firmware that crashes 2 s after its start, until safe mode comes
+        ESP_LOGW(TAG, "Crash guard test: restarting (count %u)", (unsigned)s_guard_count);
+        vTaskDelay(pdMS_TO_TICKS(2000));
+        esp_restart();
+    }
+#endif
 #endif
 }
