@@ -4304,7 +4304,7 @@ void ui_capture_show(const ui_capture_t *c)
     cap_name_show();
     lv_label_set_text_fmt(s_cap_progress_title, "Capturing \xC2\xB7 %d %%", c->progress);
     lv_bar_set_value(s_cap_progress_bar, c->progress, LV_ANIM_ON);
-    int left = (100 - c->progress) * 3;   // about 5 minutes in all
+    int left = (100 - c->progress) * 23 / 10;   // (on the Nano: about 3.5 minutes from the start to done)
     if (c->progress <= 0) lv_label_set_text(s_cap_progress_left, "Starting ...");
     else if (left >= 90) lv_label_set_text_fmt(s_cap_progress_left, "About %d minutes left.", (left + 30) / 60);
     else lv_label_set_text(s_cap_progress_left, "Almost done.");

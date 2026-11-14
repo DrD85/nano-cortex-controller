@@ -4985,13 +4985,17 @@ static bool cap_message(uint32_t type, const uint8_t *payload, size_t len)
         }
         return true;
     }
-    case NANO_MSG_TRAINING_PROGRESS:
-        s_cap.progress = (int)nano_field_varint(payload, len, 3);
+    case NANO_MSG_TRAINING_PROGRESS: {   // 0-255 (Cortex Cloud shows value / 255; seen on the Nano: done after ~220)
+        int raw = (int)nano_field_varint(payload, len, 3), percent = raw * 100 / 255;
+        if (percent > 100) percent = 100;
+        bool changed = percent != s_cap.progress;
+        s_cap.progress = percent;
         cap_entered("capturing");
-        if (s_cap.step != UI_CAP_TRAINING || s_cap.progress % 10 == 0) ESP_LOGI(TAG, "Capture: %d %%", s_cap.progress);
+        if (changed) ESP_LOGI(TAG, "Capture: %d %% (%d)", percent, raw);
         s_cap.step = UI_CAP_TRAINING;
         cap_show();
         return true;
+    }
     case NANO_MSG_TRAINING_DONE: {
         ESP_LOGI(TAG, "Capture: done - compare and save");
         s_cap.progress = 100;
@@ -5003,7 +5007,8 @@ static bool cap_message(uint32_t type, const uint8_t *payload, size_t len)
     }
     case NANO_MSG_CAPTURE_STATE: {
         int step = (int)nano_field_varint(payload, len, 3);
-        s_cap.progress = (int)nano_field_varint(payload, len, 4);
+        s_cap.progress = (int)nano_field_varint(payload, len, 4) * 100 / 255;
+        if (s_cap.progress > 100) s_cap.progress = 100;
         s_cap.source = nano_field_varint(payload, len, 7) == 1;
         s_cap.cab = (int)nano_field_varint(payload, len, 8);
         ESP_LOGI(TAG, "Capture state: step %d, %d %%, listening to the %s, cab %d", step, s_cap.progress,
