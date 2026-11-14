@@ -38,6 +38,12 @@ if(NANO_DBG)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_DBG=1)
 endif()
 
+# Development: -DNANO_STORETEST=1 adds the console line "#..." to drive and list the settings store from a computer
+# (storetest_line in main.c).
+if(NANO_STORETEST)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_STORETEST=1)
+endif()
+
 if(NANO_WDTEST)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_WDTEST=1)
 endif()

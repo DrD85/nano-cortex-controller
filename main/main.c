@@ -44,6 +44,7 @@
 #ifndef NANO_WEB
 #include "esp_flash.h"
 #include "esp_partition.h"
+#include "esp_rom_crc.h"
 #endif
 
 #include "board.h"
@@ -6061,6 +6062,74 @@ static int console_read(uint8_t *c, TickType_t wait)
 #endif
 }
 
+#ifdef NANO_STORETEST
+// Development (-DNANO_STORETEST=1): the settings store driven and checked from a computer, without the touch screen.
+//   "#L"        every entry of the store: "K <namespace> <key> <type> <size> <crc32 or value>", then "K END <count>"
+//   "#@<to>"    copy the preset that is on to <to> as the editor's "Copy preset" does: the Nano saves it there
+//               (named "Store test <to>") and the controller's entries go along (as from the app, on_app_write)
+//   "#<c><n>"   any other: command(c, n) as the screen would send it (e.g. "#g40" preset 40, "#A..." second effect)
+static void storetest_line(const char *line)
+{
+    if (!line[0]) return;
+    char c = line[0];
+    int arg = atoi(line + 1);
+    if (c == 'L') {
+        nvs_iterator_t it = NULL;
+        int count = 0;
+        for (esp_err_t err = nvs_entry_find(NVS_DEFAULT_PART_NAME, NULL, NVS_TYPE_ANY, &it); err == ESP_OK; err = nvs_entry_next(&it)) {
+            nvs_entry_info_t e;
+            nvs_handle_t h;
+            if (nvs_entry_info(it, &e) != ESP_OK || nvs_open(e.namespace_name, NVS_READONLY, &h) != ESP_OK) continue;
+            size_t len = 0;
+            uint32_t crc = 0;
+            if (e.type == NVS_TYPE_BLOB || e.type == NVS_TYPE_STR) {
+                if ((e.type == NVS_TYPE_BLOB ? nvs_get_blob(h, e.key, NULL, &len) : nvs_get_str(h, e.key, NULL, &len)) == ESP_OK) {
+                    uint8_t *buf = heap_caps_malloc(len + 1, MALLOC_CAP_SPIRAM);
+                    if (buf && (e.type == NVS_TYPE_BLOB ? nvs_get_blob(h, e.key, buf, &len) : nvs_get_str(h, e.key, (char *)buf, &len)) == ESP_OK)
+                        crc = esp_rom_crc32_le(0, buf, len);
+                    heap_caps_free(buf);
+                }
+            } else {
+                int64_t v = 0;
+                uint8_t u8; uint16_t u16; uint32_t u32;
+                if (e.type == NVS_TYPE_U8 && nvs_get_u8(h, e.key, &u8) == ESP_OK) v = u8;
+                else if (e.type == NVS_TYPE_U16 && nvs_get_u16(h, e.key, &u16) == ESP_OK) v = u16;
+                else if (e.type == NVS_TYPE_U32 && nvs_get_u32(h, e.key, &u32) == ESP_OK) v = u32;
+                else if (e.type == NVS_TYPE_I32) { int32_t i; if (nvs_get_i32(h, e.key, &i) == ESP_OK) v = i; }
+                crc = (uint32_t)v;
+            }
+            nvs_close(h);
+            printf("K %s %s %d %u %08lx\n", e.namespace_name, e.key, (int)e.type, (unsigned)len, (unsigned long)crc);
+            count++;
+        }
+        nvs_release_iterator(it);
+        nvs_stats_t st;
+        nvs_get_stats(NULL, &st);
+        printf("K END %d used %u free %u\n", count, (unsigned)st.used_entries, (unsigned)st.free_entries);
+        fflush(stdout);
+        return;
+    }
+    if (c == '@') {
+        int from = s_state.current_preset, to = arg;
+        if (to < 40 || to > 45 || to == from) { printf("K COPY refused (only to 40-45)\n"); return; }
+        char name[24];
+        snprintf(name, sizeof(name), "Store test %d", to);
+        uint8_t buf[96];
+        size_t n = nano_save_preset(to, name, buf, sizeof(buf));
+        if (n) send("Store test: copy", NANO_MSG_SAVE_PRESET, buf, n);
+        command('i', 1 | 4 | to << 8 | from << 16);
+        printf("K COPY %d -> %d\n", from, to);
+        return;
+    }
+    if (c == 'P') {   // "#P<slot>,<param>,<value x 1000>": a control moved in the FX editor (open it first with "#O<slot>")
+        int slot = 0, param = 0, milli = 0;
+        if (sscanf(line + 1, "%d,%d,%d", &slot, &param, &milli) == 3) on_param(slot, param, milli / 1000.0f);
+        return;
+    }
+    command(c, arg);
+}
+#endif
+
 static void console_task(void *arg)
 {
 #if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
@@ -6134,6 +6203,17 @@ static void console_task(void *arg)
         if (c == '`') {
             s_dbg_dump = !s_dbg_dump;
             ESP_LOGW(TAG, "Debug: messages from the Nano %s", s_dbg_dump ? "are logged" : "are no longer logged");
+            continue;
+        }
+#endif
+#ifdef NANO_STORETEST
+        if (c == '#') {   // "#<c><number>" + Enter: test of the settings store from a computer (see storetest_line)
+            char line[24];
+            size_t n = 0;
+            uint8_t ch;
+            while (n < sizeof(line) - 1 && console_read(&ch, pdMS_TO_TICKS(2000)) == 1 && ch != '\n' && ch != '\r') line[n++] = (char)ch;
+            line[n] = 0;
+            storetest_line(line);
             continue;
         }
 #endif
