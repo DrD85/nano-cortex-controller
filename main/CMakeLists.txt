@@ -1,4 +1,4 @@
-set(srcs "main.c" "nano_link.c" "nano_state.c" "board.c" "ui.c" "ui_fonts.c" "footswitches.c" "fx_models.c" "preset_icons.c"
+set(srcs "main.c" "nano_link.c" "nano_state.c" "board.c" "ui.c" "ui_fonts.c" "footswitches.c" "fx_models.c" "fx_focus.c" "preset_icons.c"
          "library.c" "midi_ble.c" "app_link.c" "phone_midi.c" "ui_mem.c" "pedal_assets.c")
 
 # Own builds may use private artwork from main/private (ignored by git, see tools/gen_tables.py and

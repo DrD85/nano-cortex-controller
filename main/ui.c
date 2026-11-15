@@ -12,6 +12,7 @@
 #include "fx_icons.h"
 #include "fx_pedals.h"
 #include "pedal_assets.h"
+#include "fx_focus.h"
 #include "library.h"
 #include "ui_icons.h"
 #include "preset_icons.h"
@@ -276,6 +277,21 @@ static float s_drag_from;
 static lv_obj_t *s_drag_bar;
 static int s_drag_param;
 static bool s_dragging;
+// The FX editor's second page, the pad (see "The pad" below)
+static struct {
+    bool prefer;                         // the pad is wanted (PAD, or a long press on a pedal) ...
+    bool page;                           // ... and shows: the model has corners and its values are known
+    bool leave;                          // the editor closes once the waiting values have gone
+    const nano_focus_t *focus;
+    float base[NANO_MAX_PARAMS];         // the values when the page opened
+    float corner[4][NANO_MAX_PARAMS];    // < 0: the corner says nothing about this control
+    float sent[NANO_MAX_PARAMS];         // what the Nano has been sent
+    uint32_t moved, waiting;             // bit n: the corners move control n / its value still has to go to the Nano
+    int next;                            // where the next value to send is looked for
+    float x, y;                          // the lens, 0-1
+    int near;                            // the zone that shows filled: 0-3 a corner, 4 the centre, -1 none
+    bool finger;
+} s_padv;
 static int s_editor_slot_index = -1;
 static uint32_t s_editor_model_type, s_editor_color = 0x5A5A5A;
 static const nano_fx_model_t *s_editor_model_def;
@@ -322,6 +338,7 @@ static int tile_position(int i);
 static void on_tile_long(lv_event_t *e)
 {
     int tile = (int)(intptr_t)lv_event_get_user_data(e);   // 0-7 = footswitch 1-8
+    s_padv.prefer = false;   // (an FX tile opens the editor's bars; a pedal of the pedal view asks for the pad after this)
     if (tile == 0) send('w', UI_SWITCH_HOLD | 1);   // looper mode on / off, as holding footswitch 1
     else if (s_looper_mode) open_looper_editor(tile - 1);
     else if (tile == 1) open_learn(tile_position(1) + 1);   // its footswitch (footswitch 1 is learned from this dialog too)
@@ -330,6 +347,14 @@ static void on_tile_long(lv_event_t *e)
     else if (!s_fx_mode && tile >= 2 && s_view.scenes) open_scene_editor(tile - 2);
     else if (!s_fx_mode && tile >= 2 && s_view.setlist_on && s_view.setlist_count) open_setlist_at(s_view.setlist_first + tile - 2);
     else if (!s_fx_mode && tile >= 2) open_bank_editor(tile - 2);
+}
+
+// A long press on a pedal of the pedal view: the FX editor on its pad page (a long press on an FX tile: its bars).
+static void on_pedal_long(lv_event_t *e)
+{
+    int tile = (int)(intptr_t)lv_event_get_user_data(e);
+    on_tile_long(e);
+    if (!s_looper_mode && s_fx_mode && tile >= 2 && tile < 2 + NANO_FX_SLOTS) s_padv.prefer = true;   // (the editor opens after this)
 }
 
 static lv_obj_t *s_splash, *s_splash_status, *s_splash_version;
@@ -972,7 +997,7 @@ static void build_pedals(lv_obj_t *parent)
         lv_obj_set_clickable(box, true);
         lv_obj_set_style_opa(box, 190, LV_STATE_PRESSED);
         lv_obj_add_event_cb(box, on_tile, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)(2 + slot));
-        lv_obj_add_event_cb(box, on_tile_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)(2 + slot));
+        lv_obj_add_event_cb(box, on_pedal_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)(2 + slot));
 
         s_pv_image[slot] = lv_image_create(box);
         lv_obj_align(s_pv_image[slot], LV_ALIGN_BOTTOM_MID, 0, -PV_BASE);
@@ -5997,13 +6022,21 @@ static void drop_panel(void)
     lv_async_call(panel_clean_later, NULL);
 }
 
-static void on_editor_back(lv_event_t *e)
+static void editor_leave(void)
 {
+    s_padv.leave = s_padv.prefer = s_padv.page = false;
+    s_padv.waiting = 0;
     drop_panel();
     lv_obj_set_hidden(s_editor, true);
     update_main_hidden();
     s_editor_slot_index = -1;
     send('E', 0);
+}
+
+static void on_editor_back(lv_event_t *e)
+{
+    if (s_padv.waiting) s_padv.leave = true;   // the pad's last values go first (pad_send closes the editor then)
+    else editor_leave();
 }
 
 static void on_editor_onoff(lv_event_t *e)
@@ -6518,6 +6551,437 @@ static void style_frame_button(lv_obj_t *btn, uint32_t color, bool active, bool 
     lv_obj_set_style_border_color(btn, lv_color_hex(active ? color : empty ? ED_NEUTRAL : blend(color, TILE_OFF_BG, ED_DIM)), 0);
 }
 
+// ---- The pad: the editor's second page ----
+// The effect large and a lens to drag between four sounds in the corners, as the focus view of the Nano Cortex
+// Editor (the sounds are the editor's: main/fx_focus.c). The centre is the effect as it was when the page opened.
+// The lens blends the controls along the Nano's 0-1; a switch follows the corner that counts most. Beside the pad:
+// the controls the corners move, with their values. The values go to the Nano one at a time, PAD_SEND_MS apart
+// (a control that waits longest first) - the rate of one moving bar, whatever the number of controls.
+#define PAD_Y 64              // inside the page, under BARS | PAD
+#define PAD_W 520
+#define PAD_H 332
+#define PAD_LENS 58
+#define PAD_FIELD_W 178
+#define PAD_FIELD_H 48
+#define PAD_LIST_X 540
+#define PAD_LIST_W 252
+#define PAD_ROW_H 41
+#define PAD_SEND_MS 30
+static lv_obj_t *s_pad_page, *s_pad_button, *s_pad_seg[2], *s_pad, *s_pad_picture, *s_pad_symbol, *s_pad_symbol_icon, *s_pad_home, *s_pad_home_text;
+static lv_obj_t *s_pad_glow, *s_pad_lens, *s_pad_corner[4], *s_pad_list;
+static lv_obj_t *s_pad_row_value[NANO_MAX_PARAMS], *s_pad_row_fill[NANO_MAX_PARAMS];
+// The lens has this control: its value is not taken from the Nano while the finger is down or it waits to be sent.
+static bool pad_holds(int idx)
+{
+    return (s_padv.waiting >> idx & 1) || (s_padv.page && s_padv.finger && (s_padv.moved >> idx & 1));
+}
+
+static void pad_row_show(int idx)
+{
+    if (!s_pad_row_value[idx]) return;
+    const nano_param_t *p = ed_param(idx);
+    char text[32];
+    if (p->kind == NANO_PARAM_RANGE && p->unit && p->unit[0] && s_param_norm[idx] >= 0) snprintf(text, sizeof(text), "%s %s", s_param_text[idx], p->unit);
+    else strlcpy(text, s_param_text[idx], sizeof(text));
+    set_text(s_pad_row_value[idx], text);
+    if (s_pad_row_fill[idx]) {
+        float n = s_param_norm[idx] < 0 ? 0 : s_param_norm[idx];
+        int w = 7 + (int)lroundf(n * (PAD_LIST_W - 14 - 7));
+        if (lv_obj_get_width(s_pad_row_fill[idx]) != w) lv_obj_set_width(s_pad_row_fill[idx], w);
+    }
+}
+
+// The lens where s_padv.x / y say, and the zone it is nearest to filled.
+static void pad_place(void)
+{
+    int cx = PAD_LENS / 2 + (int)lroundf(s_padv.x * (PAD_W - PAD_LENS)), cy = PAD_LENS / 2 + (int)lroundf(s_padv.y * (PAD_H - PAD_LENS));
+    lv_obj_set_pos(s_pad_glow, cx - 39, cy - 39);
+    lv_obj_set_pos(s_pad_lens, cx - PAD_LENS / 2, cy - PAD_LENS / 2);
+    int near = 4;
+    float best = hypotf(s_padv.x - 0.5f, s_padv.y - 0.5f);
+    for (int i = 0; i < 4; i++) {
+        float d = hypotf(s_padv.x - (float)(i % 2), s_padv.y - (float)(i / 2));
+        if (d < best) {
+            best = d;
+            near = i;
+        }
+    }
+    if (best >= 0.36f) near = -1;
+    if (near == s_padv.near) return;
+    s_padv.near = near;
+    uint32_t color = s_editor_color;
+    for (int i = 0; i < 4; i++) {
+        bool on = i == near;
+        lv_obj_set_style_bg_color(s_pad_corner[i], lv_color_hex(on ? color : TILE_OFF_BG), 0);
+        lv_obj_set_style_border_color(s_pad_corner[i], lv_color_hex(on ? color : blend(color, PANEL_BG, 0.60f)), 0);
+        lv_obj_set_style_text_color(lv_obj_get_child(s_pad_corner[i], 0), lv_color_hex(on ? ink_for(color) : TEXT), 0);
+    }
+    lv_obj_set_style_bg_color(s_pad_home, lv_color_hex(near == 4 ? color : 0x15181B), 0);
+    lv_obj_set_style_border_color(s_pad_home, lv_color_hex(near == 4 ? color : 0x3A3F45), 0);
+    lv_obj_set_style_text_color(s_pad_home_text, lv_color_hex(near == 4 ? ink_for(color) : MUTED), 0);
+}
+
+// A value on the control's own steps, back as the Nano's 0-1 (as a bar that is dragged).
+static float pad_snap(const nano_param_t *p, float n)
+{
+    float v = param_from_normalized(p, n < 0 ? 0 : n > 1 ? 1 : n);
+    n = p->max > p->min ? (v - p->min) / (p->max - p->min) : 0;
+    return p->skew > 0 && p->skew != 1 ? powf(n < 0 ? 0 : n, p->skew) : n;
+}
+
+// The lens to x / y (0-1): the controls follow, what differs from what the Nano has waits to be sent.
+static void pad_move(float x, float y)
+{
+    const nano_fx_model_t *m = s_editor_model_def;
+    if (!m || !s_padv.page) return;
+    x = x < 0 ? 0 : x > 1 ? 1 : x;
+    y = y < 0 ? 0 : y > 1 ? 1 : y;
+    s_padv.x = x;
+    s_padv.y = y;
+    float off = fmaxf(fabsf(x - 0.5f), fabsf(y - 0.5f)), centre = powf(off < 0.5f ? 1 - 2 * off : 0, 1.5f);
+    float w[4] = { (1 - x) * (1 - y), x * (1 - y), (1 - x) * y, x * y };
+    int top = 0;
+    for (int k = 0; k < 4; k++) {
+        w[k] *= 1 - centre;
+        if (w[k] > w[top]) top = k;
+    }
+    int count = ed_model_params();
+    for (int idx = 0; idx < count; idx++) {
+        if (!(s_padv.moved >> idx & 1)) continue;
+        const nano_param_t *p = &m->params[idx];
+        float base = s_padv.base[idx], n;
+        if (centre >= 0.9999f) {
+            n = base;   // the centre: exactly as it was (not moved onto a step)
+        } else if (p->kind == NANO_PARAM_ENUM) {
+            n = centre >= w[top] || s_padv.corner[top][idx] < 0 ? base : s_padv.corner[top][idx];
+        } else {
+            n = centre * base;
+            for (int k = 0; k < 4; k++) n += w[k] * (s_padv.corner[k][idx] < 0 ? base : s_padv.corner[k][idx]);
+            n = pad_snap(p, n);
+        }
+        if (fabsf(n - s_param_norm[idx]) >= 0.0001f) {
+            set_param_norm(idx, n);
+            pad_row_show(idx);
+        }
+        if (fabsf(n - s_padv.sent[idx]) >= 0.002f) s_padv.waiting |= 1u << idx;
+        else s_padv.waiting &= ~(1u << idx);
+    }
+    pad_place();
+}
+
+static void editor_leave(void);
+static void style_fxp_chips(void);
+
+// One waiting value to the Nano (the timer: every PAD_SEND_MS).
+static void pad_send(lv_timer_t *t)
+{
+    (void)t;
+    int count = ed_model_params();
+    if (!s_padv.waiting || count == 0 || lv_obj_is_hidden(s_editor)) {
+        s_padv.waiting = 0;
+        if (s_padv.leave) editor_leave();
+        return;
+    }
+    for (int i = 0; i < count; i++) {
+        int idx = (s_padv.next + i) % count;
+        if (!(s_padv.waiting >> idx & 1)) continue;
+        s_padv.waiting &= ~(1u << idx);
+        s_padv.next = idx + 1;
+        s_padv.sent[idx] = s_param_norm[idx];
+        row_changed(idx, s_param_norm[idx]);
+        return;
+    }
+    s_padv.waiting = 0;
+}
+
+// The page opens: the values as they are become the centre, the lens goes there, the corners and the list are
+// the model's.
+static void pad_open(void)
+{
+    const nano_fx_model_t *m = s_editor_model_def;
+    const nano_focus_t *f = s_padv.focus;
+    int count = ed_model_params();
+    uint32_t color = s_editor_color;
+    s_padv.moved = s_padv.waiting = 0;
+    for (int k = 0; k < 4; k++) {
+        for (int i = 0; i < NANO_MAX_PARAMS; i++) s_padv.corner[k][i] = -1;
+        for (int v = 0; v < f->corner[k].count; v++) {
+            int idx = f->corner[k].values[v].param;
+            if (idx >= count) continue;
+            s_padv.corner[k][idx] = f->corner[k].values[v].value;
+            s_padv.moved |= 1u << idx;
+        }
+        // The name in the large size if it fits, else smaller (and dots if it is still too long)
+        lv_obj_t *l = lv_obj_get_child(s_pad_corner[k], 0);
+        lv_point_t size;
+        lv_text_get_size(&size, f->corner[k].name, &ui_font_20, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        lv_obj_set_style_text_font(l, size.x <= PAD_FIELD_W - 16 ? &ui_font_20 : &ui_font_16, 0);
+        set_text(l, f->corner[k].name);
+    }
+    for (int i = 0; i < NANO_MAX_PARAMS; i++) s_padv.base[i] = s_padv.sent[i] = i < count ? s_param_norm[i] : -1;
+
+    // the picture of the own build, else the effect's symbol
+    const lv_image_dsc_t *picture = pedal_asset(m->type);
+    set_hidden(s_pad_picture, picture == NULL);
+    set_hidden(s_pad_symbol, picture != NULL);
+    if (picture) set_image(s_pad_picture, picture);
+    else {
+        lv_obj_set_style_bg_color(s_pad_symbol, lv_color_hex(color), 0);
+        set_hidden(s_pad_symbol_icon, NANO_ICONS[m->icon] == NULL);
+        if (NANO_ICONS[m->icon]) set_image(s_pad_symbol_icon, NANO_ICONS[m->icon]);
+        lv_obj_set_style_image_recolor(s_pad_symbol_icon, lv_color_hex(ink_for(color)), 0);
+    }
+    lv_obj_set_style_bg_color(s_pad_glow, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_color(s_pad_lens, lv_color_hex(blend(color, 0x15181B, 0.45f)), 0);
+    style_frame_button(s_pad_seg[0], color, false, false);
+    style_frame_button(s_pad_seg[1], color, true, false);
+    lv_obj_set_style_text_color(lv_obj_get_child(s_pad_seg[1], 0), lv_color_hex(ink_for(color)), 0);
+
+    // the controls the corners move, in the model's display order
+    lv_obj_clean(s_pad_list);
+    memset(s_pad_row_value, 0, sizeof(s_pad_row_value));
+    memset(s_pad_row_fill, 0, sizeof(s_pad_row_fill));
+    int pos = 0;
+    for (int row = 0; row < count; row++) {
+        int idx = m->order ? m->order[row] : row;
+        if (idx >= count || !(s_padv.moved >> idx & 1)) continue;
+        const nano_param_t *p = &m->params[idx];
+        lv_obj_t *box = lv_obj_create(s_pad_list);
+        lv_obj_remove_style_all(box);
+        lv_obj_set_pos(box, 0, pos * PAD_ROW_H);
+        lv_obj_set_size(box, PAD_LIST_W - 14, PAD_ROW_H);
+        lv_obj_set_scrollable(box, false);
+        lv_obj_set_clickable(box, false);
+        lv_obj_t *name = label(box, &ui_font_16, 0xC8CCD1);
+        lv_label_set_text_static(name, p->name);
+        lv_obj_set_pos(name, 2, 2);
+        s_pad_row_value[idx] = label(box, &ui_font_16, TEXT);
+        lv_obj_align(s_pad_row_value[idx], LV_ALIGN_TOP_RIGHT, -2, 2);
+        if (p->kind == NANO_PARAM_RANGE) {
+            lv_obj_t *track = lv_obj_create(box);
+            lv_obj_remove_style_all(track);
+            lv_obj_set_pos(track, 0, 28);
+            lv_obj_set_size(track, PAD_LIST_W - 14, 7);
+            lv_obj_set_style_radius(track, 3, 0);
+            lv_obj_set_style_bg_color(track, lv_color_hex(0x23272B), 0);
+            lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
+            lv_obj_set_clickable(track, false);
+            lv_obj_t *fill = lv_obj_create(box);
+            lv_obj_remove_style_all(fill);
+            lv_obj_set_pos(fill, 0, 28);
+            lv_obj_set_size(fill, 7, 7);
+            lv_obj_set_style_radius(fill, 3, 0);
+            lv_obj_set_style_bg_color(fill, lv_color_hex(color), 0);
+            lv_obj_set_style_bg_opa(fill, LV_OPA_COVER, 0);
+            lv_obj_set_clickable(fill, false);
+            s_pad_row_fill[idx] = fill;
+        }
+        pad_row_show(idx);
+        pos++;
+    }
+    lv_obj_scroll_to_y(s_pad_list, 0, LV_ANIM_OFF);
+    s_padv.x = s_padv.y = 0.5f;
+    s_padv.near = -2;
+    s_padv.finger = false;
+    pad_place();
+}
+
+// Which page shows: the bars, or the pad when it is wanted and the model has corners and known values. On the bars'
+// page the FX presets make room for PAD.
+static void pad_show(void)
+{
+    const nano_fx_model_t *m = s_editor_model_def;
+    int count = ed_model_params();
+    bool can = m && s_padv.focus;
+    for (int i = 0; can && i < count; i++) can = s_param_norm[i] >= 0;   // (effect off or still reading: no values)
+    bool page = can && s_padv.prefer;
+    if (page && !s_padv.page) {
+        s_padv.page = true;
+        stop_drag();
+        close_panel();
+        pad_open();
+    }
+    s_padv.page = page;
+    set_hidden(s_pad_page, !page);
+    set_hidden(s_editor_body, page);
+    set_hidden(s_pad_button, page || !can);
+    if (can) style_frame_button(s_pad_button, s_editor_color, false, false);
+    int x = can && !page ? 76 : 8;
+    if (lv_obj_get_x(s_fxp_bar) != x) {
+        lv_obj_set_x(s_fxp_bar, x);
+        lv_obj_set_width(s_fxp_bar, 792 - x);   // (style_fxp_chips gives the names their room)
+    }
+}
+
+static void on_pad_event(lv_event_t *e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+        s_padv.finger = false;
+        return;
+    }
+    if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING) return;
+    lv_indev_t *indev = lv_indev_active();
+    if (!indev) return;
+    lv_point_t point;
+    lv_indev_get_point(indev, &point);
+    lv_area_t a;
+    lv_obj_get_coords(s_pad, &a);
+    s_padv.finger = true;
+    pad_move((float)(point.x - a.x1 - PAD_LENS / 2) / (PAD_W - PAD_LENS), (float)(point.y - a.y1 - PAD_LENS / 2) / (PAD_H - PAD_LENS));
+}
+
+static void on_pad_corner(lv_event_t *e)
+{
+    int k = (int)(intptr_t)lv_event_get_user_data(e);
+    if (k > 3) pad_move(0.5f, 0.5f);   // Start: the effect as it was
+    else pad_move((float)(k % 2), (float)(k / 2));
+}
+
+static void on_pad_page(lv_event_t *e)
+{
+    s_padv.prefer = (intptr_t)lv_event_get_user_data(e) != 0;
+    pad_show();
+    style_fxp_chips();
+}
+
+static void build_pad(void)
+{
+    // PAD on the bars' page, left of the FX presets
+    s_pad_button = frame_button(s_editor);
+    lv_obj_set_pos(s_pad_button, 8, 76);
+    lv_obj_set_size(s_pad_button, 60, 56);
+    lv_obj_add_event_cb(s_pad_button, on_pad_page, LV_EVENT_CLICKED, (void *)(intptr_t)1);
+    lv_obj_t *l = label(s_pad_button, &ui_font_16, 0xE6E8EA);
+    lv_label_set_text_static(l, "PAD");
+    lv_obj_center(l);
+    lv_obj_set_hidden(s_pad_button, true);
+
+    s_pad_page = lv_obj_create(s_editor);
+    lv_obj_remove_style_all(s_pad_page);
+    lv_obj_set_pos(s_pad_page, 0, 76);
+    lv_obj_set_size(s_pad_page, 800, 480 - 76);
+    lv_obj_set_style_bg_color(s_pad_page, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_pad_page, LV_OPA_COVER, 0);
+    lv_obj_set_scrollable(s_pad_page, false);
+    lv_obj_set_clickable(s_pad_page, false);
+
+    static const char *const seg[2] = { "BARS", "PAD" };
+    for (int i = 0; i < 2; i++) {
+        s_pad_seg[i] = frame_button(s_pad_page);
+        lv_obj_set_pos(s_pad_seg[i], 8 + i * 100, 0);
+        lv_obj_set_size(s_pad_seg[i], 94, 56);
+        lv_obj_add_event_cb(s_pad_seg[i], on_pad_page, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        l = label(s_pad_seg[i], &ui_font_16, 0xE6E8EA);
+        lv_label_set_text_static(l, seg[i]);
+        lv_obj_set_style_text_letter_space(l, 2, 0);
+        lv_obj_center(l);
+    }
+    lv_obj_t *start = button(s_pad_page, 800 - 8 - 104, 0, 104, 56, NULL);
+    lv_obj_add_event_cb(start, on_pad_corner, LV_EVENT_CLICKED, (void *)(intptr_t)4);
+    lv_obj_set_style_radius(start, 12, 0);
+    l = label(start, &ui_font_16, TEXT);
+    lv_label_set_text_static(l, "Start");
+    lv_obj_center(l);
+
+    s_pad = lv_obj_create(s_pad_page);
+    lv_obj_remove_style_all(s_pad);
+    lv_obj_set_pos(s_pad, 8, PAD_Y);
+    lv_obj_set_size(s_pad, PAD_W, PAD_H);
+    lv_obj_set_style_radius(s_pad, 14, 0);
+    lv_obj_set_style_bg_color(s_pad, lv_color_hex(0x15181B), 0);
+    lv_obj_set_style_bg_opa(s_pad, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_pad, 1, 0);
+    lv_obj_set_style_border_color(s_pad, lv_color_hex(CARD_BORDER), 0);
+    lv_obj_set_scrollable(s_pad, false);
+    lv_obj_set_clickable(s_pad, true);
+    // (a drag here is the lens only: the page around it does not scroll, and swipes do nothing while the editor is open)
+    lv_obj_add_event_cb(s_pad, on_pad_event, LV_EVENT_ALL, NULL);
+    for (int i = 0; i < 2; i++) {   // a faint cross through the centre
+        lv_obj_t *line = lv_obj_create(s_pad);
+        lv_obj_remove_style_all(line);
+        lv_obj_set_pos(line, i ? 14 : PAD_W / 2, i ? PAD_H / 2 : 14);
+        lv_obj_set_size(line, i ? PAD_W - 28 : 1, i ? 1 : PAD_H - 28);
+        lv_obj_set_style_bg_color(line, lv_color_hex(0x262A2F), 0);
+        lv_obj_set_style_bg_opa(line, LV_OPA_COVER, 0);
+        lv_obj_set_clickable(line, false);
+    }
+    s_pad_picture = lv_image_create(s_pad);
+    lv_obj_align(s_pad_picture, LV_ALIGN_CENTER, 0, -8);
+    s_pad_symbol = lv_obj_create(s_pad);
+    lv_obj_remove_style_all(s_pad_symbol);
+    lv_obj_set_size(s_pad_symbol, 132, 132);
+    lv_obj_set_style_radius(s_pad_symbol, 28, 0);
+    lv_obj_set_style_bg_opa(s_pad_symbol, LV_OPA_COVER, 0);
+    lv_obj_align(s_pad_symbol, LV_ALIGN_CENTER, 0, -8);
+    lv_obj_set_clickable(s_pad_symbol, false);
+    s_pad_symbol_icon = lv_image_create(s_pad_symbol);
+    lv_image_set_scale(s_pad_symbol_icon, 512);
+    lv_obj_set_style_image_recolor_opa(s_pad_symbol_icon, LV_OPA_COVER, 0);
+    lv_obj_center(s_pad_symbol_icon);
+
+    s_pad_home = lv_obj_create(s_pad);   // the centre: the effect as it was when the page opened
+    lv_obj_remove_style_all(s_pad_home);
+    lv_obj_set_size(s_pad_home, 76, 30);
+    lv_obj_set_style_radius(s_pad_home, 15, 0);
+    lv_obj_set_style_bg_opa(s_pad_home, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_pad_home, 1, 0);
+    lv_obj_align(s_pad_home, LV_ALIGN_BOTTOM_MID, 0, -10);
+    lv_obj_set_ext_click_area(s_pad_home, 8);
+    lv_obj_add_event_cb(s_pad_home, on_pad_corner, LV_EVENT_CLICKED, (void *)(intptr_t)4);
+    s_pad_home_text = label(s_pad_home, &ui_font_14, MUTED);
+    lv_label_set_text_static(s_pad_home_text, "Start");
+    lv_obj_center(s_pad_home_text);
+
+    // the lens: a white ring, a faint wider disc behind it (no shadow - shadows are slow to draw); under the corners
+    s_pad_glow = lv_obj_create(s_pad);
+    lv_obj_remove_style_all(s_pad_glow);
+    lv_obj_set_size(s_pad_glow, 78, 78);
+    lv_obj_set_style_radius(s_pad_glow, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(s_pad_glow, 46, 0);
+    lv_obj_set_clickable(s_pad_glow, false);
+    s_pad_lens = lv_obj_create(s_pad);
+    lv_obj_remove_style_all(s_pad_lens);
+    lv_obj_set_size(s_pad_lens, PAD_LENS, PAD_LENS);
+    lv_obj_set_style_radius(s_pad_lens, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(s_pad_lens, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_pad_lens, 3, 0);
+    lv_obj_set_style_border_color(s_pad_lens, lv_color_white(), 0);
+    lv_obj_set_clickable(s_pad_lens, false);
+
+    for (int k = 0; k < 4; k++) {
+        lv_obj_t *field = lv_obj_create(s_pad);
+        lv_obj_remove_style_all(field);
+        lv_obj_set_pos(field, k % 2 ? PAD_W - PAD_FIELD_W - 10 : 10, k / 2 ? PAD_H - PAD_FIELD_H - 10 : 10);
+        lv_obj_set_size(field, PAD_FIELD_W, PAD_FIELD_H);
+        lv_obj_set_style_radius(field, 10, 0);
+        lv_obj_set_style_bg_opa(field, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(field, 2, 0);
+        lv_obj_set_style_opa(field, 180, LV_STATE_PRESSED);
+        lv_obj_set_scrollable(field, false);
+        lv_obj_add_event_cb(field, on_pad_corner, LV_EVENT_CLICKED, (void *)(intptr_t)k);
+        l = label(field, &ui_font_20, TEXT);
+        lv_obj_set_width(l, PAD_FIELD_W - 12);
+        lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_center(l);
+        s_pad_corner[k] = field;
+    }
+
+    s_pad_list = lv_obj_create(s_pad_page);
+    lv_obj_remove_style_all(s_pad_list);
+    lv_obj_set_pos(s_pad_list, PAD_LIST_X, PAD_Y);
+    lv_obj_set_size(s_pad_list, PAD_LIST_W, PAD_H);
+    lv_obj_set_scroll_dir(s_pad_list, LV_DIR_VER);
+    lv_obj_set_style_bg_color(s_pad_list, lv_color_hex(0x3A3F45), LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_opa(s_pad_list, LV_OPA_COVER, LV_PART_SCROLLBAR);
+    lv_obj_set_style_width(s_pad_list, 3, LV_PART_SCROLLBAR);
+    lv_obj_set_style_radius(s_pad_list, 2, LV_PART_SCROLLBAR);
+
+    lv_obj_set_hidden(s_pad_page, true);
+    lv_timer_create(pad_send, PAD_SEND_MS, NULL);
+}
+
 static void build_editor(lv_obj_t *screen)
 {
     s_editor = lv_obj_create(screen);
@@ -6656,6 +7120,7 @@ static void build_editor(lv_obj_t *screen)
     lv_obj_set_style_bg_opa(s_editor_body, LV_OPA_COVER, LV_PART_SCROLLBAR);
     lv_obj_set_style_width(s_editor_body, 3, LV_PART_SCROLLBAR);
     lv_obj_set_style_radius(s_editor_body, 2, LV_PART_SCROLLBAR);
+    build_pad();
 
     // Model / option panel. Below the header the editor is covered in plain black (no see-through layer to blend);
     // a tap there closes the panel.
@@ -6736,13 +7201,15 @@ static void style_fxp_chips(void)
     // Only when something changed (this runs with every state update of the Nano).
     static uint32_t shown_color;
     static char shown_names[UI_FX_PRESETS][16];
-    static int shown_active = -2;
+    static int shown_active = -2, shown_room;
     static bool shown_hidden;
-    bool hidden = !s_fxp_usable || !lv_obj_is_hidden(s_editor_info);   // the info line is there then
+    bool hidden = !s_fxp_usable || !lv_obj_is_hidden(s_editor_info) || s_padv.page;   // the info line or the pad page is there then
     set_hidden(s_fxp_bar, hidden);
     style_scene_chip();
-    if (hidden == shown_hidden && shown_active == s_fxp_active && shown_color == s_editor_color
+    int room = lv_obj_get_x(s_fxp_bar) > 8 ? 104 : 120;   // a name's room: less while PAD stands beside the presets
+    if (hidden == shown_hidden && shown_active == s_fxp_active && shown_color == s_editor_color && shown_room == room
         && !memcmp(shown_names, s_fxp_names, sizeof(shown_names))) return;
+    shown_room = room;
     shown_hidden = hidden;
     shown_active = s_fxp_active;
     shown_color = s_editor_color;
@@ -6759,7 +7226,8 @@ static void style_fxp_chips(void)
         // The large font if the name fits, otherwise the small one (and dots if it is still too long).
         lv_point_t size;
         lv_text_get_size(&size, text, &ui_font_16, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-        lv_obj_set_style_text_font(l, size.x <= 116 ? &ui_font_16 : &ui_font_14, 0);
+        lv_obj_set_width(l, room);
+        lv_obj_set_style_text_font(l, size.x <= room - 4 ? &ui_font_16 : &ui_font_14, 0);
         lv_obj_set_style_text_color(l, lv_color_hex(active ? ink_for(color) : i == 0 ? 0xC8CCD1 : 0xE6E8EA), 0);
         style_frame_button(chip, color, active, !filled);
         if (i) set_hidden(lv_obj_get_child(chip, 1), filled);
@@ -6857,7 +7325,12 @@ void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, i
     s_editor_model_def = nano_fx_model(model);
     const nano_fx_model_t *m = s_editor_model_def;
     s_editor_color = m ? m->color : 0x5A5A5A;
-    if (rebuild) build_param_rows();
+    if (rebuild) {
+        build_param_rows();
+        s_padv.focus = m ? nano_focus(m->type) : NULL;   // another effect: the pad starts again with its corners
+        s_padv.page = false;
+        s_padv.waiting = 0;
+    }
 
     uint32_t b_type = slot >= 0 ? s_view.ab_b_type[slot] : 0;
     int b_active = slot >= 0 ? (s_view.ab_active >> slot) & 1 : 0;
@@ -6883,10 +7356,19 @@ void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, i
 
     for (int idx = 0; m && idx < m->param_count && idx < NANO_MAX_PARAMS; idx++) {
         if (s_dragging && idx == s_drag_param) continue;   // the finger has it
+        if (pad_holds(idx)) continue;                      // ... or the pad's lens
         float v = known && idx < count ? values[idx] : -1;
         v = v < 0 ? -1 : v > 1 ? 1 : v;
-        if (v != s_param_norm[idx]) set_param_norm(idx, v);   // only what changed is drawn again
+        if (v != s_param_norm[idx]) {   // only what changed is drawn again
+            set_param_norm(idx, v);
+            if (s_padv.page) {
+                s_padv.sent[idx] = v;
+                pad_row_show(idx);
+            }
+        }
     }
+    pad_show();
+    style_fxp_chips();
 
     set_hidden(s_editor, false);
     update_main_hidden();
@@ -6917,6 +7399,8 @@ void ui_set_autowah(const ui_autowah_t *wah)
 void ui_fx_editor_close(void)
 {
     lvgl_port_lock(0);
+    s_padv.prefer = s_padv.page = s_padv.leave = false;
+    s_padv.waiting = 0;
     drop_panel();
     stop_drag();
     lv_obj_set_hidden(s_editor, true);

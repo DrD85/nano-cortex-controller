@@ -1,0 +1,7687 @@
+[
+ {
+  "type": 18,
+  "name": "Chief BD2",
+  "corners": [
+   {
+    "name": "Sparkle boost",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.1
+     ],
+     [
+      1,
+      "Tone",
+      0.6
+     ],
+     [
+      2,
+      "Volume",
+      0.75
+     ]
+    ]
+   },
+   {
+    "name": "Biting crunch",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.65
+     ],
+     [
+      1,
+      "Tone",
+      0.65
+     ],
+     [
+      2,
+      "Volume",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Warm edge",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.3
+     ],
+     [
+      1,
+      "Tone",
+      0.3
+     ],
+     [
+      2,
+      "Volume",
+      0.65
+     ]
+    ]
+   },
+   {
+    "name": "Fuzzy wall",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Gain",
+      1
+     ],
+     [
+      1,
+      "Tone",
+      0.35
+     ],
+     [
+      2,
+      "Volume",
+      0.45
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 13,
+  "name": "Chief OD1",
+  "corners": [
+   {
+    "name": "Amp pusher",
+    "asked": 2,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.1
+     ],
+     [
+      1,
+      "Level",
+      0.85
+     ]
+    ]
+   },
+   {
+    "name": "Solo lift",
+    "asked": 2,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.7
+     ],
+     [
+      1,
+      "Level",
+      0.8
+     ]
+    ]
+   },
+   {
+    "name": "Hint of hair",
+    "asked": 2,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.25
+     ],
+     [
+      1,
+      "Level",
+      0.45
+     ]
+    ]
+   },
+   {
+    "name": "Full drive",
+    "asked": 2,
+    "values": [
+     [
+      0,
+      "Gain",
+      1
+     ],
+     [
+      1,
+      "Level",
+      0.45
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 6,
+  "name": "Exotic",
+  "corners": [
+   {
+    "name": "Bright booster",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.1
+     ],
+     [
+      1,
+      "Bass",
+      0.4
+     ],
+     [
+      2,
+      "Treble",
+      0.7
+     ],
+     [
+      3,
+      "Volume",
+      0.75
+     ]
+    ]
+   },
+   {
+    "name": "Cutting lead",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.85
+     ],
+     [
+      1,
+      "Bass",
+      0.4
+     ],
+     [
+      2,
+      "Treble",
+      0.65
+     ],
+     [
+      3,
+      "Volume",
+      0.6
+     ]
+    ]
+   },
+   {
+    "name": "Fat clean",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.2
+     ],
+     [
+      1,
+      "Bass",
+      0.7
+     ],
+     [
+      2,
+      "Treble",
+      0.35
+     ],
+     [
+      3,
+      "Volume",
+      0.65
+     ]
+    ]
+   },
+   {
+    "name": "Thick sustain",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Gain",
+      1
+     ],
+     [
+      1,
+      "Bass",
+      0.65
+     ],
+     [
+      2,
+      "Treble",
+      0.35
+     ],
+     [
+      3,
+      "Volume",
+      0.55
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 3007,
+  "name": "Exotic Bass Z Boost",
+  "corners": [
+   {
+    "name": "Slap sparkle",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.1
+     ],
+     [
+      1,
+      "Bass",
+      0.55
+     ],
+     [
+      2,
+      "Treble",
+      0.75
+     ],
+     [
+      3,
+      "Volume",
+      0.55
+     ]
+    ]
+   },
+   {
+    "name": "Rock grit",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.85
+     ],
+     [
+      1,
+      "Bass",
+      0.5
+     ],
+     [
+      2,
+      "Treble",
+      0.65
+     ],
+     [
+      3,
+      "Volume",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Deep and round",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.15
+     ],
+     [
+      1,
+      "Bass",
+      0.85
+     ],
+     [
+      2,
+      "Treble",
+      0.3
+     ],
+     [
+      3,
+      "Volume",
+      0.55
+     ]
+    ]
+   },
+   {
+    "name": "Tube warmth",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.6
+     ],
+     [
+      1,
+      "Bass",
+      0.8
+     ],
+     [
+      2,
+      "Treble",
+      0.3
+     ],
+     [
+      3,
+      "Volume",
+      0.5
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 23,
+  "name": "Exotic Z Boost",
+  "corners": [
+   {
+    "name": "Sparkle",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.1
+     ],
+     [
+      1,
+      "Bass",
+      0.4
+     ],
+     [
+      2,
+      "Treble",
+      0.75
+     ],
+     [
+      3,
+      "Volume",
+      0.6
+     ]
+    ]
+   },
+   {
+    "name": "Bright grit",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.9
+     ],
+     [
+      1,
+      "Bass",
+      0.45
+     ],
+     [
+      2,
+      "Treble",
+      0.65
+     ],
+     [
+      3,
+      "Volume",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Fat clean boost",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.15
+     ],
+     [
+      1,
+      "Bass",
+      0.75
+     ],
+     [
+      2,
+      "Treble",
+      0.4
+     ],
+     [
+      3,
+      "Volume",
+      0.65
+     ]
+    ]
+   },
+   {
+    "name": "Warm push",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.8
+     ],
+     [
+      1,
+      "Bass",
+      0.7
+     ],
+     [
+      2,
+      "Treble",
+      0.35
+     ],
+     [
+      3,
+      "Volume",
+      0.55
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 22,
+  "name": "Facial Fuzz",
+  "corners": [
+   {
+    "name": "Glassy clean-up",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Fuzz",
+      1
+     ],
+     [
+      1,
+      "Volume",
+      0.75
+     ],
+     [
+      2,
+      "Pickup",
+      1
+     ],
+     [
+      3,
+      "Pickup Level",
+      0.25
+     ]
+    ]
+   },
+   {
+    "name": "Classic 60s fuzz",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Fuzz",
+      1
+     ],
+     [
+      1,
+      "Volume",
+      0.5
+     ],
+     [
+      2,
+      "Pickup",
+      1
+     ],
+     [
+      3,
+      "Pickup Level",
+      0.7
+     ]
+    ]
+   },
+   {
+    "name": "Soft overdrive",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Fuzz",
+      0.35
+     ],
+     [
+      1,
+      "Volume",
+      0.65
+     ],
+     [
+      2,
+      "Pickup",
+      0
+     ],
+     [
+      3,
+      "Pickup Level",
+      0.4
+     ]
+    ]
+   },
+   {
+    "name": "Woolly wall",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Fuzz",
+      1
+     ],
+     [
+      1,
+      "Volume",
+      0.5
+     ],
+     [
+      2,
+      "Pickup",
+      0
+     ],
+     [
+      3,
+      "Pickup Level",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 27,
+  "name": "Green 808",
+  "corners": [
+   {
+    "name": "Metal tightener",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Overdrive",
+      0
+     ],
+     [
+      1,
+      "Tone",
+      0.7
+     ],
+     [
+      2,
+      "Level",
+      0.95
+     ]
+    ]
+   },
+   {
+    "name": "Nasal bite",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Overdrive",
+      1
+     ],
+     [
+      1,
+      "Tone",
+      0.7
+     ],
+     [
+      2,
+      "Level",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Warm clean push",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Overdrive",
+      0.15
+     ],
+     [
+      1,
+      "Tone",
+      0.3
+     ],
+     [
+      2,
+      "Level",
+      0.75
+     ]
+    ]
+   },
+   {
+    "name": "Creamy lead",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Overdrive",
+      0.85
+     ],
+     [
+      1,
+      "Tone",
+      0.35
+     ],
+     [
+      2,
+      "Level",
+      0.55
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 3000,
+  "name": "Microtubes B3K",
+  "corners": [
+   {
+    "name": "Clean clank",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Drive",
+      0.2
+     ],
+     [
+      1,
+      "Growl",
+      0
+     ],
+     [
+      2,
+      "Midboost",
+      1
+     ],
+     [
+      3,
+      "Tone",
+      0.75
+     ],
+     [
+      4,
+      "Level",
+      0.5
+     ],
+     [
+      5,
+      "Blend",
+      0.3
+     ]
+    ]
+   },
+   {
+    "name": "Cutting grind",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Drive",
+      0.8
+     ],
+     [
+      1,
+      "Growl",
+      0
+     ],
+     [
+      2,
+      "Midboost",
+      1
+     ],
+     [
+      3,
+      "Tone",
+      0.7
+     ],
+     [
+      4,
+      "Level",
+      0.5
+     ],
+     [
+      5,
+      "Blend",
+      0.7
+     ]
+    ]
+   },
+   {
+    "name": "Round warmth",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Drive",
+      0.3
+     ],
+     [
+      1,
+      "Growl",
+      1
+     ],
+     [
+      2,
+      "Midboost",
+      0
+     ],
+     [
+      3,
+      "Tone",
+      0.3
+     ],
+     [
+      4,
+      "Level",
+      0.5
+     ],
+     [
+      5,
+      "Blend",
+      0.4
+     ]
+    ]
+   },
+   {
+    "name": "Full fuzz",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Drive",
+      1
+     ],
+     [
+      1,
+      "Growl",
+      1
+     ],
+     [
+      2,
+      "Midboost",
+      0
+     ],
+     [
+      3,
+      "Tone",
+      0.35
+     ],
+     [
+      4,
+      "Level",
+      0.45
+     ],
+     [
+      5,
+      "Blend",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 3,
+  "name": "OD250",
+  "corners": [
+   {
+    "name": "Gritty boost",
+    "asked": 2,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.1
+     ],
+     [
+      1,
+      "Volume",
+      0.85
+     ]
+    ]
+   },
+   {
+    "name": "Wide open",
+    "asked": 2,
+    "values": [
+     [
+      0,
+      "Gain",
+      1
+     ],
+     [
+      1,
+      "Volume",
+      0.8
+     ]
+    ]
+   },
+   {
+    "name": "Unity grit",
+    "asked": 2,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.25
+     ],
+     [
+      1,
+      "Volume",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Fuzzy crunch",
+    "asked": 2,
+    "values": [
+     [
+      0,
+      "Gain",
+      0.9
+     ],
+     [
+      1,
+      "Volume",
+      0.45
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 2,
+  "name": "Obsessive Drive",
+  "corners": [
+   {
+    "name": "Clean sparkle",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Drive",
+      0.1
+     ],
+     [
+      1,
+      "Peak",
+      0
+     ],
+     [
+      2,
+      "Tone",
+      0.7
+     ],
+     [
+      3,
+      "Volume",
+      0.6
+     ]
+    ]
+   },
+   {
+    "name": "British bite",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Drive",
+      0.8
+     ],
+     [
+      1,
+      "Peak",
+      1
+     ],
+     [
+      2,
+      "Tone",
+      0.65
+     ],
+     [
+      3,
+      "Volume",
+      0.35
+     ]
+    ]
+   },
+   {
+    "name": "Low-gain warmth",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Drive",
+      0.25
+     ],
+     [
+      1,
+      "Peak",
+      0
+     ],
+     [
+      2,
+      "Tone",
+      0.3
+     ],
+     [
+      3,
+      "Volume",
+      0.55
+     ]
+    ]
+   },
+   {
+    "name": "Thick wall",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Drive",
+      1
+     ],
+     [
+      1,
+      "Peak",
+      1
+     ],
+     [
+      2,
+      "Tone",
+      0.3
+     ],
+     [
+      3,
+      "Volume",
+      0.35
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 4,
+  "name": "Rodent Drive",
+  "corners": [
+   {
+    "name": "Gritty boost",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Distortion",
+      0.15
+     ],
+     [
+      1,
+      "Filter",
+      0.2
+     ],
+     [
+      2,
+      "Volume",
+      0.75
+     ]
+    ]
+   },
+   {
+    "name": "Raspy lead",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Distortion",
+      0.8
+     ],
+     [
+      1,
+      "Filter",
+      0.2
+     ],
+     [
+      2,
+      "Volume",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Smooth crunch",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Distortion",
+      0.4
+     ],
+     [
+      1,
+      "Filter",
+      0.7
+     ],
+     [
+      2,
+      "Volume",
+      0.6
+     ]
+    ]
+   },
+   {
+    "name": "Grunge wall",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Distortion",
+      1
+     ],
+     [
+      1,
+      "Filter",
+      0.65
+     ],
+     [
+      2,
+      "Volume",
+      0.45
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 4005,
+  "name": "Graphic 9",
+  "corners": [
+   {
+    "name": "Mid push",
+    "asked": 12,
+    "values": [
+     [
+      0,
+      "65Hz",
+      0.25
+     ],
+     [
+      1,
+      "125Hz",
+      0.375
+     ],
+     [
+      2,
+      "250Hz",
+      0.5
+     ],
+     [
+      3,
+      "500hz",
+      0.6667
+     ],
+     [
+      4,
+      "1kHz",
+      0.75
+     ],
+     [
+      5,
+      "2kHz",
+      0.625
+     ],
+     [
+      6,
+      "4kHz",
+      0.5
+     ],
+     [
+      7,
+      "8kHz",
+      0.4167
+     ],
+     [
+      8,
+      "16kHz",
+      0.3333
+     ],
+     [
+      9,
+      "HPF",
+      0.1154
+     ],
+     [
+      10,
+      "LPF",
+      0.4667
+     ],
+     [
+      11,
+      "Output",
+      0.5833
+     ]
+    ]
+   },
+   {
+    "name": "Bright and tight",
+    "asked": 12,
+    "values": [
+     [
+      0,
+      "65Hz",
+      0.25
+     ],
+     [
+      1,
+      "125Hz",
+      0.375
+     ],
+     [
+      2,
+      "250Hz",
+      0.4167
+     ],
+     [
+      3,
+      "500hz",
+      0.4167
+     ],
+     [
+      4,
+      "1kHz",
+      0.5
+     ],
+     [
+      5,
+      "2kHz",
+      0.625
+     ],
+     [
+      6,
+      "4kHz",
+      0.75
+     ],
+     [
+      7,
+      "8kHz",
+      0.75
+     ],
+     [
+      8,
+      "16kHz",
+      0.6667
+     ],
+     [
+      9,
+      "HPF",
+      0.1282
+     ],
+     [
+      10,
+      "LPF",
+      1
+     ],
+     [
+      11,
+      "Output",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Warm and dark",
+    "asked": 12,
+    "values": [
+     [
+      0,
+      "65Hz",
+      0.625
+     ],
+     [
+      1,
+      "125Hz",
+      0.6667
+     ],
+     [
+      2,
+      "250Hz",
+      0.625
+     ],
+     [
+      3,
+      "500hz",
+      0.5417
+     ],
+     [
+      4,
+      "1kHz",
+      0.4583
+     ],
+     [
+      5,
+      "2kHz",
+      0.375
+     ],
+     [
+      6,
+      "4kHz",
+      0.2917
+     ],
+     [
+      7,
+      "8kHz",
+      0.1667
+     ],
+     [
+      8,
+      "16kHz",
+      0
+     ],
+     [
+      9,
+      "HPF",
+      0.0256
+     ],
+     [
+      10,
+      "LPF",
+      0.2
+     ],
+     [
+      11,
+      "Output",
+      0.5417
+     ]
+    ]
+   },
+   {
+    "name": "Scooped",
+    "asked": 12,
+    "values": [
+     [
+      0,
+      "65Hz",
+      0.6667
+     ],
+     [
+      1,
+      "125Hz",
+      0.6667
+     ],
+     [
+      2,
+      "250Hz",
+      0.5
+     ],
+     [
+      3,
+      "500hz",
+      0.3333
+     ],
+     [
+      4,
+      "1kHz",
+      0.25
+     ],
+     [
+      5,
+      "2kHz",
+      0.375
+     ],
+     [
+      6,
+      "4kHz",
+      0.5833
+     ],
+     [
+      7,
+      "8kHz",
+      0.6667
+     ],
+     [
+      8,
+      "16kHz",
+      0.5833
+     ],
+     [
+      9,
+      "HPF",
+      0.0385
+     ],
+     [
+      10,
+      "LPF",
+      0.8667
+     ],
+     [
+      11,
+      "Output",
+      0.5
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 4003,
+  "name": "Low-High Cut",
+  "corners": [
+   {
+    "name": "Low cut only",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "HPF Slope",
+      0.5
+     ],
+     [
+      1,
+      "HPF Freq",
+      0.2208
+     ],
+     [
+      2,
+      "LPF Slope",
+      0
+     ],
+     [
+      3,
+      "LPF Freq",
+      1
+     ],
+     [
+      4,
+      "Output",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Radio",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "HPF Slope",
+      1
+     ],
+     [
+      1,
+      "HPF Freq",
+      0.3267
+     ],
+     [
+      2,
+      "LPF Slope",
+      1
+     ],
+     [
+      3,
+      "LPF Freq",
+      0.565
+     ],
+     [
+      4,
+      "Output",
+      0.625
+     ]
+    ]
+   },
+   {
+    "name": "High cut only",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "HPF Slope",
+      0
+     ],
+     [
+      1,
+      "HPF Freq",
+      0
+     ],
+     [
+      2,
+      "LPF Slope",
+      0.5
+     ],
+     [
+      3,
+      "LPF Freq",
+      0.6163
+     ],
+     [
+      4,
+      "Output",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Gentle trim",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "HPF Slope",
+      0.125
+     ],
+     [
+      1,
+      "HPF Freq",
+      0.155
+     ],
+     [
+      2,
+      "LPF Slope",
+      0.125
+     ],
+     [
+      3,
+      "LPF Freq",
+      0.8577
+     ],
+     [
+      4,
+      "Output",
+      0.5
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 4001,
+  "name": "Parametric 3",
+  "corners": [
+   {
+    "name": "Presence lift",
+    "asked": 13,
+    "values": [
+     [
+      4,
+      "1 Active",
+      1
+     ],
+     [
+      3,
+      "1 Type",
+      0.25
+     ],
+     [
+      1,
+      "1 Freq",
+      0.0035
+     ],
+     [
+      9,
+      "2 Active",
+      1
+     ],
+     [
+      8,
+      "2 Type",
+      0
+     ],
+     [
+      6,
+      "2 Freq",
+      0.0891
+     ],
+     [
+      5,
+      "2 Gain",
+      0.6667
+     ],
+     [
+      7,
+      "2 Q",
+      0.0707
+     ],
+     [
+      14,
+      "3 Active",
+      1
+     ],
+     [
+      13,
+      "3 Type",
+      0.75
+     ],
+     [
+      11,
+      "3 Freq",
+      0.3493
+     ],
+     [
+      10,
+      "3 Gain",
+      0.5833
+     ],
+     [
+      15,
+      "Output",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Telephone",
+    "asked": 13,
+    "values": [
+     [
+      4,
+      "1 Active",
+      1
+     ],
+     [
+      3,
+      "1 Type",
+      0.25
+     ],
+     [
+      1,
+      "1 Freq",
+      0.0215
+     ],
+     [
+      9,
+      "2 Active",
+      1
+     ],
+     [
+      8,
+      "2 Type",
+      0
+     ],
+     [
+      6,
+      "2 Freq",
+      0.0591
+     ],
+     [
+      5,
+      "2 Gain",
+      0.75
+     ],
+     [
+      7,
+      "2 Q",
+      0.1414
+     ],
+     [
+      14,
+      "3 Active",
+      1
+     ],
+     [
+      13,
+      "3 Type",
+      0.75
+     ],
+     [
+      11,
+      "3 Freq",
+      0.1742
+     ],
+     [
+      10,
+      "3 Gain",
+      0
+     ],
+     [
+      15,
+      "Output",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Warm and smooth",
+    "asked": 13,
+    "values": [
+     [
+      4,
+      "1 Active",
+      1
+     ],
+     [
+      3,
+      "1 Type",
+      0.25
+     ],
+     [
+      1,
+      "1 Freq",
+      0.001
+     ],
+     [
+      9,
+      "2 Active",
+      1
+     ],
+     [
+      8,
+      "2 Type",
+      0
+     ],
+     [
+      6,
+      "2 Freq",
+      0.014
+     ],
+     [
+      5,
+      "2 Gain",
+      0.5833
+     ],
+     [
+      7,
+      "2 Q",
+      0.0606
+     ],
+     [
+      14,
+      "3 Active",
+      1
+     ],
+     [
+      13,
+      "3 Type",
+      0.75
+     ],
+     [
+      11,
+      "3 Freq",
+      0.2242
+     ],
+     [
+      10,
+      "3 Gain",
+      0.25
+     ],
+     [
+      15,
+      "Output",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Scooped",
+    "asked": 13,
+    "values": [
+     [
+      4,
+      "1 Active",
+      1
+     ],
+     [
+      3,
+      "1 Type",
+      0.25
+     ],
+     [
+      1,
+      "1 Freq",
+      0.002
+     ],
+     [
+      9,
+      "2 Active",
+      1
+     ],
+     [
+      8,
+      "2 Type",
+      0
+     ],
+     [
+      6,
+      "2 Freq",
+      0.0365
+     ],
+     [
+      5,
+      "2 Gain",
+      0.2083
+     ],
+     [
+      7,
+      "2 Q",
+      0.0606
+     ],
+     [
+      14,
+      "3 Active",
+      1
+     ],
+     [
+      13,
+      "3 Type",
+      0.75
+     ],
+     [
+      11,
+      "3 Freq",
+      0.2492
+     ],
+     [
+      10,
+      "3 Gain",
+      0.6667
+     ],
+     [
+      15,
+      "Output",
+      0.5
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 16002,
+  "name": "Utility Gate",
+  "corners": [
+   {
+    "name": "Barely there",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.4056
+     ],
+     [
+      1,
+      "Attack",
+      0.004
+     ],
+     [
+      2,
+      "Hold",
+      0.1648
+     ],
+     [
+      3,
+      "Release",
+      0.2191
+     ],
+     [
+      4,
+      "Range",
+      0.9565
+     ]
+    ]
+   },
+   {
+    "name": "Staccato chop",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.7028
+     ],
+     [
+      1,
+      "Attack",
+      0
+     ],
+     [
+      2,
+      "Hold",
+      0.024
+     ],
+     [
+      3,
+      "Release",
+      0.0342
+     ],
+     [
+      4,
+      "Range",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Slow fade",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.6147
+     ],
+     [
+      1,
+      "Attack",
+      0.049
+     ],
+     [
+      2,
+      "Hold",
+      0.4349
+     ],
+     [
+      3,
+      "Release",
+      0.7359
+     ],
+     [
+      4,
+      "Range",
+      0.8172
+     ]
+    ]
+   },
+   {
+    "name": "High-gain clamp",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.633
+     ],
+     [
+      1,
+      "Attack",
+      0
+     ],
+     [
+      2,
+      "Hold",
+      0.0789
+     ],
+     [
+      3,
+      "Release",
+      0.0886
+     ],
+     [
+      4,
+      "Range",
+      0.4227
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 24006,
+  "name": "Envelope Filter",
+  "corners": [
+   {
+    "name": "Funk quack",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Sens",
+      0.65
+     ],
+     [
+      1,
+      "Attack",
+      0.004
+     ],
+     [
+      2,
+      "Decay",
+      0.35
+     ],
+     [
+      3,
+      "LP/BP/HP",
+      0.5
+     ],
+     [
+      5,
+      "Freq",
+      0.0215
+     ],
+     [
+      6,
+      "Freq Depth",
+      0.75
+     ],
+     [
+      7,
+      "Reso",
+      0.6111
+     ],
+     [
+      8,
+      "Mix",
+      1
+     ],
+     [
+      4,
+      "Level",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Sharp squeal",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Sens",
+      0.8
+     ],
+     [
+      1,
+      "Attack",
+      0.001
+     ],
+     [
+      2,
+      "Decay",
+      0.25
+     ],
+     [
+      3,
+      "LP/BP/HP",
+      1
+     ],
+     [
+      5,
+      "Freq",
+      0.044
+     ],
+     [
+      6,
+      "Freq Depth",
+      0.9
+     ],
+     [
+      7,
+      "Reso",
+      0.8333
+     ],
+     [
+      8,
+      "Mix",
+      1
+     ],
+     [
+      4,
+      "Level",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Gentle opening",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Sens",
+      0.4
+     ],
+     [
+      1,
+      "Attack",
+      0.024
+     ],
+     [
+      2,
+      "Decay",
+      0.55
+     ],
+     [
+      3,
+      "LP/BP/HP",
+      0
+     ],
+     [
+      5,
+      "Freq",
+      0.034
+     ],
+     [
+      6,
+      "Freq Depth",
+      0.35
+     ],
+     [
+      7,
+      "Reso",
+      0.1667
+     ],
+     [
+      8,
+      "Mix",
+      0.55
+     ],
+     [
+      4,
+      "Level",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Bass synth",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Sens",
+      0.55
+     ],
+     [
+      1,
+      "Attack",
+      0.014
+     ],
+     [
+      2,
+      "Decay",
+      0.7
+     ],
+     [
+      3,
+      "LP/BP/HP",
+      0
+     ],
+     [
+      5,
+      "Freq",
+      0.0065
+     ],
+     [
+      6,
+      "Freq Depth",
+      0.65
+     ],
+     [
+      7,
+      "Reso",
+      0.6667
+     ],
+     [
+      8,
+      "Mix",
+      1
+     ],
+     [
+      4,
+      "Level",
+      0.55
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 24001,
+  "name": "Love Meat",
+  "corners": [
+   {
+    "name": "Funk quack",
+    "asked": 10,
+    "values": [
+     [
+      0,
+      "Sensitivity",
+      0.65
+     ],
+     [
+      1,
+      "Attack",
+      0.007
+     ],
+     [
+      2,
+      "Decay",
+      0.35
+     ],
+     [
+      3,
+      "Color",
+      0.6
+     ],
+     [
+      4,
+      "Intensity",
+      0.7
+     ],
+     [
+      5,
+      "Blend",
+      1
+     ],
+     [
+      6,
+      "Trig Detection",
+      1
+     ],
+     [
+      9,
+      "Filter Type",
+      0.5
+     ],
+     [
+      8,
+      "Filter Cutoff",
+      0.3333
+     ],
+     [
+      10,
+      "Level",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Thin squeal",
+    "asked": 10,
+    "values": [
+     [
+      0,
+      "Sensitivity",
+      0.8
+     ],
+     [
+      1,
+      "Attack",
+      0.002
+     ],
+     [
+      2,
+      "Decay",
+      0.25
+     ],
+     [
+      3,
+      "Color",
+      0.85
+     ],
+     [
+      4,
+      "Intensity",
+      0.9
+     ],
+     [
+      5,
+      "Blend",
+      1
+     ],
+     [
+      6,
+      "Trig Detection",
+      1
+     ],
+     [
+      9,
+      "Filter Type",
+      1
+     ],
+     [
+      8,
+      "Filter Cutoff",
+      1
+     ],
+     [
+      10,
+      "Level",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Soft swell",
+    "asked": 10,
+    "values": [
+     [
+      0,
+      "Sensitivity",
+      0.4
+     ],
+     [
+      1,
+      "Attack",
+      0.0591
+     ],
+     [
+      2,
+      "Decay",
+      0.6
+     ],
+     [
+      3,
+      "Color",
+      0.35
+     ],
+     [
+      4,
+      "Intensity",
+      0.35
+     ],
+     [
+      5,
+      "Blend",
+      0.5
+     ],
+     [
+      6,
+      "Trig Detection",
+      1
+     ],
+     [
+      9,
+      "Filter Type",
+      0
+     ],
+     [
+      8,
+      "Filter Cutoff",
+      0.6667
+     ],
+     [
+      10,
+      "Level",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Synth bass dive",
+    "asked": 10,
+    "values": [
+     [
+      0,
+      "Sensitivity",
+      0.6
+     ],
+     [
+      1,
+      "Attack",
+      0.019
+     ],
+     [
+      2,
+      "Decay",
+      0.7
+     ],
+     [
+      3,
+      "Color",
+      0.75
+     ],
+     [
+      4,
+      "Intensity",
+      0.8
+     ],
+     [
+      5,
+      "Blend",
+      0.9
+     ],
+     [
+      6,
+      "Trig Detection",
+      0
+     ],
+     [
+      9,
+      "Filter Type",
+      0
+     ],
+     [
+      8,
+      "Filter Cutoff",
+      0
+     ],
+     [
+      10,
+      "Level",
+      0.55
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 5001,
+  "name": "Legendary 87 (M)",
+  "corners": [
+   {
+    "name": "Clean sparkle",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Input",
+      0.4583
+     ],
+     [
+      1,
+      "Ratio",
+      0
+     ],
+     [
+      2,
+      "Attack",
+      0.921
+     ],
+     [
+      3,
+      "Release",
+      0.5968
+     ],
+     [
+      4,
+      "Makeup",
+      0.5521
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "All buttons in",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Input",
+      0.7083
+     ],
+     [
+      1,
+      "Ratio",
+      1
+     ],
+     [
+      2,
+      "Attack",
+      0.255
+     ],
+     [
+      3,
+      "Release",
+      0.0934
+     ],
+     [
+      4,
+      "Makeup",
+      0.5833
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Parallel glue",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Input",
+      0.625
+     ],
+     [
+      1,
+      "Ratio",
+      0.25
+     ],
+     [
+      2,
+      "Attack",
+      0.6496
+     ],
+     [
+      3,
+      "Release",
+      0.8797
+     ],
+     [
+      4,
+      "Makeup",
+      0.5625
+     ],
+     [
+      5,
+      "Mix",
+      0.4
+     ]
+    ]
+   },
+   {
+    "name": "Sustain squash",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Input",
+      0.7917
+     ],
+     [
+      1,
+      "Ratio",
+      0.75
+     ],
+     [
+      2,
+      "Attack",
+      0.1416
+     ],
+     [
+      3,
+      "Release",
+      0.9411
+     ],
+     [
+      4,
+      "Makeup",
+      0.6042
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 5007,
+  "name": "Opto Comp (M)",
+  "corners": [
+   {
+    "name": "Gentle leveller",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.5278
+     ],
+     [
+      1,
+      "Ratio",
+      0.1765
+     ],
+     [
+      2,
+      "Attack",
+      0.2752
+     ],
+     [
+      3,
+      "Release",
+      0.4003
+     ],
+     [
+      4,
+      "Makeup",
+      0.5313
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Country snap",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.3611
+     ],
+     [
+      1,
+      "Ratio",
+      0.5173
+     ],
+     [
+      2,
+      "Attack",
+      0.3288
+     ],
+     [
+      3,
+      "Release",
+      0.231
+     ],
+     [
+      4,
+      "Makeup",
+      0.5938
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Parallel thickness",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.3056
+     ],
+     [
+      1,
+      "Ratio",
+      0.6147
+     ],
+     [
+      2,
+      "Attack",
+      0.0839
+     ],
+     [
+      3,
+      "Release",
+      0.6424
+     ],
+     [
+      4,
+      "Makeup",
+      0.6042
+     ],
+     [
+      5,
+      "Mix",
+      0.35
+     ]
+    ]
+   },
+   {
+    "name": "Endless sustain",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.2778
+     ],
+     [
+      1,
+      "Ratio",
+      0.7028
+     ],
+     [
+      2,
+      "Attack",
+      0.0553
+     ],
+     [
+      3,
+      "Release",
+      1
+     ],
+     [
+      4,
+      "Makeup",
+      0.625
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 5004,
+  "name": "Solid State Comp (M)",
+  "corners": [
+   {
+    "name": "Glue",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.6111
+     ],
+     [
+      1,
+      "Ratio",
+      0
+     ],
+     [
+      2,
+      "Attack",
+      1
+     ],
+     [
+      3,
+      "Release",
+      0.4287
+     ],
+     [
+      4,
+      "Makeup",
+      0.5208
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Punch",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.5
+     ],
+     [
+      1,
+      "Ratio",
+      0.5
+     ],
+     [
+      2,
+      "Attack",
+      1
+     ],
+     [
+      3,
+      "Release",
+      0.2124
+     ],
+     [
+      4,
+      "Makeup",
+      0.5521
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Parallel smash",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.3889
+     ],
+     [
+      1,
+      "Ratio",
+      1
+     ],
+     [
+      2,
+      "Attack",
+      0.0751
+     ],
+     [
+      3,
+      "Release",
+      0.2124
+     ],
+     [
+      4,
+      "Makeup",
+      0.625
+     ],
+     [
+      5,
+      "Mix",
+      0.3
+     ]
+    ]
+   },
+   {
+    "name": "Brick wall",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.4167
+     ],
+     [
+      1,
+      "Ratio",
+      1
+     ],
+     [
+      2,
+      "Attack",
+      0
+     ],
+     [
+      3,
+      "Release",
+      0.6564
+     ],
+     [
+      4,
+      "Makeup",
+      0.6042
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 5005,
+  "name": "VCA Comp (M)",
+  "corners": [
+   {
+    "name": "Even strum",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.5278
+     ],
+     [
+      1,
+      "Ratio",
+      0.2872
+     ],
+     [
+      2,
+      "Attack",
+      0.0964
+     ],
+     [
+      3,
+      "Release",
+      0.2946
+     ],
+     [
+      4,
+      "Makeup",
+      0.5313
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Chicken picking",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.3611
+     ],
+     [
+      1,
+      "Ratio",
+      0.8415
+     ],
+     [
+      2,
+      "Attack",
+      0.1365
+     ],
+     [
+      3,
+      "Release",
+      0.1122
+     ],
+     [
+      4,
+      "Makeup",
+      0.5938
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Parallel body",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.3333
+     ],
+     [
+      1,
+      "Ratio",
+      1
+     ],
+     [
+      2,
+      "Attack",
+      0.008
+     ],
+     [
+      3,
+      "Release",
+      0.4898
+     ],
+     [
+      4,
+      "Makeup",
+      0.6042
+     ],
+     [
+      5,
+      "Mix",
+      0.4
+     ]
+    ]
+   },
+   {
+    "name": "Sustainer",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.2778
+     ],
+     [
+      1,
+      "Ratio",
+      1
+     ],
+     [
+      2,
+      "Attack",
+      0.004
+     ],
+     [
+      3,
+      "Release",
+      0.8341
+     ],
+     [
+      4,
+      "Makeup",
+      0.625
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 18001,
+  "name": "Transpose",
+  "corners": [
+   {
+    "name": "Octave up",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.4
+     ],
+     [
+      1,
+      "Semitones",
+      1
+     ],
+     [
+      2,
+      "Pitch Fine",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Detune",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Semitones",
+      0.5
+     ],
+     [
+      2,
+      "Pitch Fine",
+      0.57
+     ]
+    ]
+   },
+   {
+    "name": "Octave down",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Semitones",
+      0
+     ],
+     [
+      2,
+      "Pitch Fine",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Drop tuning",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Semitones",
+      0.4167
+     ],
+     [
+      2,
+      "Pitch Fine",
+      0.5
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 18004,
+  "name": "Poly Octaver",
+  "corners": [
+   {
+    "name": "12-string",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Dry",
+      0.7
+     ],
+     [
+      1,
+      "Oct",
+      0.6
+     ],
+     [
+      2,
+      "Sub",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Organ",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Dry",
+      0.5
+     ],
+     [
+      1,
+      "Oct",
+      0.7
+     ],
+     [
+      2,
+      "Sub",
+      0.7
+     ]
+    ]
+   },
+   {
+    "name": "Fat riff",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Dry",
+      0.8
+     ],
+     [
+      1,
+      "Oct",
+      0
+     ],
+     [
+      2,
+      "Sub",
+      0.6
+     ]
+    ]
+   },
+   {
+    "name": "Bass only",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Dry",
+      0
+     ],
+     [
+      1,
+      "Oct",
+      0
+     ],
+     [
+      2,
+      "Sub",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 18006,
+  "name": "Wham",
+  "corners": [
+   {
+    "name": "Octave up",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Pedal",
+      1
+     ],
+     [
+      2,
+      "Heel Pitch 1",
+      0.5
+     ],
+     [
+      3,
+      "Toe Pitch 1",
+      0.75
+     ],
+     [
+      6,
+      "Blend",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Harmony fifth",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Pedal",
+      1
+     ],
+     [
+      2,
+      "Heel Pitch 1",
+      0.5
+     ],
+     [
+      3,
+      "Toe Pitch 1",
+      0.6458
+     ],
+     [
+      6,
+      "Blend",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Dive bomb",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Pedal",
+      1
+     ],
+     [
+      2,
+      "Heel Pitch 1",
+      0.5
+     ],
+     [
+      3,
+      "Toe Pitch 1",
+      0
+     ],
+     [
+      6,
+      "Blend",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Octaves both ways",
+    "asked": 7,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.6
+     ],
+     [
+      1,
+      "Pedal",
+      1
+     ],
+     [
+      2,
+      "Heel Pitch 1",
+      0.5
+     ],
+     [
+      3,
+      "Toe Pitch 1",
+      0.75
+     ],
+     [
+      4,
+      "Heel Pitch 2",
+      0.5
+     ],
+     [
+      5,
+      "Toe Pitch 2",
+      0.25
+     ],
+     [
+      6,
+      "Blend",
+      0.5
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 18014,
+  "name": "Chief OC2",
+  "corners": [
+   {
+    "name": "Fat riff",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Output",
+      0.5
+     ],
+     [
+      1,
+      "Dry",
+      0.8
+     ],
+     [
+      2,
+      "Oct 1",
+      0.55
+     ],
+     [
+      3,
+      "Oct 2",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Bass only",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Output",
+      0.5
+     ],
+     [
+      1,
+      "Dry",
+      0
+     ],
+     [
+      2,
+      "Oct 1",
+      1
+     ],
+     [
+      3,
+      "Oct 2",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Sub rumble",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Output",
+      0.5
+     ],
+     [
+      1,
+      "Dry",
+      0.7
+     ],
+     [
+      2,
+      "Oct 1",
+      0
+     ],
+     [
+      3,
+      "Oct 2",
+      0.7
+     ]
+    ]
+   },
+   {
+    "name": "Full stack",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Output",
+      0.5
+     ],
+     [
+      1,
+      "Dry",
+      0.3
+     ],
+     [
+      2,
+      "Oct 1",
+      0.8
+     ],
+     [
+      3,
+      "Oct 2",
+      0.8
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 16011,
+  "name": "Doubler",
+  "corners": [
+   {
+    "name": "Subtle thickening",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Spread",
+      0.0351
+     ],
+     [
+      1,
+      "Dry Level",
+      0.7692
+     ],
+     [
+      2,
+      "FX Level",
+      0.5
+     ]
+    ]
+   },
+   {
+    "name": "Wide wall",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Spread",
+      0.3333
+     ],
+     [
+      1,
+      "Dry Level",
+      0.7692
+     ],
+     [
+      2,
+      "FX Level",
+      0.7692
+     ]
+    ]
+   },
+   {
+    "name": "Second take only",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Spread",
+      0.2982
+     ],
+     [
+      1,
+      "Dry Level",
+      0
+     ],
+     [
+      2,
+      "FX Level",
+      0.7692
+     ]
+    ]
+   },
+   {
+    "name": "Slapback twin",
+    "asked": 3,
+    "values": [
+     [
+      0,
+      "Spread",
+      1
+     ],
+     [
+      1,
+      "Dry Level",
+      0.6538
+     ],
+     [
+      2,
+      "FX Level",
+      0.7692
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 5012,
+  "name": "Legendary 87 (ST)",
+  "corners": [
+   {
+    "name": "Clean sparkle",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Input",
+      0.4583
+     ],
+     [
+      1,
+      "Ratio",
+      0
+     ],
+     [
+      2,
+      "Attack",
+      0.921
+     ],
+     [
+      3,
+      "Release",
+      0.5968
+     ],
+     [
+      4,
+      "Makeup",
+      0.5521
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "All buttons in",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Input",
+      0.7083
+     ],
+     [
+      1,
+      "Ratio",
+      1
+     ],
+     [
+      2,
+      "Attack",
+      0.255
+     ],
+     [
+      3,
+      "Release",
+      0.0934
+     ],
+     [
+      4,
+      "Makeup",
+      0.5833
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Parallel glue",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Input",
+      0.625
+     ],
+     [
+      1,
+      "Ratio",
+      0.25
+     ],
+     [
+      2,
+      "Attack",
+      0.6496
+     ],
+     [
+      3,
+      "Release",
+      0.8797
+     ],
+     [
+      4,
+      "Makeup",
+      0.5625
+     ],
+     [
+      5,
+      "Mix",
+      0.4
+     ]
+    ]
+   },
+   {
+    "name": "Sustain squash",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Input",
+      0.7917
+     ],
+     [
+      1,
+      "Ratio",
+      0.75
+     ],
+     [
+      2,
+      "Attack",
+      0.1416
+     ],
+     [
+      3,
+      "Release",
+      0.9411
+     ],
+     [
+      4,
+      "Makeup",
+      0.6042
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 5015,
+  "name": "Opto Comp (ST)",
+  "corners": [
+   {
+    "name": "Gentle leveller",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.5278
+     ],
+     [
+      1,
+      "Ratio",
+      0.1765
+     ],
+     [
+      2,
+      "Attack",
+      0.2752
+     ],
+     [
+      3,
+      "Release",
+      0.4003
+     ],
+     [
+      4,
+      "Makeup",
+      0.5313
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Country snap",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.3611
+     ],
+     [
+      1,
+      "Ratio",
+      0.5173
+     ],
+     [
+      2,
+      "Attack",
+      0.3288
+     ],
+     [
+      3,
+      "Release",
+      0.231
+     ],
+     [
+      4,
+      "Makeup",
+      0.5938
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Parallel thickness",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.3056
+     ],
+     [
+      1,
+      "Ratio",
+      0.6147
+     ],
+     [
+      2,
+      "Attack",
+      0.0839
+     ],
+     [
+      3,
+      "Release",
+      0.6424
+     ],
+     [
+      4,
+      "Makeup",
+      0.6042
+     ],
+     [
+      5,
+      "Mix",
+      0.35
+     ]
+    ]
+   },
+   {
+    "name": "Endless sustain",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.2778
+     ],
+     [
+      1,
+      "Ratio",
+      0.7028
+     ],
+     [
+      2,
+      "Attack",
+      0.0553
+     ],
+     [
+      3,
+      "Release",
+      1
+     ],
+     [
+      4,
+      "Makeup",
+      0.625
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 5013,
+  "name": "Solid State Comp (ST)",
+  "corners": [
+   {
+    "name": "Glue",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.6111
+     ],
+     [
+      1,
+      "Ratio",
+      0
+     ],
+     [
+      2,
+      "Attack",
+      1
+     ],
+     [
+      3,
+      "Release",
+      0.4287
+     ],
+     [
+      4,
+      "Makeup",
+      0.5208
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Punch",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.5
+     ],
+     [
+      1,
+      "Ratio",
+      0.5
+     ],
+     [
+      2,
+      "Attack",
+      1
+     ],
+     [
+      3,
+      "Release",
+      0.2124
+     ],
+     [
+      4,
+      "Makeup",
+      0.5521
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Parallel smash",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.3889
+     ],
+     [
+      1,
+      "Ratio",
+      1
+     ],
+     [
+      2,
+      "Attack",
+      0.0751
+     ],
+     [
+      3,
+      "Release",
+      0.2124
+     ],
+     [
+      4,
+      "Makeup",
+      0.625
+     ],
+     [
+      5,
+      "Mix",
+      0.3
+     ]
+    ]
+   },
+   {
+    "name": "Brick wall",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.4167
+     ],
+     [
+      1,
+      "Ratio",
+      1
+     ],
+     [
+      2,
+      "Attack",
+      0
+     ],
+     [
+      3,
+      "Release",
+      0.6564
+     ],
+     [
+      4,
+      "Makeup",
+      0.6042
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 5014,
+  "name": "VCA Comp (ST)",
+  "corners": [
+   {
+    "name": "Even strum",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.5278
+     ],
+     [
+      1,
+      "Ratio",
+      0.2872
+     ],
+     [
+      2,
+      "Attack",
+      0.0964
+     ],
+     [
+      3,
+      "Release",
+      0.2946
+     ],
+     [
+      4,
+      "Makeup",
+      0.5313
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Chicken picking",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.3611
+     ],
+     [
+      1,
+      "Ratio",
+      0.8415
+     ],
+     [
+      2,
+      "Attack",
+      0.1365
+     ],
+     [
+      3,
+      "Release",
+      0.1122
+     ],
+     [
+      4,
+      "Makeup",
+      0.5938
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Parallel body",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.3333
+     ],
+     [
+      1,
+      "Ratio",
+      1
+     ],
+     [
+      2,
+      "Attack",
+      0.008
+     ],
+     [
+      3,
+      "Release",
+      0.4898
+     ],
+     [
+      4,
+      "Makeup",
+      0.6042
+     ],
+     [
+      5,
+      "Mix",
+      0.4
+     ]
+    ]
+   },
+   {
+    "name": "Sustainer",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Threshold",
+      0.2778
+     ],
+     [
+      1,
+      "Ratio",
+      1
+     ],
+     [
+      2,
+      "Attack",
+      0.004
+     ],
+     [
+      3,
+      "Release",
+      0.8341
+     ],
+     [
+      4,
+      "Makeup",
+      0.625
+     ],
+     [
+      5,
+      "Mix",
+      1
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 7024,
+  "name": "Chief CE2W (ST)",
+  "corners": [
+   {
+    "name": "Classic shimmer",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Rate",
+      0.3
+     ],
+     [
+      2,
+      "Depth",
+      0.5
+     ],
+     [
+      3,
+      "Type",
+      0
+     ],
+     [
+      4,
+      "Width",
+      0.6
+     ],
+     [
+      7,
+      "Sync Note",
+      0.6923
+     ]
+    ]
+   },
+   {
+    "name": "Fast swirl",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Rate",
+      0.85
+     ],
+     [
+      2,
+      "Depth",
+      0.6
+     ],
+     [
+      3,
+      "Type",
+      0
+     ],
+     [
+      4,
+      "Width",
+      1
+     ],
+     [
+      7,
+      "Sync Note",
+      0.2308
+     ]
+    ]
+   },
+   {
+    "name": "Slow and wide",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Rate",
+      0.12
+     ],
+     [
+      2,
+      "Depth",
+      0.85
+     ],
+     [
+      3,
+      "Type",
+      0.5
+     ],
+     [
+      4,
+      "Width",
+      1
+     ],
+     [
+      7,
+      "Sync Note",
+      0.9231
+     ]
+    ]
+   },
+   {
+    "name": "Vibrato",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Rate",
+      0.55
+     ],
+     [
+      2,
+      "Depth",
+      0.6
+     ],
+     [
+      3,
+      "Type",
+      1
+     ],
+     [
+      4,
+      "Width",
+      0.5
+     ],
+     [
+      7,
+      "Sync Note",
+      0.4615
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 7027,
+  "name": "Chief DC2W (ST)",
+  "corners": [
+   {
+    "name": "Subtle width",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Mode",
+      0
+     ],
+     [
+      2,
+      "Mode Type",
+      0
+     ],
+     [
+      3,
+      "Drive",
+      0.1
+     ]
+    ]
+   },
+   {
+    "name": "Deep swirl",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Mode",
+      0.3333
+     ],
+     [
+      2,
+      "Mode Type",
+      0
+     ],
+     [
+      3,
+      "Drive",
+      0.1
+     ]
+    ]
+   },
+   {
+    "name": "Studio rack",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Mode",
+      0.1111
+     ],
+     [
+      2,
+      "Mode Type",
+      1
+     ],
+     [
+      3,
+      "Drive",
+      0.2
+     ]
+    ]
+   },
+   {
+    "name": "All in, driven",
+    "asked": 4,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Mode",
+      1
+     ],
+     [
+      2,
+      "Mode Type",
+      1
+     ],
+     [
+      3,
+      "Drive",
+      0.75
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 7023,
+  "name": "Chorus 229T",
+  "corners": [
+   {
+    "name": "Subtle detune",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.3
+     ],
+     [
+      1,
+      "Rate",
+      0.3273
+     ],
+     [
+      2,
+      "Depth",
+      0.2
+     ],
+     [
+      3,
+      "Width",
+      1
+     ],
+     [
+      6,
+      "Sync Note",
+      0.9
+     ]
+    ]
+   },
+   {
+    "name": "Fast shimmer",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Rate",
+      0.8864
+     ],
+     [
+      2,
+      "Depth",
+      0.3
+     ],
+     [
+      3,
+      "Width",
+      1
+     ],
+     [
+      6,
+      "Sync Note",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Slow and deep",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Rate",
+      0.1336
+     ],
+     [
+      2,
+      "Depth",
+      0.9
+     ],
+     [
+      3,
+      "Width",
+      1
+     ],
+     [
+      6,
+      "Sync Note",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Seasick",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.6
+     ],
+     [
+      1,
+      "Rate",
+      0.7559
+     ],
+     [
+      2,
+      "Depth",
+      1
+     ],
+     [
+      3,
+      "Width",
+      0.6
+     ],
+     [
+      6,
+      "Sync Note",
+      0.3
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 7022,
+  "name": "Dream Chorus",
+  "corners": [
+   {
+    "name": "Glassy",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.4
+     ],
+     [
+      1,
+      "Speed",
+      0.25
+     ],
+     [
+      2,
+      "Depth",
+      0.3
+     ],
+     [
+      3,
+      "Mode",
+      0
+     ],
+     [
+      6,
+      "Sync Note",
+      0.9231
+     ]
+    ]
+   },
+   {
+    "name": "Fast shimmer",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Speed",
+      0.8
+     ],
+     [
+      2,
+      "Depth",
+      0.3
+     ],
+     [
+      3,
+      "Mode",
+      0
+     ],
+     [
+      6,
+      "Sync Note",
+      0.2308
+     ]
+    ]
+   },
+   {
+    "name": "Thick and slow",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.55
+     ],
+     [
+      1,
+      "Speed",
+      0.12
+     ],
+     [
+      2,
+      "Depth",
+      0.85
+     ],
+     [
+      3,
+      "Mode",
+      1
+     ],
+     [
+      6,
+      "Sync Note",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Wobble",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.6
+     ],
+     [
+      1,
+      "Speed",
+      0.7
+     ],
+     [
+      2,
+      "Depth",
+      0.9
+     ],
+     [
+      3,
+      "Mode",
+      1
+     ],
+     [
+      6,
+      "Sync Note",
+      0.4615
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 7021,
+  "name": "MX Flanger",
+  "corners": [
+   {
+    "name": "Soft chorus",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Manual",
+      0.2
+     ],
+     [
+      2,
+      "Width",
+      0.2
+     ],
+     [
+      3,
+      "Speed",
+      0.35
+     ],
+     [
+      4,
+      "Regen",
+      0
+     ],
+     [
+      7,
+      "Sync Note",
+      0.6923
+     ]
+    ]
+   },
+   {
+    "name": "Fast swirl",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Manual",
+      0.5
+     ],
+     [
+      2,
+      "Width",
+      0.45
+     ],
+     [
+      3,
+      "Speed",
+      0.85
+     ],
+     [
+      4,
+      "Regen",
+      0.3
+     ],
+     [
+      7,
+      "Sync Note",
+      0.2308
+     ]
+    ]
+   },
+   {
+    "name": "Jet plane",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Manual",
+      0.6
+     ],
+     [
+      2,
+      "Width",
+      0.9
+     ],
+     [
+      3,
+      "Speed",
+      0.08
+     ],
+     [
+      4,
+      "Regen",
+      0.85
+     ],
+     [
+      7,
+      "Sync Note",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Ray gun",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.6
+     ],
+     [
+      1,
+      "Manual",
+      0.7
+     ],
+     [
+      2,
+      "Width",
+      1
+     ],
+     [
+      3,
+      "Speed",
+      0.75
+     ],
+     [
+      4,
+      "Regen",
+      1
+     ],
+     [
+      7,
+      "Sync Note",
+      0.4615
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 7028,
+  "name": "MX Phase 95",
+  "corners": [
+   {
+    "name": "Soft swirl",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Speed",
+      0.15
+     ],
+     [
+      2,
+      "Type",
+      1
+     ],
+     [
+      3,
+      "Mode",
+      1
+     ],
+     [
+      6,
+      "Sync Note",
+      0.9375
+     ]
+    ]
+   },
+   {
+    "name": "Soft flutter",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Speed",
+      0.8
+     ],
+     [
+      2,
+      "Type",
+      1
+     ],
+     [
+      3,
+      "Mode",
+      1
+     ],
+     [
+      6,
+      "Sync Note",
+      0.375
+     ]
+    ]
+   },
+   {
+    "name": "Deep sweep",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Speed",
+      0.18
+     ],
+     [
+      2,
+      "Type",
+      0
+     ],
+     [
+      3,
+      "Mode",
+      0
+     ],
+     [
+      6,
+      "Sync Note",
+      0.9375
+     ]
+    ]
+   },
+   {
+    "name": "Rotary",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Speed",
+      0.9
+     ],
+     [
+      2,
+      "Type",
+      0
+     ],
+     [
+      3,
+      "Mode",
+      0
+     ],
+     [
+      6,
+      "Sync Note",
+      0.375
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 7029,
+  "name": "MX Vibe",
+  "corners": [
+   {
+    "name": "Breathe",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Vibe",
+      0
+     ],
+     [
+      2,
+      "Speed",
+      0.25
+     ],
+     [
+      4,
+      "Depth",
+      0.55
+     ],
+     [
+      7,
+      "Sync Note",
+      0.9231
+     ]
+    ]
+   },
+   {
+    "name": "Machine gun",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Vibe",
+      0
+     ],
+     [
+      2,
+      "Speed",
+      0.75
+     ],
+     [
+      4,
+      "Depth",
+      0.8
+     ],
+     [
+      7,
+      "Sync Note",
+      0.2308
+     ]
+    ]
+   },
+   {
+    "name": "Seasick vibrato",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Vibe",
+      1
+     ],
+     [
+      2,
+      "Speed",
+      0.42
+     ],
+     [
+      4,
+      "Depth",
+      0.85
+     ],
+     [
+      7,
+      "Sync Note",
+      0.6923
+     ]
+    ]
+   },
+   {
+    "name": "Fast vibrato",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Vibe",
+      1
+     ],
+     [
+      2,
+      "Speed",
+      0.8
+     ],
+     [
+      4,
+      "Depth",
+      0.45
+     ],
+     [
+      7,
+      "Sync Note",
+      0.2308
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 7004,
+  "name": "Tremolo",
+  "corners": [
+   {
+    "name": "Slow pulse",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Rate",
+      0.2443
+     ],
+     [
+      1,
+      "Depth",
+      0.5
+     ],
+     [
+      2,
+      "Waveform",
+      0
+     ],
+     [
+      5,
+      "Smoothing",
+      0.7
+     ],
+     [
+      6,
+      "LFO Active",
+      1
+     ],
+     [
+      11,
+      "Sync Note",
+      0.5625
+     ]
+    ]
+   },
+   {
+    "name": "Fast shimmer",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Rate",
+      0.6171
+     ],
+     [
+      1,
+      "Depth",
+      0.45
+     ],
+     [
+      2,
+      "Waveform",
+      0
+     ],
+     [
+      5,
+      "Smoothing",
+      0.6
+     ],
+     [
+      6,
+      "LFO Active",
+      1
+     ],
+     [
+      11,
+      "Sync Note",
+      0.1875
+     ]
+    ]
+   },
+   {
+    "name": "Slow chop",
+    "asked": 7,
+    "values": [
+     [
+      0,
+      "Rate",
+      0.3149
+     ],
+     [
+      1,
+      "Depth",
+      1
+     ],
+     [
+      2,
+      "Waveform",
+      0.5
+     ],
+     [
+      3,
+      "Duty Cycle",
+      0.5
+     ],
+     [
+      5,
+      "Smoothing",
+      0.1
+     ],
+     [
+      6,
+      "LFO Active",
+      1
+     ],
+     [
+      11,
+      "Sync Note",
+      0.375
+     ]
+    ]
+   },
+   {
+    "name": "Stutter",
+    "asked": 7,
+    "values": [
+     [
+      0,
+      "Rate",
+      0.7345
+     ],
+     [
+      1,
+      "Depth",
+      1
+     ],
+     [
+      2,
+      "Waveform",
+      0.5
+     ],
+     [
+      3,
+      "Duty Cycle",
+      0.3
+     ],
+     [
+      5,
+      "Smoothing",
+      0
+     ],
+     [
+      6,
+      "LFO Active",
+      1
+     ],
+     [
+      11,
+      "Sync Note",
+      0
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 6010,
+  "name": "Analog Delay",
+  "corners": [
+   {
+    "name": "Slapback",
+    "asked": 7,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.35
+     ],
+     [
+      1,
+      "Feedback",
+      0.05
+     ],
+     [
+      5,
+      "Delay Time",
+      0
+     ],
+     [
+      11,
+      "Sync Note",
+      0
+     ],
+     [
+      7,
+      "Mod Depth",
+      0
+     ],
+     [
+      9,
+      "Drive",
+      0.3
+     ],
+     [
+      3,
+      "Low Pass",
+      0.4525
+     ]
+    ]
+   },
+   {
+    "name": "Runaway",
+    "asked": 8,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.4
+     ],
+     [
+      1,
+      "Feedback",
+      0.88
+     ],
+     [
+      5,
+      "Delay Time",
+      0.3132
+     ],
+     [
+      11,
+      "Sync Note",
+      0.2308
+     ],
+     [
+      6,
+      "Mod Rate",
+      0.1458
+     ],
+     [
+      7,
+      "Mod Depth",
+      0.25
+     ],
+     [
+      9,
+      "Drive",
+      0.7
+     ],
+     [
+      3,
+      "Low Pass",
+      0.2985
+     ]
+    ]
+   },
+   {
+    "name": "Dark lead echo",
+    "asked": 8,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.22
+     ],
+     [
+      1,
+      "Feedback",
+      0.35
+     ],
+     [
+      5,
+      "Delay Time",
+      0.4637
+     ],
+     [
+      11,
+      "Sync Note",
+      0.4615
+     ],
+     [
+      6,
+      "Mod Rate",
+      0.1458
+     ],
+     [
+      7,
+      "Mod Depth",
+      0.2
+     ],
+     [
+      9,
+      "Drive",
+      0.4
+     ],
+     [
+      3,
+      "Low Pass",
+      0.2512
+     ]
+    ]
+   },
+   {
+    "name": "Warbly wash",
+    "asked": 8,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Feedback",
+      0.65
+     ],
+     [
+      5,
+      "Delay Time",
+      0.86
+     ],
+     [
+      11,
+      "Sync Note",
+      0.6923
+     ],
+     [
+      6,
+      "Mod Rate",
+      0.3092
+     ],
+     [
+      7,
+      "Mod Depth",
+      0.7
+     ],
+     [
+      9,
+      "Drive",
+      0.5
+     ],
+     [
+      3,
+      "Low Pass",
+      0.1969
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 6015,
+  "name": "Circular Delay",
+  "corners": [
+   {
+    "name": "Single slap",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.3
+     ],
+     [
+      1,
+      "Tap Preset",
+      0
+     ],
+     [
+      2,
+      "Delay Time",
+      0.0573
+     ],
+     [
+      11,
+      "Sync Note",
+      0.35
+     ],
+     [
+      3,
+      "Feedback",
+      0.05
+     ],
+     [
+      4,
+      "Diffusion",
+      0
+     ],
+     [
+      8,
+      "Mod Depth",
+      0
+     ],
+     [
+      9,
+      "Vintage Mode",
+      0
+     ],
+     [
+      6,
+      "Low Pass",
+      0.6
+     ]
+    ]
+   },
+   {
+    "name": "Rhythmic taps",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.35
+     ],
+     [
+      1,
+      "Tap Preset",
+      0.25
+     ],
+     [
+      2,
+      "Delay Time",
+      0.2397
+     ],
+     [
+      11,
+      "Sync Note",
+      0.65
+     ],
+     [
+      3,
+      "Feedback",
+      0.3
+     ],
+     [
+      4,
+      "Diffusion",
+      0.1
+     ],
+     [
+      8,
+      "Mod Depth",
+      0
+     ],
+     [
+      9,
+      "Vintage Mode",
+      0
+     ],
+     [
+      6,
+      "Low Pass",
+      0.5333
+     ]
+    ]
+   },
+   {
+    "name": "Lo-fi wash",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.4
+     ],
+     [
+      1,
+      "Tap Preset",
+      0.875
+     ],
+     [
+      2,
+      "Delay Time",
+      0.3918
+     ],
+     [
+      11,
+      "Sync Note",
+      0.75
+     ],
+     [
+      3,
+      "Feedback",
+      0.6
+     ],
+     [
+      4,
+      "Diffusion",
+      0.6
+     ],
+     [
+      8,
+      "Mod Depth",
+      0.2
+     ],
+     [
+      9,
+      "Vintage Mode",
+      1
+     ],
+     [
+      6,
+      "Low Pass",
+      0.1333
+     ]
+    ]
+   },
+   {
+    "name": "Ambient cloud",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Tap Preset",
+      0.375
+     ],
+     [
+      2,
+      "Delay Time",
+      0.5945
+     ],
+     [
+      11,
+      "Sync Note",
+      0.8
+     ],
+     [
+      3,
+      "Feedback",
+      0.7
+     ],
+     [
+      4,
+      "Diffusion",
+      1
+     ],
+     [
+      8,
+      "Mod Depth",
+      0.4
+     ],
+     [
+      9,
+      "Vintage Mode",
+      0
+     ],
+     [
+      6,
+      "Low Pass",
+      0.4
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 6011,
+  "name": "Digital Delay (ST)",
+  "corners": [
+   {
+    "name": "Doubling slap",
+    "asked": 8,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.35
+     ],
+     [
+      1,
+      "Feedback",
+      0
+     ],
+     [
+      5,
+      "Delay Time",
+      0.0767
+     ],
+     [
+      17,
+      "Sync Note",
+      0.35
+     ],
+     [
+      4,
+      "Ping Pong",
+      0
+     ],
+     [
+      7,
+      "Mod Depth",
+      0
+     ],
+     [
+      10,
+      "Dyn Mode",
+      0
+     ],
+     [
+      3,
+      "Low Pass",
+      0.8302
+     ]
+    ]
+   },
+   {
+    "name": "Dotted eighths",
+    "asked": 8,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.35
+     ],
+     [
+      1,
+      "Feedback",
+      0.35
+     ],
+     [
+      5,
+      "Delay Time",
+      0.1875
+     ],
+     [
+      17,
+      "Sync Note",
+      0.6
+     ],
+     [
+      4,
+      "Ping Pong",
+      0
+     ],
+     [
+      7,
+      "Mod Depth",
+      0
+     ],
+     [
+      10,
+      "Dyn Mode",
+      0
+     ],
+     [
+      3,
+      "Low Pass",
+      0.6858
+     ]
+    ]
+   },
+   {
+    "name": "Ducked lead",
+    "asked": 10,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.3
+     ],
+     [
+      1,
+      "Feedback",
+      0.4
+     ],
+     [
+      5,
+      "Delay Time",
+      0.2179
+     ],
+     [
+      17,
+      "Sync Note",
+      0.65
+     ],
+     [
+      4,
+      "Ping Pong",
+      0
+     ],
+     [
+      7,
+      "Mod Depth",
+      0.1
+     ],
+     [
+      10,
+      "Dyn Mode",
+      0.5
+     ],
+     [
+      9,
+      "Dyn Depth",
+      0.7
+     ],
+     [
+      11,
+      "Threshold",
+      0.4545
+     ],
+     [
+      3,
+      "Low Pass",
+      0.5173
+     ]
+    ]
+   },
+   {
+    "name": "Ping-pong wash",
+    "asked": 10,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Feedback",
+      0.7
+     ],
+     [
+      5,
+      "Delay Time",
+      0.2858
+     ],
+     [
+      17,
+      "Sync Note",
+      0.8
+     ],
+     [
+      4,
+      "Ping Pong",
+      1
+     ],
+     [
+      8,
+      "Width",
+      1
+     ],
+     [
+      6,
+      "Mod Rate",
+      0.1667
+     ],
+     [
+      7,
+      "Mod Depth",
+      0.3
+     ],
+     [
+      10,
+      "Dyn Mode",
+      0
+     ],
+     [
+      3,
+      "Low Pass",
+      0.4525
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 6012,
+  "name": "Dual Delay",
+  "corners": [
+   {
+    "name": "Stereo slap",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.35
+     ],
+     [
+      1,
+      "Delay Time L",
+      0.0767
+     ],
+     [
+      4,
+      "Delay Time R",
+      0.1018
+     ],
+     [
+      19,
+      "Sync Note L",
+      0.35
+     ],
+     [
+      21,
+      "Sync Note R",
+      0.45
+     ],
+     [
+      2,
+      "Feedback L",
+      0
+     ],
+     [
+      5,
+      "Feedback R",
+      0
+     ],
+     [
+      3,
+      "X-Feedback",
+      0
+     ],
+     [
+      9,
+      "Mod Depth",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Quarter + dotted eighth",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.32
+     ],
+     [
+      1,
+      "Delay Time L",
+      0.2234
+     ],
+     [
+      4,
+      "Delay Time R",
+      0.1875
+     ],
+     [
+      19,
+      "Sync Note L",
+      0.65
+     ],
+     [
+      21,
+      "Sync Note R",
+      0.6
+     ],
+     [
+      2,
+      "Feedback L",
+      0.3
+     ],
+     [
+      5,
+      "Feedback R",
+      0.3
+     ],
+     [
+      3,
+      "X-Feedback",
+      0
+     ],
+     [
+      9,
+      "Mod Depth",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Ping-pong",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.3
+     ],
+     [
+      1,
+      "Delay Time L",
+      0.1461
+     ],
+     [
+      4,
+      "Delay Time R",
+      0.2234
+     ],
+     [
+      19,
+      "Sync Note L",
+      0.5
+     ],
+     [
+      21,
+      "Sync Note R",
+      0.65
+     ],
+     [
+      2,
+      "Feedback L",
+      0
+     ],
+     [
+      5,
+      "Feedback R",
+      0
+     ],
+     [
+      3,
+      "X-Feedback",
+      0.55
+     ],
+     [
+      9,
+      "Mod Depth",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Galloping wash",
+    "asked": 10,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Delay Time L",
+      0.2496
+     ],
+     [
+      4,
+      "Delay Time R",
+      0.3191
+     ],
+     [
+      19,
+      "Sync Note L",
+      0.75
+     ],
+     [
+      21,
+      "Sync Note R",
+      0.8
+     ],
+     [
+      2,
+      "Feedback L",
+      0.6
+     ],
+     [
+      5,
+      "Feedback R",
+      0.6
+     ],
+     [
+      3,
+      "X-Feedback",
+      0.3
+     ],
+     [
+      9,
+      "Mod Depth",
+      0.3
+     ],
+     [
+      7,
+      "Low Pass",
+      0.4525
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 6014,
+  "name": "Dual Reverse Delay",
+  "corners": [
+   {
+    "name": "Subtle swells",
+    "asked": 8,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.25
+     ],
+     [
+      1,
+      "Delay Time L",
+      0.2811
+     ],
+     [
+      5,
+      "Delay Time R",
+      0.3464
+     ],
+     [
+      20,
+      "Sync Note L",
+      0.65
+     ],
+     [
+      21,
+      "Sync Note R",
+      0.75
+     ],
+     [
+      2,
+      "Feedback L",
+      0.15
+     ],
+     [
+      6,
+      "Feedback R",
+      0.15
+     ],
+     [
+      3,
+      "X-Feedback",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Backwards solo",
+    "asked": 8,
+    "values": [
+     [
+      0,
+      "Mix",
+      1
+     ],
+     [
+      1,
+      "Delay Time L",
+      0.3149
+     ],
+     [
+      5,
+      "Delay Time R",
+      0.3149
+     ],
+     [
+      20,
+      "Sync Note L",
+      0.8
+     ],
+     [
+      21,
+      "Sync Note R",
+      0.8
+     ],
+     [
+      2,
+      "Feedback L",
+      0
+     ],
+     [
+      6,
+      "Feedback R",
+      0
+     ],
+     [
+      3,
+      "X-Feedback",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Flutter",
+    "asked": 8,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Delay Time L",
+      0.1284
+     ],
+     [
+      5,
+      "Delay Time R",
+      0.1662
+     ],
+     [
+      20,
+      "Sync Note L",
+      0.35
+     ],
+     [
+      21,
+      "Sync Note R",
+      0.45
+     ],
+     [
+      2,
+      "Feedback L",
+      0.35
+     ],
+     [
+      6,
+      "Feedback R",
+      0.35
+     ],
+     [
+      3,
+      "X-Feedback",
+      0
+     ]
+    ]
+   },
+   {
+    "name": "Ambient reverse",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Delay Time L",
+      0.5297
+     ],
+     [
+      5,
+      "Delay Time R",
+      0.6171
+     ],
+     [
+      20,
+      "Sync Note L",
+      0.95
+     ],
+     [
+      21,
+      "Sync Note R",
+      1
+     ],
+     [
+      2,
+      "Feedback L",
+      0.55
+     ],
+     [
+      6,
+      "Feedback R",
+      0.55
+     ],
+     [
+      3,
+      "X-Feedback",
+      0.25
+     ],
+     [
+      17,
+      "Low Pass",
+      0.2667
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 6004,
+  "name": "Tape Delay",
+  "corners": [
+   {
+    "name": "Rockabilly slap",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.35
+     ],
+     [
+      1,
+      "Feedback",
+      0.05
+     ],
+     [
+      5,
+      "Delay Time",
+      0.0873
+     ],
+     [
+      10,
+      "Sync Note",
+      0.35
+     ],
+     [
+      6,
+      "Wow",
+      0.1
+     ],
+     [
+      7,
+      "Flutter",
+      0.1
+     ],
+     [
+      4,
+      "Drive",
+      0.3
+     ],
+     [
+      2,
+      "High Pass",
+      0.1765
+     ],
+     [
+      3,
+      "Low Pass",
+      0.8797
+     ]
+    ]
+   },
+   {
+    "name": "Rhythmic echo",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.3
+     ],
+     [
+      1,
+      "Feedback",
+      0.4
+     ],
+     [
+      5,
+      "Delay Time",
+      0.1875
+     ],
+     [
+      10,
+      "Sync Note",
+      0.6
+     ],
+     [
+      6,
+      "Wow",
+      0.2
+     ],
+     [
+      7,
+      "Flutter",
+      0.2
+     ],
+     [
+      4,
+      "Drive",
+      0.4
+     ],
+     [
+      2,
+      "High Pass",
+      0.1765
+     ],
+     [
+      3,
+      "Low Pass",
+      0.7473
+     ]
+    ]
+   },
+   {
+    "name": "Worn tape",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.3
+     ],
+     [
+      1,
+      "Feedback",
+      0.3
+     ],
+     [
+      5,
+      "Delay Time",
+      0.1567
+     ],
+     [
+      10,
+      "Sync Note",
+      0.5
+     ],
+     [
+      6,
+      "Wow",
+      0.8
+     ],
+     [
+      7,
+      "Flutter",
+      0.7
+     ],
+     [
+      4,
+      "Drive",
+      0.75
+     ],
+     [
+      2,
+      "High Pass",
+      0.491
+     ],
+     [
+      3,
+      "Low Pass",
+      0.3719
+     ]
+    ]
+   },
+   {
+    "name": "Ambient wash",
+    "asked": 9,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Feedback",
+      0.72
+     ],
+     [
+      5,
+      "Delay Time",
+      0.2741
+     ],
+     [
+      10,
+      "Sync Note",
+      0.8
+     ],
+     [
+      6,
+      "Wow",
+      0.4
+     ],
+     [
+      7,
+      "Flutter",
+      0.3
+     ],
+     [
+      4,
+      "Drive",
+      0.5
+     ],
+     [
+      2,
+      "High Pass",
+      0.247
+     ],
+     [
+      3,
+      "Low Pass",
+      0.5113
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 8008,
+  "name": "Ambience",
+  "corners": [
+   {
+    "name": "Subtle air",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.15
+     ],
+     [
+      1,
+      "Size",
+      0
+     ],
+     [
+      2,
+      "Pre Delay",
+      0
+     ],
+     [
+      3,
+      "High Pass",
+      0.4149
+     ],
+     [
+      4,
+      "Low Pass",
+      0.8887
+     ]
+    ]
+   },
+   {
+    "name": "Bright stage",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.35
+     ],
+     [
+      1,
+      "Size",
+      1
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.3807
+     ],
+     [
+      3,
+      "High Pass",
+      0.3413
+     ],
+     [
+      4,
+      "Low Pass",
+      0.9454
+     ]
+    ]
+   },
+   {
+    "name": "Tight and dark",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.25
+     ],
+     [
+      1,
+      "Size",
+      0
+     ],
+     [
+      2,
+      "Pre Delay",
+      0
+     ],
+     [
+      3,
+      "High Pass",
+      0.255
+     ],
+     [
+      4,
+      "Low Pass",
+      0.3227
+     ]
+    ]
+   },
+   {
+    "name": "Big dark space",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Size",
+      1
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.5771
+     ],
+     [
+      3,
+      "High Pass",
+      0.255
+     ],
+     [
+      4,
+      "Low Pass",
+      0.4259
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 8030,
+  "name": "Blossom (ST)",
+  "corners": [
+   {
+    "name": "Short bloom",
+    "asked": 10,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.25
+     ],
+     [
+      1,
+      "Decay",
+      0.4022
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.2759
+     ],
+     [
+      7,
+      "Diffusion",
+      0.6
+     ],
+     [
+      6,
+      "E.R. Length",
+      0.6178
+     ],
+     [
+      10,
+      "Ducking",
+      0
+     ],
+     [
+      11,
+      "Modulation",
+      0.15
+     ],
+     [
+      8,
+      "Bass",
+      0.1928
+     ],
+     [
+      9,
+      "Treble",
+      0.505
+     ],
+     [
+      4,
+      "Low Pass",
+      0.7609
+     ]
+    ]
+   },
+   {
+    "name": "Ducked lead",
+    "asked": 10,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.35
+     ],
+     [
+      1,
+      "Decay",
+      0.6027
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.4282
+     ],
+     [
+      7,
+      "Diffusion",
+      0.7
+     ],
+     [
+      6,
+      "E.R. Length",
+      0.7579
+     ],
+     [
+      10,
+      "Ducking",
+      0.75
+     ],
+     [
+      11,
+      "Modulation",
+      0.2
+     ],
+     [
+      8,
+      "Bass",
+      0.1928
+     ],
+     [
+      9,
+      "Treble",
+      0.505
+     ],
+     [
+      4,
+      "Low Pass",
+      0.6882
+     ]
+    ]
+   },
+   {
+    "name": "Dark swell",
+    "asked": 10,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.4
+     ],
+     [
+      1,
+      "Decay",
+      0.7174
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.6178
+     ],
+     [
+      7,
+      "Diffusion",
+      1
+     ],
+     [
+      6,
+      "E.R. Length",
+      1
+     ],
+     [
+      10,
+      "Ducking",
+      0
+     ],
+     [
+      11,
+      "Modulation",
+      0.4
+     ],
+     [
+      8,
+      "Bass",
+      0.505
+     ],
+     [
+      9,
+      "Treble",
+      0.0372
+     ],
+     [
+      4,
+      "Low Pass",
+      0.4588
+     ]
+    ]
+   },
+   {
+    "name": "Endless pad",
+    "asked": 10,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.6
+     ],
+     [
+      1,
+      "Decay",
+      1
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.4282
+     ],
+     [
+      7,
+      "Diffusion",
+      0.9
+     ],
+     [
+      6,
+      "E.R. Length",
+      0.867
+     ],
+     [
+      10,
+      "Ducking",
+      0
+     ],
+     [
+      11,
+      "Modulation",
+      0.6
+     ],
+     [
+      8,
+      "Bass",
+      0.1928
+     ],
+     [
+      9,
+      "Treble",
+      0.278
+     ],
+     [
+      4,
+      "Low Pass",
+      0.607
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 8009,
+  "name": "Cave",
+  "corners": [
+   {
+    "name": "Bright cavern",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.25
+     ],
+     [
+      1,
+      "Decay",
+      0.1969
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.2443
+     ],
+     [
+      3,
+      "Damping",
+      0.15
+     ],
+     [
+      4,
+      "High Pass",
+      0.5408
+     ],
+     [
+      5,
+      "Low Pass",
+      1
+     ]
+    ]
+   },
+   {
+    "name": "Endless shine",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Decay",
+      1
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.4822
+     ],
+     [
+      3,
+      "Damping",
+      0.1
+     ],
+     [
+      4,
+      "High Pass",
+      0.5408
+     ],
+     [
+      5,
+      "Low Pass",
+      0.9142
+     ]
+    ]
+   },
+   {
+    "name": "Doom",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.3
+     ],
+     [
+      1,
+      "Decay",
+      0.4525
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.156
+     ],
+     [
+      3,
+      "Damping",
+      0.85
+     ],
+     [
+      4,
+      "High Pass",
+      0.255
+     ],
+     [
+      5,
+      "Low Pass",
+      0.3413
+     ]
+    ]
+   },
+   {
+    "name": "Abyss pad",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.65
+     ],
+     [
+      1,
+      "Decay",
+      1
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.7345
+     ],
+     [
+      3,
+      "Damping",
+      0.7
+     ],
+     [
+      4,
+      "High Pass",
+      0.3413
+     ],
+     [
+      5,
+      "Low Pass",
+      0.4206
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 8003,
+  "name": "Hall",
+  "corners": [
+   {
+    "name": "Short bright hall",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.18
+     ],
+     [
+      1,
+      "Decay",
+      0.1765
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.3092
+     ],
+     [
+      3,
+      "High Pass",
+      0.4806
+     ],
+     [
+      4,
+      "Low Pass",
+      0.8887
+     ]
+    ]
+   },
+   {
+    "name": "Cathedral",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Decay",
+      0.9318
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.6557
+     ],
+     [
+      3,
+      "High Pass",
+      0.4806
+     ],
+     [
+      4,
+      "Low Pass",
+      0.7671
+     ]
+    ]
+   },
+   {
+    "name": "Warm ballad",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.28
+     ],
+     [
+      1,
+      "Decay",
+      0.4637
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.4273
+     ],
+     [
+      3,
+      "High Pass",
+      0.2916
+     ],
+     [
+      4,
+      "Low Pass",
+      0.4259
+     ]
+    ]
+   },
+   {
+    "name": "Dark infinity",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Decay",
+      1
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.8734
+     ],
+     [
+      3,
+      "High Pass",
+      0.3413
+     ],
+     [
+      4,
+      "Low Pass",
+      0.3227
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 8011,
+  "name": "Mind Hall",
+  "corners": [
+   {
+    "name": "Bright plate",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.22
+     ],
+     [
+      1,
+      "Decay",
+      0.0889
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.0909
+     ],
+     [
+      3,
+      "High Pass",
+      0.543
+     ],
+     [
+      4,
+      "Low Pass",
+      0.9543
+     ],
+     [
+      5,
+      "Damping",
+      0.15
+     ]
+    ]
+   },
+   {
+    "name": "Huge bright hall",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Decay",
+      0.8889
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.4444
+     ],
+     [
+      3,
+      "High Pass",
+      0.543
+     ],
+     [
+      4,
+      "Low Pass",
+      0.8557
+     ],
+     [
+      5,
+      "Damping",
+      0.25
+     ]
+    ]
+   },
+   {
+    "name": "Warm studio",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.25
+     ],
+     [
+      1,
+      "Decay",
+      0.1667
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.1919
+     ],
+     [
+      3,
+      "High Pass",
+      0.3581
+     ],
+     [
+      4,
+      "Low Pass",
+      0.491
+     ],
+     [
+      5,
+      "Damping",
+      0.75
+     ]
+    ]
+   },
+   {
+    "name": "Dark cathedral",
+    "asked": 6,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Decay",
+      1
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.697
+     ],
+     [
+      3,
+      "High Pass",
+      0.3581
+     ],
+     [
+      4,
+      "Low Pass",
+      0.3896
+     ],
+     [
+      5,
+      "Damping",
+      0.85
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 8007,
+  "name": "Modulated",
+  "corners": [
+   {
+    "name": "Subtle shimmer",
+    "asked": 7,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.25
+     ],
+     [
+      1,
+      "Decay",
+      0.2676
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.2034
+     ],
+     [
+      3,
+      "Mod Speed",
+      0.1871
+     ],
+     [
+      4,
+      "Mod Depth",
+      0.25
+     ],
+     [
+      5,
+      "High Pass",
+      0.3413
+     ],
+     [
+      6,
+      "Low Pass",
+      0.7671
+     ]
+    ]
+   },
+   {
+    "name": "Dreamy pad",
+    "asked": 7,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Decay",
+      0.9318
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.3761
+     ],
+     [
+      3,
+      "Mod Speed",
+      0.1467
+     ],
+     [
+      4,
+      "Mod Depth",
+      0.4
+     ],
+     [
+      5,
+      "High Pass",
+      0.4149
+     ],
+     [
+      6,
+      "Low Pass",
+      0.5552
+     ]
+    ]
+   },
+   {
+    "name": "Vibrato room",
+    "asked": 7,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.35
+     ],
+     [
+      1,
+      "Decay",
+      0.1765
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.0959
+     ],
+     [
+      3,
+      "Mod Speed",
+      0.8031
+     ],
+     [
+      4,
+      "Mod Depth",
+      0.9
+     ],
+     [
+      5,
+      "High Pass",
+      0.3413
+     ],
+     [
+      6,
+      "Low Pass",
+      0.7013
+     ]
+    ]
+   },
+   {
+    "name": "Seasick wash",
+    "asked": 7,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.55
+     ],
+     [
+      1,
+      "Decay",
+      0.86
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.3149
+     ],
+     [
+      3,
+      "Mod Speed",
+      0.4716
+     ],
+     [
+      4,
+      "Mod Depth",
+      1
+     ],
+     [
+      5,
+      "High Pass",
+      0.4149
+     ],
+     [
+      6,
+      "Low Pass",
+      0.4259
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 8000,
+  "name": "Room",
+  "corners": [
+   {
+    "name": "Tight booth",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.18
+     ],
+     [
+      1,
+      "Decay",
+      0.218
+     ],
+     [
+      2,
+      "Pre Delay",
+      0
+     ],
+     [
+      3,
+      "High Pass",
+      0.4149
+     ],
+     [
+      4,
+      "Low Pass",
+      0.8294
+     ]
+    ]
+   },
+   {
+    "name": "Bright live room",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.35
+     ],
+     [
+      1,
+      "Decay",
+      0.7964
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.1111
+     ],
+     [
+      3,
+      "High Pass",
+      0.3413
+     ],
+     [
+      4,
+      "Low Pass",
+      0.9454
+     ]
+    ]
+   },
+   {
+    "name": "Dark closet",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.22
+     ],
+     [
+      1,
+      "Decay",
+      0.3926
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.0404
+     ],
+     [
+      3,
+      "High Pass",
+      0.255
+     ],
+     [
+      4,
+      "Low Pass",
+      0.3227
+     ]
+    ]
+   },
+   {
+    "name": "Big dark garage",
+    "asked": 5,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Decay",
+      1
+     ],
+     [
+      2,
+      "Pre Delay",
+      0.2424
+     ],
+     [
+      3,
+      "High Pass",
+      0.2916
+     ],
+     [
+      4,
+      "Low Pass",
+      0.4716
+     ]
+    ]
+   }
+  ]
+ },
+ {
+  "type": 8010,
+  "name": "Shimmer",
+  "corners": [
+   {
+    "name": "Octave halo",
+    "asked": 8,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.3
+     ],
+     [
+      1,
+      "Decay",
+      0.3663
+     ],
+     [
+      4,
+      "Pitch",
+      0.75
+     ],
+     [
+      3,
+      "Feedback",
+      0.45
+     ],
+     [
+      2,
+      "Brightness",
+      0.6
+     ],
+     [
+      6,
+      "Damping",
+      0.3
+     ],
+     [
+      5,
+      "Pre Delay",
+      0.3149
+     ],
+     [
+      10,
+      "Mod Depth",
+      0.2
+     ]
+    ]
+   },
+   {
+    "name": "Organ fifths",
+    "asked": 8,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.45
+     ],
+     [
+      1,
+      "Decay",
+      0.7543
+     ],
+     [
+      4,
+      "Pitch",
+      0.6458
+     ],
+     [
+      3,
+      "Feedback",
+      0.7
+     ],
+     [
+      2,
+      "Brightness",
+      0.4
+     ],
+     [
+      6,
+      "Damping",
+      0.5
+     ],
+     [
+      5,
+      "Pre Delay",
+      0.3149
+     ],
+     [
+      10,
+      "Mod Depth",
+      0.2
+     ]
+    ]
+   },
+   {
+    "name": "Dark sub",
+    "asked": 8,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.3
+     ],
+     [
+      1,
+      "Decay",
+      0.6598
+     ],
+     [
+      4,
+      "Pitch",
+      0.25
+     ],
+     [
+      3,
+      "Feedback",
+      0.4
+     ],
+     [
+      2,
+      "Brightness",
+      0.25
+     ],
+     [
+      6,
+      "Damping",
+      0.65
+     ],
+     [
+      5,
+      "Pre Delay",
+      0.3149
+     ],
+     [
+      10,
+      "Mod Depth",
+      0.2
+     ]
+    ]
+   },
+   {
+    "name": "Endless ascent",
+    "asked": 8,
+    "values": [
+     [
+      0,
+      "Mix",
+      0.5
+     ],
+     [
+      1,
+      "Decay",
+      0.923
+     ],
+     [
+      4,
+      "Pitch",
+      0.75
+     ],
+     [
+      3,
+      "Feedback",
+      0.85
+     ],
+     [
+      2,
+      "Brightness",
+      0.75
+     ],
+     [
+      6,
+      "Damping",
+      0.2
+     ],
+     [
+      5,
+      "Pre Delay",
+      0.4822
+     ],
+     [
+      10,
+      "Mod Depth",
+      0.5
+     ]
+    ]
+   }
+  ]
+ }
+]

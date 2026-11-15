@@ -158,6 +158,8 @@ Preset, Bank, ungespeicherte Änderungen und den Modus. **Nach unten wischen**: 
 4. **FX-Presets**: Tippen = laden, **halten** = aktuelle Einstellungen unter einem Namen speichern
 5. **Szene**: diese Einstellungen für eine [Szene](#szenen) des Presets – sie setzt sie bei jedem Tritt auf ihren Schalter
 6. Auf einem Balken **seitlich wischen** ändert den Wert; hoch und runter scrollt
+7. **PAD**: der Effekt auf einer Fläche mit einem Klang in jeder Ecke – die Lupe dazwischen ziehen
+   ([Handbuch](docs/manual.de.md#die-fläche-pad)); ein langer Druck auf ein Pedal der Pedalansicht öffnet sie direkt
 
 Werte sind sichtbar, solange der Effekt an ist. *Off | On* wird angetippt. Mehr: [Handbuch](docs/manual.de.md#fx-editor).
 

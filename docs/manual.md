@@ -23,7 +23,7 @@ Every function in detail. The short illustrated guide is in the [README](../READ
 - **Pedal view**: **PEDALS** in the gig view's bar shows the five FX slots as pedals on a shelf whenever the
   controller is in FX mode – in signal order, with the amp's place marked between Pre FX 2 and Post FX 1. Under each
   pedal are its light, its name and its footswitch, filled in the effect's colour while it is on; a pedal that is
-  off stands in the dark. A tap switches the effect, a long press opens its FX editor, as on a tile. A slot with a
+  off stands in the dark. A tap switches the effect; a long press opens its [FX editor](#fx-editor) on the pad (on a tile: on the bars). A slot with a
   [second effect](#second-effect-a-and-b-on-an-fx-slot) names the one that waits in a field above the pedal, outlined
   in its colour – a tap on the field swaps the two. Tap **PEDALS** again for the tiles. Footswitches 1, 2 and 8 work as always, they just have no field in this view.
 
@@ -70,6 +70,7 @@ mode the controller is in – *Presets*, *Songs* (set list), *Scenes* or *FX*; b
 | Preset tile (3–8, preset mode) | **Bank editor**: colour, symbol and preset of this switch; `DEFAULT` restores the standard preset; `LEARN SWITCH` |
 | Scene tile (3–8, scenes) | **Scene**: name, colour and which effects are on; `Remove` empties the switch |
 | FX tile (3–7, FX mode) | **FX editor**: model (tap the header), on/off, all parameters and the [second effect](#second-effect-a-and-b-on-an-fx-slot) (A \| B) |
+| Pedal (pedal view) | **FX editor** on its [pad](#the-pad) |
 | Tile 8 (FX mode) | **Reverb dialog** with the tabs *MIX*, *REVERB A / B* and *2 SETTINGS* |
 | Preset name | **Rename** with on-screen keyboard (at least 4 characters, unique) |
 
@@ -251,6 +252,26 @@ Loaded settings count as changes to the Nano preset: **SAVE** keeps them there.
 
 The **scene button** at the end of the row saves the current settings for a [scene](#settings-of-an-effect-per-scene)
 of the preset.
+
+### The pad
+
+<img src="images/56-fx-pad.png" alt="" width="49%"> <img src="images/57-fx-pad-corner.png" alt="" width="49%">
+
+**PAD**, left of the FX presets, turns the editor to its second page: the effect in the middle of a pad, with a
+sound in each corner. Drag the lens across the pad and the controls move between the four sounds; the list on the
+right shows them with their values. The centre is the effect as it was when the page opened – **Start** (or the
+small *Start* under the picture) takes the lens back there. A tap on a corner jumps to its sound, **BARS** returns
+to the parameters. A long press on a pedal in the pedal view opens the editor on this page.
+
+The four sounds are those of the Nano Cortex Editor's focus view, chosen to differ as much as the effect allows.
+For delays and modulations they carry a time and a note value, so they work with *Sync* on or off. Effects with a
+single control (the wahs, Adaptive Gate, Volume) have no pad, and it needs the effect switched on – the Nano only
+reports the values of effects that are on.
+
+The values go to the Nano one at a time, about thirty a second – the pace of one moving bar. A sound that moves
+many controls therefore follows the finger in small steps; once the finger rests, the Nano has caught up within a
+third of a second, and leaving the editor waits for the last values. As every change in the editor, the result
+counts as a change to the preset: **SAVE** keeps it.
 
 ## Reverb switch (footswitch 8)
 

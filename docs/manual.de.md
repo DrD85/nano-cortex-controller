@@ -24,8 +24,8 @@ Alle Funktionen im Detail. Die kurze bebilderte Anleitung steht im [README](../R
 - **Pedalansicht**: **PEDALS** in der Leiste der Gig-Ansicht zeigt die fünf FX-Slots als Pedale auf einem Brett,
   sobald der Controller im FX-Modus ist – in Signalreihenfolge, der Platz des Amps ist zwischen Pre FX 2 und
   Post FX 1 markiert. Unter jedem Pedal stehen sein Licht, sein Name und sein Fußschalter, in der Effektfarbe gefüllt,
-  solange es an ist; ein ausgeschaltetes Pedal steht im Dunkeln. Ein Tipp schaltet den Effekt, ein langer Druck öffnet
-  seinen FX-Editor, wie auf einer Kachel. Hat ein Slot einen
+  solange es an ist; ein ausgeschaltetes Pedal steht im Dunkeln. Ein Tipp schaltet den Effekt; ein langer Druck öffnet
+  seinen [FX-Editor](#fx-editor) auf der Seite PAD (auf einer Kachel: mit den Balken). Hat ein Slot einen
   [zweiten Effekt](#zweiter-effekt-a-und-b-auf-einem-fx-slot), steht der wartende in einem Feld über dem Pedal,
   umrandet in seiner Farbe – ein Tipp auf das Feld tauscht die beiden. **PEDALS** nochmal tippen bringt die Kacheln zurück. Fußschalter 1, 2 und 8
   arbeiten wie immer, sie haben in dieser Ansicht nur kein Feld.
@@ -73,6 +73,7 @@ Die Nummern hier sind die Funktionen der Schalter; wo sie liegen, bestimmt die [
 | Preset-Kachel (3–8, Preset-Modus) | **Bank-Fenster**: Farbe, Symbol und Preset dieses Schalters; `DEFAULT` stellt das Standard-Preset her; `LEARN SWITCH` |
 | Szenen-Kachel (3–8, Szenen) | **Szene**: Name, Farbe und welche Effekte an sind; `Remove` leert den Schalter |
 | FX-Kachel (3–7, FX-Modus) | **FX-Editor**: Modell (auf den Kopf tippen), an/aus, alle Parameter und der [zweite Effekt](#zweiter-effekt-a-und-b-auf-einem-fx-slot) (A \| B) |
+| Pedal (Pedalansicht) | **FX-Editor** auf der Seite [PAD](#die-fläche-pad) |
 | Kachel 8 (FX-Modus) | **Reverb-Fenster** mit den Reitern *MIX*, *REVERB A / B* und *2 SETTINGS* |
 | Preset-Name | **Umbenennen** mit Bildschirmtastatur (mindestens 4 Zeichen, eindeutig) |
 
@@ -265,6 +266,27 @@ Geladene Einstellungen zählen als Änderung am Nano-Preset: **SAVE** behält si
 
 Der **Szenen-Knopf** am Ende der Leiste speichert die aktuellen Einstellungen für eine
 [Szene](#einstellungen-eines-effekts-pro-szene) des Presets.
+
+### Die Fläche (PAD)
+
+<img src="images/56-fx-pad.png" alt="" width="49%"> <img src="images/57-fx-pad-corner.png" alt="" width="49%">
+
+**PAD**, links neben den FX-Presets, blättert den Editor auf seine zweite Seite: der Effekt in der Mitte einer
+Fläche, in jeder Ecke ein Klang. Die Lupe über die Fläche ziehen, und die Regler wandern zwischen den vier Klängen;
+die Liste rechts zeigt sie mit ihren Werten. Die Mitte ist der Effekt, wie er beim Öffnen der Seite war – **Start**
+(oder das kleine *Start* unter dem Bild) holt die Lupe dorthin zurück. Ein Tipp auf eine Ecke springt zu ihrem
+Klang, **BARS** führt zurück zu den Balken. Ein langer Druck auf ein Pedal der Pedalansicht öffnet den Editor
+gleich auf dieser Seite.
+
+Die vier Klänge sind die der Fokus-Ansicht im Nano Cortex Editor, so gewählt, dass sie sich so stark unterscheiden,
+wie der Effekt es hergibt. Bei Delays und Modulationen bringen sie eine Zeit und einen Notenwert mit, sie
+funktionieren also mit *Sync* an und aus. Effekte mit nur einem Regler (die Wahs, Adaptive Gate, Volume) haben
+keine Fläche, und der Effekt muss an sein – der Nano meldet nur die Werte eingeschalteter Effekte.
+
+Die Werte gehen einzeln an den Nano, etwa dreißig in der Sekunde – das Tempo eines bewegten Balkens. Ein Klang, der
+viele Regler bewegt, folgt dem Finger deshalb in kleinen Schritten; ruht der Finger, hat der Nano nach einer
+Drittelsekunde aufgeholt, und beim Verlassen des Editors werden die letzten Werte noch gesendet. Wie jede Änderung
+im Editor zählt das Ergebnis als Änderung am Preset: **SAVE** behält es.
 
 ## Reverb-Schalter (Fußschalter 8)
 

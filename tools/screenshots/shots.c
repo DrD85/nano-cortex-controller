@@ -156,6 +156,8 @@ static void close_all(void)
     update_main_hidden();
 }
 
+static void on_pad_corner_test(int k) { pad_move((float)(k % 2), (float)(k / 2)); }
+
 int main(void)
 {
     lv_init();
@@ -298,6 +300,16 @@ int main(void)
     static const char fx_presets[UI_FX_PRESETS][16] = { "Slapback", "Ambient Wash", "", "" };
     ui_fx_presets_show(fx_presets, 1, true);
     shot("04-fx-editor");
+    // The pad, the editor's second page: PAD beside the FX presets, or a long press on a pedal of the pedal view
+    s_padv.prefer = true;
+    ui_fx_editor_show(3, st.fx_type[3], true, values, 11);
+    pad_move(0.80f, 0.24f);
+    shot("56-fx-pad");
+    on_pad_corner_test(3);
+    shot("57-fx-pad-corner");
+    s_padv.prefer = false;
+    s_padv.waiting = 0;
+    ui_fx_editor_show(3, st.fx_type[3], true, values, 11);
     open_panel(PANEL_SCENE, 0);
     shot("22-scene-settings");
     close_panel();

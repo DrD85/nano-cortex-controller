@@ -173,6 +173,8 @@ each, filled while the effect is on. Tap to switch, hold for the FX editor. Tap 
 4. **FX presets**: tap = load, **hold** = save the current settings under a name
 5. **Scene**: these settings for a [scene](#scenes) of the preset – it sets them whenever its footswitch is pressed
 6. **Slide sideways** on a bar to change a value; up and down scrolls
+7. **PAD**: the effect on a pad with a sound in each corner – drag the lens between them
+   ([manual](docs/manual.md#the-pad)); a long press on a pedal in the pedal view opens it directly
 
 Values are shown while the effect is on. *Off | On* settings switch with a tap. More: [manual](docs/manual.md#fx-editor).
 
