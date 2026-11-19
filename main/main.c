@@ -52,6 +52,7 @@
 #include "footswitches.h"
 #include "library.h"
 #include "midi_ble.h"
+#include "midi_switches.h"
 #include "phone_midi.h"
 #include "nano_link.h"
 #include "nano_state.h"
@@ -661,15 +662,24 @@ static void command(char c, int arg)
     post((app_event_t){ .kind = EV_COMMAND, .command = c, .arg = arg });
 }
 
+#define MIDI_LEARNED (1 << 16)   // in 'Z': the learn came from midi_switches
+
+// What a source of footswitch presses keeps between press and release: the footswitches (their task) and the
+// learned MIDI switches (midi_switches' task) each have their own, so the two never share one.
+typedef struct {
+    bool waiting[FOOTSWITCH_COUNT + 1];   // pressed, its held function may still come
+    bool sounding[FOOTSWITCH_COUNT + 1];  // its looper controller is at 127
+    bool held[FOOTSWITCH_COUNT + 1];      // a switch that acts while it is down: down
+} switch_track_t;
+
 // A switch with a held function (s_hold_switches) acts on release when it was not held; the others at once.
 // In looper mode the messages of switches 2-8 go out from here, without the way through the app task: every
 // millisecond between the foot and the looper counts.
-static void on_footswitch(int number, footswitch_event_t event)
+static void switch_event(switch_track_t *t, int number, footswitch_event_t event)
 {
     number = layout_switch(number);   // the field at this footswitch's position
     if (!number) return;
-    static bool waiting[FOOTSWITCH_COUNT + 1];   // footswitch task only
-    static bool sounding[FOOTSWITCH_COUNT + 1];  // its controller is at 127
+    bool *const waiting = t->waiting, *const sounding = t->sounding, *const held = t->held;
     if (sounding[number] && event == FOOTSWITCH_RELEASE) {
         sounding[number] = false;
         bool sent = phone_midi_send(LOOPER_STATUS, LOOPER_CC(number), 0);
@@ -685,7 +695,6 @@ static void on_footswitch(int number, footswitch_event_t event)
     }
     // A switch that acts while it is held: down and up go out as they happen (its release also if the mode changed
     // meanwhile - what went on has to go off).
-    static bool held[FOOTSWITCH_COUNT + 1];
     if (held[number] || (event == FOOTSWITCH_PRESS && ((s_momentary_switches >> number) & 1))) {
         if (event == FOOTSWITCH_PRESS) {
             held[number] = true;
@@ -706,9 +715,27 @@ static void on_footswitch(int number, footswitch_event_t event)
     }
 }
 
+static void on_footswitch(int number, footswitch_event_t event)
+{
+    static switch_track_t track;   // footswitch task only
+    switch_event(&track, number, event);
+}
+
 static void on_footswitch_learned(int number, int swapped)
 {
     command('Z', number << 8 | swapped);
+}
+
+// A learned switch of the MIDI controller (midi_switches.h): as the footswitch at its position.
+static void on_midi_switch(int number, footswitch_event_t event)
+{
+    static switch_track_t track;   // midi_switches' task only
+    switch_event(&track, number, event);
+}
+
+static void on_midi_learned(int number, int other)
+{
+    command('Z', MIDI_LEARNED | number << 8 | other);
 }
 
 // Bluetooth MIDI. An expression pedal sends many CC 1 values: only one event is queued, it takes the latest.
@@ -716,6 +743,7 @@ static int s_cc1 = -1;
 
 static void on_midi(uint8_t status, uint8_t data1, uint8_t data2)
 {
+    if (midi_switches_take(status, data1, data2)) return;   // a learned switch (or learned now)
     if ((status & 0xF0) == 0xB0 && data1 == 1 && __atomic_exchange_n(&s_cc1, data2, __ATOMIC_SEQ_CST) >= 0) return;
     post((app_event_t){ .kind = EV_MIDI, .arg = status << 16 | data1 << 8 | data2 });
 }
@@ -4430,25 +4458,58 @@ static void handle_switch(int number)
 }
 
 // Footswitch learn: 'D' from the screen (1-8 learn, 0 cancel, -1 default order), 'Z' = result from the
-// footswitch task (learned switch << 8 | switch that got its old pin; 0 = nothing pressed in time).
+// footswitch task (learned switch << 8 | switch that got its old pin; 0 = nothing pressed in time) or, with
+// MIDI_LEARNED, from midi_switches (learned switch << 8 | switch that had the message before). The next press on a
+// footswitch or over MIDI wins; the other learn is cancelled then.
+static int s_learning;   // the switch being learned, 0 = none (app task)
+
 static void footswitch_learn(char c, int arg)
 {
-    char text[96];
-    if (c == 'D' && !s_footswitches) {
-        ui_learn_done("No footswitches found (SX1509 at 0x71/0x70).");
-    } else if (c == 'D' && arg < 0) {
-        footswitches_reset();
-        ui_learn_done("Footswitches back to the default order.");
-    } else if (c == 'D') {
-        footswitches_learn(arg);
-    } else if (!(arg >> 8)) {
-        ui_learn_done("No footswitch pressed - nothing changed.");
-    } else {
-        int number = arg >> 8, swapped = arg & 0xff;
-        if (swapped) snprintf(text, sizeof(text), "Footswitch %d learned (swapped with footswitch %d).", number, swapped);
-        else snprintf(text, sizeof(text), "Footswitch %d learned.", number);
-        ui_learn_done(text);
+    char text[128];
+    if (c == 'D') {
+        if (arg < 0) {
+            if (s_footswitches) footswitches_reset();
+            midi_switches_reset();
+            ui_learn_done(s_footswitches ? "Footswitches back to the default order, learned MIDI switches forgotten."
+                                         : "Learned MIDI switches forgotten.");
+            return;
+        }
+        s_learning = arg >= 1 && arg <= FOOTSWITCH_COUNT ? arg : 0;
+        char name[32];
+        bool midi = midi_ble_status(name, sizeof(name));
+        if (s_learning && !s_footswitches && !midi) {
+            s_learning = 0;
+            ui_learn_done("No footswitches found (SX1509 at 0x71/0x70) and no MIDI controller connected.");
+            return;
+        }
+        if (s_footswitches) footswitches_learn(s_learning);
+        midi_switches_learn(s_learning);   // (also without a controller now: it may connect within the 15 s)
+        return;
     }
+    bool from_midi = arg & MIDI_LEARNED;
+    int number = (arg >> 8) & 0xff, other = arg & 0xff;
+    if (!number) {   // one side's 15 s are over (the other side ends at the same time and is not said twice)
+        if (!s_learning) return;
+        s_learning = 0;
+        if (s_footswitches) footswitches_learn(0);
+        midi_switches_learn(0);
+        ui_learn_done("Nothing pressed - nothing changed.");
+        return;
+    }
+    s_learning = 0;
+    if (from_midi) {
+        if (s_footswitches) footswitches_learn(0);
+        char what[32];
+        midi_switches_describe(number, what, sizeof(what));
+        if (other) snprintf(text, sizeof(text), "Footswitch %d learned: MIDI %s (footswitch %d had it before).", number, what, other);
+        else snprintf(text, sizeof(text), "Footswitch %d learned: MIDI %s.", number, what);
+    } else {
+        midi_switches_learn(0);
+        if (other) snprintf(text, sizeof(text), "Footswitch %d learned (swapped with footswitch %d).", number, other);
+        else snprintf(text, sizeof(text), "Footswitch %d learned.", number);
+    }
+    ESP_LOGI(TAG, "%s", text);
+    ui_learn_done(text);
 }
 
 // ---- Bluetooth MIDI ----
@@ -7075,6 +7136,7 @@ void app_main(void)
     ui_splash_status("Searching for the Nano Cortex ...", version);
 #endif
     s_footswitches = footswitches_start(board_i2c_bus(), on_footswitch, on_footswitch_learned);
+    midi_switches_start(on_midi_switch, on_midi_learned);   // (MIDI comes only after the gate, MIDI_GATE_US)
 #ifndef NANO_WEB
     xTaskCreate(app_task, "app", 6144, NULL, 4, NULL);
     xTaskCreate(console_task, "console", 3072, NULL, 3, NULL);

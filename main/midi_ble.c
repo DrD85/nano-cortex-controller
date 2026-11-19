@@ -268,8 +268,14 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         changed();
         return 0;
     case BLE_GAP_EVENT_ENC_CHANGE:
-        if (event->enc_change.status == 0) subscribe();
-        else drop("MIDI pairing failed", event->enc_change.status);
+        // A bonded device encrypts the link at once, often before the discovery is through (seen on the P4 board
+        // with the Chocolate, 2026-11-19: the write went to handle 0 and the link was dropped, four times in a row).
+        // Subscribe here only once the descriptor is known; otherwise the discovery's end subscribes.
+        if (event->enc_change.status == 0) {
+            if (s_cccd && !s_ready) subscribe();
+        } else {
+            drop("MIDI pairing failed", event->enc_change.status);
+        }
         return 0;
     case BLE_GAP_EVENT_REPEAT_PAIRING: {
         struct ble_gap_conn_desc desc;

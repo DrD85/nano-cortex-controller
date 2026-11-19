@@ -2413,7 +2413,7 @@ static void build_looper_editor(lv_obj_t *screen)
     lv_obj_set_hidden(s_looper_editor, true);
 }
 
-// ---- footswitch learn: the next pressed footswitch takes this switch's place ----
+// ---- footswitch learn: the next pressed footswitch (or switch over MIDI) takes this switch's place ----
 
 static void on_learn_button(lv_event_t *e)
 {
@@ -2429,7 +2429,7 @@ static void on_learn_button(lv_event_t *e)
 static void open_learn(int number)
 {
     lv_label_set_text_fmt(s_learn_title, "Learn footswitch %d", number);
-    lv_label_set_text_fmt(s_learn_text, "Press the footswitch that should be switch %d now. Waiting 15 seconds.", number);
+    lv_label_set_text_fmt(s_learn_text, "Press the footswitch - or the switch on the MIDI controller - that should be switch %d now. Waiting 15 seconds.", number);
     lv_obj_set_hidden(s_learn_first, number == 1);   // tile 1 held is the looper mode: its switch is learned from here
     lv_obj_set_hidden(s_learn, false);
     lv_obj_move_foreground(s_learn);
@@ -5365,9 +5365,12 @@ void ui_set_app(bool connected)
 
 void ui_set_link(bool connected)
 {
+    // The lock first: this runs in the task the link reports in, and the settings' text below is drawn too. Set
+    // before the lock, the two labels were written while the screen's own task was drawing (found on the P4 board,
+    // where it crashed the firmware at the start).
+    lvgl_port_lock(0);
     s_nano_connected = connected;
     if (s_set_nano_text) settings_nano_text();
-    lvgl_port_lock(0);
     s_linked = connected;
     lv_obj_set_style_bg_color(s_status_dot, lv_color_hex(connected ? GREEN : 0x555555), 0);
     lv_obj_set_style_bg_color(s_gig_dot, lv_color_hex(connected ? GREEN : 0x555555), 0);

@@ -56,6 +56,8 @@ void nano_link_set_adv_hook(nano_link_adv_cb cb);
 
 // Another client wants scanning: fast = actively searching (dialog open), otherwise a slow background scan.
 void nano_link_scan_request(bool on, bool fast);
+// Bluetooth is running (NimBLE in sync with its controller): before that no other client may use NimBLE.
+bool nano_link_bluetooth_ready(void);
 
 // Connects another device with its own GAP event handler (scanning pauses meanwhile). The handler must call
 // nano_link_other_connect_done() on its BLE_GAP_EVENT_CONNECT. Returns false if a connection is being set up.

@@ -38,6 +38,8 @@ void app_link_set_cloud(bool on);
 
 // Offer Bluetooth MIDI to a phone (phone_midi); false only stops offering it - a connected phone stays.
 void app_link_allow_phone(bool allowed);
+// Bluetooth came up: offers again what was asked for before it was running (the P4 board starts it later).
+void app_link_refresh(void);
 
 bool app_link_connected(void);
 

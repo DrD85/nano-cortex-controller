@@ -600,5 +600,8 @@ int main(void)
     cap.step = UI_CAP_CLOSED;
     ui_capture_show(&cap);
     close_all();
+    open_learn(3);   // the footswitch learn, which takes a switch over MIDI too
+    shot("56-learn");
+    close_all();
     return 0;
 }

@@ -208,6 +208,7 @@ static void turn_event(struct ble_npl_event *ev)
 
 static void advertise(void)
 {
+    if (!nano_link_bluetooth_ready()) return;   // (Bluetooth not up yet, or not at all: nothing to advertise with)
     bool app = s_enabled && s_conn == BLE_HS_CONN_HANDLE_NONE;
     bool phone = s_phone_allowed && phone_midi_conn() == BLE_HS_CONN_HANDLE_NONE;
     if (peer_slot(BLE_HS_CONN_HANDLE_NONE) < 0) app = phone = false;   // no room for another connection
@@ -466,6 +467,11 @@ void app_link_enable(bool enabled)
 {
     s_enabled = enabled;
     if (!enabled && s_conn != BLE_HS_CONN_HANDLE_NONE) ble_gap_terminate(s_conn, BLE_ERR_REM_USER_CONN_TERM);
+    advertise();
+}
+
+void app_link_refresh(void)
+{
     advertise();
 }
 

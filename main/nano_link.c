@@ -224,6 +224,11 @@ static void start_scan(void)
     scan_update();
 }
 
+bool nano_link_bluetooth_ready(void)
+{
+    return s_synced;
+}
+
 void nano_link_set_adv_hook(nano_link_adv_cb cb)
 {
     s_adv_hook = cb;
