@@ -2,7 +2,7 @@
 
 Every function in detail. The short illustrated guide is in the [README](../README.md); building the firmware and how it talks to the Nano are in [development.md](development.md).
 
-**Contents:** [The screen](#the-screen) · [Footswitches and tiles](#footswitches-and-tiles) · [Long presses](#long-presses) · [Own banks](#own-banks) · [Set list](#set-list) · [Scenes](#scenes) · [Expression pedal](#expression-pedal) · [Capture and Cab/IR](#capture-and-cabir) · [FX editor](#fx-editor) · [Reverb switch](#reverb-switch-footswitch-8) · [Second effect (A / B)](#second-effect-a-and-b-on-an-fx-slot) · [Auto-wah](#auto-wah) · [Tuner](#tuner) · [USB audio volume](#usb-audio-volume) · [Bluetooth MIDI](#bluetooth-midi) · [Looper mode](#looper-mode-a-looper-app-on-a-phone) · [Editor through the controller](#nano-cortex-editor-through-the-controller) · [Cortex Cloud](#cortex-cloud-through-the-controller) · [Footswitch learn](#footswitch-learn) · [Footswitches (wiring)](#footswitches) · [System](#system-memory-backup-and-self-restart) · [What is stored where](#what-is-stored-where)
+**Contents:** [The screen](#the-screen) · [Preset list](#preset-list-and-new-presets) · [Footswitches and tiles](#footswitches-and-tiles) · [Long presses](#long-presses) · [Own banks](#own-banks) · [Set list](#set-list) · [Scenes](#scenes) · [Expression pedal](#expression-pedal) · [Capture and Cab/IR](#capture-and-cabir) · [FX editor](#fx-editor) · [Reverb switch](#reverb-switch-footswitch-8) · [Second effect (A / B)](#second-effect-a-and-b-on-an-fx-slot) · [Auto-wah](#auto-wah) · [Tuner](#tuner) · [USB audio volume](#usb-audio-volume) · [Bluetooth MIDI](#bluetooth-midi) · [Looper mode](#looper-mode-a-looper-app-on-a-phone) · [Editor through the controller](#nano-cortex-editor-through-the-controller) · [Cortex Cloud](#cortex-cloud-through-the-controller) · [Footswitch learn](#footswitch-learn) · [Footswitches (wiring)](#footswitches) · [System](#system-memory-backup-and-self-restart) · [What is stored where](#what-is-stored-where)
 
 ## The screen
 
@@ -18,6 +18,8 @@ Every function in detail. The short illustrated guide is in the [README](../READ
   [settings screen](#settings); **Tempo** (NanOS 2.3) shows the tempo and opens the metronome. Its dialog closes
   by itself 5 seconds after the last touch or change; the metronome keeps playing.
 - **Swipe left / right**: next / previous preset.
+- **Tap the preset's name**: the [preset list](#preset-list-and-new-presets) with all 64 presets. Hold the name
+  to rename the preset.
 - **Swipe up – gig view**: the tiles fill the screen with larger names, and a slim bar on top shows the
   connection, preset number, bank, preset name, unsaved changes and the mode (PRESETS / SCENES / FX). **Swipe down**: back.
 - **Pedal view**: **PEDALS** in the gig view's bar shows the five FX slots as pedals on a shelf whenever the
@@ -38,7 +40,38 @@ Every function in detail. The short illustrated guide is in the [README](../READ
   the same.
 - The green dot shows the Bluetooth connection to the Nano; **Save** turns green and an orange dot appears next to
   the name when the preset has unsaved changes. **MIDI** turns green while a Bluetooth MIDI controller is connected.
-- The **capture card** shows the capture's type (amp head, combo, amp + cab, cab, pedal …) as in the editor.
+- The **signal chain** under the preset's name (since 1.26, as on the 7" board) shows what the preset is made of, in
+  the order the sound takes: Pre FX 1 and 2, the capture, the cab, Post FX 1 to 3. A dot filled in the effect's
+  colour means on, a hollow ring off; names that do not fit end in "…". It stays in every mode, so the effects can
+  be seen while the tiles are presets or scenes. **Tap an effect** for its [FX editor](#fx-editor); the capture and
+  the cab: tap to choose, hold for their settings. The slot stands beside CAPTURE and CAB. (The two wide cards of
+  1.25 also named the capture's type – amp head, combo, pedal …; the library's list still does.)
+
+## Preset list and new presets
+
+<img src="images/58-preset-list.png" alt="" width="49%"> <img src="images/60-new-preset.png" alt="" width="49%">
+
+A tap on the preset's name – on the main screen or in the gig view's bar – opens the list of the Nano's 64 presets,
+sixteen to a page (**1-16 … 49-64** at the top; it opens on the page of the preset that is on, which is filled).
+Tap a preset to load it. Nothing scrolls, so nothing moves under the finger.
+
+**New preset** gives a place a fresh start:
+
+1. Tap **New preset**, then the place it goes into. What is in that place is replaced – the sheet names it.
+2. Choose what it starts from:
+   - **Standard board, all off**: a compressor, an overdrive, a chorus, a delay and a reverb in the five slots,
+     all switched off, the capture's gain, bass, mid and treble in the middle and its volume at 0 dB, nothing on
+     the expression pedal. Capture and cab stay as they are – they are what you choose next. A slot that already
+     holds the board's model keeps its settings.
+   - **Copy of this preset**: the preset that is on, as it plays now, under a new name.
+3. Tap the name to change it (4 to 32 characters, no name twice), then **Create**.
+
+The controller sets the effects, saves into the place, reads the Nano's name list to see that the place carries the
+new name, and changes to the new preset; that takes a few seconds and is said on the screen. What the controller
+kept for that place before (scenes, second effects, the reverb switch's settings) is removed – a copy takes the
+source's along instead. If the Nano does not take the save, nothing is created and the preset you were on is loaded
+again as it is stored. Unsaved changes of the preset you start from are lost with the standard board, as with any
+change of preset.
 
 ## Footswitches and tiles
 
@@ -273,6 +306,22 @@ many controls therefore follows the finger in small steps; once the finger rests
 third of a second, and leaving the editor waits for the last values. As every change in the editor, the result
 counts as a change to the preset: **SAVE** keeps it.
 
+### The info page
+
+<img src="images/62-fx-info.png" alt="" width="49%"> <img src="images/64-fx-info-applied.png" alt="" width="49%">
+
+**i** beside the model opens what the Nano Cortex Editor's large effect view tells about it: the device the model
+is based on (or classic devices of its kind) with the year and maker, its story in a few lines, where it is heard,
+and tips for the Nano. Below that are **starting points** and **players' sounds** – settings with a name and a
+line about them. **Apply** sets one: the bars take the values at once and the Nano gets them one at a time, as from
+the pad; the one that is set shows *Applied*. The effect has to be on for that. **i** again or the back arrow
+returns to the bars. An own build shows the pedal's picture beside the text, the published firmware the effect's
+symbol.
+
+An own build can carry a third group of sounds below the two (`tools/gen_neural.py`, data in `main/private`, which
+is not published): presets of the same model taken from another device. The line under a name lists what differs
+from the model's default; **Apply** sets every control.
+
 ## Reverb switch (footswitch 8)
 
 <img src="images/38-reverb-settings.png" alt="" width="49%"> <img src="images/37-reverb-settings-tile.png" alt="" width="49%">
@@ -281,7 +330,8 @@ counts as a change to the preset: **SAVE** keeps it.
 The dialog is titled **Footswitch 8 switches** and has three tabs, one for each thing the switch can do. **The tab
 in front when you tap SAVE is what the switch does** from then on; the one in use carries a tick. Tile 8 shows the
 switch's two choices as two rows – Pos 1 / Pos 2 with their mix, reverb A / B, or the two settings – the one that
-is in filled, the other one outlined. So it never looks like the reverb's own tile (tile 7).
+is in filled, the other one outlined. **The reverb's own tile (tile 7) is an ordinary tile beside it: it switches
+the reverb on and off, at the press** – one switch for on / off, the other for what the reverb is set to.
 
 - **MIX**: footswitch 8 sets the reverb's Mix to Pos 1 or Pos 2. Moving a slider plays that mix;
   **SAVE** stores both values on the controller, for this preset. The Nano's expression pedal has no part in it and
@@ -291,15 +341,17 @@ is in filled, the other one outlined. So it never looks like the reverb's own ti
   preset. The setting itself is still in the Nano's preset, so an expression pedal would still move the reverb:
   **FREE PEDAL** in this dialog removes it from the preset (the other expression settings stay as they are, the
   switch keeps its positions). The button only shows while the reverb is on the pedal.
-- **REVERB A / B**: footswitch 8 swaps the reverb's A and B – the same two its own tile (tile 7) swaps. The tab
-  shows both; **Choose B in the reverb's editor** opens the reverb's FX editor at its
+- **REVERB A / B**: footswitch 8 swaps the reverb's A and B. The tab shows both; **Choose B in the reverb's editor** opens the reverb's FX editor at its
   [second effect](#second-effect-a-and-b-on-an-fx-slot): another reverb, or the same one again for a second
   complete setting of it (mix, decay, damping …) without a gap in the sound. B is chosen and set up there only.
   The Nano has one reverb slot, so for another reverb the controller swaps the model and sends the stored values
   (about half a second). If you save the preset while B is active, B becomes the preset's reverb; loading a preset
   always brings back its own reverb (A).
-  Saved on the *MIX* or *2 SETTINGS* tab, footswitch 8 is the mix switch (or the settings) and the reverb's tile
-  keeps its A / B – the reverb's type on one switch, its amount on the other.
+  Saved on the *MIX* or *2 SETTINGS* tab, footswitch 8 is the mix switch (or the settings) and B is kept for
+  later. (Up to 1.24 the reverb's own tile swapped A / B as well, so both tiles were drawn in two halves and the
+  reverb's switch only acted when the foot lifted. If you want the type on the reverb's own switch and the mix on
+  footswitch 8, choose it on the tile: FX editor > **A | B** > *Footswitch*, see
+  [second effect](#second-effect-a-and-b-on-an-fx-slot).)
 - **2 SETTINGS**: footswitch 8 changes between two named settings of the preset's reverb – for example *Room* and
   *Atmos* – with all its controls (mix, decay, damping …). The reverb stays the same, so there is no gap in the
   sound. To set one up, tap one of the reverb's FX presets beside the setting's name (up to four, the ones saved in
@@ -312,9 +364,9 @@ is in filled, the other one outlined. So it never looks like the reverb's own ti
   to neither (changed by hand, or the preset was stored with other values), no row is filled and the next press
   goes to the first setting. A press also switches the reverb on if it was off.
   The two settings are stored on the controller, per preset, and are **their own thing**: they have nothing to do
-  with the A and B of the reverb's own tile (tile 7), which keeps its second effect and its tap or hold as before.
-  **Each reverb of the preset has its own two settings**: the preset's reverb (A) and, if the reverb's tile has a
-  second reverb (B), that one too. Switch to B on the reverb's tile, open this dialog and set its two up the same
+  with the reverb's A and B.
+  **Each reverb of the preset has its own two settings**: the preset's reverb (A) and, if there is a second reverb
+  (B), that one too. Switch to B (in the reverb's FX editor: **A | B**), open this dialog and set its two up the same
   way – the header shows which reverb is in the slot. From then on footswitch 8 changes between the two settings of
   whichever reverb is on. A reverb without settings of its own leaves the switch at reverb A / B or the mix, and
   the tile shows that.
@@ -351,17 +403,21 @@ reverb switch (footswitch 8) looks the same.
 
 - **Two different effects:** the Nano has one model per slot, so the controller swaps the model and sends the stored
   values: about half a second with a short gap in the sound. For a gapless change put the second effect into a free
-  slot instead and switch it on and off.
+  slot instead and switch it on and off. A press on the switch while such a swap is still under way is not
+  lost: it follows as soon as the first one is done (so two presses in a row end on the effect you started from).
 - **The same effect as A and B:** only the values are sent – at once, and the sound does not break off.
 - The values of A are read from the Nano just before a swap, so edits count. If A was never on since B was set up,
   the first swap switches it on for a moment to read them.
 - Loading a preset – also the one that is on – brings back A. If you save the preset while B runs, B becomes the
   preset's effect.
-- The reverb's second effect is swapped by the reverb's own tile, always. Footswitch 8 (the
-  [reverb switch](#reverb-switch-footswitch-8)) swaps it too only when the reverb dialog was saved on its
-  *REVERB A / B* tab; otherwise it stays the mix switch or the two settings. Setting up B on the reverb's tile leaves
-  footswitch 8 as it was. When the tile swaps while footswitch 8 is the mix switch, the new reverb gets the mix the
-  switch shows (Pos 1 or Pos 2).
+- **The reverb is the exception: one switch swaps its A and B, never both.** By default that is footswitch 8 (the
+  [reverb switch](#reverb-switch-footswitch-8), its dialog saved on the *REVERB A / B* tab), and the reverb's own
+  tile stays an ordinary on / off tile that acts at the press. Its list of footswitch choices has a fourth entry,
+  *On / off only · the reverb switch changes it*, which is that default. Choose one of the other three there and
+  the reverb's own switch swaps A and B instead – footswitch 8 then is the mix switch (or the two settings) again.
+  A second reverb chosen in the tile's FX editor while footswitch 8 does something else belongs to the tile (hold:
+  A / B). When the tile swaps while footswitch 8 is the mix switch, the new reverb gets the mix the switch shows
+  (Pos 1 or Pos 2). A layout without footswitch 8 leaves the swap to the reverb's own switch.
 - MIDI: **CC 61–65** choose A (value 0–63) or B (64–127) of FX slot 1–5; CC 58 swaps Pre FX 1.
 
 ## Auto-wah

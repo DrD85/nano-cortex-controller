@@ -396,6 +396,7 @@ static void tx_task(void *arg)
     uint8_t packet[MAX_PACKET_DATA + 2];
     for (;;) {
         xQueueReceive(s_tx_queue, &m, portMAX_DELAY);
+        int64_t started_us = esp_timer_get_time();
         size_t max = s_mtu > 10 ? s_mtu - 7 : 16;
         if (max > MAX_PACKET_DATA) max = MAX_PACKET_DATA;
         for (size_t off = 0; off < m.len && s_subscribed;) {
@@ -419,6 +420,8 @@ static void tx_task(void *arg)
             }
             off += chunk;
         }
+        // (how long a long reply takes to go on to the app - beside the Nano link's "Long message from the Nano")
+        if (m.len >= 4096) ESP_LOGI(TAG, "Long message to the app: %u bytes in %lld ms", (unsigned)m.len, (esp_timer_get_time() - started_us) / 1000);
         free(m.data);
     }
 }

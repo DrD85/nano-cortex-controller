@@ -527,9 +527,11 @@ static void on_packet(const uint8_t *d, size_t n)
         deliver(d + 2, n - 2);
         return;
     }
+    static int64_t started_us;
     if (flags & 0x40) {    // first packet of a longer message
         s_rx_len = 0;
         s_rx_active = true;
+        started_us = esp_timer_get_time();
     }
     if (!s_rx_active) {
         ESP_LOGW(TAG, "Packet without start ignored (flags %02X)", flags);
@@ -544,6 +546,8 @@ static void on_packet(const uint8_t *d, size_t n)
     s_rx_len += n - 2;
     if (flags & 0x80) {    // last packet
         s_rx_active = false;
+        // How long a long reply takes to come in (the preset list, the library): the app gets it only then
+        if (s_rx_len >= 4096) ESP_LOGI(TAG, "Long message from the Nano: %u bytes in %lld ms", (unsigned)s_rx_len, (esp_timer_get_time() - started_us) / 1000);
         deliver(s_rx, s_rx_len);
     }
 }

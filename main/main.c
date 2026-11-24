@@ -203,6 +203,12 @@ static volatile bool s_values_stale;  // the app wrote to the Nano (host task): 
 // nothing waiting. The Nano reports an effect whose on/off is on the expression pedal (heel-toe) as the pedal has it,
 // not as it was switched over Bluetooth - the effect sounds anyway. Without this the next press sent "on" again.
 static int8_t s_fx_switched[NANO_FX_SLOTS] = { -1, -1, -1, -1, -1 };
+// ... and when. A state reply that comes this soon after and says otherwise may have been written by the Nano before
+// the switch (asked for just before the press): it does not count. Seen on the board (2026-11-24, an effect stepped
+// on / off quickly): the reply asked for after "on" arrived after "off" had gone out - the report had "moved", so
+// the tile went back to on, and the next press sent "off" again: a press that did nothing.
+static int64_t s_fx_switched_us[NANO_FX_SLOTS];
+#define FX_SETTLE_US (500 * 1000)
 static bool s_fx_reported[NANO_FX_SLOTS];   // the on/off states of the last reply
 static uint32_t s_fx_reports_seen;
 static int s_fx_preset;
@@ -288,7 +294,9 @@ static struct {
 // it switches on and off. Read with every new preset and edited in the expression dialog (the pedal button of the
 // top bar). A save replaces all assignments of the preset; the result is read back and compared. Taking the reverb
 // off the pedal (reverb dialog) reads the assignments again first - the app may have changed them.
-enum { EXP_WRITE_NONE, EXP_WRITE_DIALOG, EXP_WRITE_FREE_REVERB };
+enum { EXP_WRITE_NONE, EXP_WRITE_DIALOG, EXP_WRITE_FREE_REVERB, EXP_WRITE_NEW_PRESET };
+static char s_newp_said[160];     // what a new preset says on the screen once the pedal's assignments are off (see preset_new)
+static bool s_newp_saving;        // ... and it is saved once more after that (the Nano counts the change as unsaved)
 static struct {
     bool known;
     nano_exp_range_t ranges[NANO_EXP_RANGES];
@@ -451,9 +459,12 @@ static esp_timer_handle_t s_src_timer;
 // running effect are read before a swap (only possible while it is on), so edits are kept. The values of A are
 // stored too (read whenever A is on), so a switched-off A need not be switched on for that: the swap keeps the
 // effect on or off. Values may be written to an effect that is off (the desktop editor does that too).
-//   reverb:   B is the reverb's like any slot's: its own tile swaps it. Footswitch 8 swaps A <-> B too only when the
-//             reverb dialog (long press on tile 8) was saved on its Reverb A / B tab; otherwise B is "parked" for
-//             footswitch 8, which then is the mix switch (or the two settings) - the reverb's tile keeps its A / B
+//   reverb:   one switch changes the reverb, the other only switches it on and off (1.25: before, the reverb's own
+//             tile always swapped A / B too, so both tiles were drawn in two halves and the reverb's switch waited
+//             for the release). Footswitch 8 swaps A <-> B when the reverb dialog (long press on tile 8) was saved
+//             on its Reverb A / B tab - the reverb's own tile is an ordinary on / off tile then. Otherwise B is
+//             "parked" for footswitch 8, which is the mix switch (or the two settings); the reverb's tile swaps
+//             A / B only if that was chosen on the tile (in its FX editor: A | B > Footswitch), see ab_mode()
 //   Pre FX 1: the 2ND button in its FX editor chooses B; footswitch 3 short = on/off, held = A <-> B
 typedef struct {
     uint32_t type;                    // model of B, 0 = none
@@ -462,9 +473,11 @@ typedef struct {
                                       // (0 in data stored before 1.8: footswitch 8 swaps)
     uint8_t tap;                      // what the slot's switch does (UI_AB_*): 0 = a tap switches on / off and holding
     uint8_t reserved;                 // swaps (also data stored before 1.12), 1 = the other way round, 2 = a press swaps
+                                      // tap | AB_TILE_CHOSEN: chosen on the tile on purpose (the reverb's slot, 1.25)
     float values[NANO_MAX_PARAMS];
 } fx_b_t;                             // in NVS: its first FX_B_HEAD bytes, then the values that are set, 16 bits each
 #define FX_B_HEAD 8
+#define AB_TILE_CHOSEN 0x10           // in fx_b_t.tap (the reverb's slot): the mode in its low bits was chosen on the tile
 _Static_assert(sizeof(fx_b_t) == FX_B_HEAD + 4 * NANO_MAX_PARAMS && offsetof(fx_b_t, values) == FX_B_HEAD,
                "fx_b_t's head is stored as it is, and firmware before 1.15 stored all of it: it must not change");
 typedef struct {
@@ -537,11 +550,13 @@ typedef struct {
     bool cache_only;                  // reading the values for later, no swap
     int read_tries;                   // the read could not go out yet (another read open, the Nano busy)
     bool restore_off;                 // A was switched on only to read it: off again before the swap
+    bool again;                       // its switch was pressed while a swap was under way: once that is done, the other way
     bool open_editor;                 // open the FX editor once B is loaded
     int64_t swapped_us;               // last model change by the controller (state replies may still be older)
 } ab_t;
 #define AB_SETTLE_US (1500 * 1000)
 static ab_t s_ab[AB_COUNT];
+static bool s_rp_again;               // the reverb switch (two settings) was pressed while something else was switching
 
 // NVS key of an A/B's B (or of the kept values of its A). The preset's reverb slot and Pre FX 1 keep the keys they
 // had when they were the only two; the other slots have their own.
@@ -564,6 +579,28 @@ static bool ab_used(int slot)
     if (slot < 0 || slot >= AB_COUNT) return false;
     const ab_t *ab = &s_ab[slot];
     return ab->preset && ab->preset == s_state.current_preset && ab->b.type;
+}
+
+// What the switch of a slot with a second effect does with it (UI_AB_*). The reverb's slot is the exception: the
+// reverb switch (footswitch 8) is the one that changes the reverb - its A / B, its two settings or its mix - and the
+// reverb's own switch only switches it on and off (UI_AB_OFF: an ordinary tile, acting at the press). It swaps A / B
+// itself only when that was chosen on the tile (AB_TILE_CHOSEN), or when the tile layout has no reverb switch.
+static bool layout_has(int number)
+{
+    for (int p = 1; p <= FOOTSWITCH_COUNT; p++) if (layout_switch(p) == number) return true;
+    return false;
+}
+
+static int ab_mode(int slot)
+{
+    if (slot < 0 || slot >= AB_COUNT) return UI_AB_HOLD;
+    uint8_t tap = s_ab[slot].b.tap;
+    int mode = tap & 3;
+    if (slot == s_mix.slot) {
+        if (tap & AB_TILE_CHOSEN) return mode;
+        return layout_has(FOOTSWITCH_COUNT) ? UI_AB_OFF : mode == UI_AB_OFF ? UI_AB_HOLD : mode;
+    }
+    return mode == UI_AB_OFF ? UI_AB_HOLD : mode;
 }
 // Switches whose short press acts on release because they have a held function (bit n = footswitch n).
 static volatile uint32_t s_hold_switches;
@@ -1458,7 +1495,7 @@ static int reverb_slot(void)
 }
 
 // Footswitch 8 in FX mode swaps reverb A <-> B when the reverb dialog was saved on its Reverb A / B tab (B not
-// parked); otherwise it is the mix switch. The reverb's own tile swaps its A / B either way.
+// parked); otherwise it is the mix switch. What the reverb's own tile does: ab_mode().
 static bool ab_used(int slot);
 
 static bool reverb_b_used(void)
@@ -1487,8 +1524,8 @@ static void looper_switches(void)
     // second effect: that keeps the held function, and the wah moves while it is on.
     uint32_t momentary = 0;
     for (int slot = 0; slot < NANO_FX_SLOTS && s_fx_mode && !s_looper; slot++) {
-        if (ab_used(slot)) {
-            if (s_ab[slot].b.tap != UI_AB_PRESS) hold |= 1u << (slot + 3);   // (a press that only swaps acts at once)
+        if (ab_used(slot) && ab_mode(slot) != UI_AB_OFF) {
+            if (ab_mode(slot) != UI_AB_PRESS) hold |= 1u << (slot + 3);   // (a press that only swaps acts at once)
         } else if (wah_mode(slot) == UI_WAH_HELD) momentary |= 1u << (slot + 3);
     }
     s_hold_switches = hold;
@@ -1523,7 +1560,7 @@ static void show(void)
         view.ab_b_type[slot] = s_ab[slot].b.type;
         view.ab_a_type[slot] = s_ab[slot].a_type;
         if (s_ab[slot].active) view.ab_active |= (uint8_t)(1u << slot);
-        view.ab_mode[slot] = s_ab[slot].b.tap <= UI_AB_PRESS ? s_ab[slot].b.tap : UI_AB_HOLD;
+        view.ab_mode[slot] = (uint8_t)ab_mode(slot);
     }
     view.rp_used = rp_used();
     view.not_loaded = s_preset_refused && s_preset_refused == s_state.current_preset;
@@ -1814,6 +1851,7 @@ static void set_fx(int slot, bool on)
     app_link_send(NANO_MSG_BYPASS, buf, n);   // the editor shows it at once (and does not go by the Nano's report)
     s_state.fx_on[slot] = on;
     s_fx_switched[slot] = on;
+    s_fx_switched_us[slot] = esp_timer_get_time();
     if (slot == s_edit.slot) {
         if (!on) s_edit.known = false;
         editor_show();
@@ -1832,8 +1870,16 @@ static void fx_follow_switches(void)
     s_fx_reports_seen = s_state.fx_reports;
     bool other_preset = s_state.current_preset != s_fx_preset;
     s_fx_preset = s_state.current_preset;
+    int64_t now = esp_timer_get_time();
     for (int i = 0; i < NANO_FX_SLOTS; i++) {
         bool reported = s_state.fx_on[i];
+        if (!other_preset && s_fx_switched[i] >= 0 && reported != s_fx_switched[i] && now - s_fx_switched_us[i] < FX_SETTLE_US) {
+            ESP_LOGI(TAG, "%s reported %s right after it was switched %s - a reply from before the switch, left out",
+                     NANO_FX_SLOT_NAMES[i], reported ? "ON" : "off", s_fx_switched[i] ? "ON" : "off");
+            s_state.fx_on[i] = s_fx_switched[i];
+            s_fx_reported[i] = reported;
+            continue;
+        }
         if (other_preset || reported != s_fx_reported[i] || reported == s_fx_switched[i]) {
             s_fx_switched[i] = -1;   // the report moved or agrees: it counts
         } else if (s_fx_switched[i] >= 0) {
@@ -2572,13 +2618,17 @@ static void fxp_show(void)
 }
 
 
+static void ab_swap_waiting(void);
+
 static void fxp_send_step(void)
 {
     int slot = s_fxp.send_slot;
+    bool running = s_fxp.sent < s_fxp.send_count;
     for (int n = 0; n < FXP_SEND_CHUNK && s_fxp.sent < s_fxp.send_count; n++, s_fxp.sent++) {
         send_param(slot, s_fxp.sent, s_fxp.send_values[s_fxp.sent]);
     }
     if (s_fxp.sent < s_fxp.send_count) esp_timer_start_once(s_fxp_timer, 60 * 1000);
+    else if (running) ab_swap_waiting();   // (a switch pressed while these values went out)
 }
 
 // A value run (an FX preset or a reverb setting going out in steps) is under way.
@@ -3140,8 +3190,12 @@ static void ab_load(int preset)
         if (!open || nvs_get_blob(nvs, key, buf, &size) != ESP_OK || !fx_b_unpack(buf, size, &ab->b) || !nano_fx_model(ab->b.type)) {
             memset(&ab->b, 0, sizeof(ab->b));
         }
-        if (ab->b.type) ESP_LOGI(TAG, "%s B of preset %d: %s%s", ab_name(ab), preset, nano_fx_name(ab->b.type),
-                                 ab->b.tap == UI_AB_TAP ? " (a tap swaps)" : ab->b.tap == UI_AB_PRESS ? " (a press swaps)" : "");
+        if (ab->b.type) {
+            int mode = ab_mode(i);
+            ESP_LOGI(TAG, "%s B of preset %d: %s%s", ab_name(ab), preset, nano_fx_name(ab->b.type),
+                     mode == UI_AB_TAP ? " (a tap swaps)" : mode == UI_AB_PRESS ? " (a press swaps)" :
+                     mode == UI_AB_OFF ? " (its switch: on / off only)" : "");
+        }
         fx_a_t a;
         size = sizeof(buf);
         int slot = i;
@@ -3181,9 +3235,14 @@ static void ab_leave_preset(void)
     for (int i = 0; i < AB_COUNT; i++) {
         ab_t *ab = &s_ab[i];
         ab->phase = AB_IDLE;
-        ab->cache_only = ab->restore_off = ab->open_editor = false;
+        ab->cache_only = ab->restore_off = ab->open_editor = ab->again = false;
         ab->preset = 0;   // nothing is stored or compared with the Nano's state until ab_load()
     }
+    s_rp_again = false;
+    // What was switched here belongs to the preset as it was loaded: a preset loaded again (the same number) comes
+    // back as it is stored, and its report counts. (Found by the random test, 2026-11-24: an effect switched off,
+    // the same preset chosen again a moment later - the tile stayed off while the Nano played it.)
+    for (int i = 0; i < NANO_FX_SLOTS; i++) s_fx_switched[i] = -1;
     s_last_preset = 0;
 }
 
@@ -3263,6 +3322,26 @@ static void ab_read_failed(ab_t *ab, const char *message)
         ab->restore_off = false;
         if (s_state.fx_on[ab->slot]) toggle_fx(ab->slot);
     }
+    for (int i = 0; i < AB_COUNT; i++) s_ab[i].again = false;   // (what was asked for behind it does not start on a failure)
+    s_rp_again = false;
+}
+
+static void ab_swap(int which);
+static void rp_toggle(void);
+
+// What was asked for while a swap or a run of values was under way (ab_swap, rp_toggle): now.
+static void ab_swap_waiting(void)
+{
+    for (int i = 0; i < AB_COUNT; i++) {
+        if (!s_ab[i].again) continue;
+        s_ab[i].again = false;
+        ab_swap(i);
+        return;
+    }
+    if (s_rp_again) {
+        s_rp_again = false;
+        rp_toggle();
+    }
 }
 
 static void ab_read(ab_t *ab)
@@ -3305,7 +3384,11 @@ static void ab_swap(int which)
     if (!ab->b.type || ab->preset != s_state.current_preset) return;
     ab_t *running = ab_running();
     if (running && !running->cache_only) {
-        ui_show_message("Still switching - try again in a moment.");
+        // The switch again while a swap is under way (the Nano loads the model, then takes the values: 0.6 s). The
+        // press is not lost: once that swap is done this one follows - a second press more takes it back again.
+        // (Up to 1.25.0 the press was dropped with "Still switching"; stepping twice in a row did nothing.)
+        ab->again = !ab->again;
+        ESP_LOGI(TAG, "%s: pressed while %s is switching - %s", ab_name(ab), ab_name(running), ab->again ? "it follows" : "taken back");
         return;
     }
     if (running) {   // a read for later: the swap reads anyway
@@ -3319,7 +3402,8 @@ static void ab_swap(int which)
         return;
     }
     if (fxp_sending() && s_fxp.send_slot == slot) {   // its values are still going out: a read now would see half of them
-        ui_show_message("Still switching - try again in a moment.");
+        ab->again = !ab->again;                       // (the swap follows them: fxp_send_step)
+        ESP_LOGI(TAG, "%s: pressed while its values are going out - %s", ab_name(ab), ab->again ? "the swap follows" : "taken back");
         return;
     }
     ab->target = ab->active ? 0 : 1;
@@ -3437,6 +3521,7 @@ static void ab_step(void)
             editor_show();
             editor_read_later(300);
         }
+        ab_swap_waiting();
         break;
     }
     default:
@@ -3445,9 +3530,10 @@ static void ab_step(void)
 }
 
 // From the reverb dialog, the 2ND list of Pre FX 1 or an FX editor: arg = w << 24 | model of B (0 = none).
-// w: 0 = reverb, footswitch 8 swaps A / B; 2 = reverb, footswitch 8 is the mix switch or the two settings - B stays
-// the reverb tile's ("parked" for footswitch 8); 1 = Pre FX 1; 8 + n = FX slot n (for the reverb's slot: footswitch 8
-// keeps what it does, and a new B is parked - the tile swaps it, the reverb switch stays as it was).
+// w: 0 = reverb, footswitch 8 swaps A / B (the reverb's own tile is an on / off tile then); 2 = reverb, footswitch 8 is
+// the mix switch or the two settings - B is "parked" for footswitch 8; 1 = Pre FX 1; 8 + n = FX slot n (for the
+// reverb's slot: footswitch 8 keeps what it does, and a new B chosen there is parked and swapped by the tile, where
+// it was chosen - the reverb switch stays as it was).
 static void ab_set_b(int arg)
 {
     int w = arg >> 24;
@@ -3462,16 +3548,24 @@ static void ab_set_b(int arg)
         ui_show_message("Still switching - try again in a moment.");
         return;
     }
-    bool changed = type != ab->b.type;
+    bool changed = type != ab->b.type, first = type && !ab->b.type;
     if (!changed && parked == (ab->b.parked != 0)) return;
     if (changed) {
         ab->b.type = type;
         ab->b.count = 0;
     }
     ab->b.parked = parked;
+    // One switch owns the reverb's A / B: footswitch 8 (the dialog's Reverb A / B tab) takes it from the tile; a
+    // first B chosen on the tile while footswitch 8 does something else belongs to the tile.
+    if (which == s_mix.slot && type) {
+        if (w == 0) ab->b.tap &= 3;
+        else if (w >= 8 && first && parked) ab->b.tap = AB_TILE_CHOSEN | UI_AB_HOLD;
+    }
+    if (!type) ab->b.tap = 0;
     ab_store(ab);
     if (!type) ab_store_a(ab);   // no B: the kept A values are not needed any more
-    ESP_LOGI(TAG, "%s B: %s%s", ab_name(ab), type ? nano_fx_name(type) : "none", parked ? " (footswitch 8: mix / settings, the tile swaps)" : "");
+    ESP_LOGI(TAG, "%s B: %s%s%s", ab_name(ab), type ? nano_fx_name(type) : "none", parked ? " (footswitch 8: mix / settings)" : "",
+             type && which == s_mix.slot ? ab_mode(which) == UI_AB_OFF ? ", its own switch: on / off only" : ", its own switch swaps A / B" : "");
     if (ab->active == 1 && changed) {   // B is running: show the new choice, or go back to A (parking leaves it as it is)
         ab->target = type ? 1 : 0;
         if (ab->target || ab->a_type) ab_load_target(ab);
@@ -3485,13 +3579,22 @@ static void ab_set_b(int arg)
 // other way round.
 static void ab_set_tap(int slot, int mode)
 {
-    static const char *const SAID[] = { "Tap: on / off  -  hold: A / B.", "Tap: A / B  -  hold: on / off.", "Press: A / B at once (no on / off)." };
+    static const char *const SAID[] = { "Tap: on / off  -  hold: A / B.", "Tap: A / B  -  hold: on / off.", "Press: A / B at once (no on / off).",
+                                        "On / off only - the reverb switch changes the reverb." };
     if (slot < 0 || slot >= AB_COUNT || !s_ab[slot].b.type || s_ab[slot].preset != s_state.current_preset) return;
-    if (mode < UI_AB_HOLD || mode > UI_AB_PRESS) return;
-    s_ab[slot].b.tap = (uint8_t)mode;
+    bool reverb = slot == s_mix.slot;
+    if (mode < UI_AB_HOLD || mode > (reverb ? UI_AB_OFF : UI_AB_PRESS)) return;
+    s_ab[slot].b.tap = (uint8_t)(reverb ? AB_TILE_CHOSEN | mode : mode);
+    const char *said = SAID[mode];
+    // The reverb's A / B has one owner: a tile that swaps takes it from footswitch 8, which is the mix switch (or
+    // the two settings) again.
+    if (reverb && mode != UI_AB_OFF && !s_ab[slot].b.parked) {
+        s_ab[slot].b.parked = 1;
+        said = "The reverb's own switch swaps A / B now - the reverb switch is the mix switch again.";
+    }
     ab_store(&s_ab[slot]);
-    ESP_LOGI(TAG, "%s: %s", ab_name(&s_ab[slot]), SAID[mode]);
-    ui_show_message(SAID[mode]);
+    ESP_LOGI(TAG, "%s: %s", ab_name(&s_ab[slot]), said);
+    ui_show_message(said);
     show();
     if (s_edit.slot == slot) editor_show();
 }
@@ -3677,7 +3780,8 @@ static void rp_toggle(void)
     const rp_t *rp = &s_rp[p];
     const ab_t *running = ab_running();
     if ((running && !running->cache_only) || (fxp_sending() && s_fxp.send_slot != slot)) {
-        ui_show_message("Still switching - try again in a moment.");
+        s_rp_again = !s_rp_again;   // (the reverb switch while something else is switching: it follows, ab_swap_waiting)
+        ESP_LOGI(TAG, "Reverb switch pressed while something is switching - %s", s_rp_again ? "it follows" : "taken back");
         return;
     }
     if (!s_state.fx_on[slot]) toggle_fx(slot);
@@ -4437,7 +4541,7 @@ static void handle_switch(int number)
     } else if (number == 2) {
         set_tuner(!s_tuner_on);
     } else if (s_fx_mode) {
-        if (number <= 7 && ab_used(number - 3) && (s_ab[number - 3].b.tap == UI_AB_TAP || s_ab[number - 3].b.tap == UI_AB_PRESS)) {
+        if (number <= 7 && ab_used(number - 3) && (ab_mode(number - 3) == UI_AB_TAP || ab_mode(number - 3) == UI_AB_PRESS)) {
             ab_swap(number - 3);   // a tap (or the press itself) swaps A / B
         }
         else if (number <= 7) toggle_fx(number - 3);
@@ -4629,10 +4733,11 @@ static void system_page(void);
 // A preset was saved into another place (the editor's "Copy preset", or the app saving under another number): the
 // Nano copies only its own preset, so what the controller keeps for it goes along - second effects (A / B), the two
 // reverb settings, scenes, auto-wah, Pos 1 / Pos 2. Before, the copy got what the replaced preset had left there.
-// Entries the source does not have are removed at the target.
+// Entries the source does not have are removed at the target. from 0: the place gets a preset made from nothing
+// (the preset list's "New preset") - whatever the controller kept for it goes.
 static void preset_extras_copy(int from, int to)
 {
-    if (from < 1 || from > NANO_PRESETS || to < 1 || to > NANO_PRESETS || from == to) return;
+    if (from < 0 || from > NANO_PRESETS || to < 1 || to > NANO_PRESETS || from == to) return;
     static const char *const FORMATS[] = { "pf1%02d", "pfa%02d", "rvb%02d", "rva%02d", "ab1%02d", "ab2%02d", "ab3%02d",
         "ab4%02d", "aa1%02d", "aa2%02d", "aa3%02d", "aa4%02d", "rvp%02d", "rvq%02d", SCENE_STORE_KEY, SCENE_VALUES_KEY,
         SCENE_CAPTURE_KEY, WAH_STORE_KEY };
@@ -4645,7 +4750,7 @@ static void preset_extras_copy(int from, int to)
         snprintf(src, sizeof(src), FORMATS[i], from);
         snprintf(dst, sizeof(dst), FORMATS[i], to);
         size_t size = 0;
-        if (nvs_get_blob(nvs, src, NULL, &size) != ESP_OK || !size) {
+        if (!from || nvs_get_blob(nvs, src, NULL, &size) != ESP_OK || !size) {
             if (nvs_erase_key(nvs, dst) == ESP_OK) removed++;
             continue;
         }
@@ -4656,14 +4761,14 @@ static void preset_extras_copy(int from, int to)
         free(buf);
     }
     int f = from - 1, t = to - 1;
-    memcpy(s_mixes.pos[t], s_mixes.pos[f], sizeof(s_mixes.pos[t]));
-    if (s_mixes.set[f / 8] & (1u << (f % 8))) s_mixes.set[t / 8] |= (uint8_t)(1u << (t % 8));
+    if (from) memcpy(s_mixes.pos[t], s_mixes.pos[f], sizeof(s_mixes.pos[t]));
+    if (from && (s_mixes.set[f / 8] & (1u << (f % 8)))) s_mixes.set[t / 8] |= (uint8_t)(1u << (t % 8));
     else s_mixes.set[t / 8] &= (uint8_t)~(1u << (t % 8));
     if (nvs_set_blob(nvs, MIX_ALL_KEY, &s_mixes, sizeof(s_mixes)) != ESP_OK) ok = false;
     if (nvs_commit(nvs) != ESP_OK) ok = false;
     nvs_close(nvs);
     // The source is the preset that is on: its A / B as they are now (which of the two plays, the A values read)
-    for (int i = 0; i < AB_COUNT; i++) {
+    for (int i = 0; i < AB_COUNT && from; i++) {
         if (s_ab[i].preset != from || !s_ab[i].b.type) continue;
         ab_t copy = s_ab[i];
         copy.preset = to;
@@ -4671,9 +4776,280 @@ static void preset_extras_copy(int from, int to)
         ab_store(&copy);
         if (copy.a_count) ab_store_a(&copy);   // (without A values read here the copied entry stays)
     }
-    ESP_LOGI(TAG, "Preset %d saved as %d: the controller's entries went along (%d copied, %d old ones removed)", from, to,
-             copied, removed);
+    if (from) ESP_LOGI(TAG, "Preset %d saved as %d: the controller's entries went along (%d copied, %d old ones removed)", from, to,
+                       copied, removed);
+    else ESP_LOGI(TAG, "Preset %d is new: %d entries the controller kept for that place removed", to, removed);
     if (!ok) ui_show_message("Not all of the controller's settings went with the copy (memory full?).");
+}
+
+// ---- A new preset (the preset list's "New preset") ----
+// A place of the Nano's 64 gets a fresh start: the standard board - one effect of each kind in the five slots
+// (compressor, overdrive, chorus, delay, reverb), all off, the capture's tone controls in the middle, nothing on the
+// expression pedal - or a copy of the preset that is on. Capture and cab stay as they are: they are what is chosen
+// next. The place is written with SavePreset, as the editor's "Copy preset" does it (the Nano saves what plays under
+// another number - confirmed there); what the controller kept for that place goes (a copy: the source's comes along);
+// then the Nano changes to the new preset.
+//   board: models that differ, one per step (the Nano loads a model for a moment) -> effects off, tone controls ->
+//   both: SavePreset into the place -> the Nano's name list read again: the place must carry the name -> the
+//          controller's entries -> change to the place -> (board) the expression pedal's assignments emptied
+// While the effects are being set, the Nano's state replies are left out (newp_holds_state): they name models that
+// belong to no preset yet, and nothing of them may be stored for the preset the run started on.
+static const uint32_t NEW_PRESET_BOARD[NANO_FX_SLOTS] = { 5007, 27, 7024, 6011, 8000 };   // compressor, overdrive, chorus, delay, reverb
+enum { NEWP_IDLE, NEWP_MODELS, NEWP_OFF, NEWP_SAVE, NEWP_NAMES, NEWP_SELECT, NEWP_PEDAL };
+#define NEWP_MODEL_MS 450             // per model the Nano loads (as an A / B swap waits)
+static struct {
+    int phase, from, to, slot, tries;
+    bool board;                       // the standard board (false: a copy of the preset that is on)
+    char name[33];
+} s_newp;
+static esp_timer_handle_t s_newp_timer;
+
+static void newp_timer_cb(void *arg)
+{
+    command('5', 0);
+}
+
+static void newp_later(int ms)
+{
+    esp_timer_stop(s_newp_timer);
+    esp_timer_start_once(s_newp_timer, (uint64_t)ms * 1000);
+}
+
+// The Nano's state replies are not taken while the new preset's effects are set and until it is saved.
+static bool newp_holds_state(void)
+{
+    return s_newp.board && s_newp.phase >= NEWP_MODELS && s_newp.phase <= NEWP_NAMES;
+}
+
+static void newp_end(const char *message, bool back)
+{
+    int from = s_newp.from;
+    bool reload = back && s_newp.board && s_newp.phase >= NEWP_MODELS && s_newp.phase <= NEWP_NAMES;
+    esp_timer_stop(s_newp_timer);
+    s_newp.phase = NEWP_IDLE;
+    if (message) {
+        ESP_LOGI(TAG, "New preset: %s", message);
+        ui_show_message(message);
+    }
+    // Not created: what was set for it is still what plays - the preset the run started on is loaded again.
+    if (reload && nano_link_ready()) select_preset(from);
+}
+
+// Called when the link is lost.
+static void newp_reset(void)
+{
+    if (s_newp_timer) esp_timer_stop(s_newp_timer);
+    s_newp.phase = NEWP_IDLE;
+}
+
+static void newp_save(void)
+{
+    uint8_t buf[96];
+    size_t n = nano_save_preset(s_newp.to, s_newp.name, buf, sizeof(buf));
+    if (!n) {
+        newp_end("The name does not fit - nothing was created.", true);
+        return;
+    }
+    char label[48];
+    snprintf(label, sizeof(label), "New preset: save into place %d", s_newp.to);
+    send(label, NANO_MSG_SAVE_PRESET, buf, n);
+    s_newp.phase = NEWP_NAMES;
+    s_newp.tries = 0;
+    newp_later(500);   // then the name list (newp_step), which newp_names() checks
+}
+
+// The Nano's name list has come in (handle_message): the place must carry the new name.
+static void newp_names(void)
+{
+    if (s_newp.phase != NEWP_NAMES) return;
+    esp_timer_stop(s_newp_timer);
+    const char *is = s_state.preset_names[s_newp.to - 1];
+    if (strcmp(is, s_newp.name)) {
+        char text[120];
+        snprintf(text, sizeof(text), "Not created: place %d is still \"%.40s\" on the Nano.", s_newp.to, is[0] ? is : "-");
+        newp_end(text, true);
+        return;
+    }
+    preset_extras_copy(s_newp.board ? 0 : s_newp.from, s_newp.to);
+    s_scenes_preset = 0;   // (a place that was on before: what was read for it is gone or replaced)
+    s_wah_preset = 0;
+    s_newp.phase = NEWP_SELECT;
+    s_newp.tries = 0;
+    select_preset(s_newp.to);
+    newp_later(1500);
+}
+
+static bool cap_in_mode(void);
+
+static void newp_step(void)
+{
+    if (!nano_link_ready()) {
+        newp_reset();
+        return;
+    }
+    switch (s_newp.phase) {
+    case NEWP_MODELS: {
+        // One model per step; a slot that has the board's model already keeps its settings.
+        while (s_newp.slot < NANO_FX_SLOTS) {
+            int slot = s_newp.slot++;
+            uint32_t type = NEW_PRESET_BOARD[slot];
+            if (!nano_fx_model(type) || s_state.fx_type[slot] == type) continue;
+            uint8_t buf[16];
+            char label[56];
+            snprintf(label, sizeof(label), "New preset: %s model %s", NANO_FX_SLOT_NAMES[slot], nano_fx_name(type));
+            send(label, NANO_MSG_FX_TYPE, buf, nano_fx_model_select(slot, type, buf));
+            s_state.fx_type[slot] = type;
+            newp_later(NEWP_MODEL_MS);
+            return;
+        }
+        s_newp.phase = NEWP_OFF;
+        newp_later(20);
+        break;
+    }
+    case NEWP_OFF: {
+        uint8_t buf[16];
+        for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
+            size_t n = nano_fx_bypass(slot, false, buf);
+            send("New preset: effect off", NANO_MSG_BYPASS, buf, n);
+            s_state.fx_on[slot] = false;
+            s_fx_switched[slot] = 0;
+            s_fx_switched_us[slot] = esp_timer_get_time();
+        }
+        static const int KNOBS[] = { NANO_AMP_GAIN, NANO_AMP_BASS, NANO_AMP_MID, NANO_AMP_TREBLE };
+        for (size_t i = 0; i < sizeof(KNOBS) / sizeof(KNOBS[0]); i++) {
+            send("New preset: tone control to the middle", NANO_MSG_VALUE, buf, nano_amp_knob(KNOBS[i], 128, buf));
+            s_state.amp[KNOBS[i]] = 128;
+        }
+        send("New preset: capture volume 0 dB", NANO_MSG_VALUE, buf, nano_capture_volume(NANO_CAPTURE_VOLUME_0DB, buf));
+        s_state.capture_volume = NANO_CAPTURE_VOLUME_0DB;
+        s_newp.phase = NEWP_SAVE;
+        newp_later(500);   // (the eleven writes go out first)
+        break;
+    }
+    case NEWP_SAVE:
+        newp_save();
+        break;
+    case NEWP_NAMES:
+        // The name list: asked for 0.5 s after the save, once more if it does not come.
+        if (s_newp.tries++ >= 2) {
+            char text[120];
+            snprintf(text, sizeof(text), "The Nano did not answer - look at place %d before you rely on the new preset.", s_newp.to);
+            newp_end(text, true);
+            break;
+        }
+        request_full_state();
+        newp_later(6000);
+        break;
+    case NEWP_SELECT:
+        // The Nano is on the new preset (its state came in) - or not yet: wait a little longer, then say so.
+        if (s_state.current_preset != s_newp.to || s_expect_preset || s_preset_refused == s_newp.to) {
+            if (s_newp.tries++ < 4) {
+                newp_later(1000);
+                break;
+            }
+            newp_end("The new preset is saved, but the Nano did not change to it - choose it in the list.", false);
+            break;
+        }
+        if (!s_newp.board) {
+            char text[120];
+            snprintf(text, sizeof(text), "Preset %d \"%.32s\" created as a copy.", s_newp.to, s_newp.name);
+            newp_end(text, false);
+            break;
+        }
+        s_newp.phase = NEWP_PEDAL;
+        s_newp.tries = 0;
+        newp_later(600);
+        break;
+    case NEWP_PEDAL: {
+        // The save took the pedal's assignments of the preset before along: a new board starts without them. (Known
+        // once the preset's assignments have been read - the controller asks for them with every preset.)
+        if (!s_exp.known && s_newp.tries++ < 5) {
+            newp_later(600);
+            break;
+        }
+        bool assigned = false;
+        for (int i = 0; i < NANO_EXP_RANGES && s_exp.known; i++) assigned |= s_exp.ranges[i].on;
+        for (int i = 0; i < NANO_EXP_SWITCHES && s_exp.known; i++) assigned |= s_exp.switches[i].on;
+        snprintf(s_newp_said, sizeof(s_newp_said), "Preset %d \"%.32s\" is new: choose its capture and cab, then switch on what it needs.",
+                 s_newp.to, s_newp.name);
+        bool unknown = !s_exp.known, there = s_state.current_preset == s_newp.to;
+        if (assigned && there) {
+            // (said once the Nano confirms them gone: handle_message, EXP_WRITE_NEW_PRESET)
+            newp_end(NULL, false);
+            ESP_LOGI(TAG, "New preset: the expression pedal's assignments of the preset before are taken off");
+            memset(s_exp.wanted, 0, sizeof(s_exp.wanted));
+            memset(s_exp.wanted_switches, 0, sizeof(s_exp.wanted_switches));
+            s_exp.preset = s_state.current_preset;
+            exp_write(EXP_WRITE_NEW_PRESET);
+        } else {
+            newp_end(unknown ? "New preset created - check the Pedal button: its assignments could not be read." : s_newp_said, false);
+        }
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+// From the preset list: "<place, two hex digits><0 = the standard board / 1 = a copy of the preset that is on>name".
+static void preset_new(const char *text)
+{
+    unsigned place = 0;
+    if (strlen(text) < 4 || sscanf(text, "%2x", &place) != 1 || (text[2] != '0' && text[2] != '1')) return;
+    const char *name = text + 3;
+    bool board = text[2] == '0';
+    size_t len = strlen(name);
+    if (!nano_link_ready() || !s_state.names_loaded || !s_state.fx_known || cap_in_mode()) {
+        ESP_LOGW(TAG, "New preset: not now - the Nano is not ready");
+        ui_show_message("The Nano is not ready - try again in a moment.");
+        return;
+    }
+    ab_t *swapping = ab_running();
+    if (swapping && swapping->cache_only) {
+        // Only values being read for a later swap (after every preset with a second effect, for about a second): given
+        // up - on the Nano this refused every new preset made right after a preset was loaded (2026-11-24).
+        esp_timer_stop(s_ab_timer);
+        swapping->phase = AB_IDLE;
+        swapping->cache_only = false;
+        swapping = NULL;
+    }
+    if (s_newp.phase != NEWP_IDLE || swapping || s_expect_preset || s_tuner_on) {
+        ESP_LOGW(TAG, "New preset: not now - %s", s_newp.phase != NEWP_IDLE ? "another one is being made" : swapping ? "a swap is under way"
+                 : s_expect_preset ? "a preset change is under way" : "the tuner is on");
+        ui_show_message("Still busy - try again in a moment.");
+        return;
+    }
+    if (place < 1 || place > NANO_PRESETS) return;
+    if (len < 4 || len > 32) {
+        ui_show_message("Preset names need 4 to 32 characters.");
+        return;
+    }
+    for (int i = 0; i < NANO_PRESETS; i++) {
+        if (i != (int)place - 1 && strcasecmp(s_state.preset_names[i], name) == 0) {
+            ui_show_message("This preset name already exists.");
+            return;
+        }
+    }
+    if (!board && (int)place == s_state.current_preset) {
+        ui_show_message("A copy needs another place than the preset that is on.");
+        return;
+    }
+    app_sync_later();
+    memset(&s_newp, 0, sizeof(s_newp));
+    s_newp.from = s_state.current_preset;
+    s_newp.to = (int)place;
+    s_newp.board = board;
+    strlcpy(s_newp.name, name, sizeof(s_newp.name));
+    ESP_LOGI(TAG, "New preset in place %d \"%s\": %s", s_newp.to, s_newp.name, board ? "the standard board" : "a copy of the preset that is on");
+    ui_show_message(board ? "Setting up the new preset ..." : "Copying ...");
+    if (board) {
+        ab_leave_preset();   // nothing of what follows is stored for, or compared with, the preset that was on
+        editor_close();
+        s_newp.phase = NEWP_MODELS;
+        newp_step();
+    } else {
+        newp_save();
+    }
 }
 
 // ---- Neural Capture V1 (Settings > Capture) ----
@@ -5257,10 +5633,10 @@ static void handle_command(char c, int arg)
         if (arg & (UI_SWITCH_DOWN | UI_SWITCH_UP)) {   // a wah set to "Hold": on while its switch is down
             if (!s_looper && s_fx_mode) wah_hold(number, (arg & UI_SWITCH_DOWN) != 0);
             else if (arg & UI_SWITCH_DOWN) handle_switch(number);   // the mode changed meanwhile: an ordinary press
-        } else if ((arg & UI_SWITCH_HOLD) && s_fx_mode && number >= 3 && number <= 7 && ab_used(number - 3)) {
+        } else if ((arg & UI_SWITCH_HOLD) && s_fx_mode && number >= 3 && number <= 7 && ab_used(number - 3) && ab_mode(number - 3) != UI_AB_OFF) {
             ui_flash_tile(number - 1);   // held: A <-> B - or on / off, if a tap swaps
-            if (s_ab[number - 3].b.tap == UI_AB_TAP) toggle_fx(number - 3);
-            else if (s_ab[number - 3].b.tap != UI_AB_PRESS) ab_swap(number - 3);
+            if (ab_mode(number - 3) == UI_AB_TAP) toggle_fx(number - 3);
+            else if (ab_mode(number - 3) != UI_AB_PRESS) ab_swap(number - 3);
         } else if ((arg & UI_SWITCH_HOLD) && number == 2) {   // held: scenes <-> presets, as the scenes button
             if (!s_tuner_on) {
                 ui_flash_tile(1);
@@ -5311,6 +5687,7 @@ static void handle_command(char c, int arg)
     case 'V': request_settings(); break;
     case 'U': set_usb_gain(arg); break;
     case 'G': usb_throttle_done(); break;
+    case '5': newp_step(); break;   // a new preset: the next step (its timer)
     case 'v': source_value(arg); break;
     case 'z': fxp_load(arg); break;
     case '#': fxp_send_step(); break;
@@ -5339,6 +5716,7 @@ static void handle_command(char c, int arg)
     case '%':   // the app switched an effect: shown at once, and the Nano's report may not follow it (s_fx_switched)
         s_state.fx_on[arg >> 1] = arg & 1;
         s_fx_switched[arg >> 1] = arg & 1;
+        s_fx_switched_us[arg >> 1] = esp_timer_get_time();
         show();
         break;
     case 'Q': mix_preview(arg); break;
@@ -5443,6 +5821,10 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         s_incomplete_retries = 0;
         esp_timer_stop(s_state_timer);   // a complete reply: nothing overdue (the full state asks for the current one below)
         s_state_retries = 0;
+        if (!s_waiting_full_state && newp_holds_state()) {
+            ESP_LOGI(TAG, "State reply left out: a new preset is being set up");
+            break;
+        }
         if (!s_waiting_full_state && s_expect_preset) {
             int reply_preset = (int)nano_field_varint(payload, len, 13) + 1;
             if ((reply_preset != s_expect_preset || s_expect_ack) && esp_timer_get_time() - s_expect_us < 2000000) {
@@ -5506,6 +5888,7 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
                 s_refresh_library = false;
                 esp_timer_start_once(s_library_timer, 1500 * 1000);
             }
+            newp_names();   // a new preset waits for this list: its place must carry the name
         } else {
             print_summary();
             if (s_reconnected) {   // the first preset after a lost link: everything else may come back too
@@ -5517,7 +5900,9 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
             }
             if (s_save_pending && s_save_pending == s_state.current_preset) {
                 ui_show_message(s_state.dirty ? "Save not confirmed - the preset still has unsaved changes."
-                                              : "Preset saved.");
+                                : s_newp_saving ? s_newp_said : "Preset saved.");
+                if (s_newp_saving) ESP_LOGI(TAG, "New preset: %s", s_state.dirty ? "the last save is not confirmed" : s_newp_said);
+                s_newp_saving = false;
                 s_save_pending = 0;
             }
             s_mix.slot = reverb_slot();
@@ -5629,7 +6014,16 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
                        && (is->mode == NANO_EXP_SWITCH || is->delay_ms == want->delay_ms);
             }
             ESP_LOGI(TAG, "Expression assignments check: %s", same ? "matches" : "DIFFERENT");
-            ui_show_message(!same ? "Not confirmed: the preset reports other expression assignments."
+            if (same && what == EXP_WRITE_NEW_PRESET) {
+                // The Nano counts the emptied assignments as an unsaved change of the preset (seen on the Nano,
+                // 2026-11-24: the new preset showed "edited" at once): saved once more, then it is said.
+                ESP_LOGI(TAG, "New preset: saved once more, without the pedal's assignments");
+                s_newp_saving = true;
+                save_preset();
+            } else
+            ui_show_message(!same ? (what == EXP_WRITE_NEW_PRESET ? "The new preset still has the pedal assignments of the preset before - see the Pedal button."
+                                                                  : "Not confirmed: the preset reports other expression assignments.")
+                            : what == EXP_WRITE_NEW_PRESET ? s_newp_said
                             : what == EXP_WRITE_FREE_REVERB ? "The expression pedal no longer moves the reverb in this preset."
                             : "Expression pedal saved.");
         }
@@ -5961,7 +6355,10 @@ static void backup_entry(int index)
 {
     static nvs_iterator_t it;
     static int at = -1;   // the entry `it` stands on
+    static int count;     // entries in the store, counted when a run starts (before: counted anew for every entry -
+                          // a walk through the whole store per entry, hundreds of them in a row, in this task)
     if (index == 0 || index != at + 1 || !it) {   // from the start (the usual case is the next one)
+        count = backup_count();
         nvs_release_iterator(it);
         it = NULL;
         at = -1;
@@ -5987,7 +6384,6 @@ static void backup_entry(int index)
     uint8_t *reply = NULL;
     if (nvs_get_blob(nvs, info.key, NULL, &size) == ESP_OK && size <= BACKUP_VALUE_MAX
         && (reply = heap_caps_malloc(5 + key_len + size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)) != NULL) {
-        int count = backup_count();
         reply[0] = (uint8_t)index; reply[1] = (uint8_t)(index >> 8);
         reply[2] = (uint8_t)count; reply[3] = (uint8_t)(count >> 8);
         reply[4] = (uint8_t)key_len;
@@ -6056,7 +6452,15 @@ static void tiles_push(void)
     if (!app_link_connected()) { s_tiles_sub = false; return; }
     static ui_tile_info_t tiles[8];
     static ui_view_t view;
-    if (!ui_tiles_get(tiles, &view)) return;
+    static uint32_t seen;
+    static bool have;
+    // Only when the screen's tiles changed (ui_tiles_version): this runs after every event of this task.
+    uint32_t version = ui_tiles_version();
+    if (!have || version != seen) {
+        if (!ui_tiles_get(tiles, &view)) return;
+        have = true;
+        seen = version;
+    }
     for (int i = 0; i < 8; i++) {
         if ((s_tiles_sent_ok >> i & 1) && !memcmp(&tiles[i], &s_tiles_sent[i], sizeof(tiles[i]))) continue;
         const ui_tile_info_t *t = &tiles[i];
@@ -6656,6 +7060,7 @@ static void app_event(app_event_t ev)
         s_reconnected = false;
         for (int i = 0; i < NANO_FX_SLOTS; i++) s_fx_switched[i] = -1;
         values_forget();
+        newp_reset();
         ui_set_link(false);
         break;
     case EV_MESSAGE:
@@ -6680,6 +7085,7 @@ static void app_event(app_event_t ev)
 #endif
         else if (ev.command == 'X') exp_dialog_save((const char *)ev.data);
         else if (ev.command == 'c' && nano_link_ready()) cap_save((const char *)ev.data);
+        else if (ev.command == 'P') preset_new((const char *)ev.data);
         free(ev.data);
         break;
     case EV_MIDI:
@@ -6715,6 +7121,22 @@ static void app_task(void *arg)
             ESP_LOGI(TAG, "Internal RAM: %u KB free, lowest so far %u KB", (unsigned)(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024),
                      (unsigned)(low / 1024));
         }
+        // ... and the stack reserve of its tasks: said whenever the smallest one goes down (by 128 bytes or more), so a
+        // screen or a message that needs more stack than anything before shows in the log before it is too much
+        // (looked at once a second at most; the System page shows the same number)
+        static int64_t stack_checked_us;
+        static int stack_logged = 0x7fffffff;
+        int64_t now = esp_timer_get_time();
+        if (now - stack_checked_us >= 1000 * 1000) {
+            stack_checked_us = now;
+            const char *whose = "?";
+            int left = stack_reserve(&whose);
+            if (left >= 0 && left + 128 <= stack_logged) {
+                stack_logged = left;
+                if (left < STACK_WARN) ESP_LOGW(TAG, "Stack reserve: only %d bytes (%s)", left, whose);
+                else ESP_LOGI(TAG, "Stack reserve: %d bytes (%s), lowest so far", left, whose);
+            }
+        }
     }
 }
 
@@ -6738,7 +7160,11 @@ static int console_read(uint8_t *c, TickType_t wait)
 //   "#L"        every entry of the store: "K <namespace> <key> <type> <size> <crc32 or value>", then "K END <count>"
 //   "#@<to>"    copy the preset that is on to <to> as the editor's "Copy preset" does: the Nano saves it there
 //               (named "Store test <to>") and the controller's entries go along (as from the app, on_app_write)
-//   "#<c><n>"   any other: command(c, n) as the screen would send it (e.g. "#g40" preset 40, "#A..." second effect)
+//   "#Y<place, two hex digits><0 / 1><name>"  a new preset as the preset list makes it (0 the standard board, 1 a
+//               copy of the preset that is on) - only into places 40-45
+//   "#<c><n>"   any other: command(c, n) as the screen would send it (e.g. "#g40" preset 40, "#A..." second effect,
+//               "#S0" save, "#a0" Pre FX 1 on / off). Everything but "#g" and "#s" is refused unless the preset
+//               that is on is one of the test presets 40-45: a test never writes to a preset of the player.
 static void storetest_line(const char *line)
 {
     if (!line[0]) return;
@@ -6778,6 +7204,18 @@ static void storetest_line(const char *line)
         nvs_get_stats(NULL, &st);
         printf("K END %d used %u free %u\n", count, (unsigned)st.used_entries, (unsigned)st.free_entries);
         fflush(stdout);
+        return;
+    }
+    bool test_preset = s_state.current_preset >= 40 && s_state.current_preset <= 45;
+    if (c == 'Y') {
+        unsigned place = 0;
+        if (sscanf(line + 1, "%2x", &place) != 1 || place < 40 || place > 45) { printf("K NEW refused (only into 40-45)\n"); return; }
+        on_text('P', line + 1);
+        printf("K NEW %u\n", place);
+        return;
+    }
+    if (c != 'g' && c != 's' && c != '@' && c != 'X' && !test_preset) {
+        printf("K REFUSED %c: preset %d is not a test preset (40-45)\n", c, s_state.current_preset);
         return;
     }
     if (c == '@') {
@@ -6900,7 +7338,7 @@ static void console_task(void *arg)
 #endif
 #ifdef NANO_STORETEST
         if (c == '#') {   // "#<c><number>" + Enter: test of the settings store from a computer (see storetest_line)
-            char line[24];
+            char line[48];
             size_t n = 0;
             uint8_t ch;
             while (n < sizeof(line) - 1 && console_read(&ch, pdMS_TO_TICKS(2000)) == 1 && ch != '\n' && ch != '\r') line[n++] = (char)ch;
@@ -7046,6 +7484,8 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_create(&jack_timer, &s_jack_timer));
     const esp_timer_create_args_t exp_retry_timer = { .callback = exp_retry_timer_cb, .name = "exp_retry" };
     ESP_ERROR_CHECK(esp_timer_create(&exp_retry_timer, &s_exp_retry_timer));
+    const esp_timer_create_args_t newp_timer = { .callback = newp_timer_cb, .name = "new_preset" };
+    ESP_ERROR_CHECK(esp_timer_create(&newp_timer, &s_newp_timer));
     const esp_timer_create_args_t usb_timer = { .callback = usb_timer_cb, .name = "usb" };
     ESP_ERROR_CHECK(esp_timer_create(&usb_timer, &s_usb_timer));
     const esp_timer_create_args_t fxp_timer = { .callback = fxp_timer_cb, .name = "fxp" };

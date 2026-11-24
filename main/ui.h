@@ -67,7 +67,9 @@
 typedef void (*ui_command_cb)(char command, int arg);
 // The switch of a slot with a second effect: a tap switches on / off and holding swaps A / B; a tap swaps and holding
 // switches on / off; or the press itself swaps, at once - without a held function there is no wait for the release.
-enum { UI_AB_HOLD, UI_AB_TAP, UI_AB_PRESS };
+// UI_AB_OFF (the reverb's slot only): its switch only switches the reverb on and off, at once, and its tile is an
+// ordinary one - the reverb switch (footswitch 8) is the one that changes the reverb.
+enum { UI_AB_HOLD, UI_AB_TAP, UI_AB_PRESS, UI_AB_OFF };
 #define UI_SWITCH_HOLD 0x100
 #define UI_SWITCH_SENT 0x200   // looper mode: the footswitch's message went out already, only show the press
 #define UI_SWITCH_LOST 0x400   // ... but it could not be sent (no phone)
@@ -320,5 +322,8 @@ typedef struct {
     uint8_t flags;       // UI_TILE_*
     int8_t row_active;   // the filled row: 0 / 1, -1 = none
 } ui_tile_info_t;
-// The eight tiles and the view they were drawn from; false while the screen has not drawn them yet.
+// The eight tiles and the view they were drawn from; false while the screen has not drawn them yet. A copy taken at
+// the last ui_show_state: it never waits for the screen. ui_tiles_version counts up whenever that copy changes. Both
+// are to be called from the task that calls ui_show_state.
 bool ui_tiles_get(ui_tile_info_t tiles[8], ui_view_t *view);
+uint32_t ui_tiles_version(void);

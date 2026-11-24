@@ -76,8 +76,10 @@ If it does not find the Nano within a minute, switch the Nano off and on again.
 3. **pedal** what the [expression pedal](docs/manual.md#expression-pedal) moves · **layers** [scenes](#scenes) on
    tiles 3–8, tap again for the bank's presets · **disk** save the preset on the Nano – green when there are unsaved changes
 4. Previous / next **bank**
-5. Preset name – **hold** to rename
-6. Capture and cab – **tap** to choose, **hold** for tone / cab settings
+5. Preset name – **tap** for the [list of all presets](docs/manual.md#preset-list-and-new-presets), with **New preset**
+   for a fresh start in any place; **hold** to rename
+6. The signal chain: Pre FX 1-2, capture, cab, Post FX 1-3 – a filled dot = on. **Tap** an effect for its FX editor;
+   capture and cab: **tap** to choose, **hold** for tone / cab settings
 7. Eight tiles = eight footswitches. **Tap** a tile = press its switch
 
 A tile is **filled** when it is active (the loaded preset, an effect that is on) and dark with its colour along the
@@ -175,6 +177,8 @@ each, filled while the effect is on. Tap to switch, hold for the FX editor. Tap 
 6. **Slide sideways** on a bar to change a value; up and down scrolls
 7. **PAD**: the effect on a pad with a sound in each corner – drag the lens between them
    ([manual](docs/manual.md#the-pad)); a long press on a pedal in the pedal view opens it directly
+8. **i** beside the model: what the effect is based on, starting points and players' sounds to set with one tap
+   ([manual](docs/manual.md#the-info-page))
 
 Values are shown while the effect is on. *Off | On* settings switch with a tap. More: [manual](docs/manual.md#fx-editor).
 
@@ -194,7 +198,7 @@ Values are shown while the effect is on. *Off | On* settings switch with a tap. 
 </td>
 <td>
 
-**Hold** the capture card for gain, bass, mid and treble – the cab card for output, high and low pass.
+**Hold** the capture's field in the signal chain for gain, bass, mid and treble – the cab's field for output, high and low pass.
 
 </td>
 <td>
@@ -229,6 +233,8 @@ Setup step by step: [manual](docs/manual.md#looper-mode-a-looper-app-on-a-phone)
 | Do this | Where | What happens |
 |---|---|---|
 | **Tap** | a tile | the same as its footswitch |
+| | an effect in the signal chain | its FX editor |
+| | the preset name | the list of all 64 presets; **New preset** there |
 | | the **scenes** button (top bar) | tiles 3–8: scenes of the preset ↔ presets of the bank |
 | | the **pedal** button (top bar) | what the Nano's expression pedal moves in this preset |
 | **Hold** | a preset tile | bank editor: preset, colour and symbol of this switch |
@@ -239,7 +245,7 @@ Setup step by step: [manual](docs/manual.md#looper-mode-a-looper-app-on-a-phone)
 | | a looper tile | its name, colour and symbol |
 | | tile 2 | learn which footswitch is which |
 | | the preset name | rename the preset |
-| | capture / cab card | capture tone / cab settings |
+| | capture / cab field of the chain | capture tone / cab settings |
 | **Swipe** left / right | anywhere | next / previous preset |
 | **Swipe** up / down | anywhere | gig view on / off |
 | **Footswitch 1** | | short: presets or scenes ↔ FX · held: looper mode |

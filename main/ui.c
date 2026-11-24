@@ -13,6 +13,8 @@
 #include "fx_pedals.h"
 #include "pedal_assets.h"
 #include "fx_focus.h"
+#include "fx_info.h"
+#include "fx_neural.h"
 #include "library.h"
 #include "ui_icons.h"
 #include "preset_icons.h"
@@ -90,6 +92,7 @@ static bool s_pedals_shown;   // on the screen now: chosen, full screen, FX mode
 static lv_obj_t *s_capture_title;
 static uint32_t s_tile_accent[TILES];   // colour of the pedal drawing on the tile
 static lv_obj_t *s_preset_number, *s_preset_name, *s_capture, *s_cab;
+static lv_obj_t *s_presets;                 // the preset list (a tap on the preset's name)
 static lv_obj_t *s_tile[TILES], *s_tile_caption[TILES], *s_tile_name[TILES], *s_tile_number[TILES];
 static lv_obj_t *s_tile_square[TILES], *s_tile_pedal[TILES];
 static lv_obj_t *s_system;                 // the system page
@@ -103,7 +106,7 @@ static lv_obj_t *s_tile_note_image[TILES];
 static uint32_t s_tile_color[TILES];   // the tile's colour and state as set_tile drew it (for the editor)
 static bool s_tile_active[TILES], s_tile_empty[TILES], s_tiles_drawn;
 static uint32_t s_tile_head[TILES];   // colour of a tile that is not active, dimmed behind its top row (0 = none)
-static lv_obj_t *s_capture_square, *s_capture_slot_label, *s_cab_square, *s_cab_slot_label;
+static lv_obj_t *s_capture_slot_label, *s_cab_slot_label;
 static lv_obj_t *s_picker, *s_picker_title, *s_picker_list, *s_picker_tab[2], *s_picker_chips, *s_picker_chip[LIB_CATEGORY_COUNT];
 static lv_obj_t *s_picker_pager, *s_picker_page_label, *s_picker_info, *s_confirm, *s_confirm_text;
 static lv_obj_t *s_listen_bar, *s_listen_name, *s_listen_note;
@@ -143,6 +146,7 @@ static lv_obj_t *s_rp_name[2], *s_rp_state[2];   // the two settings of the reve
 static char s_mix_model[48];
 static bool s_mix_touched;                 // Pos 1 / Pos 2 moved: SAVE writes them
 static int s_second_pending = -1;           // FX editor of this slot opens with its second effect's list
+static bool s_second_for_switch;            // ... and that list was asked for by the reverb switch's dialog: the B chosen is the switch's
 static lv_obj_t *s_rev_b_label;             // reverb switch dialog, A / B tab: the reverb's A and B
 static int s_mix_tab_shown;                // the tab in front: saved, it is what footswitch 8 does
 static uint32_t s_rev_types[16];           // reverb models for the dropdown (index + 1; 0 = none)
@@ -221,7 +225,10 @@ static int s_sl_count, s_sl_selected = -1;
 static bool s_sl_on;
 static lv_obj_t *s_sl_scene_chip[1 + UI_SCENES], *s_sl_scene_hint;   // the chosen song's start scene: none, 1-6
 static ui_scene_names_cb s_scene_names;
-static lv_obj_t *s_preset_card, *s_source_card[2];
+static lv_obj_t *s_preset_card;
+// The signal chain under the preset's name (1.26, as the 7" board has it): one box, seven equal fields
+#define CHAIN_FIELDS 7        // Pre FX 1-2, capture, cab, Post FX 1-3
+static lv_obj_t *s_chain, *s_chain_dot[CHAIN_FIELDS], *s_chain_cap[CHAIN_FIELDS], *s_chain_name[CHAIN_FIELDS];
 static lv_obj_t *s_midi_label, *s_midi, *s_midi_status, *s_midi_list;
 static ui_midi_t s_midi_state;
 static bool s_fullscreen;
@@ -292,6 +299,13 @@ static struct {
     int near;                            // the zone that shows filled: 0-3 a corner, 4 the centre, -1 none
     bool finger;
 } s_padv;
+// The FX editor's third page, the info page (see "The info page" below)
+#define INFO_MAX_SOUNDS 44   // starting points + players' sounds (12 at most, tools/gen_info.py) + an own build's presets (28, tools/gen_neural.py)
+static const nano_info_t *s_info;        // the notes of the editor's model, NULL = none (no button then)
+static const nano_info_t *s_info_for;    // ... the page is filled with
+static bool s_info_on;                   // the page is wanted
+static lv_obj_t *s_info_button, *s_info_button_icon, *s_info_page;
+static void info_set(bool on);
 static int s_editor_slot_index = -1;
 static uint32_t s_editor_model_type, s_editor_color = 0x5A5A5A;
 static const nano_fx_model_t *s_editor_model_def;
@@ -381,7 +395,7 @@ static void on_gesture(lv_event_t *e)
     // Swipes work only on the main screen, not in an open dialog.
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_usb, s_mix_editor, s_learn, s_midi, s_layout,
                                    s_settings, s_cab_settings, s_amp, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
-                                   s_setlist, s_scene_cap, s_system, s_metro, s_rot, s_cap };
+                                   s_setlist, s_scene_cap, s_system, s_metro, s_rot, s_cap, s_presets };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
         if (overlays[i] && shown(overlays[i])) return;
     }
@@ -1909,14 +1923,17 @@ void ui_set_tempo(const ui_tempo_t *t)
         t->note_len != s_tempo_ui.note_len || t->sound != s_tempo_ui.sound) metro_keep();
     s_tempo_ui = *t;
     // the button: symbol and tempo, green while the metronome is on (filled = on)
-    lv_obj_set_hidden(s_tempo_button, !t->supported);
-    lv_label_set_text_fmt(s_tempo_button_text, "%d", (int)lroundf(t->tempo));
-    lv_obj_set_style_border_color(s_tempo_button, lv_color_hex(t->muted ? 0x3A3D40 : GREEN), 0);
-    lv_obj_set_style_border_width(s_tempo_button, t->muted ? 1 : 2, 0);
-    lv_obj_set_style_bg_color(s_tempo_button, lv_color_hex(t->muted ? 0x191B1D : 0x122417), 0);
-    lv_obj_set_style_bg_grad_dir(s_tempo_button, t->muted ? LV_GRAD_DIR_VER : LV_GRAD_DIR_NONE, 0);
+    // (only what differs: this comes with every state reply, and a style set draws the button again)
+    char bpm[12];
+    snprintf(bpm, sizeof(bpm), "%d", (int)lroundf(t->tempo));
+    set_hidden(s_tempo_button, !t->supported);
+    set_text(s_tempo_button_text, bpm);
+    set_color_prop(s_tempo_button, LV_STYLE_BORDER_COLOR, t->muted ? 0x3A3D40 : GREEN);
+    set_num_prop(s_tempo_button, LV_STYLE_BORDER_WIDTH, t->muted ? 1 : 2);
+    set_color_prop(s_tempo_button, LV_STYLE_BG_COLOR, t->muted ? 0x191B1D : 0x122417);
+    set_num_prop(s_tempo_button, LV_STYLE_BG_GRAD_DIR, t->muted ? LV_GRAD_DIR_VER : LV_GRAD_DIR_NONE);
     set_color_prop(s_tempo_button_icon, LV_STYLE_IMAGE_RECOLOR, t->muted ? 0xC8CCD1 : GREEN);
-    lv_obj_set_style_text_color(s_tempo_button_text, lv_color_hex(t->muted ? 0x9AA0A6 : TEXT), 0);
+    set_color_prop(s_tempo_button_text, LV_STYLE_TEXT_COLOR, t->muted ? 0x9AA0A6 : TEXT);
     // the dialog
     if (t->open && t->supported) {
         lv_obj_set_hidden(s_metro, false);
@@ -2510,6 +2527,8 @@ static void close_rename(void)
     lv_obj_set_hidden(s_rename, true);
 }
 
+static void preset_new_named(const char *text);
+
 static void submit_rename(void)
 {
     const char *text = lv_textarea_get_text(s_rename_area);
@@ -2524,6 +2543,15 @@ static void submit_rename(void)
             return;
         }
         cap_named(text);
+        close_rename();
+        return;
+    }
+    if (s_rename_kind == 'p') {   // the new preset's name, into its sheet (sent with Create)
+        if (strlen(text) < 4) {
+            ui_show_message("Preset names need at least 4 characters.");
+            return;
+        }
+        preset_new_named(text);
         close_rename();
         return;
     }
@@ -2557,7 +2585,7 @@ static void show_rename(char kind, const char *title, const char *ok, const char
     lv_label_set_text(s_rename_title, title);
     lv_label_set_text(lv_obj_get_child(s_rename_ok, 0), ok);
     lv_textarea_set_max_length(s_rename_area, max_length);
-    lv_textarea_set_placeholder_text(s_rename_area, kind == 'N' || kind == 'L' || kind == 'S' ? "" : "Name (empty name = delete)");
+    lv_textarea_set_placeholder_text(s_rename_area, kind == 'N' || kind == 'L' || kind == 'S' || kind == 'p' || kind == 'c' ? "" : "Name (empty name = delete)");
     lv_textarea_set_text(s_rename_area, text);
     lv_obj_set_hidden(s_rename, false);
     lv_obj_move_foreground(s_rename);
@@ -3105,8 +3133,8 @@ static void on_rev_choose(lv_event_t *e)
 
 // 0 cancel, 1 save, 2 edit reverb B, 3 save and take the reverb off the Nano's expression pedal.
 // The tab in front decides what footswitch 8 does from now on: saved on the mix tab it switches the mix, on the
-// Reverb A / B tab it swaps the two reverbs, on the 2 settings tab it changes between them. A second reverb always
-// stays on the reverb's own tile.
+// Reverb A / B tab it swaps the two reverbs, on the 2 settings tab it changes between them. The reverb's own tile
+// only switches the reverb on and off (unless a second reverb was given to that tile in its FX editor).
 static void on_mix_button(lv_event_t *e)
 {
     int action = (int)(intptr_t)lv_event_get_user_data(e);
@@ -3257,8 +3285,8 @@ static void build_mix_editor(lv_obj_t *screen)
     lv_obj_t *info = label(rev, HINT_FONT, MUTED);
     lv_obj_set_width(info, 520);
     lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(info, "The reverb's A and B - the same two its own tile swaps. B is chosen and set up in the "
-                            "reverb's editor.");
+    lv_label_set_text(info, "Footswitch 8 swaps the reverb's A and B; the reverb's own switch only switches it on and "
+                            "off. B is chosen and set up in the reverb's editor.");
     lv_obj_set_pos(info, 20, 0);
     s_rev_b_label = label(rev, &ui_font_20, TEXT);
     lv_obj_set_width(s_rev_b_label, 520);
@@ -3739,6 +3767,241 @@ static void build_setlist(lv_obj_t *screen)
 void ui_set_scene_names_source(ui_scene_names_cb cb)
 {
     s_scene_names = cb;
+}
+
+// ---- preset list: the Nano's 64 presets, a page of sixteen at a time (a tap on the preset's name) ----
+// Fields instead of a scrolling list: a page is drawn once and nothing moves under the finger. "New preset" asks for
+// the place first (a tap on a field), then for what it starts from and its name; the controller does the rest (text
+// 'P': "<place, two hex digits><0 = the standard board / 1 = a copy of the preset that is on>name", see preset_new
+// in main.c). A tap on a preset sends 'g' with its number.
+#define PL_PAGES 4
+#define PL_CELLS 16
+#define PL_CELL_W 182
+#define PL_CELL_H 76
+static lv_obj_t *s_pl_title, *s_pl_tab[PL_PAGES], *s_pl_cell[PL_CELLS], *s_pl_num[PL_CELLS], *s_pl_name[PL_CELLS];
+static lv_obj_t *s_pl_new, *s_pl_hint, *s_pl_sheet, *s_pl_sheet_title, *s_pl_sheet_note, *s_pl_start[2], *s_pl_start_note[2], *s_pl_name_text;
+static int s_pl_page, s_pl_place, s_pl_start_mode;
+static bool s_pl_choosing;         // "New preset": the next tap on a field chooses its place
+static char s_pl_new_name[33];
+
+static void fill_presets(void)
+{
+    char text[12];
+    lv_label_set_text(s_pl_title, s_pl_choosing ? "New preset" : "Presets");
+    for (int i = 0; i < PL_PAGES; i++) style_tab(s_pl_tab[i], i == s_pl_page);
+    for (int i = 0; i < PL_CELLS; i++) {
+        int preset = s_pl_page * PL_CELLS + i + 1;
+        bool current = preset == s_current_preset;
+        const char *name = s_preset_names[preset - 1];
+        snprintf(text, sizeof(text), "%d", preset);
+        set_text(s_pl_num[i], text);
+        set_text(s_pl_name[i], name[0] ? name : "-");
+        // The preset that is on: filled light (as a chosen tab); the others as buttons
+        set_color_prop(s_pl_cell[i], LV_STYLE_BG_COLOR, current ? 0xECECEC : BUTTON_BG);
+        set_color_prop(s_pl_cell[i], LV_STYLE_BORDER_COLOR, current ? 0xECECEC : BUTTON_LINE);
+        set_color_prop(s_pl_num[i], LV_STYLE_TEXT_COLOR, current ? 0x4A4E53 : MUTED);
+        set_color_prop(s_pl_name[i], LV_STYLE_TEXT_COLOR, current ? INK : TEXT);
+    }
+    lv_label_set_text(lv_obj_get_child(s_pl_new, 0), s_pl_choosing ? "Cancel" : "New preset");
+    lv_label_set_text(s_pl_hint, s_pl_choosing ? "Tap the place the new preset goes into - what is there is replaced."
+                                               : "Tap a preset to load it. The one that is on is filled.");
+    set_hidden(s_pl_sheet, true);
+}
+
+static void close_presets(void)
+{
+    lv_obj_set_hidden(s_presets, true);
+}
+
+// The sheet of a new preset: its place, what it starts from, its name.
+static void show_new_sheet(void)
+{
+    char text[120];
+    const char *old = s_preset_names[s_pl_place - 1];
+    snprintf(text, sizeof(text), "New preset in place %d", s_pl_place);
+    lv_label_set_text(s_pl_sheet_title, text);
+    snprintf(text, sizeof(text), "It replaces \"%.60s\" on the Nano.", old[0] ? old : "-");
+    lv_label_set_text(s_pl_sheet_note, text);
+    bool copy_possible = s_pl_place != s_current_preset;
+    if (!copy_possible) s_pl_start_mode = 0;
+    for (int i = 0; i < 2; i++) {
+        bool on = i == s_pl_start_mode;
+        choice_on(s_pl_start[i], on);
+        set_color_prop(s_pl_start_note[i], LV_STYLE_TEXT_COLOR, on ? 0x4A4E53 : MUTED);
+    }
+    if (copy_possible) lv_obj_remove_state(s_pl_start[1], LV_STATE_DISABLED);
+    else lv_obj_add_state(s_pl_start[1], LV_STATE_DISABLED);
+    const char *now = s_current_preset >= 1 ? s_preset_names[s_current_preset - 1] : "";
+    snprintf(text, sizeof(text), "\"%.40s\" as it plays now", now[0] ? now : "-");
+    lv_label_set_text(s_pl_start_note[1], copy_possible ? text : "The place is the preset that is on");
+    lv_label_set_text(s_pl_name_text, s_pl_new_name);
+    set_hidden(s_pl_sheet, false);
+}
+
+static void on_presets_cell(lv_event_t *e)
+{
+    int preset = s_pl_page * PL_CELLS + (int)(intptr_t)lv_event_get_user_data(e) + 1;
+    if (!lv_obj_is_hidden(s_pl_sheet)) return;
+    if (s_pl_choosing) {
+        s_pl_place = preset;
+        s_pl_start_mode = 0;
+        // A name that is not taken yet: "New preset", then with the place's number
+        snprintf(s_pl_new_name, sizeof(s_pl_new_name), "New preset");
+        for (int i = 0; i < NANO_PRESETS; i++) {
+            if (i != preset - 1 && !strcasecmp(s_preset_names[i], s_pl_new_name)) {
+                snprintf(s_pl_new_name, sizeof(s_pl_new_name), "New preset %d", preset);
+                break;
+            }
+        }
+        show_new_sheet();
+        return;
+    }
+    close_presets();
+    if (preset != s_current_preset) send('g', preset);
+}
+
+static void on_presets_button(lv_event_t *e)
+{
+    int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 close, 1 new preset / cancel, 10-13 page, 20 / 21 start from, 30 name, 40 sheet cancel, 41 create
+    if (action == 0) {
+        close_presets();
+    } else if (action == 1) {
+        if (!s_linked) {
+            ui_show_message("The Nano is not connected.");
+            return;
+        }
+        s_pl_choosing = !s_pl_choosing;
+        fill_presets();
+    } else if (action >= 10 && action < 10 + PL_PAGES) {
+        if (!lv_obj_is_hidden(s_pl_sheet)) return;
+        s_pl_page = action - 10;
+        fill_presets();
+    } else if (action == 20 || action == 21) {
+        s_pl_start_mode = action - 20;
+        show_new_sheet();
+    } else if (action == 30) {
+        char title[40];
+        snprintf(title, sizeof(title), "Name of the new preset (place %d)", s_pl_place);
+        show_rename('p', title, "OK", s_pl_new_name, 32);
+    } else if (action == 40) {
+        set_hidden(s_pl_sheet, true);
+    } else if (action == 41) {
+        size_t len = strlen(s_pl_new_name);
+        if (len < 4 || len > 32) {
+            ui_show_message("Preset names need 4 to 32 characters.");
+            return;
+        }
+        for (int i = 0; i < NANO_PRESETS; i++) {
+            if (i != s_pl_place - 1 && !strcasecmp(s_preset_names[i], s_pl_new_name)) {
+                ui_show_message("This preset name already exists - tap the name to change it.");
+                return;
+            }
+        }
+        char text[40];
+        snprintf(text, sizeof(text), "%02X%c%s", s_pl_place, s_pl_start_mode ? '1' : '0', s_pl_new_name);
+        s_pl_choosing = false;
+        close_presets();
+        if (s_on_text) s_on_text('P', text);
+    }
+}
+
+// From the keyboard: the new preset's name (kind 'p').
+static void preset_new_named(const char *text)
+{
+    strlcpy(s_pl_new_name, text, sizeof(s_pl_new_name));
+    if (s_presets && !lv_obj_is_hidden(s_presets) && s_pl_place) show_new_sheet();
+}
+
+static void open_presets(lv_event_t *e)
+{
+    (void)e;
+    if (s_current_preset < 1) return;   // (no preset shown yet)
+    s_pl_choosing = false;
+    s_pl_place = 0;
+    s_pl_page = (s_current_preset - 1) / PL_CELLS;
+    fill_presets();
+    lv_obj_set_hidden(s_presets, false);
+    lv_obj_move_foreground(s_presets);
+}
+
+static void build_presets(lv_obj_t *screen)
+{
+    s_presets = panel(screen, 10, 8, 780, 464);
+    s_pl_title = dialog_title(s_presets, "Presets");
+    for (int i = 0; i < PL_PAGES; i++) {
+        char text[12];
+        snprintf(text, sizeof(text), "%d-%d", i * PL_CELLS + 1, (i + 1) * PL_CELLS);
+        s_pl_tab[i] = small_button(s_presets, 206 + i * 122, 10, 114, 46, text, on_presets_button, 10 + i);
+    }
+    close_button(s_presets, 722, 12, on_presets_button, 0);
+    for (int i = 0; i < PL_CELLS; i++) {
+        lv_obj_t *cell = button(s_presets, 14 + (i % 4) * (PL_CELL_W + 8), 66 + (i / 4) * (PL_CELL_H + 8), PL_CELL_W, PL_CELL_H, on_presets_cell);
+        lv_obj_remove_event_cb(cell, on_presets_cell);
+        lv_obj_add_event_cb(cell, on_presets_cell, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        lv_obj_set_style_pad_all(cell, 0, 0);
+        lv_obj_set_style_bg_color(cell, lv_color_hex(0xFFFFFF), LV_STATE_PRESSED);
+        lv_obj_set_style_bg_opa(cell, LV_OPA_COVER, 0);
+        s_pl_num[i] = label(cell, &ui_font_14, MUTED);
+        lv_obj_set_pos(s_pl_num[i], 10, 5);
+        s_pl_name[i] = label(cell, &ui_font_20, TEXT);
+        lv_obj_set_pos(s_pl_name[i], 10, 23);
+        lv_obj_set_size(s_pl_name[i], PL_CELL_W - 18, 50);   // two lines, then dots
+        lv_label_set_long_mode(s_pl_name[i], LV_LABEL_LONG_DOT);
+        lv_obj_set_style_text_line_space(s_pl_name[i], -2, 0);
+        s_pl_cell[i] = cell;
+    }
+    s_pl_new = small_button(s_presets, 14, 404, 170, 48, "New preset", on_presets_button, 1);
+    s_pl_hint = label(s_presets, HINT_FONT, MUTED);
+    lv_obj_set_width(s_pl_hint, 560);
+    lv_label_set_long_mode(s_pl_hint, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(s_pl_hint, 200, 418);
+
+    // The sheet of a new preset, over the fields
+    s_pl_sheet = card(s_presets, 90, 62, 600, 336);
+    lv_obj_set_style_bg_color(s_pl_sheet, lv_color_hex(0x1A1D20), 0);
+    lv_obj_set_style_border_color(s_pl_sheet, lv_color_hex(FILL_LINE), 0);
+    lv_obj_set_clickable(s_pl_sheet, true);   // (nothing below it is touched through it)
+    s_pl_sheet_title = dialog_title(s_pl_sheet, "");
+    lv_obj_set_pos(s_pl_sheet_title, 20, 14);
+    s_pl_sheet_note = label(s_pl_sheet, HINT_FONT, MUTED);
+    lv_obj_set_width(s_pl_sheet_note, 560);
+    lv_label_set_long_mode(s_pl_sheet_note, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(s_pl_sheet_note, 20, 46);
+    lv_obj_t *caption = label(s_pl_sheet, CAPTION_FONT, MUTED);
+    lv_obj_set_style_text_letter_space(caption, 2, 0);
+    lv_label_set_text(caption, "START FROM");
+    lv_obj_set_pos(caption, 20, 80);
+    static const char *const STARTS[2] = { "Standard board, all off", "Copy of this preset" };
+    for (int i = 0; i < 2; i++) {
+        lv_obj_t *b = button(s_pl_sheet, 20 + i * 284, 100, 276, 76, on_presets_button);
+        lv_obj_remove_event_cb(b, on_presets_button);
+        lv_obj_add_event_cb(b, on_presets_button, LV_EVENT_CLICKED, (void *)(intptr_t)(20 + i));
+        lv_obj_set_style_pad_all(b, 0, 0);
+        lv_obj_t *l = label(b, &ui_font_20, TEXT);   // (child 0: choice_on colours it)
+        lv_label_set_text(l, STARTS[i]);
+        lv_obj_set_pos(l, 14, 10);
+        s_pl_start_note[i] = label(b, &ui_font_14, MUTED);
+        lv_obj_set_width(s_pl_start_note[i], 250);
+        lv_label_set_long_mode(s_pl_start_note[i], LV_LABEL_LONG_DOT);
+        lv_obj_set_pos(s_pl_start_note[i], 14, 42);
+        s_pl_start[i] = b;
+    }
+    lv_label_set_text(s_pl_start_note[0], "Comp, drive, chorus, delay, reverb");
+    caption = label(s_pl_sheet, CAPTION_FONT, MUTED);
+    lv_obj_set_style_text_letter_space(caption, 2, 0);
+    lv_label_set_text(caption, "NAME");
+    lv_obj_set_pos(caption, 20, 190);
+    lv_obj_t *name = button(s_pl_sheet, 20, 210, 560, 52, on_presets_button);
+    lv_obj_remove_event_cb(name, on_presets_button);
+    lv_obj_add_event_cb(name, on_presets_button, LV_EVENT_CLICKED, (void *)(intptr_t)30);
+    s_pl_name_text = label(name, &ui_font_20, TEXT);
+    lv_obj_set_width(s_pl_name_text, 520);
+    lv_label_set_long_mode(s_pl_name_text, LV_LABEL_LONG_DOT);
+    lv_obj_align(s_pl_name_text, LV_ALIGN_LEFT_MID, 0, 0);
+    small_button(s_pl_sheet, 300, 276, 130, 48, "Cancel", on_presets_button, 40);
+    primary(small_button(s_pl_sheet, 440, 276, 140, 48, "Create", on_presets_button, 41));
+    lv_obj_set_hidden(s_pl_sheet, true);
+    lv_obj_set_hidden(s_presets, true);
 }
 
 // ---- system page: is everything well (the System button of the MIDI dialog) ----
@@ -4637,8 +4900,8 @@ static void build_capture(lv_obj_t *screen)
         s_cap_slot_btn[i] = cap_button(s_cap_slots, 18 + (i % 5) * 148, 30 + (i / 5) * 54, 142, 48, "", on_cap_slot, i + 1);
         lv_obj_t *l = lv_obj_get_child(s_cap_slot_btn[i], 0);
         lv_obj_set_style_text_font(l, &ui_font_14, 0);
-        lv_obj_set_width(l, 130);
-        lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+        lv_obj_set_size(l, 130, lv_font_get_line_height(&ui_font_14));   // one line, "..." when longer (with the
+        lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);                    // width alone a long name ran over three lines)
         lv_obj_center(l);
     }
     cap_outline(cap_button(s_cap_slots, 420, 342, 180, 50, "Cancel", on_cap_slot_button, 0));
@@ -4824,29 +5087,94 @@ void ui_set_library(const nano_library_t *library)
 
 // Capture / cab card: icon square, title, current name, slot. Tapping opens the picker.
 // Tap: cb (slot picker), long press: long_cb (capture volume / cab settings).
-static lv_obj_t *source_card(lv_obj_t *screen, int x, const char *title, int icon, lv_event_cb_t cb, lv_event_cb_t long_cb,
-                             lv_obj_t **square, lv_obj_t **name, lv_obj_t **slot, lv_obj_t **title_label)
+// ---- The signal chain: one box, seven equal fields split by hairlines ----
+// Pre FX 1-2, the capture, the cab, Post FX 1-3, in the order the sound takes. Each field: a dot (filled in the
+// effect's colour = on, a hollow ring = off), what it is, and the name on one line. A tap on an effect opens its
+// FX editor; on the capture or the cab their list, held their settings - as the two cards did that were here before.
+// It shows in every mode, so the preset's effects can be seen while the tiles are presets or scenes.
+static const int8_t CHAIN_SLOT[CHAIN_FIELDS] = { 0, 1, -1, -2, 2, 3, 4 };   // FX slot, -1 capture, -2 cab
+
+static void on_chain_fx(lv_event_t *e)
 {
-    lv_obj_t *c = card(screen, x, 126, 385, 54);
-    lv_obj_set_clickable(c, true);
-    lv_obj_set_style_bg_color(c, lv_color_hex(0x24272A), LV_STATE_PRESSED);
-    lv_obj_add_event_cb(c, cb, LV_EVENT_SHORT_CLICKED, NULL);
-    lv_obj_add_event_cb(c, long_cb, LV_EVENT_LONG_PRESSED, NULL);
-    *square = icon_square(c, 36);
-    lv_obj_set_pos(*square, 10, 9);
-    set_icon_square(*square, TEXT, NANO_ICONS[icon], true);
-    lv_obj_t *t = label(c, &ui_font_14, 0xA8ADB3);
-    lv_obj_set_style_text_letter_space(t, 1, 0);
-    lv_label_set_text(t, title);
-    lv_obj_set_pos(t, 56, 5);
-    if (title_label) *title_label = t;
-    *slot = label(c, &ui_font_14, 0xA8ADB3);
-    lv_obj_align(*slot, LV_ALIGN_TOP_RIGHT, -12, 5);
-    *name = label(c, &ui_font_20, TEXT);
-    lv_obj_set_width(*name, 310);
-    lv_label_set_long_mode(*name, LV_LABEL_LONG_DOT);
-    lv_obj_set_pos(*name, 56, 24);
-    return c;
+    send('O', (int)(intptr_t)lv_event_get_user_data(e));
+}
+
+static void build_chain(lv_obj_t *parent)
+{
+    static const char *const CAPS[CHAIN_FIELDS] = { "PRE 1", "PRE 2", "CAPTURE", "CAB", "POST 1", "POST 2", "POST 3" };
+    s_chain = card(parent, 10, 126, 780, 54);
+    int inner = 778;
+    for (int n = 0; n < CHAIN_FIELDS; n++) {
+        int x = n * inner / CHAIN_FIELDS, w = (n + 1) * inner / CHAIN_FIELDS - x, slot = CHAIN_SLOT[n];
+        lv_obj_t *f = lv_obj_create(s_chain);
+        lv_obj_remove_style_all(f);
+        lv_obj_set_pos(f, x, 0);
+        lv_obj_set_size(f, w, 52);
+        lv_obj_set_scrollable(f, false);
+        lv_obj_set_clickable(f, true);
+        lv_obj_set_style_bg_color(f, lv_color_hex(SURF_ON), LV_STATE_PRESSED);
+        lv_obj_set_style_bg_opa(f, LV_OPA_COVER, LV_STATE_PRESSED);
+        if (n) {   // the hairline between two fields
+            lv_obj_set_style_border_side(f, LV_BORDER_SIDE_LEFT, 0);
+            lv_obj_set_style_border_width(f, 1, 0);
+            lv_obj_set_style_border_color(f, lv_color_hex(HAIRLINE), 0);
+        }
+        if (slot >= 0) {
+            lv_obj_add_event_cb(f, on_chain_fx, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)slot);
+        } else {
+            lv_obj_add_event_cb(f, slot == -1 ? open_capture_picker : open_cab_picker, LV_EVENT_SHORT_CLICKED, NULL);
+            lv_obj_add_event_cb(f, slot == -1 ? open_amp : open_cab_settings, LV_EVENT_LONG_PRESSED, NULL);
+        }
+        lv_obj_t *d = lv_obj_create(f);
+        lv_obj_remove_style_all(d);
+        lv_obj_set_size(d, 8, 8);
+        lv_obj_set_style_radius(d, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_color(d, lv_color_hex(0x6A7077), 0);
+        lv_obj_set_style_border_width(d, 1, 0);
+        lv_obj_set_pos(d, 7, 10);
+        lv_obj_set_clickable(d, false);
+        s_chain_dot[n] = d;
+        lv_obj_t *c = label(f, &ui_font_14, 0xA8ADB3);
+        lv_label_set_text(c, CAPS[n]);
+        lv_obj_set_pos(c, 19, 4);
+        s_chain_cap[n] = c;
+        lv_obj_t *name = label(f, &ui_font_16, TEXT);
+        lv_obj_set_size(name, w - 11, lv_font_get_line_height(&ui_font_16));   // one line, "..." when longer
+        lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
+        lv_obj_set_pos(name, 7, 26);
+        s_chain_name[n] = name;
+        if (slot < 0) {   // the capture's / cab's slot at the right of the caption, their name as the cards had it
+            lv_obj_t *number = label(f, &ui_font_14, 0xA8ADB3);
+            lv_obj_align(number, LV_ALIGN_TOP_RIGHT, -4, 4);
+            if (slot == -1) s_capture = name, s_capture_title = c, s_capture_slot_label = number;
+            else s_cab = name, s_cab_slot_label = number;
+        }
+    }
+}
+
+// The chain from the state: an effect's name and its dot in the effect's colour (filled = on, a ring = off), the
+// name grey while it is off. Capture and cab: the dot filled while they are not bypassed (their names: ui_show_state).
+static void show_chain(const nano_state_t *st)
+{
+    for (int n = 0; n < CHAIN_FIELDS; n++) {
+        int slot = CHAIN_SLOT[n];
+        bool on;
+        uint32_t color;
+        if (slot >= 0) {
+            const nano_fx_model_t *model = nano_fx_model(st->fx_type[slot]);
+            bool empty = !st->fx_known || !st->fx_type[slot];
+            on = !empty && st->fx_on[slot];
+            color = model ? model->color : 0x6A7077;
+            set_text(s_chain_name[n], empty ? "Empty" : nano_fx_name(st->fx_type[slot]));
+            set_color_prop(s_chain_name[n], LV_STYLE_TEXT_COLOR, on ? TEXT : 0x8E949B);
+        } else {
+            on = slot == -1 ? st->capture_slot != 0 : st->cab_slot != 0;
+            color = slot == -1 ? TEXT : 0xB38CFF;
+        }
+        set_color_prop(s_chain_dot[n], LV_STYLE_BG_COLOR, on ? color : 0x6A7077);
+        set_num_prop(s_chain_dot[n], LV_STYLE_BG_OPA, on ? LV_OPA_COVER : LV_OPA_TRANSP);
+        set_num_prop(s_chain_dot[n], LV_STYLE_BORDER_WIDTH, on ? 0 : 1);
+    }
 }
 
 // Tuner as in the desktop editor: the note in the tuning colour (grey idle, green in tune, orange off), a scale with
@@ -5221,7 +5549,8 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_style_text_align(s_preset_name, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(s_preset_name, LV_LABEL_LONG_DOT);
     lv_obj_set_pos(s_preset_name, 100, 56);
-    lv_obj_set_clickable(s_preset_name, true);   // long press: rename
+    lv_obj_set_clickable(s_preset_name, true);   // a tap: the preset list; long press: rename
+    lv_obj_add_event_cb(s_preset_name, open_presets, LV_EVENT_SHORT_CLICKED, NULL);
     lv_obj_add_event_cb(s_preset_name, open_rename, LV_EVENT_LONG_PRESSED, NULL);
     s_edited = lv_obj_create(preset);   // unsaved changes
     lv_obj_set_size(s_edited, 10, 10);
@@ -5267,6 +5596,9 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_set_style_text_align(s_gig_name, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(s_gig_name, LV_LABEL_LONG_DOT);
     lv_obj_align(s_gig_name, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_set_clickable(s_gig_name, true);   // a tap: the preset list, as on the name of the other view
+    lv_obj_set_ext_click_area(s_gig_name, 8);
+    lv_obj_add_event_cb(s_gig_name, open_presets, LV_EVENT_SHORT_CLICKED, NULL);
     s_gig_dirty = lv_obj_create(s_gig_bar);
     lv_obj_set_size(s_gig_dirty, 9, 9);
     lv_obj_set_style_radius(s_gig_dirty, LV_RADIUS_CIRCLE, 0);
@@ -5304,11 +5636,8 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     lv_obj_add_event_cb(s_gig_mode, on_scene_button, LV_EVENT_CLICKED, NULL);
     lv_obj_set_hidden(s_gig_bar, true);
 
-    // Capture and cab cards
-    s_source_card[0] = source_card(s_main, 10, "CAPTURE", NANO_ICON_CAPTURE, open_capture_picker, open_amp,
-                                   &s_capture_square, &s_capture, &s_capture_slot_label, &s_capture_title);
-    s_source_card[1] = source_card(s_main, 405, "CAB / IR", NANO_ICON_CAB, open_cab_picker, open_cab_settings,
-                                   &s_cab_square, &s_cab, &s_cab_slot_label, NULL);
+    // The signal chain (in the place of the capture and cab cards of 1.25 and before)
+    build_chain(s_main);
 
     for (int i = 0; i < TILES; i++) build_tile(s_main, i);
     build_pedals(s_main);
@@ -5330,6 +5659,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     build_midi(screen);
     build_layout(screen);
     build_setlist(screen);
+    build_presets(screen);
     build_system(screen);
     build_settings(screen);   // (after MIDI, USB and System: it takes them in)
     build_capture(screen);
@@ -5347,8 +5677,7 @@ static void set_fullscreen(bool on)
     if (on == s_fullscreen) return;
     s_fullscreen = on;
     lv_obj_set_hidden(s_preset_card, on);
-    lv_obj_set_hidden(s_source_card[0], on);
-    lv_obj_set_hidden(s_source_card[1], on);
+    lv_obj_set_hidden(s_chain, on);
     lv_obj_set_hidden(s_gig_bar, !on);
     if (!on) s_pedals_shown = false, lv_obj_set_hidden(s_pedals, true);   // (the pedals belong to the full-screen view)
     for (int i = 0; i < TILES; i++) place_tile(i);
@@ -5396,6 +5725,7 @@ void ui_set_link(bool connected)
         lv_obj_set_hidden(s_scene_editor, true);
         lv_obj_set_hidden(s_scene_cap, true);
         lv_obj_set_hidden(s_setlist, true);
+        lv_obj_set_hidden(s_presets, true);
         lv_obj_set_hidden(s_exp_dialog, true);
         lv_obj_set_hidden(s_cal_panel, true);
         lv_obj_set_hidden(s_ask, true);
@@ -5449,7 +5779,10 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
         bool on = !empty && st->fx_on[slot];
         // A second effect: the tile's colour says which one runs - each effect has its own, and B of the same effect
         // (a second setting of it) a lighter shade of it
-        bool has_b = !empty && view->ab_b_type[slot], b_runs = has_b && ((view->ab_active >> slot) & 1);
+        bool second = !empty && view->ab_b_type[slot], b_runs = second && ((view->ab_active >> slot) & 1);
+        // (UI_AB_OFF, the reverb's slot: its switch only switches on and off - an ordinary tile; the reverb switch's
+        // tile is the one in two halves)
+        bool has_b = second && view->ab_mode[slot] != UI_AB_OFF;
         uint32_t color = model ? model->color : 0x6A6A6A;
         if (b_runs && view->ab_a_type[slot] == st->fx_type[slot]) color = blend(color, 0xFFFFFF, 0.5f);
         set_tile(2 + slot, NANO_FX_SLOT_NAMES[slot], empty ? "Empty" : nano_fx_name(st->fx_type[slot]),
@@ -5507,7 +5840,7 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
         }
     } else if (view->rev_b_type && view->mix_slot >= 0) {
         // The switch between the two reverbs: one of two, as the two settings - the names as rows, the one that
-        // runs filled. (The reverb's own tile shows the same A / B with its symbols; this one is the switch.)
+        // runs filled. (The reverb's own tile is an ordinary on / off tile then; this one is the switch.)
         int slot = view->mix_slot;
         uint32_t now = st->fx_type[slot];
         const nano_fx_model_t *model = nano_fx_model(now);
@@ -5647,6 +5980,8 @@ static void show_scene_tiles(const ui_view_t *view)
     }
 }
 
+static void tiles_copy(void);
+
 void ui_show_state(const nano_state_t *st, const ui_view_t *view)
 {
     char text[96];
@@ -5706,6 +6041,7 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     set_num_prop(s_scene_button, LV_STYLE_BG_GRAD_DIR, scenes_shown ? LV_GRAD_DIR_NONE : LV_GRAD_DIR_VER);
     set_color_prop(s_scene_button, LV_STYLE_BORDER_COLOR, scenes_shown ? 0xECECEC : 0x3A3D40);
     set_color_prop(lv_obj_get_child(s_scene_button, 0), LV_STYLE_IMAGE_RECOLOR, scenes_shown ? INK : 0xC8CCD1);
+    set_color_prop(lv_obj_get_child(s_scene_button, 1), LV_STYLE_TEXT_COLOR, scenes_shown ? INK : 0x9AA0A6);   // (its word: grey on the light fill could not be read)
     // Expression pedal: green while it does something in this preset (as MIDI while a controller is connected)
     set_color_prop(lv_obj_get_child(s_exp_button, 0), LV_STYLE_IMAGE_RECOLOR, view->exp_used ? GREEN : 0xC8CCD1);
     // Save: neutral, green when there is something to save (as in the editor), plus the orange dot by the name.
@@ -5713,6 +6049,7 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     set_num_prop(s_save_button, LV_STYLE_BG_GRAD_DIR, st->dirty ? LV_GRAD_DIR_NONE : LV_GRAD_DIR_VER);
     set_color_prop(s_save_button, LV_STYLE_BORDER_COLOR, st->dirty ? GREEN : 0x3A3D40);
     set_color_prop(lv_obj_get_child(s_save_button, 0), LV_STYLE_IMAGE_RECOLOR, st->dirty ? INK : 0xC8CCD1);
+    set_color_prop(lv_obj_get_child(s_save_button, 1), LV_STYLE_TEXT_COLOR, st->dirty ? INK : 0x9AA0A6);
     const char *name = st->preset_names[st->current_preset - 1];
     const char *shown = st->names_loaded && name[0] ? name : "-";
     set_text(s_preset_name, shown);
@@ -5744,35 +6081,18 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     s_view = *view;
     s_cab_slot = st->cab_slot;
     set_text(s_capture, st->capture_slot ? (st->capture[0] ? st->capture : "-") : "Bypassed");
-    set_color_prop(s_capture, LV_STYLE_TEXT_COLOR, st->capture_slot ? TEXT : MUTED);
-    // The capture's type (amp head, combo, pedal, ...) from the library, as in the editor.
-    static const char *const KIND_NAMES[LIB_KIND_COUNT] = { "AMP HEAD", "COMBO", "AMP + CAB", "CAB", "PEDAL", "OVERDRIVE",
-                                                            "FUZZ", "COMPRESSOR", "" };
-    int kind = LIB_KIND_OTHER;
-    if (s_library && st->capture_slot && st->capture[0]) {
-        for (int i = 0; i < s_library->captures.count; i++) {
-            if (!strcasecmp(s_library->captures.items[i].name, st->capture)) {
-                kind = s_library->captures.items[i].kind;
-                break;
-            }
-        }
-    }
-    const lv_image_dsc_t *kind_icon = kind <= LIB_KIND_OVERDRIVE ? UI_ICONS[UI_ICON_CAP_AMP_HEAD + kind]
-                                    : kind == LIB_KIND_FUZZ ? NANO_ICONS[NANO_ICON_FUZZ]
-                                    : kind == LIB_KIND_COMPRESSOR ? NANO_ICONS[NANO_ICON_COMPRESSOR] : NANO_ICONS[NANO_ICON_CAPTURE];
-    set_icon_square(s_capture_square, TEXT, kind_icon ? kind_icon : NANO_ICONS[NANO_ICON_CAPTURE], st->capture_slot != 0);
-    if (KIND_NAMES[kind][0]) snprintf(text, sizeof(text), "CAPTURE  \xC2\xB7  %s", KIND_NAMES[kind]);
-    else snprintf(text, sizeof(text), "CAPTURE");
-    set_text(s_capture_title, text);
+    set_color_prop(s_capture, LV_STYLE_TEXT_COLOR, st->capture_slot ? TEXT : 0x8E949B);
+    // (the capture's type - amp head, combo, pedal ... - stood beside "CAPTURE" on the card of 1.25; the chain's field
+    // has no room for it. The library's list still shows it.)
     if (st->capture_slot) snprintf(text, sizeof(text), "%d-%d", (st->capture_slot - 1) / 5 + 1, (st->capture_slot - 1) % 5 + 1);
-    else snprintf(text, sizeof(text), "BYPASS");
+    else text[0] = 0;
     set_text(s_capture_slot_label, text);
     set_text(s_cab, st->cab_slot ? (st->cab[0] ? st->cab : "-") : "Bypassed");
-    set_color_prop(s_cab, LV_STYLE_TEXT_COLOR, st->cab_slot ? TEXT : MUTED);
-    set_icon_square(s_cab_square, TEXT, NANO_ICONS[NANO_ICON_CAB], st->cab_slot != 0);
+    set_color_prop(s_cab, LV_STYLE_TEXT_COLOR, st->cab_slot ? TEXT : 0x8E949B);
     if (st->cab_slot) snprintf(text, sizeof(text), "%d", st->cab_slot);
-    else snprintf(text, sizeof(text), "BYPASS");
+    else text[0] = 0;
     set_text(s_cab_slot_label, text);
+    show_chain(st);
     // Capture volume: not while the slider is held or right after a change on the board (older replies).
     if (lv_obj_is_hidden(s_amp) ||
         (lv_tick_elaps(s_volume_tick) > VOLUME_HOLD_MS && !lv_obj_has_state(s_level_slider[0], LV_STATE_PRESSED))) {
@@ -5801,6 +6121,7 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     bool pedals = s_pedal_view && s_fullscreen && view->fx_mode && !view->looper;
     if (pedals) show_pedals(st, view);
     pedals_show(pedals);
+    tiles_copy();   // (for the editor's strip: ui_tiles_get)
 
     lvgl_port_unlock();
 }
@@ -5876,7 +6197,7 @@ void ui_show_tuner_reading(const nano_tuner_reading_t *reading)
 
 enum { PANEL_MODEL, PANEL_SECOND, PANEL_OPTION, PANEL_SCENE };
 #define PANEL_AB_MODE(m) (-1 - (m))   // entries of PANEL_SECOND that are not models: what the footswitch does (UI_AB_*)
-#define PANEL_IS_AB_MODE(data) ((data) < 0 && (data) >= PANEL_AB_MODE(UI_AB_PRESS))
+#define PANEL_IS_AB_MODE(data) ((data) < 0 && (data) >= PANEL_AB_MODE(UI_AB_OFF))
 
 static float param_from_normalized(const nano_param_t *p, float n);
 static int option_index(const nano_param_t *p, float n);
@@ -6027,6 +6348,8 @@ static void drop_panel(void)
 
 static void editor_leave(void)
 {
+    s_info_on = false;
+    lv_obj_set_hidden(s_info_page, true);
     s_padv.leave = s_padv.prefer = s_padv.page = false;
     s_padv.waiting = 0;
     drop_panel();
@@ -6038,6 +6361,10 @@ static void editor_leave(void)
 
 static void on_editor_back(lv_event_t *e)
 {
+    if (s_info_on) {   // from the info page: back to the bars
+        info_set(false);
+        return;
+    }
     if (s_padv.waiting) s_padv.leave = true;   // the pad's last values go first (pad_send closes the editor then)
     else editor_leave();
 }
@@ -6062,7 +6389,10 @@ static void on_ab(lv_event_t *e)
     if (slot < 0) return;
     int running = s_view.ab_b_type[slot] && ((s_view.ab_active >> slot) & 1) ? 1 : 0;
     if (s_view.ab_b_type[slot] && seg != running) send('[', slot);
-    else open_panel(PANEL_SECOND, 0);
+    else {
+        s_second_for_switch = false;
+        open_panel(PANEL_SECOND, 0);
+    }
 }
 
 static void on_panel_close(lv_event_t *e) { close_panel(); }
@@ -6098,6 +6428,11 @@ static void panel_choice(intptr_t data)
         int slot = s_editor_slot_index;
         if (slot < 0) return;
         if (PANEL_IS_AB_MODE(data)) send('>', slot << 8 | (int)(-1 - data));
+        else if (s_second_for_switch && slot == s_view.mix_slot) {
+            // Asked for by the reverb switch's dialog: footswitch 8 swaps this B (the reverb's own switch stays on / off)
+            if ((uint32_t)data != s_view.ab_b_type[slot] || (data && !s_view.rev_b_type)) send('A', (int)data);
+            if (data) send('-', 16);
+        }
         else if ((uint32_t)data != s_view.ab_b_type[slot]) send('A', (8 + slot) << 24 | (int)data);
     } else if (s_editor_model_def && s_panel_param < ed_param_count()) {
         set_enum(s_panel_param, (int)data);
@@ -6146,7 +6481,8 @@ static void draw_entry(lv_obj_t *obj, lv_layer_t *layer, intptr_t data)
         char text[24];
         if (tap_choice) {
             static const char *const CHOICES[] = { "Tap: on / off  \xC2\xB7  hold: A / B", "Tap: A / B  \xC2\xB7  hold: on / off",
-                                                   "Press: A / B at once  \xC2\xB7  no on / off" };
+                                                   "Press: A / B at once  \xC2\xB7  no on / off",
+                                                   "On / off only  \xC2\xB7  the reverb switch changes it" };
             draw_text(layer, CHOICES[-1 - data], false, &ui_font_16, ink, a.x1 + 4, cy - 11, a.x2 - 4, LV_TEXT_ALIGN_CENTER);
             return;
         }
@@ -6241,6 +6577,8 @@ static void open_panel(int mode, int param)
         } else {
             if (mode == PANEL_SECOND && s_view.ab_b_type[slot]) {   // what the footswitch does with A and B
                 panel_heading("FOOTSWITCH");
+                // (the reverb: its own switch only switches it on and off unless one of the others is chosen here)
+                if (slot == s_view.mix_slot) panel_entry(ED_ENTRY_W, PANEL_AB_MODE(UI_AB_OFF));
                 for (int m = UI_AB_HOLD; m <= UI_AB_PRESS; m++) panel_entry(ED_ENTRY_W, PANEL_AB_MODE(m));
                 panel_heading("SECOND EFFECT");
             }
@@ -6268,8 +6606,17 @@ static void open_panel(int mode, int param)
         s_panel_current = -1;
     } else if (mode == PANEL_SECOND) {
         lv_label_set_text(s_panel_title, "Second effect (B)");
-        snprintf(sub, sizeof(sub), "%.12s  \xC2\xB7  its footswitch swaps A and B - the same effect again gives it two settings",
-                 NANO_FX_SLOT_NAMES[slot]);
+        bool reverb = slot == s_view.mix_slot, waits = s_view.ab_b_type[slot] && s_view.ab_mode[slot] == UI_AB_OFF;
+        if (reverb && (s_second_for_switch || (waits && s_view.rev_b_type))) {
+            snprintf(sub, sizeof(sub), "%.12s  \xC2\xB7  footswitch 8 swaps A and B - the same reverb again gives it two settings",
+                     NANO_FX_SLOT_NAMES[slot]);
+        } else if (reverb && waits) {
+            snprintf(sub, sizeof(sub), "%.12s  \xC2\xB7  B is kept for later: choose below how this switch swaps it",
+                     NANO_FX_SLOT_NAMES[slot]);
+        } else {
+            snprintf(sub, sizeof(sub), "%.12s  \xC2\xB7  its footswitch swaps A and B - the same effect again gives it two settings",
+                     NANO_FX_SLOT_NAMES[slot]);
+        }
         s_panel_current = (intptr_t)s_view.ab_b_type[slot];
     } else {
         lv_label_set_text(s_panel_title, "Choose a model");
@@ -6985,6 +7332,330 @@ static void build_pad(void)
     lv_timer_create(pad_send, PAD_SEND_MS, NULL);
 }
 
+// ---- The info page: the editor's third page ----
+// What the Nano Cortex Editor's large effect view tells about a model (main/fx_info.c, generated from the editor):
+// the device it is based on, its story, where it is heard, starting points and players' sounds to set with one tap,
+// tips. "i" in the header opens it over the bars; "i" again or the back arrow goes back. Left the pedal's picture
+// of the own build (else the effect's symbol) with the original's name; right one column to scroll.
+// Apply sets the values as the pad does: on the bars at once, to the Nano one at a time (pad_send).
+// (From the 7" board, where the page came first; here laid out for 800 x 480.)
+#define INFO_PAGE_Y 76
+#define INFO_PAGE_H (480 - INFO_PAGE_Y)
+#define INFO_LEFT_W 216
+#define INFO_X (8 + INFO_LEFT_W + 10)
+#define INFO_W (800 - 8 - INFO_X)   // 558
+#define INFO_APPLY_W 104
+
+static lv_obj_t *s_info_left, *s_info_picture, *s_info_symbol, *s_info_symbol_icon, *s_info_orig_caption, *s_info_orig, *s_info_made;
+static lv_obj_t *s_info_list, *s_info_hint, *s_info_apply[INFO_MAX_SOUNDS];
+static const nano_info_sound_t *s_info_sound[INFO_MAX_SOUNDS];
+static int s_info_sounds;
+
+// The editor's values are known (the effect is on and read): only then there is something to set.
+static bool info_values_known(void)
+{
+    int count = ed_model_params();
+    for (int i = 0; i < count; i++) {
+        if (s_param_norm[i] < 0) return false;
+    }
+    return count > 0;
+}
+
+// The bars show exactly this sound (each control on the same step).
+static bool info_sound_on(const nano_info_sound_t *sound)
+{
+    const nano_fx_model_t *m = s_editor_model_def;
+    int count = ed_model_params();
+    if (!m || !sound->count) return false;
+    for (int v = 0; v < sound->count; v++) {
+        int idx = sound->values[v].param;
+        if (idx >= count || s_param_norm[idx] < 0) return false;
+        const nano_param_t *p = &m->params[idx];
+        if (p->kind == NANO_PARAM_ENUM) {
+            if (option_index(p, s_param_norm[idx]) != option_index(p, sound->values[v].value)) return false;
+        } else {
+            float step = p->step > 0 ? p->step : (p->max - p->min) / 1000;
+            if (fabsf(param_from_normalized(p, s_param_norm[idx]) - param_from_normalized(p, sound->values[v].value)) > step / 2 + 0.0001f) return false;
+        }
+    }
+    return true;
+}
+
+// As everywhere: the sound that is set is filled, the others are framed.
+static void info_style_sounds(void)
+{
+    uint32_t color = s_editor_color;
+    bool known = info_values_known();
+    set_hidden(s_info_hint, known || s_info_sounds == 0);
+    for (int i = 0; i < s_info_sounds; i++) {
+        bool on = known && info_sound_on(s_info_sound[i]);
+        lv_obj_t *l = lv_obj_get_child(s_info_apply[i], 0);
+        style_frame_button(s_info_apply[i], color, on, false);
+        set_color_prop(l, LV_STYLE_TEXT_COLOR, on ? ink_for(color) : TEXT);
+        set_text(l, on ? "Applied" : "Apply");
+        set_num_prop(s_info_apply[i], LV_STYLE_OPA, known ? LV_OPA_COVER : LV_OPA_40);
+    }
+}
+
+static void info_style_button(void)
+{
+    style_frame_button(s_info_button, s_editor_color, s_info_on, false);
+    lv_obj_set_style_image_recolor(s_info_button_icon, lv_color_hex(s_info_on ? ink_for(s_editor_color) : TEXT), 0);
+}
+
+static void on_info_apply(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    int count = ed_model_params();
+    if (!s_editor_model_def || i >= s_info_sounds || !info_values_known()) return;
+    const nano_info_sound_t *sound = s_info_sound[i];
+    for (int v = 0; v < sound->count; v++) {
+        int idx = sound->values[v].param;
+        float n = sound->values[v].value;
+        if (idx >= count || fabsf(n - s_param_norm[idx]) < 0.0001f) continue;
+        set_param_norm(idx, n);
+        s_padv.waiting |= 1u << idx;   // to the Nano one at a time (pad_send), as the pad's values
+    }
+    info_style_sounds();
+}
+
+static lv_obj_t *info_text(lv_obj_t *parent, const lv_font_t *font, uint32_t color, const char *text)
+{
+    lv_obj_t *l = label(parent, font, color);
+    lv_obj_set_width(l, LV_PCT(100));
+    lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+    lv_label_set_text_static(l, text);   // (the table's texts live on)
+    return l;
+}
+
+static void info_caption(const char *text)
+{
+    lv_obj_t *l = info_text(s_info_list, CAPTION_FONT, MUTED, text);
+    lv_obj_set_style_text_letter_space(l, 2, 0);
+    lv_obj_set_style_pad_top(l, 8, 0);
+}
+
+static lv_obj_t *info_box(lv_obj_t *parent)
+{
+    lv_obj_t *box = lv_obj_create(parent);
+    lv_obj_remove_style_all(box);
+    lv_obj_set_width(box, LV_PCT(100));
+    lv_obj_set_height(box, LV_SIZE_CONTENT);
+    lv_obj_set_scrollable(box, false);
+    lv_obj_set_clickable(box, false);
+    return box;
+}
+
+static void info_sounds(const char *caption, const nano_info_sound_t *sounds, int count)
+{
+    if (!count) return;
+    uint32_t color = s_editor_color;
+    info_caption(caption);
+    for (int i = 0; i < count && s_info_sounds < INFO_MAX_SOUNDS; i++) {
+        const nano_info_sound_t *sound = &sounds[i];
+        lv_obj_t *c = info_box(s_info_list);
+        lv_obj_set_style_bg_color(c, lv_color_hex(SURF), 0);
+        lv_obj_set_style_bg_opa(c, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(c, 1, 0);
+        lv_obj_set_style_border_color(c, lv_color_hex(HAIRLINE), 0);
+        lv_obj_set_style_radius(c, RADIUS, 0);
+        lv_obj_set_style_pad_all(c, 10, 0);
+        lv_obj_set_style_pad_left(c, 14, 0);
+        lv_obj_set_style_pad_column(c, 12, 0);
+        lv_obj_set_flex_flow(c, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(c, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_t *col = info_box(c);
+        lv_obj_set_flex_grow(col, 1);
+        lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_style_pad_row(col, 2, 0);
+        info_text(col, &ui_font_20, TEXT, sound->name);
+        info_text(col, &ui_font_16, blend(color, 0xF2F2F2, 0.60f), sound->values_text);
+        if (sound->why[0]) info_text(col, &ui_font_14, MUTED, sound->why);
+        lv_obj_t *apply = frame_button(c);
+        lv_obj_set_size(apply, INFO_APPLY_W, 56);
+        lv_obj_add_event_cb(apply, on_info_apply, LV_EVENT_CLICKED, (void *)(intptr_t)s_info_sounds);
+        lv_obj_center(label(apply, &ui_font_20, TEXT));
+        s_info_apply[s_info_sounds] = apply;
+        s_info_sound[s_info_sounds++] = sound;
+    }
+}
+
+// The page for the editor's model.
+static void info_fill(void)
+{
+    const nano_info_t *info = s_info;
+    const nano_fx_model_t *m = s_editor_model_def;
+    uint32_t color = s_editor_color;
+    s_info_for = info;
+    s_info_sounds = 0;
+
+    // left: the pedal of the own build - only where it is the original, or the editor shows it too (never a
+    // stand-in beside "In the style of"); else the effect's symbol
+    const lv_image_dsc_t *picture = info->picture ? pedal_asset(m->type) : NULL;
+    set_hidden(s_info_picture, picture == NULL);
+    set_hidden(s_info_symbol, picture != NULL);
+    if (picture) set_image(s_info_picture, picture);
+    else {
+        lv_obj_set_style_bg_color(s_info_symbol, lv_color_hex(color), 0);
+        set_hidden(s_info_symbol_icon, NANO_ICONS[m->icon] == NULL);
+        if (NANO_ICONS[m->icon]) set_image(s_info_symbol_icon, NANO_ICONS[m->icon]);
+        lv_obj_set_style_image_recolor(s_info_symbol_icon, lv_color_hex(ink_for(color)), 0);
+    }
+    bool original = info->original[0] != 0;
+    set_hidden(s_info_orig_caption, !original);
+    set_hidden(s_info_orig, !original);
+    lv_label_set_text_static(s_info_orig_caption, info->based ? "BASED ON" : "IN THE STYLE OF");
+    lv_label_set_text_static(s_info_orig, info->original);
+    set_hidden(s_info_made, !info->made[0]);
+    lv_label_set_text_static(s_info_made, info->made);
+    lv_obj_scroll_to_y(s_info_left, 0, LV_ANIM_OFF);
+
+    // right: the story, where it is heard, the sounds to set, tips, the small print
+    lv_obj_clean(s_info_list);
+    if (info->category[0]) {
+        char caps[48];
+        size_t n = 0;
+        for (const char *c = info->category; *c && n + 1 < sizeof(caps); c++) caps[n++] = (char)toupper((unsigned char)*c);
+        caps[n] = 0;
+        lv_obj_t *l = label(s_info_list, CAPTION_FONT, blend(color, 0xF2F2F2, 0.60f));
+        lv_obj_set_style_text_letter_space(l, 2, 0);
+        lv_label_set_text(l, caps);
+    }
+    if (info->text[0]) info_text(s_info_list, &ui_font_20, 0xE6E8EA, info->text);
+    if (info->heard[0]) {
+        info_caption("HEARD ON");
+        info_text(s_info_list, &ui_font_16, 0xC8CCD1, info->heard);
+    }
+    s_info_hint = info_text(s_info_list, &ui_font_16, 0xFFB02E, "The effect is off \xE2\x80\x93 switch it on to set one of the sounds below.");
+    lv_obj_set_style_pad_top(s_info_hint, 8, 0);
+    info_sounds("STARTING POINTS", info->starts, info->start_count);
+    info_sounds("PLAYERS' SOUNDS", info->players, info->player_count);
+    // An own build: Neural DSP's presets of the same model (private data, main/fx_neural.h; none in the published one)
+    int neural_count = 0;
+    const nano_info_sound_t *neural = nano_fx_neural(m->type, &neural_count);
+    info_sounds("NEURAL DSP PRESETS", neural, neural_count);
+    if (info->tip_count) info_caption("ON THE NANO");
+    for (int i = 0; i < info->tip_count; i++) {
+        lv_obj_t *row = info_box(s_info_list);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_style_pad_column(row, 10, 0);
+        lv_obj_t *dot = label(row, &ui_font_16, blend(color, 0xF2F2F2, 0.60f));
+        lv_label_set_text_static(dot, "\xE2\x80\xA2");
+        lv_obj_set_flex_grow(info_text(row, &ui_font_16, 0xC8CCD1, info->tips[i]), 1);
+    }
+    if (original || info->start_count) {
+        lv_obj_t *foot = info_text(s_info_list, &ui_font_14, 0x8A8F96, info->based ? NANO_INFO_FOOT_BASED : NANO_INFO_FOOT_LIKE);
+        lv_obj_set_style_pad_top(foot, 10, 0);
+        if (info->player_count) info_text(s_info_list, &ui_font_14, 0x8A8F96, NANO_INFO_FOOT_PLAYERS);
+    }
+    if (neural_count) {
+        info_text(s_info_list, &ui_font_14, 0x8A8F96, "Neural DSP presets: the factory presets of the same model, read off a Quad Cortex. The line "
+                  "names what differs from the model's default; Apply sets every control.");
+    }
+    lv_obj_scroll_to_y(s_info_list, 0, LV_ANIM_OFF);
+}
+
+// The page shows while it is wanted and the model has notes; it lies over the bars.
+static void info_show(void)
+{
+    bool page = s_info_on && s_info && s_editor_model_def;
+    s_info_on = page;
+    if (page && s_info_for != s_info) info_fill();
+    set_hidden(s_info_page, !page);
+    if (page) info_style_sounds();
+    info_style_button();
+}
+
+static void info_set(bool on)
+{
+    s_info_on = on;
+    if (on) {
+        stop_drag();
+        close_panel();
+        s_padv.prefer = false;   // (the pad's centre would no longer be what the bars show)
+        pad_show();
+    }
+    info_show();
+}
+
+static void on_info_button(lv_event_t *e)
+{
+    (void)e;
+    info_set(!s_info_on);
+}
+
+static void build_info(void)
+{
+    // "i" in the header, right of the model's card (placed by show_editor_header)
+    s_info_button = frame_button(s_editor);
+    lv_obj_set_pos(s_info_button, 0, 8);
+    lv_obj_set_size(s_info_button, 60, 60);
+    lv_obj_set_style_radius(s_info_button, 12, 0);
+    lv_obj_add_event_cb(s_info_button, on_info_button, LV_EVENT_CLICKED, NULL);
+    s_info_button_icon = ui_icon(s_info_button, UI_ICON_INFO, 30, TEXT);
+    lv_obj_center(s_info_button_icon);
+    lv_obj_set_hidden(s_info_button, true);
+
+    s_info_page = lv_obj_create(s_editor);
+    lv_obj_remove_style_all(s_info_page);
+    lv_obj_set_pos(s_info_page, 0, INFO_PAGE_Y);
+    lv_obj_set_size(s_info_page, 800, INFO_PAGE_H);
+    lv_obj_set_style_bg_color(s_info_page, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_info_page, LV_OPA_COVER, 0);
+    lv_obj_set_scrollable(s_info_page, false);
+    lv_obj_set_clickable(s_info_page, true);   // (nothing below it is touched through it)
+
+    s_info_left = lv_obj_create(s_info_page);
+    lv_obj_remove_style_all(s_info_left);
+    lv_obj_set_pos(s_info_left, 8, 0);
+    lv_obj_set_size(s_info_left, INFO_LEFT_W, INFO_PAGE_H - 8);
+    lv_obj_set_style_bg_color(s_info_left, lv_color_hex(SURF), 0);
+    lv_obj_set_style_bg_opa(s_info_left, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_info_left, 1, 0);
+    lv_obj_set_style_border_color(s_info_left, lv_color_hex(HAIRLINE), 0);
+    lv_obj_set_style_radius(s_info_left, RADIUS, 0);
+    lv_obj_set_style_pad_all(s_info_left, 12, 0);
+    lv_obj_set_style_pad_row(s_info_left, 6, 0);
+    lv_obj_set_flex_flow(s_info_left, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(s_info_left, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_scroll_dir(s_info_left, LV_DIR_VER);   // (a tall pedal with a long line below it)
+    lv_obj_set_scrollbar_mode(s_info_left, LV_SCROLLBAR_MODE_OFF);
+    s_info_picture = lv_image_create(s_info_left);
+    lv_obj_set_style_margin_bottom(s_info_picture, 8, 0);
+    s_info_symbol = lv_obj_create(s_info_left);
+    lv_obj_remove_style_all(s_info_symbol);
+    lv_obj_set_size(s_info_symbol, 132, 132);
+    lv_obj_set_style_radius(s_info_symbol, 30, 0);
+    lv_obj_set_style_bg_opa(s_info_symbol, LV_OPA_COVER, 0);
+    lv_obj_set_style_margin_top(s_info_symbol, 18, 0);
+    lv_obj_set_style_margin_bottom(s_info_symbol, 18, 0);
+    lv_obj_set_clickable(s_info_symbol, false);
+    s_info_symbol_icon = lv_image_create(s_info_symbol);
+    lv_image_set_scale(s_info_symbol_icon, 512);
+    lv_obj_set_style_image_recolor_opa(s_info_symbol_icon, LV_OPA_COVER, 0);
+    lv_obj_center(s_info_symbol_icon);
+    s_info_orig_caption = info_text(s_info_left, CAPTION_FONT, MUTED, "");
+    lv_obj_set_style_text_letter_space(s_info_orig_caption, 2, 0);
+    s_info_orig = info_text(s_info_left, &ui_font_20, TEXT, "");
+    s_info_made = info_text(s_info_left, &ui_font_16, MUTED, "");
+
+    s_info_list = lv_obj_create(s_info_page);
+    lv_obj_remove_style_all(s_info_list);
+    lv_obj_set_pos(s_info_list, INFO_X, 0);
+    lv_obj_set_size(s_info_list, INFO_W, INFO_PAGE_H);
+    lv_obj_set_style_pad_right(s_info_list, 12, 0);
+    lv_obj_set_style_pad_bottom(s_info_list, 8, 0);
+    lv_obj_set_style_pad_row(s_info_list, 8, 0);
+    lv_obj_set_flex_flow(s_info_list, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_scroll_dir(s_info_list, LV_DIR_VER);
+    lv_obj_set_style_bg_color(s_info_list, lv_color_hex(0x3A3F45), LV_PART_SCROLLBAR);
+    lv_obj_set_style_bg_opa(s_info_list, LV_OPA_COVER, LV_PART_SCROLLBAR);
+    lv_obj_set_style_width(s_info_list, 3, LV_PART_SCROLLBAR);
+    lv_obj_set_style_radius(s_info_list, 2, LV_PART_SCROLLBAR);
+
+    lv_obj_set_hidden(s_info_page, true);
+}
+
 static void build_editor(lv_obj_t *screen)
 {
     s_editor = lv_obj_create(screen);
@@ -7124,6 +7795,7 @@ static void build_editor(lv_obj_t *screen)
     lv_obj_set_style_width(s_editor_body, 3, LV_PART_SCROLLBAR);
     lv_obj_set_style_radius(s_editor_body, 2, LV_PART_SCROLLBAR);
     build_pad();
+    build_info();
 
     // Model / option panel. Below the header the editor is covered in plain black (no see-through layer to blend);
     // a tap there closes the panel.
@@ -7300,6 +7972,13 @@ static void show_editor_header(int slot, const nano_fx_model_t *m, bool on)
     // A | B takes the right end of the header card.
     bool ab = slot >= 0 && m != NULL;
     int card_w = ab ? 472 : 596;
+    // "i" beside the card where the model has notes (the info page)
+    set_hidden(s_info_button, s_info == NULL);
+    if (s_info) {
+        card_w -= 68;
+        lv_obj_set_x(s_info_button, 76 + card_w + 8);
+        info_style_button();
+    }
     lv_obj_set_width(s_editor_card, card_w);
     lv_obj_set_width(s_editor_model, card_w - 64 - (pedal ? 116 : 50));
     set_hidden(s_editor_ab, !ab);
@@ -7331,6 +8010,7 @@ void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, i
     if (rebuild) {
         build_param_rows();
         s_padv.focus = m ? nano_focus(m->type) : NULL;   // another effect: the pad starts again with its corners
+        s_info = m ? nano_fx_info(m->type) : NULL;        // ... and the info page tells about it
         s_padv.page = false;
         s_padv.waiting = 0;
     }
@@ -7371,12 +8051,14 @@ void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, i
         }
     }
     pad_show();
+    info_show();
     style_fxp_chips();
 
     set_hidden(s_editor, false);
     update_main_hidden();
     if (s_second_pending == slot) {   // opened from the reverb switch's dialog: straight to the second effect's list
         s_second_pending = -1;
+        s_second_for_switch = true;   // (open_panel reads it; on_ab, the editor's own A | B, clears it)
         open_panel(PANEL_SECOND, 0);
     }
     lvgl_port_unlock();
@@ -7404,6 +8086,8 @@ void ui_fx_editor_close(void)
     lvgl_port_lock(0);
     s_padv.prefer = s_padv.page = s_padv.leave = false;
     s_padv.waiting = 0;
+    s_info_on = false;
+    lv_obj_set_hidden(s_info_page, true);
     drop_panel();
     stop_drag();
     lv_obj_set_hidden(s_editor, true);
@@ -8286,10 +8970,21 @@ static void plain_copy(char *out, size_t size, const char *text)
     out[n] = 0;
 }
 
-bool ui_tiles_get(ui_tile_info_t tiles[TILES], ui_view_t *view)
+// What the tiles show, for the editor's strip: a copy made whenever the screen has been given a state (below), so
+// asking for it never waits for the screen. (Before, ui_tiles_get read the tiles under the screen's lock - after
+// every event of the controller's task while the editor was connected, and each time that task stood still until
+// the picture being drawn was finished: 16 to 40 ms. With the editor the whole controller was slower.)
+// ui_show_state and ui_tiles_get both run in the controller's task, so the copy needs no lock of its own.
+static ui_tile_info_t s_tiles_copy[TILES];
+static ui_view_t s_tiles_copy_view;
+static bool s_tiles_copy_ok;
+static uint32_t s_tiles_version;   // counts up when the copy changes
+
+static void tiles_copy(void)   // (called with the screen's lock held, at the end of ui_show_state)
 {
-    lvgl_port_lock(0);
+    static ui_tile_info_t tiles[TILES];
     bool drawn = s_tiles_drawn;
+    if (!drawn) return;
     for (int i = 0; i < TILES && drawn; i++) {
         ui_tile_info_t *t = &tiles[i];
         memset(t, 0, sizeof(*t));
@@ -8315,7 +9010,22 @@ bool ui_tiles_get(ui_tile_info_t tiles[TILES], ui_view_t *view)
             }
         }
     }
-    if (drawn && view) *view = s_view;
-    lvgl_port_unlock();
-    return drawn;
+    if (s_tiles_copy_ok && !memcmp(tiles, s_tiles_copy, sizeof(tiles)) && !memcmp(&s_view, &s_tiles_copy_view, sizeof(s_view))) return;
+    memcpy(s_tiles_copy, tiles, sizeof(tiles));
+    s_tiles_copy_view = s_view;
+    s_tiles_copy_ok = true;
+    s_tiles_version++;
+}
+
+uint32_t ui_tiles_version(void)
+{
+    return s_tiles_version;
+}
+
+bool ui_tiles_get(ui_tile_info_t tiles[TILES], ui_view_t *view)
+{
+    if (!s_tiles_copy_ok) return false;
+    memcpy(tiles, s_tiles_copy, sizeof(s_tiles_copy));
+    if (view) *view = s_tiles_copy_view;
+    return true;
 }

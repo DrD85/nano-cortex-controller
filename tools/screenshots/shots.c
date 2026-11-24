@@ -115,7 +115,8 @@ static void example_state(void)
     view.rev_b_type = view.rev_b_stored = type_of("Room");
     view.rev_active = 0;
     view.ab_b_type[0] = type_of("Envelope Filter");   // Pre FX 1: the Green 808 (A) and an envelope filter (B)
-    view.ab_b_type[4] = type_of("Room");              // the reverb: Mind Hall (A) and Room (B), also on footswitch 8
+    view.ab_b_type[4] = type_of("Room");              // the reverb: Mind Hall (A) and Room (B) - footswitch 8 swaps them,
+    view.ab_mode[4] = UI_AB_OFF;                      // the reverb's own switch only switches it on and off
 }
 
 static nano_library_t *example_library(void)
@@ -151,7 +152,7 @@ static void close_all(void)
 {
     lv_obj_t *const overlays[] = { s_tuner, s_editor, s_picker, s_bank_editor, s_rename, s_ask, s_mix_editor, s_learn,
                                    s_layout, s_settings, s_cab_settings, s_amp, s_toast, s_looper_editor, s_scene_editor, s_exp_dialog, s_cal_panel,
-                                   s_setlist, s_scene_cap, s_metro, s_rot };
+                                   s_setlist, s_scene_cap, s_metro, s_rot, s_presets };
     for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) lv_obj_set_hidden(overlays[i], true);
     update_main_hidden();
 }
@@ -339,8 +340,9 @@ int main(void)
     view.ab_active = 1u << 0 | 1u << 4;
     view.ab_b_type[4] = st.fx_type[4];
     view.ab_a_type[4] = st.fx_type[4];
-    view.ab_mode[4] = UI_AB_PRESS;
-    view.rev_b_type = view.rev_b_stored = st.fx_type[4];   // (footswitch 8 swaps the same two)
+    view.ab_mode[4] = UI_AB_PRESS;                    // (chosen on the reverb's tile: footswitch 8 is the mix switch then)
+    view.rev_b_type = 0;
+    view.rev_b_stored = st.fx_type[4];
     view.rev_active = 1;
     ui_show_state(&st, &view);
     shot("29-second-effects");
@@ -360,7 +362,7 @@ int main(void)
     view.ab_a_type[0] = 0;
     view.ab_active = 0;
     view.ab_b_type[4] = rev_b;
-    view.ab_mode[4] = UI_AB_HOLD;
+    view.ab_mode[4] = UI_AB_OFF;
     ui_show_state(&st, &view);
 
     // The reverb switch changes between two settings of the reverb: "Atmos" is in, "Room" comes with the next press
@@ -603,5 +605,36 @@ int main(void)
     open_learn(3);   // the footswitch learn, which takes a switch over MIDI too
     shot("56-learn");
     close_all();
+
+    // The preset list (a tap on the preset's name), and a new preset: its place, what it starts from, its name
+    view.fx_mode = false;
+    ui_show_state(&st, &view);
+    open_presets(NULL);
+    shot("58-preset-list");
+    lv_obj_send_event(s_pl_new, LV_EVENT_CLICKED, NULL);
+    shot("59-new-preset-place");
+    lv_obj_send_event(s_pl_cell[11], LV_EVENT_CLICKED, NULL);
+    shot("60-new-preset");
+    close_all();
+
+    // The info page of the FX editor ("i" beside the model): the story, starting points and players' sounds
+    {
+        static const float od[3] = { 0.25f, 0.45f, 0.60f };
+        view.fx_mode = true;
+        ui_show_state(&st, &view);
+        ui_fx_editor_show(0, st.fx_type[0], true, od, 3);
+        ui_fx_presets_show(fx_presets, -1, true);
+        shot("61-fx-editor-info-button");
+        info_set(true);
+        shot("62-fx-info");
+        lv_obj_update_layout(s_info_list);
+        if (s_info_sounds) lv_obj_scroll_to_view(lv_obj_get_parent(s_info_apply[0]), LV_ANIM_OFF);
+        lv_obj_scroll_by(s_info_list, 0, 24, LV_ANIM_OFF);
+        shot("63-fx-info-sounds");
+        if (s_info_sounds) lv_obj_send_event(s_info_apply[0], LV_EVENT_CLICKED, NULL);
+        shot("64-fx-info-applied");
+        ui_fx_editor_close();
+        close_all();
+    }
     return 0;
 }

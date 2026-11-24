@@ -1,9 +1,9 @@
-set(srcs "main.c" "nano_link.c" "nano_state.c" "board.c" "ui.c" "ui_fonts.c" "footswitches.c" "midi_switches.c" "fx_models.c" "fx_focus.c" "preset_icons.c"
+set(srcs "main.c" "nano_link.c" "nano_state.c" "board.c" "ui.c" "ui_fonts.c" "footswitches.c" "midi_switches.c" "fx_models.c" "fx_focus.c" "fx_info.c" "preset_icons.c"
          "library.c" "midi_ble.c" "app_link.c" "phone_midi.c" "ui_mem.c" "pedal_assets.c")
 
 # Own builds may use private artwork from main/private (ignored by git, see tools/gen_tables.py and
 # tools/gen_pedals.py). The published firmware is built with -DNANO_PUBLIC=1 and never contains it.
-foreach(part fx_icons fx_pedals ui_icons)
+foreach(part fx_icons fx_pedals ui_icons fx_neural)
     if(NOT NANO_PUBLIC AND EXISTS "${CMAKE_CURRENT_LIST_DIR}/private/${part}_private.c")
         list(APPEND srcs "private/${part}_private.c")
     else()

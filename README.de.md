@@ -70,8 +70,10 @@ das aktuelle. Findet es den Nano nicht innerhalb einer Minute, den Nano aus- und
    den Kacheln 3–8, nochmal tippen: die Presets der Bank · **Diskette**: Preset auf dem Nano speichern – grün bei
    ungespeicherten Änderungen
 4. Vorherige / nächste **Bank**
-5. Preset-Name – **halten** zum Umbenennen
-6. Capture und Cab – **tippen** zum Auswählen, **halten** für Klang / Cab-Einstellungen
+5. Preset-Name – **tippen** für die [Liste aller Presets](docs/manual.de.md#preset-liste-und-neue-presets), mit **New preset**
+   für einen frischen Start in jedem Platz; **halten** zum Umbenennen
+6. Die Signalkette: Pre FX 1-2, Capture, Cab, Post FX 1-3 – gefüllter Punkt = an. **Tippen** auf einen Effekt öffnet
+   seinen FX-Editor; Capture und Cab: **tippen** zum Auswählen, **halten** für Klang / Cab-Einstellungen
 7. Acht Kacheln = acht Fußschalter. **Tippen** auf eine Kachel = ihren Schalter treten
 
 Eine Kachel ist **gefüllt**, wenn sie aktiv ist (das geladene Preset, ein eingeschalteter Effekt), und dunkel mit
@@ -160,6 +162,8 @@ Preset, Bank, ungespeicherte Änderungen und den Modus. **Nach unten wischen**: 
 6. Auf einem Balken **seitlich wischen** ändert den Wert; hoch und runter scrollt
 7. **PAD**: der Effekt auf einer Fläche mit einem Klang in jeder Ecke – die Lupe dazwischen ziehen
    ([Handbuch](docs/manual.de.md#die-fläche-pad)); ein langer Druck auf ein Pedal der Pedalansicht öffnet sie direkt
+8. **i** neben dem Modell: worauf der Effekt beruht, Startpunkte und Spieler-Sounds, mit einem Tipp gesetzt
+   ([Handbuch](docs/manual.de.md#die-info-seite))
 
 Werte sind sichtbar, solange der Effekt an ist. *Off | On* wird angetippt. Mehr: [Handbuch](docs/manual.de.md#fx-editor).
 
@@ -179,7 +183,7 @@ Werte sind sichtbar, solange der Effekt an ist. *Off | On* wird angetippt. Mehr:
 </td>
 <td>
 
-**Halten** auf dem Capture-Feld für Gain, Bass, Mid und Treble – auf dem Cab-Feld für Output, High und Low Pass.
+**Halten** auf dem Capture-Feld der Signalkette für Gain, Bass, Mid und Treble – auf dem Cab-Feld für Output, High und Low Pass.
 
 </td>
 <td>
@@ -214,6 +218,8 @@ Einrichtung Schritt für Schritt: [Handbuch](docs/manual.de.md#looper-modus-eine
 | Aktion | Wo | Was passiert |
 |---|---|---|
 | **Tippen** | eine Kachel | dasselbe wie ihr Fußschalter |
+| | ein Effekt in der Signalkette | sein FX-Editor |
+| | der Preset-Name | die Liste aller 64 Presets; dort **New preset** |
 | | der **Szenen**-Knopf (obere Leiste) | Kacheln 3–8: Szenen des Presets ↔ Presets der Bank |
 | | der **Pedal**-Knopf (obere Leiste) | was das Expression-Pedal des Nano in diesem Preset bewegt |
 | **Halten** | eine Preset-Kachel | Bank-Fenster: Preset, Farbe und Symbol dieses Schalters |
@@ -224,7 +230,7 @@ Einrichtung Schritt für Schritt: [Handbuch](docs/manual.de.md#looper-modus-eine
 | | eine Looper-Kachel | ihr Name, ihre Farbe und ihr Symbol |
 | | Kachel 2 | lernen, welcher Fußschalter welcher ist |
 | | der Preset-Name | Preset umbenennen |
-| | Capture- / Cab-Feld | Capture-Klang / Cab-Einstellungen |
+| | Capture- / Cab-Feld der Kette | Capture-Klang / Cab-Einstellungen |
 | **Wischen** links / rechts | überall | nächstes / vorheriges Preset |
 | **Wischen** hoch / runter | überall | Gig-Ansicht an / aus |
 | **Fußschalter 1** | | kurz: Presets oder Szenen ↔ FX · gehalten: Looper-Modus |
