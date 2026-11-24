@@ -1,0 +1,341 @@
+#include "footswitches.h"
+
+#include <string.h>
+
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "nvs.h"
+#if NANO_P4
+#include "driver/gpio.h"
+#endif
+
+static const char *TAG = "footswitch";
+
+// SX1509 registers (bank B = pins 8-15, bank A = pins 0-7)
+#define REG_INPUT_DISABLE_B 0x00
+#define REG_PULLUP_B 0x06
+#define REG_PULLUP_A 0x07
+#define REG_PULLDOWN_B 0x08
+#define REG_PULLDOWN_A 0x09
+#define REG_DIR_B 0x0E
+#define REG_DIR_A 0x0F
+#define REG_DATA_B 0x10
+#define REG_RESET 0x7D
+
+#define PINS 16
+// A press counts as soon as a pin is low in two polls in a row (2-4 ms after the contact closes - a looper needs
+// that); the contact's bouncing afterwards is ignored because a release only counts after RELEASE_POLLS high polls.
+#define POLL_MS 2
+#define PRESS_POLLS 2
+#define RELEASE_POLLS 10   // 20 ms
+#define LEARN_TIMEOUT_MS 15000
+#define STORE_NAMESPACE "nano"
+#define STORE_KEY "fsw_pins"
+
+// Default SX1509 pin of footswitch 1-8, as wired in the user's TonexOneController enclosure.
+static const int8_t DEFAULT_PINS[FOOTSWITCH_COUNT] = { 11, 10, 0, 1, 2, 3, 8, 9 };
+
+#if NANO_P4
+// P4 board without an SX1509: eight switches wired straight to its 12-pin header P3, each between a pin and GND (the
+// chip's own pull-ups). They take the place of the SX1509's pins 0-7 in everything below, so the debounce, holding
+// and learning are the same. The header's GPIO34 and 36 are strapping pins of the P4 and stay free.
+static const gpio_num_t DIRECT_GPIOS[] = { GPIO_NUM_2,  GPIO_NUM_3,  GPIO_NUM_4,  GPIO_NUM_5,
+                                           GPIO_NUM_28, GPIO_NUM_29, GPIO_NUM_30, GPIO_NUM_31 };
+#define DIRECT_COUNT ((int)(sizeof(DIRECT_GPIOS) / sizeof(DIRECT_GPIOS[0])))
+static const int8_t DIRECT_DEFAULT_PINS[FOOTSWITCH_COUNT] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+#define DIRECT_STORE_KEY "fsw_gpio"   // an entry of its own: an order learned on an SX1509 means nothing here
+static bool s_direct;                 // set once in footswitches_start, before the task runs
+#else
+#define s_direct false
+#endif
+// What the log calls a pin: the SX1509's pin, or the GPIO of a switch on the header.
+#define PIN_KIND (s_direct ? "GPIO" : "SX1509 pin")
+
+static i2c_master_dev_handle_t s_dev;
+static footswitch_cb s_on_press;
+static footswitch_learn_cb s_on_learn;
+// Pin per footswitch; only the footswitch task changes it (learn and reset requests are handed over).
+static int8_t s_pins[FOOTSWITCH_COUNT];
+static int s_learn_request = -1;       // from footswitches_learn: -1 = none, 0 = cancel, 1-8 = learn
+static volatile bool s_reset;
+
+static int switch_for_pin(int pin)
+{
+    for (int i = 0; i < FOOTSWITCH_COUNT; i++) if (s_pins[i] == pin) return i + 1;
+    return 0;
+}
+
+static const int8_t *default_pins(void)
+{
+#if NANO_P4
+    if (s_direct) return DIRECT_DEFAULT_PINS;
+#endif
+    return DEFAULT_PINS;
+}
+
+static const char *store_key(void)
+{
+#if NANO_P4
+    if (s_direct) return DIRECT_STORE_KEY;
+#endif
+    return STORE_KEY;
+}
+
+static int pin_name(int pin)
+{
+#if NANO_P4
+    if (s_direct) return pin >= 0 && pin < DIRECT_COUNT ? (int)DIRECT_GPIOS[pin] : -1;
+#endif
+    return pin;
+}
+
+static void pins_load(void)
+{
+    memcpy(s_pins, default_pins(), sizeof(s_pins));
+    nvs_handle_t nvs;
+    if (nvs_open(STORE_NAMESPACE, NVS_READONLY, &nvs) != ESP_OK) return;
+    int8_t stored[FOOTSWITCH_COUNT];
+    size_t size = sizeof(stored);
+    if (nvs_get_blob(nvs, store_key(), stored, &size) == ESP_OK && size == sizeof(stored)) memcpy(s_pins, stored, sizeof(s_pins));
+    nvs_close(nvs);
+#if NANO_P4
+    if (s_direct) {   // a stored order that names a pin the header does not have: back to the default
+        for (int i = 0; i < FOOTSWITCH_COUNT; i++) {
+            if (s_pins[i] >= 0 && s_pins[i] < DIRECT_COUNT) continue;
+            memcpy(s_pins, DIRECT_DEFAULT_PINS, sizeof(s_pins));
+            break;
+        }
+    }
+#endif
+}
+
+static void pins_save(void)
+{
+    nvs_handle_t nvs;
+    if (nvs_open(STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
+    if (nvs_set_blob(nvs, store_key(), s_pins, sizeof(s_pins)) != ESP_OK || nvs_commit(nvs) != ESP_OK) {
+        ESP_LOGW(TAG, "Could not store the footswitch order");
+    }
+    nvs_close(nvs);
+}
+
+static void log_pins(void)
+{
+    ESP_LOGI(TAG, "Footswitch 1-8 on %ss %d %d %d %d %d %d %d %d", PIN_KIND, pin_name(s_pins[0]), pin_name(s_pins[1]),
+             pin_name(s_pins[2]), pin_name(s_pins[3]), pin_name(s_pins[4]), pin_name(s_pins[5]), pin_name(s_pins[6]),
+             pin_name(s_pins[7]));
+}
+
+void footswitches_learn(int number)
+{
+    __atomic_store_n(&s_learn_request, number >= 1 && number <= FOOTSWITCH_COUNT ? number : 0, __ATOMIC_SEQ_CST);
+}
+
+void footswitches_reset(void)
+{
+    s_reset = true;
+}
+
+// A pin was pressed while learning: it becomes footswitch number; a switch that had it gets the old pin.
+static void learn_pin(int number, int pin)
+{
+    int other = switch_for_pin(pin);
+    if (other && other != number) s_pins[other - 1] = s_pins[number - 1];
+    s_pins[number - 1] = (int8_t)pin;
+    pins_save();
+    ESP_LOGI(TAG, "Footswitch %d learned: %s %d", number, PIN_KIND, pin_name(pin));
+    log_pins();
+    if (s_on_learn) s_on_learn(number, other != number ? other : 0);
+}
+
+static esp_err_t write_reg(uint8_t reg, uint8_t value)
+{
+    uint8_t buf[2] = { reg, value };
+    return i2c_master_transmit(s_dev, buf, sizeof(buf), 50);
+}
+
+#if NANO_P4
+// The eight pins of the header as inputs with the chip's pull-ups.
+static void direct_configure(void)
+{
+    uint64_t mask = 0;
+    for (int i = 0; i < DIRECT_COUNT; i++) mask |= 1ULL << DIRECT_GPIOS[i];
+    const gpio_config_t io = { .pin_bit_mask = mask, .mode = GPIO_MODE_INPUT, .pull_up_en = GPIO_PULLUP_ENABLE };
+    gpio_config(&io);
+}
+#endif
+
+static esp_err_t read_pins(uint16_t *pins)
+{
+#if NANO_P4
+    if (s_direct) {
+        uint16_t levels = 0xFFFF;   // "pins" 8-15 do not exist: always released
+        for (int i = 0; i < DIRECT_COUNT; i++) if (!gpio_get_level(DIRECT_GPIOS[i])) levels &= (uint16_t)~(1u << i);
+        *pins = levels;
+        return ESP_OK;
+    }
+#endif
+    uint8_t reg = REG_DATA_B, data[2];
+    esp_err_t err = i2c_master_transmit_receive(s_dev, &reg, 1, data, sizeof(data), 50);
+    if (err == ESP_OK) *pins = (uint16_t)(data[0] << 8 | data[1]);   // B, then A (auto-increment)
+    return err;
+}
+
+// All pins as inputs with pull-ups (after a reset of the chip its pull-ups are off: open inputs, phantom presses).
+static void configure(void)
+{
+    write_reg(REG_INPUT_DISABLE_B, 0x00);
+    write_reg(REG_INPUT_DISABLE_B + 1, 0x00);
+    write_reg(REG_PULLDOWN_B, 0x00);
+    write_reg(REG_PULLDOWN_A, 0x00);
+    write_reg(REG_PULLUP_B, 0xFF);
+    write_reg(REG_PULLUP_A, 0xFF);
+    write_reg(REG_DIR_B, 0xFF);
+    write_reg(REG_DIR_A, 0xFF);
+}
+
+// True while the chip still has the pull-ups it was set up with (a supply dip or a discharge on stage resets it).
+static bool configured(void)
+{
+    uint8_t reg = REG_PULLUP_B, data[2];
+    return i2c_master_transmit_receive(s_dev, &reg, 1, data, sizeof(data), 50) == ESP_OK && data[0] == 0xFF && data[1] == 0xFF;
+}
+
+#define CHECK_POLLS 500    // the chip's setup is looked at once a second
+#define SETTLE_POLLS 25    // after setting it up again: 50 ms in which no press counts
+
+static void footswitch_task(void *arg)
+{
+    uint16_t stable = 0xFFFF;          // debounced pins (bit set = released)
+    uint8_t low[PINS] = { 0 }, high[PINS] = { 0 };   // polls in a row with the pin low / high
+    int learn = 0;                     // switch waiting for a press, 0 = none
+    TickType_t learn_start = 0;
+    TickType_t down_since[FOOTSWITCH_COUNT + 1] = { 0 };
+    bool down[FOOTSWITCH_COUNT + 1] = { false };   // pressed and not held long enough yet
+    // Switches on the header: the first 50 ms take the pins as they are (a switch held while the board starts is
+    // not a press), and there is no chip whose setup could get lost.
+    int check = 0, settle = s_direct ? SETTLE_POLLS : 0, failed = 0;
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(POLL_MS));
+        if (++check >= CHECK_POLLS) {
+            check = 0;
+            if (!s_direct && !configured()) {
+                ESP_LOGW(TAG, "SX1509 lost its setup (reset?) - setting it up again");
+                configure();
+                settle = SETTLE_POLLS;
+            }
+        }
+        if (s_reset) {
+            s_reset = false;
+            memcpy(s_pins, default_pins(), sizeof(s_pins));
+            pins_save();
+            log_pins();
+        }
+        int request = __atomic_exchange_n(&s_learn_request, -1, __ATOMIC_SEQ_CST);
+        if (request >= 0) {
+            learn = request;
+            learn_start = xTaskGetTickCount();
+        }
+        if (learn && xTaskGetTickCount() - learn_start > pdMS_TO_TICKS(LEARN_TIMEOUT_MS)) {
+            learn = 0;
+            if (s_on_learn) s_on_learn(0, 0);
+        }
+        for (int number = 1; number <= FOOTSWITCH_COUNT; number++) {
+            if (down[number] && xTaskGetTickCount() - down_since[number] >= pdMS_TO_TICKS(FOOTSWITCH_HOLD_MS)) {
+                down[number] = false;
+                ESP_LOGI(TAG, "Footswitch %d held", number);
+                if (s_on_press) s_on_press(number, FOOTSWITCH_HOLD);
+            }
+        }
+        uint16_t pins;
+        if (read_pins(&pins) != ESP_OK) {
+            if (++failed == 100) ESP_LOGW(TAG, "SX1509 does not answer");   // (said once per outage)
+            continue;
+        }
+        if (failed >= 100) ESP_LOGI(TAG, "SX1509 answers again");
+        failed = 0;
+        if (settle) {   // freshly set up: take the pins as they are, without presses
+            settle--;
+            stable = pins;
+            memset(down, 0, sizeof(down));
+            memset(low, 0, sizeof(low));
+            memset(high, 0, sizeof(high));
+            continue;
+        }
+        uint16_t pressed = 0, released = 0;
+        for (int pin = 0; pin < PINS; pin++) {
+            bool is_low = !(pins & (1u << pin));
+            low[pin] = is_low && low[pin] < 255 ? low[pin] + 1 : is_low ? 255 : 0;
+            high[pin] = !is_low && high[pin] < 255 ? high[pin] + 1 : !is_low ? 255 : 0;
+            if ((stable & (1u << pin)) && low[pin] >= PRESS_POLLS) pressed |= 1u << pin;
+            else if (!(stable & (1u << pin)) && high[pin] >= RELEASE_POLLS) released |= 1u << pin;
+        }
+        if (!pressed && !released) continue;
+        stable = (uint16_t)((stable & ~pressed) | released);
+        for (int pin = 0; pin < PINS; pin++) {
+            if (released & (1u << pin)) {
+                int number = switch_for_pin(pin);
+                if (number) {
+                    down[number] = false;
+                    if (s_on_press) s_on_press(number, FOOTSWITCH_RELEASE);
+                }
+            }
+            if (!(pressed & (1u << pin))) continue;
+            if (learn) {
+                learn_pin(learn, pin);
+                learn = 0;
+                continue;
+            }
+            int number = switch_for_pin(pin);
+            if (!number) {
+                ESP_LOGI(TAG, "%s %d pressed (no footswitch assigned)", PIN_KIND, pin_name(pin));
+                continue;
+            }
+            ESP_LOGI(TAG, "Footswitch %d (%s %d)", number, PIN_KIND, pin_name(pin));
+            down[number] = true;
+            down_since[number] = xTaskGetTickCount();
+            if (s_on_press) s_on_press(number, FOOTSWITCH_PRESS);
+        }
+    }
+}
+
+bool footswitches_start(i2c_master_bus_handle_t bus, footswitch_cb on_press, footswitch_learn_cb on_learn)
+{
+    s_on_press = on_press;
+    s_on_learn = on_learn;
+    // 0x71 is TonexOneController's address; 0x3E/0x3F would clash with the board's CH422G.
+    static const uint8_t addresses[] = { 0x71, 0x70 };
+    for (size_t i = 0; i < sizeof(addresses); i++) {
+        if (i2c_master_probe(bus, addresses[i], 50) != ESP_OK) continue;
+        const i2c_device_config_t config = {
+            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+            .device_address = addresses[i],
+            .scl_speed_hz = 400000,
+        };
+        if (i2c_master_bus_add_device(bus, &config, &s_dev) != ESP_OK) return false;
+
+        // Software reset, then all pins as inputs with pull-ups.
+        write_reg(REG_RESET, 0x12);
+        write_reg(REG_RESET, 0x34);
+        configure();
+
+        pins_load();
+        ESP_LOGI(TAG, "SX1509 found at 0x%02X - footswitches active", addresses[i]);
+        log_pins();
+        xTaskCreate(footswitch_task, "footswitch", 3072, NULL, 5, NULL);
+        return true;
+    }
+#if NANO_P4
+    s_direct = true;
+    pins_load();
+    direct_configure();
+    ESP_LOGI(TAG, "No SX1509 at 0x71/0x70 - footswitches on the header P3 (each switch between its pin and GND)");
+    log_pins();
+    xTaskCreate(footswitch_task, "footswitch", 3072, NULL, 5, NULL);
+    return true;
+#else
+    ESP_LOGW(TAG, "No SX1509 at 0x71/0x70 - footswitches off");
+    return false;
+#endif
+}

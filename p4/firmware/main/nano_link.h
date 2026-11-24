@@ -1,0 +1,82 @@
+// The link to the Nano Cortex. P4 board: over USB (nano_link_usb.c) while its cable is in, otherwise over Bluetooth LE
+// (nano_link_ble.c, NimBLE central through the ESP32-C6) - nano_link.c chooses; main.c sees one link.
+// Bluetooth LE link (NimBLE central):
+//
+// The Nano exposes service A002 (A003 on some units) with a write characteristic C304 and a
+// notify characteristic C305. Every message is framed as [length] C0 [protobuf payload] [u32 LE type];
+// longer replies arrive as several notifications (byte 1: 0x40 = first packet, 0x80 = last packet).
+#pragma once
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "host/ble_hs.h"
+
+// A complete message from the Nano: protobuf payload (frame header and type removed) and its type.
+// Called from the NimBLE host task; the payload is only valid during the call.
+typedef void (*nano_message_cb)(uint32_t type, const uint8_t *payload, size_t len);
+
+// Called when the link is ready (notifications on) or lost.
+typedef void (*nano_link_cb)(bool ready);
+
+void nano_link_start(nano_message_cb on_message, nano_link_cb on_link);
+bool nano_link_ready(void);
+// Drops the connection to the Nano; it is found and connected again (when it stopped answering).
+void nano_link_restart(void);
+void nano_link_pause(int seconds);   // development: disconnect properly and do not connect for this long
+
+// Queues a message for C304. Writes go out strictly one at a time (write with response).
+bool nano_link_send(const char *label, uint32_t type, const uint8_t *payload, size_t len);
+
+// ---- app bridge ----
+
+enum { NANO_OWNER_BOARD, NANO_OWNER_APP, NANO_OWNER_BOTH };
+
+// A complete framed message from the app ([len] C0 payload type), sent on to the Nano. Its reply goes back to the app.
+bool nano_link_send_frame(const uint8_t *frame, size_t len);
+
+// A long message from the app as its packets back to back (each: its size in 2 bytes little endian, then the packet as
+// the app sent it), sent on to the Nano in one go. The buffer (heap_caps_malloc / malloc) is handed over and freed here.
+bool nano_link_send_packets(uint8_t *packets, size_t len, uint32_t type);
+
+// Messages for the app (replies to its requests and messages the Nano sends on its own): payload + u32 type.
+// Called from the NimBLE host task.
+typedef void (*nano_forward_cb)(const uint8_t *message, size_t len);
+void nano_link_set_forward(nano_forward_cb cb);
+
+uint8_t nano_link_own_addr_type(void);
+
+// The Nano's manufacturer data from its advertisement (0 bytes until it was seen).
+size_t nano_link_nano_mfg(uint8_t *out, size_t max);
+
+// ---- shared with other Bluetooth clients (MIDI) ----
+
+// Every advertisement seen while scanning. Called from the NimBLE host task.
+typedef void (*nano_link_adv_cb)(const ble_addr_t *addr, int8_t rssi, const struct ble_hs_adv_fields *fields);
+void nano_link_set_adv_hook(nano_link_adv_cb cb);
+
+// Another client wants scanning: fast = actively searching (dialog open), otherwise a slow background scan.
+void nano_link_scan_request(bool on, bool fast);
+// Bluetooth is running (NimBLE in sync with its controller): before that no other client may use NimBLE.
+bool nano_link_bluetooth_ready(void);
+
+// Connects another device with its own GAP event handler (scanning pauses meanwhile). The handler must call
+// nano_link_other_connect_done() on its BLE_GAP_EVENT_CONNECT. Returns false if a connection is being set up.
+bool nano_link_connect_other(const ble_addr_t *addr, ble_gap_event_fn *cb, void *arg);
+void nano_link_other_connect_done(void);
+
+
+// For the controller's system page: how often the link to the Nano was lost since the start, why and when last
+// (Bluetooth reason code, esp_timer time; 0 = never), and since when it is up (0 = it is down).
+typedef struct {
+    int drops, last_reason;
+    int64_t last_drop_us, ready_us;
+} nano_link_stats_t;
+void nano_link_stats(nano_link_stats_t *out);
+
+// Logs whether Bluetooth is ready, scanning and connected (for the serial monitor).
+void nano_link_log_status(void);
+
+// P4 board: the way that carries the link now - "USB", "Bluetooth" or "" (none).
+const char *nano_link_way(void);

@@ -1,0 +1,5 @@
+dependencies:
+  idf: ">=6.0"
+  espressif/usb:
+    version: "^1.6.0"
+    public: true

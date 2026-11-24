@@ -8,6 +8,10 @@ und IR-Library, die Belegung des Expression-Pedals, ein Stimmgerät und ein Loop
 
 ![Nano Cortex Controller](docs/images/00-overview.png)
 
+**Zwei Boards:** das hier beschriebene **4,3"-Board** (ESP32-S3, Bluetooth) und das **[7"-Board](#das-7-board-esp32-p4)**
+(ESP32-P4): dieselben Funktionen auf einem größeren Bildschirm. Es hängt per USB-Kabel am Nano und bringt dazu einen
+Looper mit zwei Parts, einen Drumcomputer und einen Jam-Player mit.
+
 **English:** [README](README.md) · **Noch kein Board?** Dieselbe Firmware läuft im Browser:
 [Nano Cortex Controller Web](https://github.com/DrD85/nano-cortex-controller-web)
 
@@ -236,6 +240,33 @@ Einrichtung Schritt für Schritt: [Handbuch](docs/manual.de.md#looper-modus-eine
 | **Fußschalter 1** | | kurz: Presets oder Szenen ↔ FX · gehalten: Looper-Modus |
 | **Fußschalter 2** | | kurz: Stimmgerät · gehalten: Szenen ↔ Presets |
 | **Fußschalter 3** gehalten | FX-Modus | Pre FX 1 wechselt zum zweiten Effekt |
+
+## Das 7"-Board (ESP32-P4)
+
+Derselbe Controller auf einem **Waveshare ESP32-P4-WIFI6-Touch-LCD-7B** (7", 1024 × 600). Er kann alles oben
+Beschriebene, nur steckt der Nano per Kabel in der USB-A-Buchse des Boards statt über Bluetooth verbunden zu sein.
+Über dasselbe Kabel spielt das Board eigenen Ton in den Nano:
+
+- **Nano über USB** – kein Koppeln, kein Bluetooth-Fenster. Ohne Kabel nimmt es Bluetooth
+- **Looper auf dem Board** – zwei Parts A / B, Overdub, Undo / Redo, Loops auf Takte im Tempo des Nano gerundet
+- **Drumcomputer** – 54 Grooves in acht Stilen im Tempo des Nano, Einzähler, Drums, die mit der Aufnahme starten
+- **Jam-Player** – Backing-Tracks von der microSD-Karte, auf gleiche Lautheit gebracht, per WLAN aufgespielt
+- **Bluetooth** über seinen ESP32-C6 – MIDI-Controller mit MIDI-Learn, eine Looper-App, der Editor durchs Board
+- **Firmware-Updates über WLAN**, acht Fußschalter direkt am Board (keine Zusatzplatine nötig)
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/p4/01-preset-mode.png" alt="7-Zoll-Board: Hauptbildschirm"></td>
+<td width="50%"><img src="docs/images/p4/18e-looper-to-part-b.png" alt="7-Zoll-Board: Looper"></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/p4/51-jam.png" alt="7-Zoll-Board: Jam-Player"></td>
+<td width="50%"><img src="docs/images/p4/03-fullscreen.png" alt="7-Zoll-Board: Gig-Ansicht"></td>
+</tr>
+</table>
+
+Hardware, Verdrahtung der Fußschalter, Installation und Bauen (englisch): **[p4/README.md](p4/README.md)**.
+Release-Dateien: `nano-controller-p4-<version>-…` auf der [Releases](../../releases)-Seite.
 
 ## Mehr
 

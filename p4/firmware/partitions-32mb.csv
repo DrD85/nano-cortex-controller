@@ -1,0 +1,12 @@
+# P4 board, 32 MB flash (only once the board has shown it: esptool flash-id, and the pedal pictures read back from
+# above 16 MB). Two firmware places of 6 MB each, the store, the rescue copy at the same 0xF00000, and 16 MB for the
+# pedal pictures (room for larger pictures on the 7" screen). Changing from partitions.csv moves the store: flash
+# everything anew (the settings come back from the editor's backup).
+# Name,   Type, SubType, Offset,    Size
+phy_init, data, phy,     0xf000,    0x1000
+otadata,  data, ota,     0x10000,   0x2000
+ota_0,    app,  ota_0,   0x20000,   0x600000
+ota_1,    app,  ota_1,   0x620000,  0x600000
+nvs,      data, nvs,     0xC20000,  0x80000
+rescue,   data, 0x41,    0xF00000,  0x80000
+pedals,   data, 0x40,    0x1000000, 0x1000000

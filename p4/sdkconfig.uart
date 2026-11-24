@@ -1,0 +1,9 @@
+# Extra settings for a build whose log also appears on the board's "USB TO UART" USB-C port (CH343, UART0 on GPIO37/38).
+# Use it on top of a project's own sdkconfig.defaults, with a build folder of its own, e.g. in firmware/:
+#
+#   idf.py -B build-uart -D SDKCONFIG=build-uart/sdkconfig -D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;../sdkconfig.uart" build
+#
+# The console (log and the keys typed into the monitor) is then on UART0; the "USB 1.1 FS Direct Out" port shows the
+# same log, output only. Without this file the console is on "USB 1.1 FS Direct Out" alone (USB Serial/JTAG).
+CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y

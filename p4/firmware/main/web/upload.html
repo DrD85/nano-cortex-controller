@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nano Board · Jam tracks</title>
+<style>
+/* the board's calm look: one surface, one hairline, radius 12, captions in small grey capitals */
+:root { --bg:#000; --surf:#121416; --surf2:#262A2F; --line:#25292D; --txt:#F2F3F5; --mut:#8E949B; --green:#45F862; --red:#FF4B4B; --blue:#4D8DFF; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--txt); font: 500 15px/1.4 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 28px 16px 60px; }
+h1 { font-size: 30px; font-weight: 600; margin: 0 0 4px; }
+.sub { color: var(--mut); margin: 0 0 22px; }
+.cap { font-size: 11px; letter-spacing: 1.3px; color: var(--mut); font-weight: 600; text-transform: uppercase; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+.box { background: var(--surf); border: 1px solid var(--line); border-radius: 12px; }
+#drop { min-height: 200px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 24px; cursor: pointer; }
+#drop.over { background: var(--surf2); border-color: var(--txt); }
+#drop b { font-size: 20px; }
+.row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.row .n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.row .s { color: var(--mut); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bar { height: 3px; background: var(--line); border-radius: 2px; margin-top: 6px; }
+.bar i { display: block; height: 3px; background: var(--txt); border-radius: 2px; width: 0; }
+.row .s.ok, .ok { color: var(--green); } .row .s.err, .err { color: var(--red); }
+h2 { margin: 26px 0 8px; }
+.row button { padding: 8px 14px; }
+button:disabled { opacity: .45; cursor: default; }
+button { font: inherit; color: var(--txt); background: var(--surf); border: 1px solid var(--line); border-radius: 12px; padding: 10px 18px; cursor: pointer; }
+</style></head>
+<body><main>
+  <h1>Jam tracks for the Nano Board</h1>
+  <p class="sub">Drop audio files here. The Mac reads them (WAV, AIFF, MP3, AAC / M4A, Apple Lossless, FLAC as far as this
+  browser can), measures their loudness as the Jam Player does and sends them to the board's microSD card as WAV.
+  A track of the same name is replaced.</p>
+  <div class="grid">
+    <div id="drop" class="box"><b>Drop files here</b><span class="cap">or click to choose</span>
+      <input id="pick" type="file" multiple accept="audio/*,.wav,.aif,.aiff,.mp3,.m4a,.aac,.flac" hidden></div>
+    <div class="box" id="queue"><div class="row"><span class="s">Nothing sent yet.</span></div></div>
+  </div>
+  <h2 class="cap">On the board</h2>
+  <div class="box" id="board"><div class="row"><span class="s">…</span></div></div>
+  <h2 class="cap">Firmware</h2>
+  <div class="box"><div class="row">
+    <div style="flex:1;min-width:0"><div class="n" id="fwNow">On the board: …</div>
+      <div class="s" id="fwState">A new firmware (build/nano_controller_p4.bin) goes into the board's second firmware place.
+      If it does not start properly, the board goes back to this one.</div>
+      <div class="bar" id="fwBar" hidden><i></i></div></div>
+    <button id="fwBtn">Choose file …</button>
+    <input id="fwPick" type="file" accept=".bin" hidden>
+  </div></div>
+</main>
+<script>
+'use strict';
+// ---- loudness: the Jam Player's code (jam-player/index.html, loudness worker), unchanged ----
+const lufsOf = energy => (energy > 0 ? -0.691 + 10 * Math.log10(energy) : -Infinity);
+function blockEnergy(blocks) {
+  const seconds = blocks.reduce((sum, b) => sum + b.s, 0);
+  return seconds > 0 ? blocks.reduce((sum, b) => sum + b.e * b.s, 0) / seconds : 0;
+}
+function gatedLoudness(blocks) {
+  const windows = blocks.map((b, i) => blockEnergy(blocks.slice(Math.max(0, i - 3), i + 1)));
+  const mean = list => list.reduce((a, b) => a + b, 0) / list.length;
+  let kept = windows.filter(e => lufsOf(e) > -70);
+  if (!kept.length) return -Infinity;
+  const gate = lufsOf(mean(kept)) - 10;
+  kept = kept.filter(e => lufsOf(e) > gate);
+  return lufsOf(mean(kept));
+}
+function kWeighting(rate) {
+  let k = Math.tan(Math.PI * 1681.974450955533 / rate);
+  let q = 0.7071752369554196;
+  const vh = Math.pow(10, 3.999843853973347 / 20), vb = Math.pow(vh, 0.4996667741545416);
+  let a0 = 1 + k / q + k * k;
+  const shelf = [(vh + vb * k / q + k * k) / a0, 2 * (k * k - vh) / a0, (vh - vb * k / q + k * k) / a0, 2 * (k * k - 1) / a0, (1 - k / q + k * k) / a0];
+  k = Math.tan(Math.PI * 38.13547087602444 / rate);
+  q = 0.5003270373238773;
+  a0 = 1 + k / q + k * k;
+  return [shelf, [1, -2, 1, 2 * (k * k - 1) / a0, (1 - k / q + k * k) / a0]];
+}
+function highPass(rate, hz) {
+  const w = 2 * Math.PI * hz / rate, cos = Math.cos(w), alpha = Math.sin(w) / Math.SQRT2;
+  const a0 = 1 + alpha;
+  return [(1 + cos) / 2 / a0, -(1 + cos) / a0, (1 + cos) / 2 / a0, -2 * cos / a0, (1 - alpha) / a0];
+}
+function trackLoudness({ rate, channels, bassHz, bassUsualDb, bassMostDb }) {
+  const hop = Math.round(rate / 10);
+  const count = Math.floor(channels[0].length / hop);
+  const energy = new Float64Array(count), noBass = new Float64Array(count);
+  const [s, h] = kWeighting(rate);
+  const c = highPass(rate, bassHz);
+  let peak = 0;
+  for (let ch = 0; ch < channels.length; ch++) {
+    const data = channels[ch];
+    let s1 = 0, s2 = 0, h1 = 0, h2 = 0, c1 = 0, c2 = 0;
+    for (let block = 0, i = 0; block < count; block++) {
+      let sum = 0, cut = 0;
+      for (const end = i + hop; i < end; i++) {
+        const x = data[i];
+        const a = x < 0 ? -x : x;
+        if (a > peak) peak = a;
+        const y = s[0] * x + s1;
+        s1 = s[1] * x - s[3] * y + s2;
+        s2 = s[2] * x - s[4] * y;
+        const z = h[0] * y + h1;
+        h1 = h[1] * y - h[3] * z + h2;
+        h2 = h[2] * y - h[4] * z;
+        sum += z * z;
+        const w = c[0] * z + c1;
+        c1 = c[1] * z - c[3] * w + c2;
+        c2 = c[2] * z - c[4] * w;
+        cut += w * w;
+      }
+      energy[block] += sum / hop;
+      noBass[block] += cut / hop;
+    }
+  }
+  const both = channels.length === 1 ? 2 : 1;
+  const gated = list => gatedLoudness(Array.from(list, e => ({ e: e * both, s: 0.1 })));
+  const lufs = gated(energy);
+  return { lufs, play: Math.max(gated(noBass) + bassUsualDb, lufs - bassMostDb), peak };
+}
+
+// ---- WAV, 16 bit, the file's own channels (1 or 2) at 44.1 kHz ----
+function wav16(channels, rate) {
+  const n = channels[0].length, ch = channels.length, bytes = n * ch * 2;
+  const out = new DataView(new ArrayBuffer(44 + bytes));
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) out.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); out.setUint32(4, 36 + bytes, true); str(8, 'WAVE'); str(12, 'fmt ');
+  out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, ch, true); out.setUint32(24, rate, true);
+  out.setUint32(28, rate * ch * 2, true); out.setUint16(32, ch * 2, true); out.setUint16(34, 16, true);
+  str(36, 'data'); out.setUint32(40, bytes, true);
+  for (let i = 0, o = 44; i < n; i++)
+    for (let c = 0; c < ch; c++, o += 2) {
+      const v = Math.max(-1, Math.min(1, channels[c][i]));
+      out.setInt16(o, Math.round(v * 32767), true);
+    }
+  return new Blob([out.buffer], { type: 'audio/wav' });
+}
+
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const RATE = 44100;
+let queue = [], busy = false;
+
+function rowFor(item) {
+  if (!item.el) {
+    if (!queue.some(q => q.el)) $('queue').innerHTML = '';
+    item.el = document.createElement('div');
+    item.el.className = 'row';
+    $('queue').appendChild(item.el);
+  }
+  item.el.innerHTML = `<div style="flex:1;min-width:0"><div class="n">${esc(item.name)}</div>` +
+    (item.pct != null ? `<div class="bar"><i style="width:${item.pct}%"></i></div>` : '') + `</div>` +
+    `<span class="s ${item.cls || ''}">${esc(item.status)}</span>`;
+}
+
+function put(item, blob, m) {
+  return new Promise(resolve => {
+    const x = new XMLHttpRequest();
+    x.open('PUT', '/api/tracks/' + encodeURIComponent(item.name) + '.wav');
+    if (m && isFinite(m.play)) {
+      x.setRequestHeader('X-Lufs', m.lufs.toFixed(2));
+      x.setRequestHeader('X-Play', m.play.toFixed(2));
+      x.setRequestHeader('X-Peak', Math.min(m.peak, 1).toFixed(5));
+    }
+    x.upload.onprogress = e => { if (e.lengthComputable) { item.pct = Math.round(100 * e.loaded / e.total); rowFor(item); } };
+    x.onload = () => {
+      let r = {};
+      try { r = JSON.parse(x.responseText); } catch (e) {}
+      resolve(x.status === 200 && r.ok ? null : (r.error || 'the board said ' + x.status));
+    };
+    x.onerror = () => resolve('the board did not answer');
+    x.send(blob);
+  });
+}
+
+async function work() {
+  if (busy) return;
+  busy = true;
+  const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: RATE });
+  for (let item; (item = queue.find(q => !q.done));) {
+    try {
+      item.status = 'reading'; rowFor(item);
+      const audio = await ctx.decodeAudioData(await item.file.arrayBuffer());
+      const channels = [audio.getChannelData(0)];
+      if (audio.numberOfChannels > 1) channels.push(audio.getChannelData(1));
+      item.status = 'measuring'; rowFor(item);
+      await new Promise(r => setTimeout(r, 20));
+      const m = trackLoudness({ rate: audio.sampleRate, channels, bassHz: 200, bassUsualDb: 1.4, bassMostDb: 3 });
+      item.status = 'sending'; item.pct = 0; rowFor(item);
+      const error = await put(item, wav16(channels, audio.sampleRate), m);
+      item.pct = null;
+      item.status = error ? error : (isFinite(m.lufs) ? m.lufs.toFixed(1) + ' LUFS · sent' : 'sent');
+      item.cls = error ? 'err' : 'ok';
+    } catch (e) {
+      item.status = 'this browser cannot read it'; item.cls = 'err';
+    }
+    item.done = true;
+    rowFor(item);
+  }
+  busy = false;
+  ctx.close();
+  await fetch('/api/done', { method: 'POST' }).catch(() => {});
+  setTimeout(board, 800);
+}
+
+// ---- firmware: checked here first (the board checks again), then PUT /api/firmware ----
+const cstr = (bytes, from, n) => { let s = ''; for (let i = from; i < from + n && bytes[i]; i++) s += String.fromCharCode(bytes[i]); return s; };
+function firmwareInfo(bytes) {   // esp_image_header_t (24) + segment header (8), then esp_app_desc_t
+  if (bytes.length < 288 || bytes[0] !== 0xE9) return null;
+  const v = new DataView(bytes.buffer, bytes.byteOffset);
+  if (v.getUint32(32, true) !== 0xABCD5432) return null;
+  return { chip: v.getUint16(12, true), version: cstr(bytes, 48, 32), project: cstr(bytes, 80, 32), date: cstr(bytes, 128, 16) };
+}
+let fwBoard = '';
+async function sendFirmware(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const info = firmwareInfo(bytes);
+  const state = $('fwState');
+  state.className = 's';
+  if (!info) { state.textContent = file.name + ' is not a firmware file.'; state.className = 's err'; return; }
+  if (info.project !== 'nano_controller_p4' || info.chip !== 18) {
+    state.textContent = file.name + ' is the firmware of ' + (info.project || 'something else') + ', not of this board.';
+    state.className = 's err';
+    return;
+  }
+  if (!confirm('Update the board from ' + (fwBoard || '?') + ' to ' + info.version + ' (' + info.date + ')?\n\n' +
+      'Jam tracks stop meanwhile; afterwards the board restarts (Wi-Fi is off then).')) return;
+  $('fwBtn').disabled = true;
+  const bar = $('fwBar');
+  bar.hidden = false;
+  state.textContent = 'Sending ' + info.version + ' …';
+  const error = await new Promise(resolve => {
+    const x = new XMLHttpRequest();
+    x.open('PUT', '/api/firmware');
+    x.upload.onprogress = e => { if (e.lengthComputable) bar.firstChild.style.width = Math.round(100 * e.loaded / e.total) + '%'; };
+    x.onload = () => {
+      let r = {};
+      try { r = JSON.parse(x.responseText); } catch (e) {}
+      resolve(x.status === 200 && r.ok ? null : (r.error || 'the board said ' + x.status));
+    };
+    x.onerror = () => resolve('the board did not answer');
+    x.send(file);
+  });
+  bar.hidden = true;
+  $('fwBtn').disabled = false;
+  if (error) { state.textContent = 'Not updated: ' + error + '. The board keeps ' + (fwBoard || 'its firmware') + '.'; state.className = 's err'; return; }
+  state.textContent = 'Done: the board restarts with ' + info.version + '. It keeps it once it has run for 30 s; ' +
+    'its system page shows the version. Switch Wi-Fi on again for more tracks.';
+  state.className = 's ok';
+}
+$('fwBtn').onclick = () => $('fwPick').click();
+$('fwPick').onchange = e => { if (e.target.files[0]) sendFirmware(e.target.files[0]); e.target.value = ''; };
+
+function add(files) {
+  for (const file of files) {
+    const name = file.name.replace(/\.[^.]+$/, '').replace(/[\/\\:*?"<>|]/g, '-').slice(0, 70);
+    const item = { file, name, status: 'waiting' };
+    queue.push(item);
+    rowFor(item);
+  }
+  work();
+}
+
+async function board() {
+  try {
+    const r = await (await fetch('/api/tracks')).json();
+    if (r.firmware) { fwBoard = r.firmware; $('fwNow').textContent = 'On the board: ' + r.firmware; }
+    const rows = r.tracks.map(t => `<div class="row"><span class="n">${esc(t.name)}</span><span class="s">${esc(t.note)}</span></div>`);
+    if (!r.card) rows.unshift('<div class="row"><span class="s err">No microSD card in the board.</span></div>');
+    else if (!rows.length) rows.push('<div class="row"><span class="s">No tracks yet.</span></div>');
+    $('board').innerHTML = rows.join('');
+    if (r.measuring) setTimeout(board, 3000);
+  } catch (e) {
+    $('board').innerHTML = '<div class="row"><span class="s err">The board does not answer.</span></div>';
+  }
+}
+
+const drop = $('drop');
+drop.onclick = () => $('pick').click();
+$('pick').onchange = e => add(e.target.files);
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('over'); add(e.dataTransfer.files); };
+board();
+</script>
+</body></html>

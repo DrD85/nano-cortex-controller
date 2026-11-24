@@ -1,0 +1,12 @@
+dependencies:
+  idf: ">=6.0"
+  lvgl/lvgl: "^9.2"
+  espressif/esp_lvgl_port:
+    version: "^2.6"
+    override_path: "../components/esp_lvgl_port"   # 2.9.0 with its MIPI-DSI path fixed for IDF 6.0
+  espressif/esp_lcd_ek79007: "^1"
+  espressif/esp_lcd_touch_gt911: "^1.1"
+  # Wi-Fi through the ESP32-C6 (SDIO), only for sending jam tracks from the Mac (p4_net.c)
+  espressif/esp_hosted: "~2"
+  espressif/esp_wifi_remote: ">=0.10,<2.0"
+  espressif/mdns: "^1.4"

@@ -19,3 +19,9 @@ release/
 # Python
 __pycache__/
 build-storetest/
+
+# The 7" board (p4/): its build folders and private artwork
+p4/firmware/build-*/
+p4/firmware/main/private/
+p4/**/img/
+p4/a2dp-bridge/sdkconfig

@@ -1,0 +1,416 @@
+// Touch screen: current preset with capture and cab, previous/next buttons, a mode button, a tuner button
+// and six tiles that match footswitches 3-8:
+//   preset mode: the six presets of the bank (bank with the arrow buttons)
+//   scene mode:  in place of them the six scenes of the current preset - which of its effects are on (the Scenes
+//                button next to Save goes there and back; long press on a tile: name, colour and effects)
+//   FX mode:     FX slots 1-5 on/off, reverb mix Pos 1 / Pos 2 (long press: set them); Pre FX 1 can have
+//                a second effect (A | B in its FX editor), swapped by holding - or tapping - its footswitch
+// VOL (top left): capture volume; long press on the capture card: its gain, bass, mid and treble; long press on the
+// cab card: cab output, high pass and low pass.
+#pragma once
+
+#include <stdbool.h>
+#include <stddef.h>
+
+#include "library.h"
+#include "nano_state.h"
+
+// Called from the LVGL task when the user taps something. Must not block.
+//   'p' / 'n'      previous / next preset (swipe)
+//   'k', -1 / +1   previous / next bank (arrow buttons)
+//   'w', 1..8      same as footswitch 1-8 (1 = mode, 2 = tuner, 3-8 = tiles); UI_SWITCH_HOLD | n = footswitch n held
+//                  (footswitch 1 held = looper mode on / off, 2 held = scenes <-> presets)
+//   '^', +-1       tuner reference pitch one Hz up / down (all letters are taken)
+//   '~', 0         tuner: mute the output on / off
+//   'O', slot      long press on an FX tile: open the FX editor for that slot
+//   'E', 0         FX editor closed
+//   'M', type      FX editor: choose this model for the edited slot
+//   'a'-'e'        FX editor: switch the edited slot on/off
+//   'C' / 'I', n   capture slot 1-25 / cab slot 1-5 (0 = bypass)
+//   'L', k<<16|i   load library item i (alphabetical) into the active slot; k: 0 capture, 1 cab
+//   'B', packed    own bank: symbol << 18 (5 bits) | bank << 14 | slot << 11 | colour << 7 | preset (preset 0 = default)
+//   'S', 0         save the current preset (after the user confirmed it)
+//   'r', 0         refresh: read presets, names and the library again
+//   'V', 0         USB volume opened: read the Nano's settings (answer with ui_set_usb_gain)
+//   'U', tenths    USB playback volume in tenths of a dB (-400 = off .. 0)
+//   'v', w<<16|v   capture volume (w 0: v = 0-255), cab setting (w 1-3 = output, high pass, low pass: v = 0-1000)
+//                  or capture amp knob (w 4-7 = gain, bass, mid, treble: v = 0-255)
+//   'Y', 0         the library list is shown but not read yet: read it now (answer with ui_set_library)
+//   'y', 1 / 0     cab settings opened (read them, answer with ui_set_cab_settings) / closed
+//   'z', n         FX editor: load FX preset n into the slot (0 = the original values, 1-UI_FX_PRESETS)
+//   'Q', w<<8|v    reverb mix editor: Pos w+1 (0/1) moved to v (0-255), play that mix
+//   'W', p1<<8|p2  reverb mix editor: save Pos 1 / Pos 2 (0-255) for this preset (on the controller)
+//   '!', 0         reverb mix editor: take the reverb off the expression pedal in the Nano's preset
+//   '=', 1 / 0     expression dialog opened (read the preset's assignments, answer with ui_set_expression) / closed
+//   '+', mode      expression dialog: set the Nano's EXP/MIDI connector (NANO_JACK_MIDI / NANO_JACK_EXPRESSION)
+//   '<', n         expression dialog, Calibrate: 1 = start (answer with ui_set_pedal while the pedal moves),
+//                  2 = save what was seen, 0 = stop
+//   'K', 0         reverb mix editor closed
+//   'A', w<<24|t   second effect (B) of this preset: w 0 = reverb (0 = none: footswitch 8 is the mix switch),
+//                  w 2 = reverb B kept for later while footswitch 8 is the mix switch, w 8 + n = FX slot n (its
+//                  switch swaps A / B); t = model, 0 = none
+//   'H', 0         edit reverb B: load it and open the FX editor
+//   'X', 1 / 0     Bluetooth MIDI dialog opened / closed (search for devices while open)
+//   'P', n         connect MIDI device n of the list (-1 = disconnect and forget)
+//   'D', n         footswitch learn: 1-8 = the next pressed footswitch becomes switch n, 0 = cancel,
+//                  -1 = default order (answer with ui_learn_done)
+//   '$', -1        the Scenes button: scenes on the tiles, or the bank's presets again if scenes are showing
+//                  (1 / 0 = scenes / presets)
+//   '&', n         FX editor, scene button: the settings of the edited effect as they are now belong to scene n (0-5)
+//                  from now on; 0x100 | n = the scene leaves this effect's settings alone again
+//   '|', r<<16|v   FX editor of a wah: auto-wah setting r (UI_WAH_*) of this preset changed to v (answer with
+//                  ui_set_autowah)
+//   '[', slot      FX editor, A | B: swap to the other effect of this slot
+//   '-', n         reverb dialog, its two settings: 1 / 2 = set that one from the reverb as it is now; 16 / 17 = the
+//                  reverb switch does not / does change between the two (the dialog was saved on another / that tab)
+//   ')', 0         the system page was opened or asks again: answer with ui_show_system
+//   '>', s<<8|m    what the switch of FX slot s does with its second effect (m = UI_AB_*)
+typedef void (*ui_command_cb)(char command, int arg);
+// The switch of a slot with a second effect: a tap switches on / off and holding swaps A / B; a tap swaps and holding
+// switches on / off; or the press itself swaps, at once - without a held function there is no wait for the release.
+// UI_AB_OFF (the reverb's slot only): its switch only switches the reverb on and off, at once, and its tile is an
+// ordinary one - the reverb switch (footswitch 8) is the one that changes the reverb.
+enum { UI_AB_HOLD, UI_AB_TAP, UI_AB_PRESS, UI_AB_OFF };
+#define UI_SWITCH_HOLD 0x100
+#define UI_SWITCH_SENT 0x200   // looper mode: the footswitch's message went out already, only show the press
+#define UI_SWITCH_LOST 0x400   // ... but it could not be sent (no phone)
+#define UI_SWITCH_DOWN 0x800   // a footswitch that acts while it is held (auto-wah "Hold") went down ...
+#define UI_SWITCH_UP 0x1000    // ... and up again
+
+// Text input from the on-screen keyboard: 'N' = new name for the current preset; '1'-'4' = save the FX editor's
+// values as FX preset 1-4 under this name ("" deletes it). 'L' = a looper tile from its dialog:
+// "<footswitch 2-8><colour a-j><symbol a-j>name", or "<footswitch>!" for the default. 'S' = a scene of the current
+// preset from its dialog: "<footswitch 3-8><colour a-j><five times 0 / 1: FX slot on>name", or "<footswitch>!" to
+// empty it. 'X' = the expression dialog's assignments, saved: one entry per sweep (NANO_EXP_RANGES, in their order),
+// "<0 / 1: on the pedal><heel, two hex digits><toe, two hex digits>", then one per on/off assignment
+// (NANO_EXP_SWITCHES), "<0 / 1: assigned><way 0-2><0 / 1: inverted><0 / 1: latch><delay in ms, four hex digits>".
+// 'R' = the name of a reverb setting: "<1 / 2>name". 'T' = the set list from its dialog: "<0 / 1: on>", then per song in order "<preset, two hex digits><start scene
+// 0-6>" (0 = none). A scene's
+// text has its capture after the five FX: 'a' = as it is, 'b'-'z' = slot 1-25.
+typedef void (*ui_text_cb)(char kind, const char *text);
+
+// FX editor: a parameter was moved. value = 0-1, as the Nano expects it.
+typedef void (*ui_param_cb)(int slot, int param, float value);
+
+// Looper mode: the tiles of footswitches 2-8, each with a name, a colour (as the banks') and a symbol.
+#define UI_LOOPER_SWITCHES 7
+#define UI_LOOPER_NAME 16      // with the terminating 0
+#define UI_LOOPER_SYMBOLS 10   // none, loop, play, pause, stop, undo, note, previous, next, play / pause
+
+// Scenes of the current preset (footswitches 3-8 in scene mode).
+#define UI_SCENES 6
+#define UI_SETLIST_MAX 36      // songs in the set list (six pages)
+#define UI_SCENE_NAME 16       // with the terminating 0
+
+typedef struct {
+    bool fx_mode;
+    int bank;            // 0-15
+    int mix_slot;        // FX slot of the reverb, -1 if there is none
+    bool mix_known;      // Pos 1 / Pos 2 are set for this preset
+    bool mix_exp;        // the Nano's preset has the reverb on the expression pedal (its Amount)
+    bool exp_used;       // the Nano's expression pedal does something in this preset
+    float mix_pos[2];    // 0-1
+    int mix_active;      // -1 = as stored in the preset, 0 = Pos 1, 1 = Pos 2
+    uint32_t rev_b_type; // second reverb of this preset (footswitch 8 swaps A/B), 0 = none: it is the mix switch
+    uint32_t rev_b_stored; // the second reverb kept for this preset - also while footswitch 8 is the mix switch
+    int rev_active;      // 0 = reverb A (the preset's), 1 = reverb B
+    uint32_t ab_b_type[NANO_FX_SLOTS];   // second effect (B) of an FX slot, 0 = none: its switch swaps A / B
+    uint32_t ab_a_type[NANO_FX_SLOTS];   // the preset's own effect (A) of that slot (known once read), shown while B runs
+    uint8_t ab_active;   // bit n: B runs in slot n
+    uint8_t ab_mode[NANO_FX_SLOTS];      // what the slot's switch does with A and B (UI_AB_*)
+    bool rp_used;        // the reverb switch changes between two named settings of the reverb (not A / B, not the mix)
+    bool not_loaded;     // the Nano refused to load this preset: it names it, but plays the one before
+    uint8_t rp_active;   // 0 / 1: the setting that is on, 2: the reverb is set to neither (the next press: setting 1)
+    uint8_t rp_set;      // bit n: setting n + 1 is set (for the reverb that is in the slot)
+    char rp_names[2][16];
+    uint8_t rp_fxp_count;   // the FX presets of the reverb in the slot (to take as a setting), their names
+    char rp_fxp_names[4][16];
+    uint8_t exp_amount;  // bit n: the Nano's expression pedal moves the Amount of the effect in slot n in this preset
+    uint8_t exp_switch;  // bit n: ... and switches it on / off
+    uint8_t bank_presets[6];   // own bank: preset per switch 3-8, 0 = empty
+    uint8_t bank_colors[6];    // colour index (UI_BANK_COLOR_COUNT)
+    uint8_t bank_icons[6];     // symbol: 0 = none, n = PRESET_ICONS[n - 1]
+    bool looper;         // looper mode: the tiles are the switches of a looper app on a phone
+    bool phone;          // that phone is connected (Bluetooth MIDI)
+    int looper_sent;     // looper mode: controller number of the last press, < 0 if it could not be sent, 0 = none yet
+    char looper_names[UI_LOOPER_SWITCHES][UI_LOOPER_NAME];   // looper mode: tiles of footswitches 2-8
+    uint8_t looper_colors[UI_LOOPER_SWITCHES];                // colour index (UI_BANK_COLOR_COUNT)
+    uint8_t looper_icons[UI_LOOPER_SWITCHES];                 // symbol index (UI_LOOPER_SYMBOLS)
+    bool scenes;         // scene mode: the tiles of footswitches 3-8 are scenes, not the bank's presets
+    int scene_active;    // scene whose effects are on right now, -1 = none
+    char scene_names[UI_SCENES][UI_SCENE_NAME];               // "" = empty
+    uint8_t scene_colors[UI_SCENES];                          // colour index (UI_BANK_COLOR_COUNT)
+    uint8_t scene_fx[UI_SCENES];                              // bit n = FX slot n on
+    uint8_t scene_set[UI_SCENES];                             // bit n = the scene carries settings for the effect in slot n
+    uint8_t scene_capture[UI_SCENES];                         // capture slot 1-25 the scene loads, 0 = as it is
+    uint8_t wah_mode[NANO_FX_SLOTS];                          // auto-wah of the wah in this slot (UI_WAH_OFF / ON / HELD)
+    uint8_t wah_rate[NANO_FX_SLOTS];                          // its rate (index into the list of UI_WAH_RATES)
+    bool setlist_on;                                          // set list: footswitches 3-8 are its songs (preset mode);
+    uint8_t setlist_count;                                    // then bank_presets / colours / symbols are those songs
+    uint8_t setlist_presets[UI_SETLIST_MAX];                  // the songs in order (presets 1-64)
+    uint8_t setlist_scenes[UI_SETLIST_MAX];                   // their start scenes 1-6, 0 = none
+    char setlist_scene_names[6][UI_SCENE_NAME];               // names of the start scenes of the songs on the page
+    uint8_t setlist_first;                                    // the song on footswitch 3 (0-based)
+    int8_t setlist_song;                                      // the song that is on, -1 = none
+} ui_view_t;
+
+#define UI_BANK_COLOR_COUNT 10
+
+void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text);
+// Milliseconds since the screen's task last ran its timers (it does so twice a second): the controller's watchdog
+// restarts the controller when the screen has stood still for too long.
+uint32_t ui_stalled_ms(void);
+#ifdef NANO_WDTEST
+void ui_test_hang(void);   // development: takes the screen's lock for good
+#endif
+// Where the set list dialog reads the scene names of any preset ("" = empty scene); called from the LVGL task.
+typedef void (*ui_scene_names_cb)(int preset, char names[UI_SCENES][UI_SCENE_NAME]);
+void ui_set_scene_names_source(ui_scene_names_cb cb);
+void ui_set_link(bool connected);
+// P4 board: the link goes over USB (true) or Bluetooth (false) - before ui_set_link(true).
+void ui_set_link_way(bool usb);
+void ui_show_state(const nano_state_t *state, const ui_view_t *view);
+void ui_show_tuner(bool open);
+void ui_show_tuner_reading(const nano_tuner_reading_t *reading);
+// Reference pitch (Hz) and output mute shown on the tuner screen.
+void ui_tuner_settings(float base_hz, bool muted);
+
+// FX editor. values = current parameter values (0-1, index order) or NULL while they are unknown
+// (the Nano only reports them for FX that are on).
+void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, int count);
+void ui_fx_editor_close(void);
+
+// Library for the capture / cab pickers (owned by the caller, must stay valid).
+void ui_set_library(const nano_library_t *library);
+
+// Listening to a library item without loading it: kind 'C' capture / 'I' cab, 0 = nothing (picker rows, bar).
+// The picker's play buttons send '.' with (1 = IR) << 16 | position, '.' -1 stops (also when the picker closes).
+void ui_set_listening(char kind, int position, const char *name, bool pending);
+
+// Tempo button (top bar) and the tempo / metronome dialog (NanOS 2.3.0). The dialog sends '\'' what << 24 | value
+// (see metro_command in main.c); open: the dialog shows (also when the Nano opened its own tempo screen).
+// It closes by itself 5 s after it came up, after the last touch and after the last change (it sends what = 10 then).
+typedef struct {
+    bool supported, open, global, ext_clock, muted;
+    float tempo, volume_db;
+    int time_sig, note_len, sound;
+} ui_tempo_t;
+void ui_set_tempo(const ui_tempo_t *t);
+
+// The wheel while a rotary footswitch of the Nano is turned: before / now / after; "Back to" sends '"' with
+// (cab ? 1 : 0) << 8 | from. It closes by itself 2 s after the last call.
+typedef struct {
+    bool cab;
+    int slot, from;            // capture 1-25 / cab 1-5, 0 = bypass
+    int bank;                  // capture: the bank (also while bypassed)
+    const char *prev, *name, *next, *from_name;
+} ui_rotate_t;
+void ui_show_rotate(const ui_rotate_t *r);
+
+// Cortex Cloud through the controller: the switch on the settings screen's Nano page ('\\' 0 / 1 sets it).
+void ui_set_cloud(bool on);
+
+// NanOS version from the state (-1 = unknown), for the settings screen's Nano page.
+void ui_set_nano_firmware(int major, int minor);
+
+// USB playback volume (dB, -40 = off) read from the Nano's settings.
+void ui_set_usb_gain(float db);
+
+// Auto-wah: the controller moves the position of a wah in tempo. Its settings belong to the preset and are shown in
+// the FX editor of a wah below the wah's own parameter: the mode (off, moving while the effect is on, or the
+// footswitch switches the wah on only while it is held), the rate as a note value, the shape, the heel and toe ends
+// (0-100 %) and the tempo - the Nano's (nano_bpm, 0 = not known) or an own one.
+enum { UI_WAH_MODE, UI_WAH_RATE, UI_WAH_SHAPE, UI_WAH_HEEL, UI_WAH_TOE, UI_WAH_TEMPO, UI_WAH_BPM, UI_WAH_ROWS };
+enum { UI_WAH_OFF, UI_WAH_ON, UI_WAH_HELD };
+#define UI_WAH_RATES 6         // 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16
+#define UI_WAH_SHAPES 3        // triangle, sine, up
+#define UI_WAH_BPM_MIN 40
+#define UI_WAH_BPM_MAX 240
+typedef struct {
+    uint8_t mode, rate, shape, heel, toe;
+    bool own_tempo;
+    uint16_t bpm;        // the own tempo
+    float nano_bpm;
+} ui_autowah_t;
+void ui_set_autowah(const ui_autowah_t *wah);
+
+// FX presets of the model in the FX editor (a row above its parameters): names of the places ("" = empty), the one
+// loaded or saved last (-1 = none, 0 = ORIGINAL, 1-UI_FX_PRESETS) and whether they can be used (the effect is on).
+#define UI_FX_PRESETS 4
+void ui_fx_presets_show(const char names[][16], int active, bool usable);
+
+// Cab settings dialog: values = output, high pass, low pass (0-1, NANO_CAB_SETTINGS) or NULL while unknown;
+// enabled = the sliders can be used; info = line under the title (cab name or why the values are missing).
+void ui_set_cab_settings(const float *values, bool enabled, const char *info);
+
+// Expression dialog: what the Nano's expression pedal does in the current preset. ranges = what it sweeps - the
+// Amount of FX slot 1-5, then the capture's gain, bass, mid, treble and level and the input gate (NANO_EXP_RANGES),
+// each from its heel to its toe value (0-255 = 0-100 %); switches = what it switches on and off (NANO_EXP_SWITCHES).
+#define UI_EXP_TARGETS NANO_EXP_RANGES
+typedef nano_exp_range_t ui_exp_range_t;
+void ui_set_expression(const nano_exp_range_t *ranges, const nano_exp_switch_t *switches);
+// Calibrate: the pedal's position as the Nano reports it and the lowest and highest seen so far (min > max: none yet).
+void ui_set_pedal(int value, int min, int max);
+// What the Nano's EXP/MIDI connector is set to (NANO_JACK_*, -1 = not known), shown at the top of that dialog.
+void ui_set_jack(int mode);
+
+// Tile layout: `count` fields (6 or 8) on the screen; position p shows the tile of switch order[p] (1-8, all eight
+// listed, the ones past count are left out). The footswitches and MIDI CC 50-57 are mapped the same way (main.c).
+// The layout dialog (from the MIDI dialog) sends ']' with count << 24 | (order[p] - 1) << 3p.
+// switch1: what footswitch 1 changes between (UI_SWITCH1_*), set in the same dialog.
+enum { UI_SWITCH1_FX_PRESETS, UI_SWITCH1_FX_SCENES, UI_SWITCH1_PRESETS_SCENES, UI_SWITCH1_ALL, UI_SWITCH1_COUNT };
+void ui_set_layout(int count, const uint8_t order[8], int switch1);
+
+// The Nano Cortex Editor is connected through the controller (shown in the status line).
+void ui_set_app(bool connected);
+
+// Footswitch learn finished (or not possible): closes the learn window and shows the message.
+void ui_learn_done(const char *message);
+
+// Bluetooth MIDI: connection and the devices found while the MIDI dialog is open.
+typedef struct {
+    bool connected;
+    char name[32];       // connected or stored device, "" = none
+    int count;
+    struct {
+        char name[32];
+        int8_t rssi;
+        bool remembered;
+    } devices[8];
+} ui_midi_t;
+void ui_set_midi(const ui_midi_t *midi);
+
+// Start screen (from ui_init until ui_splash_done or a tap): status line and version; NULL keeps the old text.
+void ui_splash_status(const char *status, const char *version);
+void ui_splash_done(void);
+
+// Short message at the top of the screen.
+void ui_show_message(const char *text);
+
+// ---- Neural Capture V1 assistant (Settings > Capture) ----
+typedef enum { UI_CAP_CLOSED, UI_CAP_CONNECT, UI_CAP_LEVELS, UI_CAP_TRAINING, UI_CAP_COMPARE, UI_CAP_DONE } ui_cap_step_t;
+typedef struct {
+    int step;              // ui_cap_step_t
+    int gain, level;       // CAPTURE IN / OUTPUT LEVEL, 0-255
+    int progress;          // 0-100
+    int cab;               // listening through cab 0-5
+    bool source;           // listening to the original
+    int user_captures;     // in My Neural Captures, -1 = not known
+    const char *message;   // a hint to show once, NULL = none
+    const char *saved;     // the done step's text
+    bool busy;             // waiting for the Nano (saving, leaving)
+} ui_capture_t;
+void ui_capture_show(const ui_capture_t *c);
+void ui_capture_meter(int which, int value);   // which 0 = CAPTURE IN, 1 = OUTPUT; the Nano's raw value
+// The system page (the System button of the MIDI dialog sent ')'): these lines.
+void ui_show_system(const char *text);
+// Footswitch tile 0-7 lights up for a moment (the press arrived).
+void ui_flash_tile(int tile);
+
+// Pedal view chosen or not (the field "PEDALS" of the full-screen bar sends '_' with 1 / 0; the controller keeps it
+// and answers with this call and the state).
+void ui_set_pedal_view(bool on);
+
+#ifdef NANO_BENCH
+// Development (-DNANO_BENCH=1): times the FX editor's lists on the board and prints the result (console '%').
+void ui_bench(void);
+#endif
+
+// For the editor (connected through the controller): what tile n (switch n + 1, before the layout) shows, with
+// the screen's own symbols left out of the texts.
+enum { UI_TILE_ACTIVE = 1, UI_TILE_EMPTY = 2, UI_TILE_ROWS = 4, UI_TILE_ROWS_ON = 8 };
+typedef struct {
+    char caption[24], name[40], note[24], rows[2][16];
+    uint32_t color;
+    uint8_t flags;       // UI_TILE_*
+    int8_t row_active;   // the filled row: 0 / 1, -1 = none
+} ui_tile_info_t;
+// The eight tiles and the view they were drawn from; false while the screen has not drawn them yet. A copy taken at
+// the last ui_show_state: it never waits for the screen. ui_tiles_version counts up whenever that copy changes. Both
+// are to be called from the task that calls ui_show_state.
+bool ui_tiles_get(ui_tile_info_t tiles[8], ui_view_t *view);
+uint32_t ui_tiles_version(void);
+
+// ---- P4 board: the phone (Bluetooth audio through the ESP32) and the Nano's output level ----
+typedef struct {
+    bool connected, playing;
+    char device[32];            // "iPhone"
+    char title[64], artist[96]; // artist / album line
+    int pos_s, len_s;
+    float volume_db;            // into the Nano
+    bool mute_on_tuner;
+} ui_phone_t;
+typedef enum {
+    UI_PHONE_PREV, UI_PHONE_TOGGLE, UI_PHONE_NEXT, UI_PHONE_VOLUME, UI_PHONE_MUTE_TUNER,
+    UI_JAM_PLAY, UI_JAM_TOGGLE, UI_JAM_PREV, UI_JAM_NEXT, UI_JAM_VOLUME, UI_JAM_LEVEL,
+    UI_LOOP_BARS, UI_NET_ON, UI_NET_SCAN,   // (UI_NET_SCAN: look for the networks around, see ui_net_t)
+    UI_DRUM_GROOVE, UI_DRUM_LEVEL, UI_DRUM_LEVEL_KEEP, UI_DRUM_SYNC, UI_DRUM_COUNT,   // groove index; level dB x 10; 0 / 1
+    UI_LOOP_QUANTIZE, UI_LOOP_ARM,   // 0 / 1: takes on the drums' bar lines; Rec arms (the first note starts the take)
+    UI_BRIGHTNESS, UI_BRIGHTNESS_KEEP,   // the screen's brightness in percent: while the bar moves / let go (kept)
+} ui_phone_action_t;
+// value: UI_PHONE_VOLUME / UI_JAM_VOLUME / UI_JAM_LEVEL dB x 10 (the level: correction of the current jam track),
+// UI_PHONE_MUTE_TUNER / UI_LOOP_BARS / UI_NET_ON 0 / 1, UI_JAM_PLAY the track (0-based). Called from the LVGL task.
+typedef void (*ui_phone_cb)(ui_phone_action_t action, int value);
+void ui_set_phone_handler(ui_phone_cb cb);
+// The brightness the screen has (Settings > Display), 10-100 %.
+void ui_set_brightness(int percent);
+void ui_set_phone(const ui_phone_t *p);
+// The player (jam tracks or the phone, whichever the top bar's field shows) on the screen, or away again -
+// footswitch 1 held.
+void ui_player_toggle(void);
+// The drum menu (looper mode: footswitch 1 held, or the drums' tile held) on the screen, or away again.
+void ui_drum_menu_toggle(void);
+// The Nano's output (USB capture 3/4): loudness and a level 0..1 for the bar; known = false shows a dash.
+void ui_set_output_level(bool known, float lufs, float level);
+
+// ---- P4 board: the looper on the board and the jam tracks on the microSD card ----
+// The screen asks for them itself, 10 times a second (ui_set_loop_source), and shows them: the loop strip in place of
+// the signal chain and the tiles in looper mode (the tuner's footswitch held), the jam player (from the top bar's
+// player field when the jam tracks are its source, or with footswitch 1 held). Taps go out as 'w' (looper tiles) and through the phone handler (jam).
+enum { UI_LOOP_EMPTY, UI_LOOP_REC, UI_LOOP_PLAY, UI_LOOP_DUB, UI_LOOP_STOP };
+typedef struct {
+    bool ready;                 // the looper has its memory
+    int state;                  // UI_LOOP_*
+    float pos_s, len_s, max_s;  // position, length (0 while the first take runs), longest loop
+    bool to_bar_line, can_undo, can_redo;
+    bool bar_lines;             // the first take is rounded to bars in the Nano's tempo
+    int passes, bars;           // bars: in the loop (bar lines on and the length known), 0 = free length
+    float bpm;
+    // P4: two parts (A, B) and the drums beside them
+    int part, next_part;        // the part that plays (0 / 1); the one it changes to at the loop's end (-1 none)
+    bool paused;                // loop and drums are held
+    float part_len_s[2];        // 0 = empty
+    int part_state[2];          // UI_LOOP_*
+    bool drums_ready, drums_on, drum_sync, count_in, counting;   // counting: the count-in runs
+    bool quantize, arm, armed;  // armed: the part waits for the first note
+    int groove;                 // index into DRUM_GROOVES
+    float drum_level_db;
+} ui_loop_t;
+typedef struct {
+    bool card;                  // the microSD card is there
+    bool unreadable;            // ... a card is in the slot, but without a file system the board reads (FAT32)
+    int count, current;         // tracks; the one loaded (-1 = none)
+    bool playing;
+    int pos_s, len_s;
+    float volume_db;            // the jam volume into the Nano
+    float level_db;             // correction by ear of the current track
+    int measuring;              // tracks still to be measured
+    float target_lufs;          // where the measured tracks play
+} ui_jam_t;
+// Wi-Fi for tracks from the Mac (its switch and status in the jam player; the network's name and password come
+// from the keyboard as text 'W' and 'K').
+enum { UI_NET_OFF, UI_NET_STARTING, UI_NET_JOINING, UI_NET_STATION, UI_NET_AP, UI_NET_FAILED };
+typedef struct {
+    int state;                  // UI_NET_*
+    char ssid[33], addr[48], ap_pass[12];
+    int received;               // files received since it went on
+    char receiving[64];         // the file coming in ("" = none)
+    int percent;
+    bool scanning;              // looking for the networks around
+    int scan_count;             // what the last look found, strongest first
+    struct { char ssid[33]; int8_t rssi; bool secure; } scan[16];
+} ui_net_t;
+typedef void (*ui_loop_source_cb)(ui_loop_t *loop, ui_jam_t *jam, ui_net_t *net);
+typedef const char *(*ui_jam_name_cb)(int i);
+typedef void (*ui_jam_note_cb)(int i, char *out, size_t n);   // the track list's note: "-17.3 LUFS · +1.5"
+void ui_set_loop_source(ui_loop_source_cb source, ui_jam_name_cb names, ui_jam_note_cb notes);

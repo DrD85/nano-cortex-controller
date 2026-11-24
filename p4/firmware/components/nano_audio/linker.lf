@@ -1,0 +1,14 @@
+# The sound path in internal RAM instead of flash (P4 board, 2026-11-19): code from flash runs through the cache that
+# the PSRAM shares - when the screen draws a lot (or the drum kit is made) the audio code was pushed out of the cache
+# and every render of 1 ms of sound took up to 0.8-4.8 ms: the capture packets were not taken in time and the looper
+# recorded silence (clicks). About 100 KB of the 364 KB internal RAM that were free.
+[mapping:nano_audio_iram]
+archive: libnano_audio.a
+entries:
+    * (noflash)
+
+# The USB host library: every packet of the Nano's sound goes through it (transfer callbacks, resubmits).
+[mapping:usb_host_iram]
+archive: libespressif__usb.a
+entries:
+    * (noflash)
