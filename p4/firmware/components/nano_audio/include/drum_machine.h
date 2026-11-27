@@ -24,13 +24,25 @@ typedef struct {
 extern const drum_groove_t DRUM_GROOVES[];
 extern const int DRUM_GROOVE_COUNT;
 
-#define DRUM_VOICES 12
+#define DRUM_VOICES 16
+#define DRUM_LAYERS 3                         // sample kit: ghost, hit, accent
+#define DRUM_TAKES 2                          // sample kit: takes per layer, alternated
+enum { DRUM_KIT_COMPUTED, DRUM_KIT_ACOUSTIC, DRUM_KITS };
+typedef struct { const int16_t *data; uint32_t frames; uint8_t channels; } drum_take_t;
 
 typedef struct {
     // the kit (made once by drum_machine_init)
     int16_t *sound[DRUM_PADS];                // stereo frames
     uint32_t length[DRUM_PADS];
     float gain[DRUM_PADS];                    // the pads' levels (as the DAW's KitBalance: by the loudness of the attack)
+    // the acoustic kit (drum_machine_load_kit; the data stays the caller's)
+    drum_take_t take[DRUM_PADS][DRUM_LAYERS][DRUM_TAKES];
+    uint8_t takes[DRUM_PADS][DRUM_LAYERS];
+    float kit_gain[DRUM_PADS];
+    bool has_samples;
+    _Atomic int want_kit;                     // -1 = no change
+    int kit;                                  // DRUM_KIT_* (audio side)
+    uint8_t next_take[DRUM_PADS];
 
     // set from any task
     _Atomic int want_groove;                  // -1 = no change
@@ -44,7 +56,7 @@ typedef struct {
     bool paused;                              // set by loop_parts: no new hits, the place in the groove is kept
     double step_pos;                          // in steps since the start of the groove (fractions = between steps)
     uint32_t next_step;                       // the next step whose hits are still to come
-    struct { int pad; uint32_t pos, wait; float gain; bool on; } voice[DRUM_VOICES];   // wait: frames before it sounds
+    struct { int pad; uint32_t pos, wait, len; float gain; bool on; uint8_t channels; const int16_t *data; } voice[DRUM_VOICES];   // wait: frames before it sounds
     uint32_t rate;
 
     _Atomic uint32_t i_step, i_bar, i_running, i_groove;
@@ -59,6 +71,10 @@ void drum_machine_stop(drum_machine_t *d);        // the sounds that ring go on,
 void drum_machine_set_groove(drum_machine_t *d, int groove);   // takes over at the next bar line while it runs
 void drum_machine_set_bpm(drum_machine_t *d, float bpm);
 void drum_machine_set_level_db(drum_machine_t *d, float db);
+// The acoustic kit from a "NDK1" file (tools/gen_drum_kit.c) that stays in memory; false if it is not one.
+bool drum_machine_load_kit(drum_machine_t *d, const uint8_t *file, size_t size);
+void drum_machine_set_kit(drum_machine_t *d, int kit);   // DRUM_KIT_*: at the next hit (without samples: computed)
+int drum_machine_kit(drum_machine_t *d);
 
 // Audio side (loop_parts.h): start in the frame `delay` of the next render, `steps` into the groove (fractions too).
 void drum_machine_start_now(drum_machine_t *d, uint32_t delay, double steps);

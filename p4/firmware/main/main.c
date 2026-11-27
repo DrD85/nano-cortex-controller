@@ -175,6 +175,8 @@ static bool s_cloud;   // (loaded at the start, see cloud_load)
 #define METRO_KEY "metro"     // metronome settings: muted, time signature, note, sound, volume (dB x 2, signed)
 
 static volatile bool s_looper_live;   // (below: looper mode, for the footswitch task)
+static bool s_player;                 // P4: player mode - the tiles are the player's switches (footswitch 1 held)
+static volatile bool s_player_live;   // (the same, for the footswitch task)
 // Tile layout: footswitch / CC 50+p-1 / Chocolate switch p presses the switch s_layout[p - 1] (1-8) - for p up to
 // s_layout_count (6 or 8); the switches themselves keep their numbers everywhere else. Set in the layout dialog.
 static volatile uint8_t s_layout[FOOTSWITCH_COUNT] = { 1, 2, 3, 4, 5, 6, 7, 8 };
@@ -189,7 +191,7 @@ static int s_switch1 = UI_SWITCH1_FX_PRESETS;
 // looper's switches too, 2026-11-19.)
 static int layout_switch(int p)
 {
-    if (s_looper_live) return p >= 1 && p <= FOOTSWITCH_COUNT ? p : 0;
+    if (s_looper_live || s_player_live) return p >= 1 && p <= FOOTSWITCH_COUNT ? p : 0;   // (player mode: as the looper)
     return p >= 1 && p <= s_layout_count ? s_layout[p - 1] : 0;
 }
 // Values of a scene on their way to the Nano: the first ones go out with the scene's switches, the rest a few at a
@@ -238,6 +240,11 @@ static uint16_t value_u16(float value)
 // per bank and switch; stored in NVS.
 typedef struct { uint8_t preset, color, icon; } bank_slot_t;
 static bank_slot_t s_banks[BANKS][BANK_SLOTS];
+// P4 (2026-11-27): a second preset per switch, loaded when the switch was held - on its release (0 = none). An entry
+// of its own ("bank2"), so the banks' blob and its migrations stay as they are.
+#define BANK2_KEY "bank2"
+static uint8_t s_bank2[BANKS][BANK_SLOTS];
+static uint32_t s_release_hold_switches;   // switches whose held function comes on the release (footswitch task)
 
 static nano_library_t *s_library;
 
@@ -452,8 +459,8 @@ static int s_jack_wanted = -1;   // just set: the next settings reply should say
 // the cab card): each slider sends at most one value per PARAM_SEND_MS, the last one when the timer fires. The cab
 // settings are read while their dialog is open; the others come with the preset state.
 enum { SRC_CAPTURE_VOLUME, SRC_CAB_OUTPUT, SRC_CAB_HIGH_PASS, SRC_CAB_LOW_PASS,
-       SRC_AMP_GAIN, SRC_AMP_BASS, SRC_AMP_MID, SRC_AMP_TREBLE, SRC_COUNT };
-static const int SRC_AMP_KNOB[] = { NANO_AMP_GAIN, NANO_AMP_BASS, NANO_AMP_MID, NANO_AMP_TREBLE };
+       SRC_AMP_GAIN, SRC_AMP_BASS, SRC_AMP_MID, SRC_AMP_TREBLE, SRC_AMP_LEVEL, SRC_COUNT };   // (P4: LEVEL from the Level sheet)
+static const int SRC_AMP_KNOB[] = { NANO_AMP_GAIN, NANO_AMP_BASS, NANO_AMP_MID, NANO_AMP_TREBLE, NANO_AMP_LEVEL };
 #define CAB_SLIDER_MAX 1000              // cab values from the UI: 0-1000 = 0-1
 static struct {
     bool throttling;
@@ -631,6 +638,22 @@ typedef struct {
     uint16_t bpm;       // the own tempo
 } wah_t;                // stored in NVS as an array of NANO_FX_SLOTS
 _Static_assert(sizeof(wah_t) == 12, "wah_t is stored as it is: its size must not change");
+// (2026-11-27, the user: "ein Auto-Wah mit dem Input-Signal") Or the wah follows the playing: the dry input's peak
+// (USB 1/2) between quiet (-50 dBFS) and loud - loud is -6 dBFS at sensitivity 0, -42 dBFS at 100 - opens it from
+// heel to toe, rising with the attack and falling with the release. Stored beside the wah_t (its size is fixed), as
+// its own array per preset.
+typedef struct {
+    uint8_t follows;      // 0 = the tempo (wah_t), 1 = the playing
+    uint8_t sens;         // 0-100 %
+    uint16_t attack_ms;   // 5-200
+    uint16_t release_ms;  // 20-1000
+} wah_env_t;
+_Static_assert(sizeof(wah_env_t) == 6, "wah_env_t is stored as it is: its size must not change");
+static const wah_env_t WAH_ENV_DEFAULT = { .follows = 0, .sens = 60, .attack_ms = 15, .release_ms = 250 };
+static wah_env_t s_wah_env[NANO_FX_SLOTS];
+static float s_wah_level;             // the playing as the envelope has it, 0-1 (follows the playing)
+#define WAH_ENV_KEY "awe%02d"
+#define WAH_QUIET_DB (-50.0f)
 static const wah_t WAH_DEFAULT = { .rate = 3, .toe = 100, .bpm = 120 };
 static const float WAH_BEATS[UI_WAH_RATES] = { 8, 4, 2, 1, 0.5f, 0.25f };   // beats per round: 2 bars ... 1/16
 static wah_t s_wah[NANO_FX_SLOTS];
@@ -718,6 +741,7 @@ typedef struct {
     bool waiting[FOOTSWITCH_COUNT + 1];   // pressed, its held function may still come
     bool sounding[FOOTSWITCH_COUNT + 1];  // its looper controller is at 127
     bool held[FOOTSWITCH_COUNT + 1];      // a switch that acts while it is down: down
+    bool long_held[FOOTSWITCH_COUNT + 1]; // held long enough - its held function comes when it is let go
 } switch_track_t;
 
 // A switch with a held function (s_hold_switches) acts on release when it was not held; the others at once.
@@ -735,9 +759,9 @@ static void switch_event(switch_track_t *t, int number, footswitch_event_t event
         return;
     }
 #ifdef NANO_P4
-    // P4: the looper on the board (top row 1 drums, 2 part A, 3 part B, 4 pause; bottom row 5 back, 6 record /
-    // overdub, 7 play / stop, 8 undo). Switches 2, 3, 4, 6 and 7 act on the press, from here - every millisecond
-    // counts; 1 and 8 have a held function (drum menu, clear) and go the usual way.
+    // P4: the looper on the board (top row 1 drums, 2 part A, 3 part B, 4 pause; bottom row 5 undo, 6 record /
+    // overdub, 7 play / stop, 8 back). Switches 2, 3, 4, 6 and 7 act on the press, from here - every millisecond
+    // counts; 1 and 5 have a held function (drum menu, clear) and go the usual way. (8 = back out, 2026-11-26)
     if (s_looper_live && (number == 2 || number == 3 || number == 4 || number == 6 || number == 7)) {
         if (event == FOOTSWITCH_PRESS) {
             if (number == 6) p4_looper_command(LOOPER_CMD_REC_DUB);
@@ -775,8 +799,14 @@ static void switch_event(switch_track_t *t, int number, footswitch_event_t event
         waiting[number] = ((s_hold_switches >> number) & 1) && !(number == 2 && s_tuner_on);
         if (!waiting[number]) command('w', number);
     } else if (waiting[number]) {
+        if (event == FOOTSWITCH_HOLD && ((s_release_hold_switches >> number) & 1)) {   // (a second preset: on the release)
+            t->long_held[number] = true;
+            return;
+        }
         waiting[number] = false;
-        command('w', event == FOOTSWITCH_HOLD ? UI_SWITCH_HOLD | number : number);
+        bool long_press = event == FOOTSWITCH_HOLD || t->long_held[number];
+        t->long_held[number] = false;
+        command('w', long_press ? UI_SWITCH_HOLD | number : number);
     }
 }
 
@@ -1032,7 +1062,7 @@ static void print_help(void)
            "  A-E          FX mode: hold its footswitch (second effect, settings swap)\n"
            "  m / t / x    mode (footswitch 1) / tuner (2) / reverb switch (8 in FX mode)\n"
 #ifdef NANO_P4
-           "  o / O        looper mode on / off (footswitch 2 held; out: footswitch 5) / the player (1 held)\n"
+           "  o / O        looper mode on / off (footswitch 2 held; out: footswitch 8) / the player (1 held)\n"
 #else
            "  o            looper mode on / off (as holding footswitch 1); then t = its switch 2\n"
 #endif
@@ -1073,6 +1103,14 @@ static void banks_load(void)
         }
     }
     nvs_close(nvs);
+    nvs_handle_t nvs2;   // (P4: the second presets)
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READONLY, &nvs2) == ESP_OK) {
+        size_t size2 = sizeof(s_bank2);
+        if (nvs_get_blob(nvs2, BANK2_KEY, s_bank2, &size2) != ESP_OK || size2 != sizeof(s_bank2)) memset(s_bank2, 0, sizeof(s_bank2));
+        for (int i = 0; i < BANKS; i++)
+            for (int k = 0; k < BANK_SLOTS; k++) if (s_bank2[i][k] > NANO_PRESETS) s_bank2[i][k] = 0;
+        nvs_close(nvs2);
+    }
 }
 
 static void show(void);
@@ -1336,6 +1374,11 @@ static void banks_save(void)
         ESP_LOGW(TAG, "Saving the banks failed");
     }
     nvs_close(nvs);
+    nvs_handle_t nvs2;   // (P4: the second presets, an entry of their own)
+    if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs2) == ESP_OK) {
+        if (nvs_set_blob(nvs2, BANK2_KEY, s_bank2, sizeof(s_bank2)) == ESP_OK) nvs_commit(nvs2);
+        nvs_close(nvs2);
+    }
 }
 
 // Keeps the current bank if it holds the preset, otherwise jumps to the first bank that does.
@@ -1505,6 +1548,7 @@ static void follow_preset_with_bank(int preset)
         return;
     }
     for (int i = 0; i < BANK_SLOTS; i++) if (s_banks[s_bank][i].preset == preset) return;
+    for (int i = 0; i < BANK_SLOTS; i++) if (s_bank2[s_bank][i] == preset) return;   // (a second preset of this bank: it stays)
     for (int bank = 0; bank < BANKS; bank++) {
         for (int i = 0; i < BANK_SLOTS; i++) {
             if (s_banks[bank][i].preset == preset) {
@@ -1551,7 +1595,7 @@ static void rp_check_later(int ms);
 static void looper_switches(void)
 {
 #ifdef NANO_P4
-    uint32_t hold = s_looper ? 1u << 1 | 1u << 8 : 1u << 1 | 1u << 2;   // looper on the board: 1 held = drum menu, 8 held = clear
+    uint32_t hold = s_looper ? 1u << 1 | 1u << 5 : 1u << 1 | 1u << 2;   // looper on the board: 1 held = drum menu, 5 held = clear
 #else
     uint32_t hold = s_looper ? 0 : 1u << 1 | 1u << 2;
 #endif
@@ -1564,9 +1608,21 @@ static void looper_switches(void)
             if (ab_mode(slot) != UI_AB_PRESS) hold |= 1u << (slot + 3);   // (a press that only swaps acts at once)
         } else if (wah_mode(slot) == UI_WAH_HELD) momentary |= 1u << (slot + 3);
     }
+    // Preset mode: a switch with a second preset waits - its preset on a short press, the second one when it was
+    // held, on the release (P4, 2026-11-27)
+    uint32_t release_hold = 0;
+#ifdef NANO_P4
+    if (!s_looper && !s_player && !s_fx_mode && !s_scene_mode && !setlist_used())
+        for (int slot = 0; slot < BANK_SLOTS; slot++)
+            if (s_bank2[s_bank][slot]) release_hold |= 1u << (slot + 3);
+#endif
+    hold |= release_hold;
+    if (s_player) hold = momentary = release_hold = 0;   // player mode: every switch acts on its press (none has a held function there)
+    s_release_hold_switches = release_hold;
     s_hold_switches = hold;
     s_momentary_switches = momentary;
     s_looper_live = s_looper;
+    s_player_live = s_player;
 }
 
 static void wah_load(int preset);
@@ -1583,6 +1639,7 @@ static void show(void)
         .mix_active = s_mix.active,
         .mix_exp = s_mix.exp,
         .looper = s_looper,
+        .player = s_player,
         .phone = phone_midi_connected(),
         .looper_sent = s_looper_sent,
         .scenes = s_scene_mode,
@@ -1630,7 +1687,7 @@ static void show(void)
     if (s_wah_preset != s_state.current_preset) wah_load(s_state.current_preset);
     for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
         view.wah_mode[slot] = (uint8_t)wah_mode(slot);
-        view.wah_rate[slot] = s_wah[slot].rate;
+        view.wah_rate[slot] = s_wah_env[slot].follows ? UI_WAH_FOLLOWS_RATE : s_wah[slot].rate;
     }
     wah_update();
     view.scene_active = scene_active();
@@ -1654,6 +1711,7 @@ static void show(void)
         view.bank_presets[i] = s_banks[s_bank][i].preset;
         view.bank_colors[i] = s_banks[s_bank][i].color;
         view.bank_icons[i] = s_banks[s_bank][i].icon;
+        view.bank_presets2[i] = s_bank2[s_bank][i];
     }
     view.setlist_on = s_setlist.on;
     view.setlist_count = (uint8_t)s_setlist.count;
@@ -2226,7 +2284,7 @@ static int wah_mode(int slot)
 
 static void wah_load(int preset)
 {
-    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) s_wah[slot] = WAH_DEFAULT;
+    for (int slot = 0; slot < NANO_FX_SLOTS; slot++) s_wah[slot] = WAH_DEFAULT, s_wah_env[slot] = WAH_ENV_DEFAULT;
     s_wah_preset = preset;
     char key[16];
     snprintf(key, sizeof(key), WAH_STORE_KEY, preset);
@@ -2242,6 +2300,16 @@ static void wah_load(int preset)
             s_wah[slot] = *w;
         }
     }
+    wah_env_t env[NANO_FX_SLOTS];
+    size = sizeof(env);
+    snprintf(key, sizeof(key), WAH_ENV_KEY, preset);
+    if (nvs_get_blob(nvs, key, env, &size) == ESP_OK && size == sizeof(env)) {
+        for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
+            const wah_env_t *e = &env[slot];
+            if (e->follows > 1 || e->sens > 100 || e->attack_ms < 5 || e->attack_ms > 200 || e->release_ms < 20 || e->release_ms > 1000) continue;
+            s_wah_env[slot] = *e;
+        }
+    }
     nvs_close(nvs);
 }
 
@@ -2251,9 +2319,10 @@ static void wah_save(void)
     snprintf(key, sizeof(key), WAH_STORE_KEY, s_wah_preset);
     nvs_handle_t nvs;
     if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) != ESP_OK) return;
-    if (nvs_set_blob(nvs, key, s_wah, sizeof(s_wah)) != ESP_OK || nvs_commit(nvs) != ESP_OK) {
-        ui_show_message("Could not store the auto-wah (memory full?).");
-    }
+    bool ok = nvs_set_blob(nvs, key, s_wah, sizeof(s_wah)) == ESP_OK;
+    snprintf(key, sizeof(key), WAH_ENV_KEY, s_wah_preset);
+    ok = ok && nvs_set_blob(nvs, key, s_wah_env, sizeof(s_wah_env)) == ESP_OK;
+    if (!ok || nvs_commit(nvs) != ESP_OK) ui_show_message("Could not store the auto-wah (memory full?).");
     nvs_close(nvs);
 }
 
@@ -2261,8 +2330,12 @@ static void wah_save(void)
 static void wah_show(int slot)
 {
     const wah_t *w = s_wah[slot].type && s_wah[slot].type == s_state.fx_type[slot] ? &s_wah[slot] : &WAH_DEFAULT;
+    const wah_env_t *e = s_wah[slot].type && s_wah[slot].type == s_state.fx_type[slot] ? &s_wah_env[slot] : &WAH_ENV_DEFAULT;
     ui_autowah_t shown = { .mode = w->mode, .rate = w->rate, .shape = w->shape, .heel = w->heel, .toe = w->toe,
-                           .own_tempo = w->own_tempo != 0, .bpm = w->bpm, .nano_bpm = s_state.tempo };
+                           .own_tempo = w->own_tempo != 0, .bpm = w->bpm, .nano_bpm = s_state.tempo,
+                           .follows = e->follows, .sens = e->sens, .attack_ms = e->attack_ms, .release_ms = e->release_ms,
+                           .live = slot == s_sweep.slot, .level = s_wah_level,
+                           .position = s_edit.slot == slot && s_edit.known ? s_edit.values[WAH_PARAM] : 0 };
     ui_set_autowah(&shown);
 }
 
@@ -2279,16 +2352,29 @@ static void wah_step(void)
     esp_timer_start_once(s_wah_timer, WAH_STEP_MS * 1000);
     if (s_tuner_on || s_expect_preset) return;   // nothing to hear, or the Nano is loading another preset
     const wah_t *w = &s_wah[slot];
-    double period_us = (double)WAH_BEATS[w->rate] * 60e6 / (double)wah_bpm(w);
-    double phase = fmod((double)(esp_timer_get_time() - s_sweep.start_us), period_us) / period_us;   // 0-1
-    float x = w->shape == 2 ? (float)phase
-            : w->shape == 1 ? 0.5f - 0.5f * cosf(2 * (float)M_PI * (float)phase)
-            : (float)(phase < 0.5 ? 2 * phase : 2 - 2 * phase);
+    const wah_env_t *e = &s_wah_env[slot];
+    float x;
+    if (e->follows) {   // the playing: the DI's peak since the last step, between quiet and loud, smoothed
+        float pk = p4_audio_di_peak();
+        float db = pk > 1e-5f ? 20 * log10f(pk) : -100, loud = -6 - 0.36f * e->sens;
+        float target = (db - WAH_QUIET_DB) / (loud - WAH_QUIET_DB);
+        target = target < 0 ? 0 : target > 1 ? 1 : target;
+        float tau = (target > s_wah_level ? e->attack_ms : e->release_ms) / 1000.0f;
+        s_wah_level += (target - s_wah_level) * (1 - expf(-(WAH_STEP_MS / 1000.0f) / tau));
+        x = s_wah_level;
+    } else {
+        double period_us = (double)WAH_BEATS[w->rate] * 60e6 / (double)wah_bpm(w);
+        double phase = fmod((double)(esp_timer_get_time() - s_sweep.start_us), period_us) / period_us;   // 0-1
+        x = w->shape == 2 ? (float)phase
+          : w->shape == 1 ? 0.5f - 0.5f * cosf(2 * (float)M_PI * (float)phase)
+          : (float)(phase < 0.5 ? 2 * phase : 2 - 2 * phase);
+    }
     float value = ((float)w->heel + ((float)w->toe - (float)w->heel) * x) / 100;
     send_param(slot, WAH_PARAM, value);
     if (slot == s_edit.slot && s_edit.known && ++s_sweep.steps % 4 == 0) {   // the wah's bar in the FX editor moves along
         s_edit.values[WAH_PARAM] = value;
         editor_show();
+        if (e->follows) wah_show(slot);   // (and its live row: the playing and the position)
     }
 }
 
@@ -2322,8 +2408,10 @@ static void wah_edit(int row, int value)
     int slot = s_edit.slot;
     if (slot < 0 || !is_wah(s_state.fx_type[slot]) || s_wah_preset != s_state.current_preset) return;
     wah_t *w = &s_wah[slot];
+    wah_env_t *e = &s_wah_env[slot];
     if (w->type != s_state.fx_type[slot]) {   // the first setting for this wah: from the defaults
         *w = WAH_DEFAULT;
+        *e = WAH_ENV_DEFAULT;
         w->type = s_state.fx_type[slot];
     }
     switch (row) {
@@ -2347,6 +2435,10 @@ static void wah_edit(int row, int value)
         w->own_tempo = 1;
         w->bpm = (uint16_t)(value < UI_WAH_BPM_MIN ? UI_WAH_BPM_MIN : value > UI_WAH_BPM_MAX ? UI_WAH_BPM_MAX : value);
         break;
+    case UI_WAH_FOLLOWS: e->follows = value != 0; s_wah_level = 0; break;
+    case UI_WAH_SENS: e->sens = (uint8_t)(value < 0 ? 0 : value > 100 ? 100 : value); break;
+    case UI_WAH_ATTACK: e->attack_ms = (uint16_t)(value < 5 ? 5 : value > 200 ? 200 : value); break;
+    case UI_WAH_RELEASE: e->release_ms = (uint16_t)(value < 20 ? 20 : value > 1000 ? 1000 : value); break;
     default: return;
     }
     wah_save();
@@ -2446,7 +2538,7 @@ static void send_source_value(int what, int value)
         return;
     }
     if (what >= SRC_AMP_GAIN) {
-        static const char *const knobs[] = { "gain", "bass", "mid", "treble" };
+        static const char *const knobs[] = { "gain", "bass", "mid", "treble", "level" };
         int knob = SRC_AMP_KNOB[what - SRC_AMP_GAIN];
         snprintf(label, sizeof(label), "Capture %s %.1f", knobs[what - SRC_AMP_GAIN], value / 25.5f);
         send(label, NANO_MSG_VALUE, buf, nano_amp_knob(knob, value, buf));
@@ -4105,13 +4197,15 @@ static void rotate_back(int arg)
 static void set_bank_slot(int arg)
 {
     int icon = (arg >> 18) & 0x1F, bank = (arg >> 14) & 0xF, slot = (arg >> 11) & 0x7, color = (arg >> 7) & 0xF, preset = arg & 0x7F;
-    if (bank >= BANKS || slot >= BANK_SLOTS || preset > NANO_PRESETS) return;
+    int preset2 = (arg >> 23) & 0x7F;   // (P4: the second preset, held; 0 = none)
+    if (bank >= BANKS || slot >= BANK_SLOTS || preset > NANO_PRESETS || preset2 > NANO_PRESETS) return;
+    s_bank2[bank][slot] = preset ? (uint8_t)preset2 : 0;
     int default_preset = bank * BANK_SLOTS + slot + 1;
     s_banks[bank][slot] = preset ? (bank_slot_t){ .preset = (uint8_t)preset, .color = (uint8_t)color, .icon = (uint8_t)icon }
                                  : (bank_slot_t){ .preset = (uint8_t)(default_preset <= NANO_PRESETS ? default_preset : 0) };
     banks_save();
-    ESP_LOGI(TAG, "Bank %d switch %d: preset %d, colour %d, symbol %d", bank + 1, slot + 3, s_banks[bank][slot].preset,
-             s_banks[bank][slot].color, s_banks[bank][slot].icon);
+    ESP_LOGI(TAG, "Bank %d switch %d: preset %d, colour %d, symbol %d, held: %d", bank + 1, slot + 3, s_banks[bank][slot].preset,
+             s_banks[bank][slot].color, s_banks[bank][slot].icon, s_bank2[bank][slot]);
     show();
 }
 
@@ -4480,9 +4574,25 @@ static void metro_from_nano(const nano_tempo_t *t, bool has_screen)
     metro_show();
 }
 
+static void looper_switches(void);
+static void show(void);
+static void looper_set(bool on);
+// Player mode on / off (P4): the tiles become the player's switches, as in looper mode.
+static void player_set(bool on)
+{
+    if (on == s_player) return;
+    if (on && s_looper) looper_set(false);
+    s_player = on;
+    if (!on) ui_player_hide();
+    ESP_LOGI(TAG, "Player mode %s", on ? "on" : "off");
+    looper_switches();
+    if (nano_link_ready()) show();
+}
+
 static void looper_set(bool on)
 {
     if (on == s_looper) return;
+    if (on && s_player) player_set(false);
     s_looper = on;
     s_looper_sent = 0;
 #ifdef NANO_P4
@@ -4533,24 +4643,46 @@ static bool looper_switch(int arg)
     int number = arg & 0xFF;
     if (number < 1 || number > FOOTSWITCH_COUNT) return false;
 #ifdef NANO_P4
-    // P4: the tuner's switch (2) held = into looper mode, switch 5 in the mode = out; switch 1 held outside the
+    // P4: switch 2 pressed = into looper mode (held: the tuner), switch 8 in the mode = out; switch 1 held outside the
     // mode = the player (jam tracks / phone) on the screen, held again = away. (Scenes / presets, the small board's
     // "switch 2 held", are on the Scenes button of the top bar and on MIDI CC 60.)
-    if (s_looper && number == 5) {
-        ui_flash_tile(4);
+    // Player mode (footswitch 1 held, 2026-11-26, after the looper mode): the switches in fixed places, each on its
+    // press - 1 jam tracks / phone, 2 the tuner, 3 the player's page, 4 to the looper, 5 back, 6 play / pause, 7 next,
+    // 8 back out to the presets (8 is the way back in every mode: the user's MODE switch is there).
+    if (s_player) {
+        if (number == 8) {
+            ui_flash_tile(7);
+            player_set(false);
+            return true;
+        }
+        if (arg & UI_SWITCH_HOLD) return true;
+        if (number == 2) return false;   // (the tuner, as always)
+        ui_flash_tile(number - 1);
+        if (number == 1) ui_player_action(UI_PLAYER_SOURCE);
+        else if (number == 3) ui_player_toggle();
+        else if (number == 4) looper_set(true);   // (player mode goes off with it)
+        else if (number == 5) ui_player_action(UI_PLAYER_BACK);
+        else if (number == 6) ui_player_action(UI_PLAYER_TOGGLE);
+        else ui_player_action(UI_PLAYER_NEXT);
+        ESP_LOGI(TAG, "Player: footswitch %d", number);
+        return true;
+    }
+    if (s_looper && number == 8) {   // (8 is the way back in every mode, 2026-11-26; was 5)
+        ui_flash_tile(7);
         looper_set(false);
         return true;
     }
-    if (!s_looper && (arg & UI_SWITCH_HOLD) && number == 2) {
-        if (s_tuner_on || !nano_link_ready()) return true;   // (not from the tuner's screen, not without the Nano)
+    // Switch 2 (2026-11-27, the user's choice): a press = looper mode, held = the tuner. A press while the tuner shows
+    // closes it (the footswitch task sends it at once then).
+    if (!s_looper && number == 2) {
         ui_flash_tile(1);
-        looper_set(true);
+        if ((arg & UI_SWITCH_HOLD) || s_tuner_on) set_tuner(!s_tuner_on);
+        else if (nano_link_ready()) looper_set(true);
         return true;
     }
     if (!s_looper && (arg & UI_SWITCH_HOLD) && number == 1) {
         ui_flash_tile(0);
-        ESP_LOGI(TAG, "Player: shown / hidden (footswitch 1 held)");
-        ui_player_toggle();
+        player_set(true);
         return true;
     }
 #else
@@ -4564,8 +4696,8 @@ static bool looper_switch(int arg)
     if (!s_looper) return false;
     ui_flash_tile(number - 1);
 #ifdef NANO_P4
-    // P4: 1 drums on / off (held: the drum menu), 2 / 3 part A / B, 4 pause (drums and loop), 6 record / overdub,
-    // 7 play / stop, 8 undo / redo (held: clear). 2, 3, 4, 6, 7 from the footswitches are done already
+    // P4: 1 drums on / off (held: the drum menu), 2 / 3 part A / B, 4 pause (drums and loop), 5 undo / redo (held:
+    // clear), 6 record / overdub, 7 play / stop; 8 back out (above). 2, 3, 4, 6, 7 from the footswitches are done already
     // (UI_SWITCH_SENT); from the screen and MIDI they come here.
     bool done = arg & UI_SWITCH_SENT;
     switch (number) {
@@ -4577,7 +4709,7 @@ static bool looper_switch(int arg)
     case 4: if (!done) p4_parts_pause(); break;
     case 6: if (!done) p4_looper_command(LOOPER_CMD_REC_DUB); break;
     case 7: if (!done) p4_looper_command(LOOPER_CMD_PLAY_STOP); break;
-    case 8: {
+    case 5: {
         looper_info_t li;
         p4_looper_info(&li);
         if (arg & UI_SWITCH_HOLD) p4_looper_command(LOOPER_CMD_CLEAR);
@@ -4673,23 +4805,29 @@ static void handle_switch(int number)
 // MIDI_LEARNED, from midi_switches (learned switch << 8 | switch that had the message before). The next press on a
 // footswitch or over MIDI wins; the other learn is cancelled then.
 static int s_learning;   // the switch being learned, 0 = none (app task)
+static bool s_learn_all;  // ... and the ones after it follow, up to the last ('D' with UI_LEARN_ALL)
 
 static void footswitch_learn(char c, int arg)
 {
     char text[128];
     if (c == 'D') {
         if (arg < 0) {
+            s_learn_all = false;
             if (s_footswitches) footswitches_reset();
             midi_switches_reset();
             ui_learn_done(s_footswitches ? "Footswitches back to the default order, learned MIDI switches forgotten."
                                          : "Learned MIDI switches forgotten.");
             return;
         }
+        s_learn_all = arg > 0 && (arg & UI_LEARN_ALL);
+        if (arg > 0) arg &= ~UI_LEARN_ALL;
         s_learning = arg >= 1 && arg <= FOOTSWITCH_COUNT ? arg : 0;
+        if (!s_learning) s_learn_all = false;
         char name[32];
         bool midi = midi_ble_status(name, sizeof(name));
         if (s_learning && !s_footswitches && !midi) {
             s_learning = 0;
+            s_learn_all = false;
             ui_learn_done("No footswitches found and no MIDI controller connected.");
             return;
         }
@@ -4702,6 +4840,7 @@ static void footswitch_learn(char c, int arg)
     if (!number) {   // one side's 15 s are over (the other side ends at the same time and is not said twice)
         if (!s_learning) return;
         s_learning = 0;
+        s_learn_all = false;
         if (s_footswitches) footswitches_learn(0);
         midi_switches_learn(0);
         ui_learn_done("Nothing pressed - nothing changed.");
@@ -4720,6 +4859,14 @@ static void footswitch_learn(char c, int arg)
         else snprintf(text, sizeof(text), "Footswitch %d learned.", number);
     }
     ESP_LOGI(TAG, "%s", text);
+    if (s_learn_all && number < FOOTSWITCH_COUNT) {   // all of them: the next one at once
+        s_learning = number + 1;
+        if (s_footswitches) footswitches_learn(s_learning);
+        midi_switches_learn(s_learning);
+        ui_learn_next(s_learning, text);
+        return;
+    }
+    s_learn_all = false;
     ui_learn_done(text);
 }
 
@@ -5750,6 +5897,10 @@ static void handle_command(char c, int arg)
             ui_flash_tile(number - 1);   // held: A <-> B - or on / off, if a tap swaps
             if (ab_mode(number - 3) == UI_AB_TAP) toggle_fx(number - 3);
             else if (ab_mode(number - 3) != UI_AB_PRESS) ab_swap(number - 3);
+        } else if ((arg & UI_SWITCH_HOLD) && !s_fx_mode && !s_scene_mode && !setlist_used() && number >= 3 && s_bank2[s_bank][number - 3]) {
+            ui_flash_tile(number - 1);   // P4: held (and let go): the switch's second preset
+            ESP_LOGI(TAG, "Switch %d held: second preset %d", number, s_bank2[s_bank][number - 3]);
+            select_preset(s_bank2[s_bank][number - 3]);
         } else if ((arg & UI_SWITCH_HOLD) && number == 2) {   // held: scenes <-> presets, as the scenes button
             if (!s_tuner_on) {
                 ui_flash_tile(1);
@@ -5864,7 +6015,8 @@ static void link_usable(void)
         app_link_allow_phone(true);
         app_link_enable(true);
     }
-    ui_splash_done();
+    ui_splash_status("Presets loaded - the sound is starting ...", NULL);
+    ui_splash_step(UI_SPLASH_PRESETS);   // (it closes once the sound is there too - p4_audio.c)
 }
 
 static void external_change(uint32_t type)
@@ -7129,6 +7281,7 @@ static void app_event(app_event_t ev)
         ESP_LOGI(TAG, "Connected to the Nano Cortex - reading presets");
         s_refused_run = 0;   // (after switching it off and on)
         ui_splash_status("Connected - loading presets ...", NULL);
+        ui_splash_step(UI_SPLASH_NANO);
         request_full_state();
         break;
     case EV_LINK_DOWN:
@@ -7758,6 +7911,7 @@ void app_main(void)
     ui_splash_status("Searching for the Nano Cortex ...", version);
 #endif
     s_footswitches = footswitches_start(board_i2c_bus(), on_footswitch, on_footswitch_learned);
+    ui_splash_step(UI_SPLASH_SWITCHES);
     midi_switches_start(on_midi_switch, on_midi_learned);   // (MIDI comes only after the gate, MIDI_GATE_US)
 #ifndef NANO_WEB
     xTaskCreate(app_task, "app", 6144, NULL, 4, NULL);

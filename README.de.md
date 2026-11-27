@@ -249,8 +249,9 @@ Beschriebene, nur steckt der Nano per Kabel in der USB-A-Buchse des Boards statt
 
 - **Nano über USB** – kein Koppeln, kein Bluetooth-Fenster. Ohne Kabel nimmt es Bluetooth
 - **Looper auf dem Board** – zwei Parts A / B, Overdub, Undo / Redo, Loops auf Takte im Tempo des Nano gerundet
-- **Drumcomputer** – 54 Grooves in acht Stilen im Tempo des Nano, Einzähler, Drums, die mit der Aufnahme starten
-- **Jam-Player** – Backing-Tracks von der microSD-Karte, auf gleiche Lautheit gebracht, per WLAN aufgespielt
+- **Drumcomputer** – 88 Grooves im Tempo des Nano, ein Groove pro Looper-Part, Einzähler, Drums, die mit der Aufnahme starten
+- **Jam-Player** – Backing-Tracks in Alben mit Cover von der microSD-Karte, auf gleiche Lautheit gebracht, vom Jam Player auf dem Mac per WLAN geschickt; ein Player-Modus auf den Fußschaltern
+- **Level, Gain Reduction, Auto-Wah nach Anschlag** – Lautheit pro Preset, die Gain Reduction eines Kompressors in seinem Editor, ein Wah, das dem Anschlag folgt
 - **Bluetooth** über seinen ESP32-C6 – MIDI-Controller mit MIDI-Learn, eine Looper-App, der Editor durchs Board
 - **Firmware-Updates über WLAN**, acht Fußschalter direkt am Board (keine Zusatzplatine nötig)
 
@@ -260,7 +261,7 @@ Beschriebene, nur steckt der Nano per Kabel in der USB-A-Buchse des Boards statt
 <td width="50%"><img src="docs/images/p4/18e-looper-to-part-b.png" alt="7-Zoll-Board: Looper"></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/p4/51-jam.png" alt="7-Zoll-Board: Jam-Player"></td>
+<td width="50%"><img src="docs/images/p4/79-player-mode.png" alt="7-Zoll-Board: Player-Modus"></td>
 <td width="50%"><img src="docs/images/p4/03-fullscreen.png" alt="7-Zoll-Board: Gig-Ansicht"></td>
 </tr>
 </table>

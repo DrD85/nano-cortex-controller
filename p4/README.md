@@ -19,9 +19,13 @@ and the [manual](../docs/manual.md). In addition:
 | | |
 |---|---|
 | **Nano over USB** | The Nano is plugged into the board's USB-A socket: no pairing and no Bluetooth window. The cable is also the way for the board's own audio into the Nano. Without a cable, the board looks for the Nano over Bluetooth instead |
-| **Looper** | On the board, recorded from the Nano's sound (USB channels 3/4) and played back into it. Two parts **A** and **B**, record, overdub, play / stop, undo / redo, hold to clear. Loops are rounded to bars of the Nano's tempo; the USB round trip is taken out. Up to 45 s |
-| **Drum machine** | A computed kit (no sample files) in the Nano's tempo: 54 grooves in eight styles, its own level, a count-in, and drums that start with the first take |
-| **Jam player** | WAV backing tracks from a microSD card, each one measured and levelled to −21 LUFS, a correction by ear per track. Tracks come onto the card from a Mac or PC over Wi-Fi (the board's page `http://nano-board.local`) |
+| **Looper** | On the board, recorded from the Nano's sound (USB channels 3/4) and played back into it. Two parts **A** and **B**, record, overdub, play / stop, undo / redo, hold to clear. Loops are rounded to bars of the Nano's tempo; the USB round trip is taken out. Up to 45 s. If the Nano's USB stream ever goes garbled (a robotic sound), the board starts it anew by itself |
+| **Drum machine** | A computed kit (no sample files) in the Nano's tempo: 88 grooves, a groove of its own per looper part, its own level, a count-in, and drums that start with the first take |
+| **Jam player** | WAV backing tracks from a microSD card in **albums** (one folder each), with their **covers**, each one measured and levelled to −21 LUFS, a correction by ear per track. **Player mode** (hold footswitch 1): cover, title, time, next and previous track, play / pause, back, next on the footswitches. Tracks come onto the card over Wi-Fi: from the [Jam Player](https://github.com/DrD85/jam-player) on a Mac (folders become albums, only new or changed tracks are sent, covers go along) or the board's page `http://nano-board.local` |
+| **Level** | Measures each preset's loudness (LUFS) and sets the Nano's output level to match the others, with a count-down so you can start playing |
+| **Gain reduction** | The FX editor of a compressor shows how much it is compressing, worked out from its knobs and the Nano's dry input (the Nano does not report it) |
+| **Auto-wah from your playing** | Besides the auto-wah in tempo: a wah that opens with your picking (sensitivity, attack, release), with a live view in the FX editor |
+| **Second preset per switch** | Each bank switch can hold a second preset, loaded when the switch is released after a long press |
 | **Bluetooth** | Through the board's ESP32-C6: MIDI controllers (for example an M-VAVE Chocolate, with MIDI learn), a looper app on a phone, and the [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) through the board |
 | **Updates over Wi-Fi** | A new firmware file on the board's page; if the new firmware does not run properly, the board goes back to the old one |
 | **Footswitches** | Eight switches straight on the board's header P3, no extra board needed, or the SX1509 board of the 4.3" version |
@@ -35,9 +39,9 @@ and the [manual](../docs/manual.md). In addition:
 <tr>
 <td>
 
-**Looper** – **hold footswitch 2**. Tile 1 = drums (hold for the drum menu), 2 / 3 = parts A and B, 4 = pause
-drums + loop, 5 = back, 6 = record / overdub, 7 = play / stop, 8 = undo / redo (hold: clear). The bar above shows the
-part, the time and the bars.
+**Looper** – **press footswitch 2** (hold it: tuner). Tile 1 = drums (hold for the drum menu), 2 / 3 = parts A
+and B, 4 = pause drums + loop, 5 = undo / redo (hold: clear), 6 = record / overdub, 7 = play / stop, 8 = back to the
+presets. The bar above shows the part, the time and the bars.
 
 </td>
 <td>
@@ -48,14 +52,14 @@ on the drums' bar lines or with the first note.
 </td>
 </tr>
 <tr>
-<td width="50%"><img src="../docs/images/p4/51-jam.png" alt="Jam player"></td>
+<td width="50%"><img src="../docs/images/p4/51d-jam-albums.png" alt="Jam player"></td>
 <td width="50%"><img src="../docs/images/p4/64-preset-list.png" alt="Preset list"></td>
 </tr>
 <tr>
 <td>
 
-**Jam player** – **hold footswitch 1**, or tap the player in the top bar. Tracks from the card's `jam` folder,
-levelled, with play / pause / next on the footswitches.
+**Jam player** – tap the player in the top bar. Tracks from the card's `jam` folder, one album at a time (the
+arrows at the top), levelled.
 
 </td>
 <td>
@@ -80,6 +84,39 @@ levelled, with play / pause / next on the footswitches.
 
 </td>
 </tr>
+<tr>
+<td width="50%"><img src="../docs/images/p4/79-player-mode.png" alt="Player mode"></td>
+<td width="50%"><img src="../docs/images/p4/81-fx-editor-compressor.png" alt="Gain reduction"></td>
+</tr>
+<tr>
+<td>
+
+**Player mode** – **hold footswitch 1**: the track's cover, the album, next and previous; 6 = play / pause,
+5 / 7 = back / next, 8 = back to the presets.
+
+</td>
+<td>
+
+**Gain reduction** below a compressor's knobs (estimated from its knobs and the dry input).
+
+</td>
+</tr>
+<tr>
+<td width="50%"><img src="../docs/images/p4/26b-auto-wah-playing.png" alt="Auto-wah from the playing"></td>
+<td width="50%"><img src="../docs/images/p4/77-level-measured.png" alt="Level"></td>
+</tr>
+<tr>
+<td>
+
+**Auto-wah** that follows your playing: sensitivity, attack and release, the live row shows where it is.
+
+</td>
+<td>
+
+**Level**: play for a few seconds, the board suggests the preset's level from its loudness.
+
+</td>
+</tr>
 </table>
 
 ## What you need
@@ -88,7 +125,7 @@ levelled, with play / pause / next on the footswitches.
 |---|---|
 | [Waveshare ESP32-P4-WIFI6-Touch-LCD-7B](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-7B) | 7", 1024 × 600, ESP32-P4 with an ESP32-C6 for Bluetooth and Wi-Fi |
 | Neural DSP Nano Cortex | with a USB-C cable to the board's **USB-A** socket |
-| Optional: microSD card | **FAT32**, for the jam player (folder `jam`) |
+| Optional: microSD card | **FAT32**, for the jam player (folder `jam`, one sub-folder per album) |
 | Optional: up to 8 momentary footswitches | each between a pin of header **P3** and GND (below) |
 | Optional: ESP32 (ESP-WROOM-32 dev board) | only for phone audio over Bluetooth, see `a2dp-bridge/main/main.c` for the wiring |
 
@@ -140,13 +177,14 @@ ESP-IDF 6.0, in `p4/firmware`:
 
 `tools/release.sh` builds the release files. With `-D "SDKCONFIG_DEFAULTS=sdkconfig.defaults;../sdkconfig.uart"` the
 log also appears on the UART port. Host tests: `tools/test_main/run.sh` (after one build; `BUILD=build-public`),
-`tools/test_midi_switches/run.sh`, `components/nano_audio/test/run.sh`. Screens on the computer:
+`tools/test_midi_switches/run.sh`, `components/nano_audio/test/run.sh`, `tools/test_cover/run.sh` (covers). Screens on the computer:
 `tools/screenshots/make_p4.sh`.
 
 Most of `main/` is the 4.3" board's code with a P4 part (`NANO_P4`); [UPSTREAM.md](firmware/UPSTREAM.md) lists
 what came over from it. The audio is in `components/nano_audio` (USB audio host for the Nano, mixer, looper,
-drums, track player, loudness). `components/esp_lvgl_port` is Espressif's esp_lvgl_port 2.9.0 (Apache-2.0) with one
-line changed for ESP-IDF 6.0 (marked "P4 board").
+drums, track player, loudness). `components/esp_lvgl_port` is Espressif's esp_lvgl_port 2.9.0 (Apache-2.0) with a
+few lines changed for ESP-IDF 6.0 and the P4's display (marked "P4 board"). `main/tjpgd` is ChaN's TJpgDec R0.03 as
+LVGL ships it (its own licence in that folder), used for the covers.
 
 ## Not tested yet
 
@@ -154,6 +192,9 @@ line changed for ESP-IDF 6.0 (marked "P4 board").
 - Phone audio through the ESP32 bridge
 - The published build itself on a board: the screenshots and host tests come from the same code, and the
   author's own build differs only in private artwork and the log port
+- New in 1.1.0 and not yet played much: the gain reduction view and the auto-wah from the playing
+- The Nano Cortex Editor through the board over Bluetooth (the board's ESP32-C6 stops taking packets during long
+  messages; under investigation)
 
 ## License
 

@@ -5,7 +5,8 @@
 // joins it; without one - or if it cannot - it opens its own network "Nano Board" with a password shown on the
 // screen. Either way it answers at http://nano-board.local (and at its address): a page to drop audio files on (the
 // browser on the Mac decodes them, measures them as the Jam Player does and sends 16-bit WAV), and a small API
-// (PUT /api/tracks/<name>.wav, GET /api/tracks, POST /api/trims, POST /api/done) for the Jam Player app, and
+// (PUT /api/tracks/<name>.wav, PUT /api/covers/<name>.jpg, GET /api/tracks, POST /api/trims, POST /api/move,
+// POST /api/sources, POST /api/done; <name> "Album/Title" or "Title", 2026-11-27) for the Jam Player app, and
 // PUT /api/firmware for a new firmware (p4_ota.h).
 //
 // STATUS: builds; not yet run on hardware (C6 firmware, SDIO pins 18/19/14-17 and reset 54 are esp_hosted's defaults

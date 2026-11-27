@@ -13,7 +13,7 @@ endif()
 
 set(ADD_SRCS "")
 set(ADD_LIBS "")
-set(PRIV_REQ "")
+set(PRIV_REQ "esp_timer")   # (P4 board: the VSYNC time in esp_lvgl_port_disp.c)
 idf_build_get_property(target IDF_TARGET)
 if(${target} STREQUAL "esp32p4")
     list(APPEND ADD_SRCS "src/common/ppa/lcd_ppa.c")

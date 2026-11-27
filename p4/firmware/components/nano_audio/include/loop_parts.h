@@ -40,6 +40,7 @@ typedef struct {
     int64_t bf_dst;                  // its frame in the loop
 
     _Atomic uint32_t bar_frames;     // frames per bar of the Nano's tempo (0 = not known): for the drums' bar lines
+    _Atomic int part_groove[2];      // a part's own drum groove (-1 = the drums keep theirs): set when that part takes over
 
     // audio side only
     int active, next;                // next = -1: no switch waiting
@@ -65,6 +66,7 @@ void loop_parts_set_drums(loop_parts_t *p, drum_machine_t *drums);   // before t
 
 void loop_parts_command(loop_parts_t *p, looper_cmd_t cmd);   // to the part that plays
 void loop_parts_choose(loop_parts_t *p, int part);              // tap on part A (0) / B (1)
+void loop_parts_set_part_groove(loop_parts_t *p, int part, int groove);   // -1 = none (the drums keep their groove)
 void loop_parts_pause(loop_parts_t *p);                         // tap on pause: pause / go on
 void loop_parts_drums(loop_parts_t *p, bool on);
 void loop_parts_set_drum_sync(loop_parts_t *p, bool on);

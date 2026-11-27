@@ -120,6 +120,12 @@ Brought over from the small board's working tree on 2026-11-24, afternoon (**1.2
   hook `#Y...` and the refusal of changing hooks outside the test presets 40-45. `tools/test_main/test.c`: the small
   board's current file with the two P4 blocks, 72 checks.
 
+Brought over from the small board's working tree on 2026-11-26 (**1.28.0** there, not committed): **the tempo typed** -
+a tap on the BPM value of the tempo dialog opens the keyboard as a number pad (40-240, one decimal), and - / + go on
+while held. In `main/ui.c`: `on_metro_bpm`, `metro_typed`, keyboard kind `'b'` in `submit_rename` / `show_rename`
+(`s_rename_keyboard`, number mode and back), the wait in `metro_hide`, the three event lines in `build_metro`. The
+same text in both projects except the dialog's coordinates. Shots 73 / 74.
+
 ## Found on the P4 board - the small board needs it too
 
 - **`ui_set_link()` in `main/ui.c` (2026-11-18): the settings text was set before the screen lock was taken**
@@ -162,3 +168,115 @@ P4-only since 2026-11-18 (evening, firmware 0.2.0):
   `looper_level()` (the loop makes up for the Nano's USB volume) and the console keys `o` / `O` under `NANO_P4`;
   `components/nano_audio/audio_mix.c` (the capture cushion comes back after running dry, a head start is cut;
   `MIX_SLACK`), tests in `components/nano_audio/test/test_looper.c`.
+
+## Brought over from the QC board (`../../quad-cortex-controller-p4`, its HEAD 924fdee) on 2026-11-26
+
+State at the time of writing: built, host tests pass, **not flashed, not heard**.
+- **The mixer's larger cushion** - `components/nano_audio/include/audio_mix.h`: `MIX_CUSHION` 192 -> 384 (8 ms),
+  `MIX_SLACK` 384 -> 600. Measured on the QC board on 2026-11-21: while the screen redraws, the capture arrives with
+  gaps of up to 6.6 ms; with 4 ms in hand the mixer ran dry, and piles after a held render were cut (431 frames each
+  time). The user's report here ("A fine with drums, after switching distortion and metallic artefacts") fits: a part
+  switch redraws the tiles while the new part's first take is being recorded. `LOOPER_LATENCY` follows by its formula.
+- **88 grooves** (`drum_grooves.c`: the 54 of the Duo DAW + 34 written for the QC board, nine styles), **a looper
+  part's own groove** (`loop_parts.c/.h`: `part_groove`, `loop_parts_set_part_groove`), **the acoustic kit**
+  (`drum_machine.c/.h`: `drum_machine_load_kit`, `drum_machine_set_kit`, 16 voices). The component is the QC board's
+  committed one, file for file; its uncommitted loop loading (`looper_load_*`) was left there.
+- `main/p4_audio.c/.h`: `s_drum_kit` / `s_acoustic_kit` (NVS "p4" / "dkit"), `load_acoustic_kit` (here from the
+  partition **"drumkit"**, offset 0), `s_part_groove` (NVS "pgroove"), `parts_groove_*`, `p4_part_groove`,
+  `p4_drums_kit`, the two actions in the phone callback, the three fields in the loop source.
+- `partitions.csv`: `drumkit` (data, 0x43) at **0x1A00000**, 4 MB - the very place the QC board's firmware reads
+  `drumkit.bin` from (its "qcpics" + 0xA00000), so a board that had the QC firmware needs no flashing of the file.
+  Otherwise: `esptool --chip esp32p4 write-flash 0x1A00000 <QC project>/firmware/build-pictures/drumkit.bin`
+  (MuldjordKit, CC BY 4.0; made by the QC project's `tools/gen_drum_kit.c`). `sdkconfig.defaults`: flash size
+  **32 MB** (the file lies above 16 MB); everything below 16 MB is where it was. Without the file: the computed kit.
+- `main/ui.h`: `UI_DRUM_KIT`, `UI_PART_GROOVE`, `ui_loop_t.drum_kit / acoustic_kit / part_groove`. `main/ui.c`: the
+  drum menu anew after the QC board's (`qc_ui.c`): ten style buttons in two rows, fifteen groove buttons made once,
+  "A = B / Part A / Part B", the kit, the level and the four switches at the right; the tiles' change signature
+  takes the groove in whole (it had six bits). Shots 18g, 18h.
+
+## Found on the P4 board on 2026-11-26: no way to learn footswitch 2 - the settings' learn goes through all eight now
+
+The small board learns footswitch 2 from the tuner tile held; here that hold is looper mode, and "Learn the order ..."
+(Settings > Footswitches) learned switch 1 only, whatever its text promised. Now that button learns the switches one
+after the other: `main/ui.h` `UI_LEARN_ALL` (in 'D') and `ui_learn_next()`; `main/main.c` `s_learn_all` in
+`footswitch_learn` (after a learned switch the next one is waited for at once; nothing pressed, Cancel or Default order
+end it); `main/ui.c` `show_learn_all`, `ui_learn_next`, `on_settings_learn`. A single switch (the bank editor's
+"Learn switch") is as before. `tools/test_main/test.c`: five checks at the end and the two stand-ins that keep the
+learn's answers (marked P4) - 77 checks. Shot 75. Built, **not flashed, not tried with switches**. The small board
+could take it as it is (same text), it does not need it.
+
+## The looper's "robotic" sound - found and fixed on 2026-11-26 (P4 only; the QC board's project needs the same)
+
+Measured with the user playing (trace in `main/p4_audio.c`: stalls of the USB audio, flash writes, screen draws):
+- With avoid-tearing and direct mode `esp_lvgl_port` hands the WHOLE frame to `esp_lcd_panel_draw_bitmap` on every
+  refresh, and the DPI driver writes all 1.2 MB out of the cache (`esp_cache_msync`, one critical section). While
+  that runs, the mix - it reads loops and drum sounds from PSRAM - stood still: 3 ms at every small refresh, 11-16 ms
+  when much was drawn (a part switch, a dialog). The mix was rendered inside the USB audio task, so the USB transfers
+  stood still as long: capture gaps ("short" in the take) and playback packets skipped.
+- The Nano does not forgive a playback that stumbles: from then on its capture repeats frames on every channel
+  ("garbled stream", brightness 0.4-0.6) until something shifts it back - the robotic, tinny loops. (The same is
+  known of the Nano on Android hosts.) No flash write was involved.
+- The larger cushion (384) alone did not help, nor did cutting the write-back into pieces alone.
+
+The fix (all in `main/p4_audio.c` unless said):
+- **The playback's lead**: `on_render` (USB task) only copies from a ring in internal RAM (`s_lead`, `LEAD_RING`);
+  `mix_task` (core 1, priority 19, above the screen's task) renders `LEAD_FRAMES` = 960 (20 ms) ahead. Frames are
+  counted on both sides, so nothing shifts when the mix falls behind (silence for the missing frames, counted:
+  "frames went out as silence"). `LOOPER_LATENCY` + `LEAD_FRAMES`.
+- `__wrap_esp_cache_msync` (`main/CMakeLists.txt`: `-Wl,--wrap=esp_cache_msync`, `esp_mm` required): large
+  write-backs in pieces of 8 KB, each its own short critical section - the mix task gets in between them.
+- `components/nano_audio/include/audio_mix.h`: `MIX_CAP_RING` 2048, `MIX_SLACK` 1440 (the capture goes on while the
+  mix is held up; the pile is taken whole afterwards). `uac2_host.c`: the extra `esp_cache_msync` in `cap_done` is out,
+  `uac2_host_stall()` (weak) reports capture / playback gaps and long renders.
+- The trace stays for now (`trace:` lines with the "sound:" line; `-Wl,--wrap=esp_flash_write/erase_region`).
+Result of the first run with it (208 s, drums, takes, a part switch, 1779 screen draws of up to 147 ms): no capture
+gap over 3 ms, no "short", nothing skipped, the Nano's stream clean throughout (brightness at most 0.07 / 0.12).
+Open: the user's ear on the loop's timing against the drums (20 ms more lead, taken into the latency by reckoning
+only); the acoustic kit read at the start; without the Nano the start screen keeps core 1 busy (kit made in 17 s).
+
+## P4 only, 2026-11-26 evening: the Level sheet, player mode
+
+- **Level** (a tap on OUT in the signal chain), after the QC board's sheet and the editor's Auto level: short-term /
+  momentary / peak / target, the preset's kind (Clean, Edge, Drive, Fuzz, Lead), Rehearsal / Quiet, Clean's level;
+  "Measure 4 s" sets the preset's capture volume to the target (peaks under -1 dBFS, -24..+12 dB), Undo. The Nano's
+  LEVEL knob is set to 10 first (asked once when lower) - the sound on USB follows it. `main/p4_audio.c`: 100 ms
+  loudness blocks (`s_loud`), `level_fill` / `level_finish` / `level_set` / `level_measure` (NVS "p4" / "lvl"),
+  `UI_LEVEL_SET` / `UI_LEVEL_MEASURE`; `main/ui.c` `build_level_sheet`, `show_level_sheet`; `main/main.c`
+  `SRC_AMP_LEVEL` (the LEVEL knob as a source value, row 8 of 'v'). Shots 76-78. Tried on the Nano: measured,
+  capture volume sent, preset saved.
+- **Player mode** (footswitch 1 held), after the looper mode - the player window with footswitch numbers did not
+  work cleanly (the switches kept their held functions and switch 1 its release). Now the tiles are the player's
+  switches in fixed places: 1 back out, 2 tuner, 3 jam tracks / phone, 4 the player's page, 5 back, 6 play, 7 pause,
+  8 next; every switch acts on its press (`s_hold_switches` 0). The chain becomes the player's bar (now playing, the
+  time, the next song). `main/main.c`: `s_player`, `s_player_live`, `player_set`, the block in `looper_switch`,
+  `layout_switch`; `main/ui.c`: `s_player_mode`, `build_playerbar` / `show_playerbar` / `show_player_tiles`,
+  `ui_player_action` (`UI_PLAYER_*`), `ui_player_hide`; the player's page: Jam tracks first (`s_source` starts at 1),
+  a row of four tiles Back / Play / Pause / Next and a Close tile (their numbers only in player mode). Host test: 84
+  checks. Shots 79 / 80. Tried on the board: every press as it should.
+- **Later the same evening (user: "8 sollte bei allen der Umschalter sein um zum Preset zurückzukommen", play and
+  pause on one switch):** 8 goes back to the presets in looper mode and in player mode (the user's MODE switch is at
+  position 8 of the tile layout; in FX mode it already was). Looper: 5 undo / redo (held: clear), 8 back - was the
+  other way round (`looper_switches` hold mask 1 | 5, `looper_switch`, the tiles, the tile held). Player mode: 1 jam
+  tracks / phone, 2 tuner, 3 the page, 4 to the looper, 5 back, 6 play / pause, 7 next, 8 back. The page's row:
+  Back · Play / Pause · Next · Presets (Close outside player mode). Host test 86 checks. Tried on the board.
+
+## P4 only, 2026-11-27: start screen, second presets, switch 2, Level countdown, display fixes
+
+- **Torn frames (a pressed tile flickered, "manchmal", twice after a preset press):** a tile log showed every tile
+  changed once per press - the content was right, the output was not. On chip revision 3 esp_lvgl_port's "refresh
+  done" is the DSI bridge's VSYNC, while the DPI driver switches to the new frame buffer when its DMA has read a frame,
+  a little earlier. A draw_bitmap between the two let LVGL draw into the buffer still being read.
+  `components/esp_lvgl_port/src/lvgl9/esp_lvgl_port_disp.c`: one more VSYNC is waited for (between two there is
+  always a DMA reload). Costs up to one frame of latency.
+- **Light-blue flash at the start:** `main/board_p4.c` clears both frame buffers before the backlight comes on.
+- **Tiles:** the flash's outline is set at build (the first press re-measured the tile); a running flash is
+  stopped before a new one (LVGL 9 runs two side by side); pressed = background opacity, not the tile's (no layer).
+- **Start screen:** the seven symbols light up with the steps of the start (`ui_splash_step`, `UI_SPLASH_*`): screen,
+  footswitches, Nano, presets, drum kit, sound, ready; it closes with presets + sound (at most 12 s after the
+  presets). The presets no longer close it.
+- **Switch 2:** press = looper mode, held = tuner (the user's choice). **Second presets:** per bank switch, loaded
+  when the switch was held - on the release (`s_bank2`, NVS "nano" / "bank2", `s_release_hold_switches`,
+  `switch_track_t.long_held`, the bank editor's second list, "Hold: name" on the tile; the bank stays). MODE tile blue
+  with the grid, LOOPER tile orange with the loop.
+- **Level:** a countdown of 5 s, then 8 s of measuring (`LV_MEASURE` 80).
+- `s_raw` (console K) in PSRAM on first use. Host test 94 checks.

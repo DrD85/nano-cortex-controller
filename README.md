@@ -264,8 +264,9 @@ board plays its own sound into the Nano:
 
 - **Nano over USB** – no pairing and no Bluetooth window. Without a cable it uses Bluetooth
 - **Looper on the board** – two parts A / B, overdub, undo / redo, loops rounded to bars of the Nano's tempo
-- **Drum machine** – 54 grooves in eight styles in the Nano's tempo, a count-in, and drums that start with the take
-- **Jam player** – backing tracks from a microSD card, levelled to the same loudness, uploaded over Wi-Fi
+- **Drum machine** – 88 grooves in the Nano's tempo, a groove per looper part, a count-in, and drums that start with the take
+- **Jam player** – backing tracks in albums with covers from a microSD card, levelled to the same loudness, sent from the Jam Player on a Mac over Wi-Fi; a player mode on the footswitches
+- **Level, gain reduction, auto-wah from your playing** – loudness per preset, a compressor's gain reduction in its editor, a wah that follows the picking
 - **Bluetooth** through its ESP32-C6 – MIDI controllers with MIDI learn, a looper app, the editor through the board
 - **Firmware updates over Wi-Fi**, eight footswitches straight on the board (no extra board needed)
 
@@ -275,7 +276,7 @@ board plays its own sound into the Nano:
 <td width="50%"><img src="docs/images/p4/18e-looper-to-part-b.png" alt="7-inch board: looper"></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/images/p4/51-jam.png" alt="7-inch board: jam player"></td>
+<td width="50%"><img src="docs/images/p4/79-player-mode.png" alt="7-inch board: player mode"></td>
 <td width="50%"><img src="docs/images/p4/03-fullscreen.png" alt="7-inch board: gig view"></td>
 </tr>
 </table>

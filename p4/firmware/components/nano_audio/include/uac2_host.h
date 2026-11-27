@@ -68,3 +68,6 @@ void uac2_host_set_start_mode(int mode);
 void uac2_host_stats(uac2_host_stats_t *out);
 // The two peaks of the stats since the last call, then set back to 0.
 void uac2_host_take_peaks(uint32_t *render_max_us, uint32_t *cap_gap_max_us);
+// Weak, empty: called (from the client task) when the sound was held up - kind 'C' a capture transfer came `us` after
+// the one before, 'P' a playback transfer, 'R' a render of 1 ms of sound took `us`. The board keeps them with the time.
+void uac2_host_stall(char kind, uint32_t us);

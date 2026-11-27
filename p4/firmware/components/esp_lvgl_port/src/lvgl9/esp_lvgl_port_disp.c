@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "esp_timer.h"
 #include <string.h>
 #include "sdkconfig.h"
 #include "esp_log.h"
@@ -524,10 +525,13 @@ static bool lvgl_port_flush_dpi_panel_ready_callback(esp_lcd_panel_handle_t pane
     return false;
 }
 
+static volatile int64_t s_vsync_us;   // P4 board: when the last VSYNC came (see the flush below)
+
 static bool lvgl_port_flush_dpi_vsync_ready_callback(esp_lcd_panel_handle_t panel_io,
         esp_lcd_dpi_panel_event_data_t *edata, void *user_ctx)
 {
     BaseType_t need_yield = pdFALSE;
+    s_vsync_us = esp_timer_get_time();
 
     lv_display_t *disp_drv = (lv_display_t *)user_ctx;
     assert(disp_drv != NULL);
@@ -747,12 +751,38 @@ static void lvgl_port_flush_callback(lv_display_t *drv, const lv_area_t *area, u
 
     if ((disp_ctx->disp_type == LVGL_PORT_DISP_TYPE_RGB || disp_ctx->disp_type == LVGL_PORT_DISP_TYPE_DSI)
             && (disp_ctx->flags.direct_mode || disp_ctx->flags.full_refresh)) {
+        /* P4 board (2026-11-27): only the lines that changed go out of the cache. The DPI driver writes back the rows
+         * it is given (y_start..y_end of the frame buffer) and switches to that buffer either way; before, every
+         * refresh - the player's time once a second - wrote back the whole 1.2 MB. Changed in this frame: the areas
+         * LVGL drew now (all flush calls of the frame) and those it copied from the other buffer before drawing (the
+         * areas of the frame before: LVGL's refr_sync_areas, a CPU copy into this buffer). */
+        static int32_t s_rows_y1 = INT32_MAX, s_rows_y2 = -1, s_prev_y1 = 0, s_prev_y2 = INT32_MAX;
+        if (area->y1 < s_rows_y1) s_rows_y1 = area->y1;
+        if (area->y2 > s_rows_y2) s_rows_y2 = area->y2;
         if (lv_disp_flush_is_last(drv)) {
             /* If the interface is I80 or SPI, this step cannot be used for drawing. */
-            esp_lcd_panel_draw_bitmap(disp_ctx->panel_handle, 0, 0, lv_disp_get_hor_res(drv), lv_disp_get_ver_res(drv), color_map);
+            int32_t vres = lv_disp_get_ver_res(drv), hres = lv_disp_get_hor_res(drv);
+            int32_t y1 = s_rows_y1 < s_prev_y1 ? s_rows_y1 : s_prev_y1, y2 = s_rows_y2 > s_prev_y2 ? s_rows_y2 : s_prev_y2;
+            y1 = y1 < 0 ? 0 : y1;
+            y2 = y2 >= vres ? vres - 1 : y2;
+            if (y2 < y1) y1 = 0, y2 = vres - 1;
+            s_prev_y1 = s_rows_y1, s_prev_y2 = s_rows_y2;
+            s_rows_y1 = INT32_MAX, s_rows_y2 = -1;
+            size_t row_bytes = (size_t)hres * lv_color_format_get_size(lv_display_get_color_format(drv));
+            int64_t drawn_us = esp_timer_get_time();
+            esp_lcd_panel_draw_bitmap(disp_ctx->panel_handle, 0, y1, hres, y2 + 1, color_map + (size_t)y1 * row_bytes);
             /* Waiting for the last frame buffer to complete transmission */
             xSemaphoreTake(disp_ctx->trans_sem, 0);
             xSemaphoreTake(disp_ctx->trans_sem, portMAX_DELAY);
+            /* P4 board (2026-11-27): and for one more. On chip revision 3 the "refresh done" is the DSI bridge's VSYNC,
+             * but the DPI driver switches to the new frame buffer when its DMA has read a whole frame - a little
+             * before that VSYNC. When draw_bitmap came between the two, the first VSYNC let LVGL draw into the
+             * buffer the DMA was still reading: a torn frame, now and then (a pressed tile flickered). Between two
+             * VSYNCs there is always one DMA reload, so after the second the old buffer is free.
+             * (2026-11-27, the looper's bar lagged: waiting for two VSYNCs every time halved the frames, 60 -> 30 a
+             * second. The DMA reload comes less than 1 ms before the VSYNC, so only a frame handed over in the last
+             * 3 ms before the VSYNC can miss it - only then is the second VSYNC waited for.) */
+            if (s_vsync_us - drawn_us < 3000) xSemaphoreTake(disp_ctx->trans_sem, pdMS_TO_TICKS(50));
         }
     } else {
         esp_lcd_panel_draw_bitmap(disp_ctx->panel_handle, offsetx1, offsety1, offsetx2 + 1, offsety2 + 1, color_map);

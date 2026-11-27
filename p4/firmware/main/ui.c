@@ -83,7 +83,7 @@ static void phone_action(ui_phone_action_t a, int value);
 static void show_wifi_page(void);   // (P4: Settings > Wi-Fi and the list of networks, see "Wi-Fi" below)
 static void netlist_open(void);
 static lv_obj_t *s_save_button, *s_ask, *s_ask_text, *s_ask_ok, *s_rename, *s_rename_title, *s_rename_area;
-static lv_obj_t *s_rename_ok;
+static lv_obj_t *s_rename_ok, *s_rename_keyboard;
 static char s_rename_kind = 'N';   // 'N' preset name, '1'-'4' FX preset
 static lv_obj_t *s_cap;   // the capture assistant (Settings > Capture)
 static void cap_named(const char *text);
@@ -92,6 +92,7 @@ static int s_ask_arg;
 static int s_current_preset;
 static bool s_fx_mode;
 static bool s_looper_mode;   // the tiles are the looper's switches (P4: the tuner's tile or footswitch held)
+static bool s_player_mode;   // P4: the tiles are the player's switches (footswitch 1 held, 2026-11-26)
 
 static lv_obj_t *s_main;   // everything of the main screen (hidden under the full-screen editor and tuner)
 static lv_obj_t *s_status_dot, *s_status, *s_edited, *s_app, *s_midi_icon, *s_preset_chip, *s_preset_chip_text;
@@ -108,6 +109,7 @@ static bool s_pedals_shown;   // on the screen now: chosen, full screen, FX mode
 static lv_obj_t *s_capture_title;
 static uint32_t s_tile_accent[TILES];   // colour of the pedal drawing on the tile
 static lv_obj_t *s_preset_number, *s_preset_name, *s_capture, *s_cab;
+static lv_obj_t *s_prev_box, *s_next_box;   // the arrows beside the preset's name
 static lv_obj_t *s_presets;                 // the preset list (a tap on the preset's name)
 static lv_obj_t *s_tile[TILES], *s_tile_caption[TILES], *s_tile_name[TILES], *s_tile_number[TILES];
 static lv_obj_t *s_tile_square[TILES], *s_tile_pedal[TILES];
@@ -157,12 +159,16 @@ static lv_obj_t *s_chain, *s_chain_dot[CHAIN_FIELDS], *s_chain_cap[CHAIN_FIELDS]
 static lv_obj_t *s_out_fill, *s_out_value, *s_tempo_line;
 static void open_phone(lv_event_t *e);
 static lv_obj_t *s_jam;   // P4: the jam player
-static int s_source;      // P4: the top bar's player, 0 = the phone, 1 = the jam tracks
+static int s_source = 1;  // P4: the top bar's player, 0 = the phone, 1 = the jam tracks (first since 2026-11-26)
 static void open_source(int source);
 static void show_jam_field(void);
 static void show_onboard_looper_tiles(void);
 static void show_loopbar(void);
+static void on_level_open(lv_event_t *e);
 static void build_loopbar(lv_obj_t *parent);
+static void build_playerbar(lv_obj_t *parent);
+static void show_playerbar(void);
+static void show_player_tiles(void);
 static void build_jam(lv_obj_t *screen);
 static void source_chooser(lv_obj_t *parent, int x, int y, int chosen);
 static void on_phone_toggle(lv_event_t *e);
@@ -295,7 +301,8 @@ static bool s_picker_library;
 static int s_picker_category, s_picker_page, s_confirm_code;
 static char s_preset_names[NANO_PRESETS][65];
 static ui_view_t s_view;
-static int s_be_bank, s_be_tile, s_be_preset, s_be_color, s_be_icon;
+static int s_be_bank, s_be_tile, s_be_preset, s_be_color, s_be_icon, s_be_preset2;   // (preset2: held, 0 = none)
+static lv_obj_t *s_bank_list2;
 static lv_obj_t *s_bank_symbol[PRESET_ICON_COUNT + 1];   // 0 = no symbol
 
 #define LIB_PAGE 30
@@ -403,9 +410,10 @@ static void on_tile_long(lv_event_t *e)
     s_padv.prefer = false;   // (an FX tile opens the editor's bars; a pedal of the pedal view asks for the pad after this)
     // P4: MODE held = the player (jam tracks / phone), TUNER held = looper mode - as holding footswitch 1 / 2.
     // (The small board: MODE held = looper mode, TUNER held = its footswitch is learned - Bluetooth MIDI, not here yet.)
+    if (s_player_mode) return;   // player mode: no switch has a held function (8 is out, on its press)
     if (s_looper_mode) {   // the looper on the board: the drums' tile held = their menu, undo held = clear
         if (tile == 0) ui_drum_menu_toggle();
-        else if (tile == 7) send('w', UI_SWITCH_HOLD | 8);
+        else if (tile == 4) send('w', UI_SWITCH_HOLD | 5);   // (undo held = clear)
     }
     else if (tile == 0) send('w', UI_SWITCH_HOLD | 1);
     else if (tile == 1) send('w', UI_SWITCH_HOLD | 2);
@@ -717,14 +725,14 @@ static int tile_height(void)
 // whatever order the home screen has.)
 static int tile_position(int i)
 {
-    if (s_looper_mode) return i >= 0 && i < TILES ? i : -1;
+    if (s_looper_mode || s_player_mode) return i >= 0 && i < TILES ? i : -1;
     for (int p = 0; p < s_layout_count; p++) if (s_layout_order[p] == i + 1) return p;
     return -1;
 }
 
 static void place_tile(int i)
 {
-    int h = tile_height(), p = tile_position(i), columns = (s_looper_mode ? TILES : s_layout_count) / 2;
+    int h = tile_height(), p = tile_position(i), columns = (s_looper_mode || s_player_mode ? TILES : s_layout_count) / 2;
     s_tile_w = (SCREEN_W - 2 * MARGIN - (columns - 1) * TILE_GAP) / columns;   // 241 with four columns, 325 with three
     lv_obj_set_hidden(s_tile[i], p < 0 || s_pedals_shown);
     if (p < 0) return;
@@ -1170,7 +1178,7 @@ static void build_pedals(lv_obj_t *parent)
         lv_obj_set_scrollable(field, false);
         lv_obj_set_clickable(field, true);
         lv_obj_set_ext_click_area(field, 8);
-        lv_obj_set_style_opa(field, 190, LV_STATE_PRESSED);
+        lv_obj_set_style_bg_opa(field, 190, LV_STATE_PRESSED);
         lv_obj_add_event_cb(field, on_pedal_swap, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)slot);
         lv_obj_add_event_cb(field, on_tile_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)(2 + slot));
         s_pv_ab_icon[slot] = lv_image_create(field);
@@ -1202,7 +1210,7 @@ static void build_pedals(lv_obj_t *parent)
     lv_obj_set_scrollable(s_pv_rp, false);
     lv_obj_set_clickable(s_pv_rp, true);
     lv_obj_set_ext_click_area(s_pv_rp, 8);
-    lv_obj_set_style_opa(s_pv_rp, 190, LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(s_pv_rp, 190, LV_STATE_PRESSED);
     lv_obj_add_event_cb(s_pv_rp, on_tile, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)7);
     lv_obj_add_event_cb(s_pv_rp, on_tile_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)7);
     s_pv_rp_name = label(s_pv_rp, &ui_font_title_22, TEXT);
@@ -1324,7 +1332,15 @@ static void build_tile(lv_obj_t *parent, int i)
     lv_obj_set_style_pad_all(tile, 0, 0);
     lv_obj_set_scrollable(tile, false);
     lv_obj_set_clickable(tile, true);
-    lv_obj_set_style_opa(tile, 190, LV_STATE_PRESSED);
+    // pressed: its background a little through (2026-11-27; was the whole tile's opacity, which LVGL draws through a
+    // layer of the tile's size - slower, and a suspect for the short glitch in a pressed tile the user saw)
+    lv_obj_set_style_bg_opa(tile, 190, LV_STATE_PRESSED);
+    // the flash's outline from the start, invisible (2026-11-27: set at the first press it re-measured the tile's
+    // drawing area while the flash began - the user saw a glitch at the first press)
+    lv_obj_set_style_outline_width(tile, 4, 0);
+    lv_obj_set_style_outline_pad(tile, 2, 0);
+    lv_obj_set_style_outline_color(tile, lv_color_white(), 0);
+    lv_obj_set_style_outline_opa(tile, LV_OPA_TRANSP, 0);
     lv_obj_add_event_cb(tile, on_tile, LV_EVENT_SHORT_CLICKED, (void *)(intptr_t)i);
     lv_obj_add_event_cb(tile, on_tile_long, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)i);
     lv_obj_add_event_cb(tile, on_tile_draw, LV_EVENT_DRAW_MAIN_END, (void *)(intptr_t)i);
@@ -1385,9 +1401,13 @@ void ui_flash_tile(int i)
     lvgl_port_lock(0);
     lv_obj_t *t = s_pedals_shown && i >= 2 && i < 2 + NANO_FX_SLOTS ? s_pv_key[i - 2]
                   : s_pedals_shown && i == 7 && !lv_obj_is_hidden(s_pv_rp) ? s_pv_rp : s_tile[i];
-    lv_obj_set_style_outline_width(t, 4, 0);
-    lv_obj_set_style_outline_pad(t, 2, 0);
-    lv_obj_set_style_outline_color(t, lv_color_white(), 0);
+    // (2026-11-27: a flash still running on this tile is stopped first - LVGL 9 runs two side by side, and their two
+    // opacities alternated frame by frame: a flicker in the tile when it was pressed twice, or a press came twice.
+    // The outline is set only when it differs: every style set redraws and re-measures the tile.)
+    lv_anim_delete(t, flash_cb);
+    set_num_prop(t, LV_STYLE_OUTLINE_WIDTH, 4);
+    set_num_prop(t, LV_STYLE_OUTLINE_PAD, 2);
+    set_color_prop(t, LV_STYLE_OUTLINE_COLOR, 0xFFFFFF);
     lv_anim_t a;
     lv_anim_init(&a);
     lv_anim_set_var(&a, t);
@@ -1922,6 +1942,7 @@ static void metro_hide(lv_timer_t *t)
 {
     (void)t;
     if (lv_obj_is_hidden(s_metro)) return;
+    if (!lv_obj_is_hidden(s_rename) && s_rename_kind == 'b') return;   // the tempo is being typed: the dialog waits
     uint32_t idle = lv_tick_elaps(s_metro_news_tick), touch = lv_display_get_inactive_time(NULL);
     if ((touch < idle ? touch : idle) < METRO_HIDE_MS) return;
     lv_obj_set_hidden(s_metro, true);
@@ -1944,6 +1965,36 @@ static void on_metro_close(lv_event_t *e)
     metro(1, 0);
 }
 static void on_metro_step(lv_event_t *e) { metro(3, (int)(intptr_t)lv_event_get_user_data(e)); }
+
+static void show_rename(char kind, const char *title, const char *ok, const char *text, int max_length);
+static void close_rename(void);
+
+// A tap on the BPM value: the tempo is typed on the number pad (40-240, one decimal: "92", "120.5").
+static void on_metro_bpm(lv_event_t *e)
+{
+    (void)e;
+    metro_keep();
+    show_rename('b', "Tempo in BPM", "Set", "", 5);
+}
+
+// From the keyboard. What is no tempo is said and the keyboard stays; a tempo goes to the Nano as TAP's does.
+static void metro_typed(const char *text)
+{
+    char number[8];
+    size_t n = 0;
+    for (const char *c = text; *c && n + 1 < sizeof(number); c++) number[n++] = *c == ',' ? '.' : *c;
+    number[n] = 0;
+    char *end = number;
+    float bpm = strtof(number, &end);
+    if (end == number || *end || !(bpm >= 40 && bpm <= 240)) {
+        ui_show_message("The tempo goes from 40 to 240 BPM.");
+        return;
+    }
+    close_rename();
+    metro_keep();
+    metro(0, 0);   // (should the dialog have gone meanwhile: the tempo is the controller's again)
+    metro(2, (int)lroundf(bpm * 10));
+}
 static void on_metro_scope(lv_event_t *e) { metro(9, (int)(intptr_t)lv_event_get_user_data(e)); }
 static void on_metro_switch(lv_event_t *e) { metro(4, 0); }
 static void on_metro_note(lv_event_t *e) { metro(7, (int)(intptr_t)lv_event_get_user_data(e)); }
@@ -2085,6 +2136,12 @@ static void build_metro(lv_obj_t *screen)
     lv_obj_set_width(s_metro_bpm, DLG_W / 2 - 200);
     lv_obj_set_style_text_align(s_metro_bpm, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_pos(s_metro_bpm, 100, 84);
+    lv_obj_set_clickable(s_metro_bpm, true);   // a tap: type the tempo
+    lv_obj_set_ext_click_area(s_metro_bpm, 6);
+    lv_obj_add_event_cb(s_metro_bpm, on_metro_bpm, LV_EVENT_SHORT_CLICKED, NULL);
+    // - and + held: they go on, a step at a time
+    lv_obj_add_event_cb(minus, on_metro_step, LV_EVENT_LONG_PRESSED_REPEAT, (void *)(intptr_t)-10);
+    lv_obj_add_event_cb(plus, on_metro_step, LV_EVENT_LONG_PRESSED_REPEAT, (void *)(intptr_t)10);
     lv_obj_t *bpm = metro_caption(s_metro, 100, 140, "BPM");
     lv_obj_set_width(bpm, DLG_W / 2 - 200);
     lv_obj_set_style_text_align(bpm, LV_TEXT_ALIGN_CENTER, 0);
@@ -2318,26 +2375,37 @@ static void on_bank_preset(lv_event_t *e)
     s_be_preset = (int)(intptr_t)lv_event_get_user_data(e);
     fill_bank_list();
 }
+static void on_bank_preset2(lv_event_t *e)
+{
+    s_be_preset2 = (int)(intptr_t)lv_event_get_user_data(e);
+    fill_bank_list();
+}
 
 static void fill_bank_list(void)
 {
     char text[80];
-    lv_obj_clean(s_bank_list);
-    for (int preset = 1; preset <= NANO_PRESETS; preset++) {
-        bool selected = preset == s_be_preset;
-        lv_obj_t *btn = lv_button_create(s_bank_list);
+    for (int k = 0; k < 2; k++) {
+    lv_obj_t *list = k ? s_bank_list2 : s_bank_list;
+    lv_obj_clean(list);
+    for (int preset = k ? 0 : 1; preset <= NANO_PRESETS; preset++) {   // (held: "None" first)
+        bool selected = preset == (k ? s_be_preset2 : s_be_preset);
+        lv_obj_t *btn = lv_button_create(list);
         lv_obj_set_size(btn, LV_PCT(100), 46);
         lv_obj_set_style_bg_color(btn, lv_color_hex(selected ? 0x2A2E33 : 0x1A1D20), 0);
         lv_obj_set_style_border_width(btn, selected ? 2 : 0, 0);
         lv_obj_set_style_border_color(btn, lv_color_hex(BANK_COLORS[s_be_color]), 0);
         lv_obj_set_style_shadow_width(btn, 0, 0);
         lv_obj_set_style_radius(btn, 9, 0);
-        lv_obj_add_event_cb(btn, on_bank_preset, LV_EVENT_CLICKED, (void *)(intptr_t)preset);
+        lv_obj_add_event_cb(btn, k ? on_bank_preset2 : on_bank_preset, LV_EVENT_CLICKED, (void *)(intptr_t)preset);
         lv_obj_t *l = label(btn, &ui_font_20, selected ? 0xFFFFFF : 0xD8D8D8);
-        snprintf(text, sizeof(text), "%2d   %.60s", preset, s_preset_names[preset - 1][0] ? s_preset_names[preset - 1] : "-");
+        if (!preset) snprintf(text, sizeof(text), "None");
+        else snprintf(text, sizeof(text), "%2d   %.60s", preset, s_preset_names[preset - 1][0] ? s_preset_names[preset - 1] : "-");
         lv_label_set_text(l, text);
+        lv_obj_set_width(l, LV_PCT(100));
+        lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
         lv_obj_align(l, LV_ALIGN_LEFT_MID, 0, 0);
         if (selected) lv_obj_scroll_to_view(btn, LV_ANIM_OFF);
+    }
     }
 }
 
@@ -2349,6 +2417,7 @@ static void open_bank_editor(int tile)
     s_be_preset = s_view.bank_presets[tile];
     s_be_color = s_view.bank_colors[tile] < UI_BANK_COLOR_COUNT ? s_view.bank_colors[tile] : 0;
     s_be_icon = s_view.bank_icons[tile] <= PRESET_ICON_COUNT ? s_view.bank_icons[tile] : 0;
+    s_be_preset2 = s_view.bank_presets2[tile] <= NANO_PRESETS ? s_view.bank_presets2[tile] : 0;
     snprintf(text, sizeof(text), "Bank %d  \xC2\xB7  switch %d", s_be_bank + 1, tile + 3);
     lv_label_set_text(s_bank_title, text);
     for (int i = 0; i < UI_BANK_COLOR_COUNT; i++) style_swatch(i, i == s_be_color);
@@ -2366,7 +2435,7 @@ static void on_bank_button(lv_event_t *e)
     }
     lv_obj_set_hidden(s_bank_editor, true);
     int base = s_be_bank << 14 | s_be_tile << 11;
-    if (action == 1 && s_be_preset) send('B', s_be_icon << 18 | base | s_be_color << 7 | s_be_preset);
+    if (action == 1 && s_be_preset) send('B', s_be_preset2 << 23 | s_be_icon << 18 | base | s_be_color << 7 | s_be_preset);
     else if (action == 2) send('B', base);
 }
 
@@ -2395,15 +2464,33 @@ static void build_bank_editor(lv_obj_t *screen)
         lv_obj_set_clickable(sq, true);
         lv_obj_add_event_cb(sq, on_symbol, LV_EVENT_CLICKED, (void *)(intptr_t)i);
     }
+    // the presets: pressed (left) | held, on the release (right; "None" first)
+    int lw = (DLG_W - 22 - 16) / 2;
+    static const char *const LISTS[2] = { "PRESSED", "HELD \xC2\xB7 ON THE RELEASE" };
+    for (int k = 0; k < 2; k++) {
+        lv_obj_t *c = label(s_bank_editor, CAPTION_FONT, MUTED);
+        lv_label_set_text(c, LISTS[k]);
+        lv_obj_set_style_text_letter_space(c, 2, 0);
+        lv_obj_set_pos(c, 16 + k * (lw + 16), 280);
+    }
     s_bank_list = lv_obj_create(s_bank_editor);
-    lv_obj_set_pos(s_bank_list, 10, 284);
-    lv_obj_set_size(s_bank_list, DLG_W - 22, 150);
+    lv_obj_set_pos(s_bank_list, 10, 300);
+    lv_obj_set_size(s_bank_list, lw, 140);
     lv_obj_set_style_bg_opa(s_bank_list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_bank_list, 0, 0);
     lv_obj_set_style_pad_all(s_bank_list, 4, 0);
     lv_obj_set_style_pad_row(s_bank_list, 6, 0);
     lv_obj_set_flex_flow(s_bank_list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_scroll_dir(s_bank_list, LV_DIR_VER);
+    s_bank_list2 = lv_obj_create(s_bank_editor);
+    lv_obj_set_pos(s_bank_list2, 10 + lw + 16, 300);
+    lv_obj_set_size(s_bank_list2, lw, 140);
+    lv_obj_set_style_bg_opa(s_bank_list2, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_bank_list2, 0, 0);
+    lv_obj_set_style_pad_all(s_bank_list2, 4, 0);
+    lv_obj_set_style_pad_row(s_bank_list2, 6, 0);
+    lv_obj_set_flex_flow(s_bank_list2, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_scroll_dir(s_bank_list2, LV_DIR_VER);
     small_button(s_bank_editor, 18, 452, 150, 46, "Default", on_bank_button, 2);
     small_button(s_bank_editor, 182, 452, 180, 46, "Learn switch", on_bank_button, 3);
     small_button(s_bank_editor, DLG_W - 2 - 18 - 330, 452, 160, 46, "Cancel", on_bank_button, 0);
@@ -2553,6 +2640,26 @@ static void open_learn(int number)
     send('D', number);
 }
 
+// All switches, one after the other (Settings > Footswitches): the same window, which says where it is. Each press
+// swaps two switches, so after the last one every switch is where it was pressed.
+static void show_learn_all(int number)
+{
+    lv_label_set_text_fmt(s_learn_title, "Learn footswitch %d of %d", number, TILES);
+    if (number > 1) lv_label_set_text_fmt(s_learn_text, "Switch %d learned. Now press the one that should be switch %d. Waiting 15 seconds.", number - 1, number);
+    else lv_label_set_text_fmt(s_learn_text, "Press the footswitch - or the switch on the MIDI controller - that should be switch 1 now. Waiting 15 seconds.");
+    lv_obj_set_hidden(s_learn_first, true);
+    lv_obj_set_hidden(s_learn, false);
+    lv_obj_move_foreground(s_learn);
+}
+
+void ui_learn_next(int number, const char *message)
+{
+    (void)message;   // (what was swapped is in the log; the window says which switch is next)
+    lvgl_port_lock(0);
+    show_learn_all(number);
+    lvgl_port_unlock();
+}
+
 void ui_learn_done(const char *message)
 {
     lvgl_port_lock(0);
@@ -2628,11 +2735,16 @@ static void close_rename(void)
 }
 
 static void preset_new_named(const char *text);
+static void metro_typed(const char *text);
 
 static void submit_rename(void)
 {
     const char *text = lv_textarea_get_text(s_rename_area);
     while (*text == ' ') text++;
+    if (s_rename_kind == 'b') {   // the tempo, typed (a tap on the BPM value of the tempo dialog); stays open if it is no tempo
+        metro_typed(text);
+        return;
+    }
     if (s_rename_kind == 'N' && strlen(text) < 4) {
         ui_show_message("Preset names need at least 4 characters.");
         return;
@@ -2699,8 +2811,11 @@ static void show_rename(char kind, const char *title, const char *ok, const char
     lv_textarea_set_max_length(s_rename_area, max_length);
     lv_textarea_set_placeholder_text(s_rename_area, kind == 'N' || kind == 'L' || kind == 'S' || kind == 'p' || kind == 'c' ? ""
                                      : kind == 'W' ? "Network name (empty = the board's own network)" : kind == 'K' ? "Password"
-                                     : "Name (empty name = delete)");
+                                     : kind == 'b' ? "40 - 240" : "Name (empty name = delete)");
     lv_textarea_set_password_mode(s_rename_area, kind == 'K');
+    // The tempo is typed on the number pad; every other text gets the letters back
+    if (kind == 'b') lv_keyboard_set_mode(s_rename_keyboard, LV_KEYBOARD_MODE_NUMBER);
+    else if (lv_keyboard_get_mode(s_rename_keyboard) == LV_KEYBOARD_MODE_NUMBER) lv_keyboard_set_mode(s_rename_keyboard, LV_KEYBOARD_MODE_TEXT_LOWER);
     lv_textarea_set_text(s_rename_area, text);
     lv_obj_set_hidden(s_rename, false);
     lv_obj_move_foreground(s_rename);
@@ -2737,7 +2852,7 @@ static void build_rename(lv_obj_t *screen)
     lv_textarea_set_max_length(s_rename_area, 32);
     lv_obj_set_style_text_font(s_rename_area, &ui_font_28, 0);
 
-    lv_obj_t *kb = lv_keyboard_create(s_rename);
+    lv_obj_t *kb = s_rename_keyboard = lv_keyboard_create(s_rename);
     lv_obj_set_size(kb, SCREEN_W, 380);
     lv_obj_align(kb, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_set_style_text_font(kb, &ui_font_20, 0);
@@ -4378,7 +4493,11 @@ static void close_settings(lv_event_t *e)
 }
 
 static void on_settings_layout(lv_event_t *e) { open_layout(NULL); lv_obj_move_foreground(s_layout); }
-static void on_settings_learn(lv_event_t *e) { open_learn(1); lv_obj_move_foreground(s_learn); }
+static void on_settings_learn(lv_event_t *e)
+{
+    show_learn_all(1);
+    send('D', 1 | UI_LEARN_ALL);
+}
 static void on_settings_reload(lv_event_t *e) { send('r', 0); }
 static void on_settings_cloud(lv_event_t *e) { send('\\', lv_obj_has_state(s_set_cloud, LV_STATE_CHECKED) ? 1 : 0); }
 
@@ -5666,7 +5785,7 @@ static void build_chain(lv_obj_t *parent)
         if (SLOT[n] >= 0) chain_field(b, n, x, w, CAPS[n], on_chain_fx, NULL, (void *)(intptr_t)SLOT[n]);
         else if (SLOT[n] == -1) chain_field(b, n, x, w, CAPS[n], open_capture_picker, open_amp, NULL);
         else if (SLOT[n] == -2) chain_field(b, n, x, w, CAPS[n], open_cab_picker, open_cab_settings, NULL);
-        else chain_field(b, n, x, w, CAPS[n], NULL, NULL, NULL);
+        else chain_field(b, n, x, w, CAPS[n], on_level_open, NULL, NULL);   // (OUT: the Level sheet)
         lv_obj_t *f = lv_obj_get_parent(s_chain_name[n]);
         if (SLOT[n] == -1 || SLOT[n] == -2) {   // the capture's / cab's labels as the old cards had them
             lv_obj_t *slot = label(f, &ui_font_12, CAPTION);
@@ -5753,8 +5872,111 @@ static void phone_action(ui_phone_action_t a, int value)
 }
 
 static void on_phone_toggle(lv_event_t *e) { phone_action(s_source ? UI_JAM_TOGGLE : UI_PHONE_TOGGLE, 0); }
+
+// ---- the players' footswitch row (2026-11-26, draft C): Back | Play | Pause | Next as four tiles along the bottom of
+//      both players, drawn as the main screen's tiles - symbol top left, the footswitch's number top right, the name
+//      bottom left; Play lit green while it plays, Pause lit while it is paused. The footswitches are the bottom row of
+//      the tile layout (positions 5-8; with 6 fields 4-6: Back, Play / Pause, Next); footswitch 1 closes the player
+//      (the Close tile at the top right says so). ----
+typedef struct { lv_obj_t *tile[4], *sym[4], *num[4], *name[4]; } transport_t;
+static transport_t s_jam_tr, s_ph_tr;
+static const char *const TRANSPORT_SYM[4] = { LV_SYMBOL_PREV, LV_SYMBOL_PLAY, LV_SYMBOL_NEXT, LV_SYMBOL_CLOSE };
+static const char *const TRANSPORT_NAME[4] = { "Back", "Play", "Next", "Close" };
+#define PLAYER_ROW_H 96
+#define PLAYER_ROW_Y (SCREEN_H - 72 - MARGIN - 2 - 12 - PLAYER_ROW_H)   // (in the player's box)
+
+// The footswitch of field k (0-3), 0 = none
+// (only in player mode: there switches 5-8 are these, in fixed places)
+static int transport_switch(int k) { return s_player_mode ? 5 + k : 0; }
+static void on_player_row_out(lv_event_t *e);
+
+
+static lv_obj_t *player_tile(lv_obj_t *parent, int x, int y, int w, int h, lv_event_cb_t cb, lv_obj_t **sym, lv_obj_t **num,
+                             lv_obj_t **name, const char *symbol, const char *text)
+{
+    lv_obj_t *t = lv_obj_create(parent);
+    lv_obj_remove_style_all(t);
+    lv_obj_set_pos(t, x, y);
+    lv_obj_set_size(t, w, h);
+    lv_obj_set_style_radius(t, RADIUS, 0);
+    lv_obj_set_style_bg_opa(t, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(t, 2, 0);
+    lv_obj_set_scrollable(t, false);
+    lv_obj_set_clickable(t, true);
+    lv_obj_add_event_cb(t, cb, LV_EVENT_CLICKED, NULL);
+    *sym = label(t, &ui_font_24, TEXT);
+    lv_label_set_text(*sym, symbol);
+    lv_obj_set_pos(*sym, 14, 10);
+    *num = label(t, &ui_font_title_16, CAPTION);
+    lv_obj_align(*num, LV_ALIGN_TOP_RIGHT, -14, 10);
+    *name = label(t, &ui_font_title_22, TEXT);
+    lv_label_set_text(*name, text);
+    lv_obj_align(*name, LV_ALIGN_BOTTOM_LEFT, 14, -10);
+    return t;
+}
+
+static void player_tile_look(lv_obj_t *t, lv_obj_t *sym, lv_obj_t *num, lv_obj_t *name, uint32_t color, bool on)
+{
+    uint32_t lit = blend(color, SURF, 0.80f), ink = on ? ink_for(lit) : TEXT;
+    set_color_prop(t, LV_STYLE_BG_COLOR, on ? lit : blend(color, SURF, TILE_DIM));
+    set_color_prop(t, LV_STYLE_BORDER_COLOR, on ? lit : blend(color, SURF, TILE_DIM + 0.14f));
+    set_color_prop(sym, LV_STYLE_TEXT_COLOR, on ? ink : blend(color, 0xFFFFFF, 0.7f));
+    set_color_prop(num, LV_STYLE_TEXT_COLOR, on ? ink : CAPTION);
+    set_color_prop(name, LV_STYLE_TEXT_COLOR, ink);
+}
+
+// The row along the bottom of a player, four tiles over the width
+static void build_transport(transport_t *t, lv_obj_t *parent, const lv_event_cb_t cb[4])
+{
+    int inner = SCREEN_W - 2 * MARGIN - 2, w = (inner - 5 * 12) / 4;
+    for (int k = 0; k < 4; k++)
+        t->tile[k] = player_tile(parent, 12 + k * (w + 12), PLAYER_ROW_Y, w, PLAYER_ROW_H, cb[k], &t->sym[k], &t->num[k],
+                                 &t->name[k], TRANSPORT_SYM[k], TRANSPORT_NAME[k]);
+}
+
+static void show_transport(transport_t *t, bool playing)
+{
+    // (2026-11-26: play / pause on one switch, 8 back out - as the player mode's tiles)
+    set_text(t->sym[1], playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+    set_text(t->name[1], playing ? "Pause" : "Play");
+    set_text(t->name[3], s_player_mode ? "Presets" : "Close");
+    for (int k = 0; k < 4; k++) {
+        bool on = k == 1 && playing;
+        player_tile_look(t->tile[k], t->sym[k], t->num[k], t->name[k], k == 1 ? 0x45F862 : 0x9AA0A6, on);
+        char n[4] = "";
+        int sw = transport_switch(k);
+        if (sw >= 1 && sw <= 8) snprintf(n, sizeof(n), "%d", sw);
+        set_text(t->num[k], n);
+    }
+}
+
+// The row's fourth tile: in player mode back out to the presets (as switch 8), else the page closes
+static void on_player_row_out(lv_event_t *e)
+{
+    (void)e;
+    if (s_player_mode) send('w', 8);
+    else { lv_obj_set_hidden(s_phone, true); lv_obj_set_hidden(s_jam, true); }
+}
+
+// Close, at the top right of both players (by touch)
+static void player_close(lv_obj_t *parent, lv_event_cb_t cb)
+{
+    lv_obj_t *sym, *num, *name;
+    int w = 150, h = 44;   // (as high as the Jam tracks | Phone switch beside it, on its line)
+    lv_obj_t *t = player_tile(parent, SCREEN_W - 2 * MARGIN - 2 - 24 - w, 14, w, h, cb, &sym, &num, &name, "", "Close");
+    lv_obj_t *x = ui_icon(t, UI_ICON_CLOSE, 18, TEXT);
+    lv_obj_align(x, LV_ALIGN_LEFT_MID, 14, 0);
+    lv_obj_align(name, LV_ALIGN_LEFT_MID, 42, 0);
+    lv_obj_set_style_text_font(name, &ui_font_title_18, 0);
+    lv_label_set_text(num, "");
+    lv_obj_align(num, LV_ALIGN_RIGHT_MID, -14, 0);
+    player_tile_look(t, sym, num, name, 0x9AA0A6, false);
+}
 static void on_phone_prev(lv_event_t *e) { phone_action(UI_PHONE_PREV, 0); }
 static void on_phone_next(lv_event_t *e) { phone_action(UI_PHONE_NEXT, 0); }
+static bool s_ph_playing;
+static void on_phone_play(lv_event_t *e) { if (!s_ph_playing) phone_action(UI_PHONE_TOGGLE, 0); }
+static void on_phone_pause(lv_event_t *e) { if (s_ph_playing) phone_action(UI_PHONE_TOGGLE, 0); }
 static void close_phone(lv_event_t *e) { lv_obj_set_hidden(s_phone, true); }
 
 static void open_phone(lv_event_t *e)
@@ -5864,10 +6086,7 @@ static void build_phone(lv_obj_t *screen)
     lv_obj_set_style_text_letter_space(s_ph_caption, 1, 0);
     lv_obj_set_pos(s_ph_caption, X + 2 * 124 + 3 + 20, 30);
     source_chooser(s_phone, X, 14, 0);
-    lv_obj_t *cb = box(s_phone, SCREEN_W - 2 * MARGIN - 2 - 24 - 52, 10, 52, 52);
-    lv_obj_t *x = seg(cb, 0, 50, close_phone);
-    lv_obj_t *xi = ui_icon(x, UI_ICON_CLOSE, 20, TEXT);
-    lv_obj_center(xi);
+    player_close(s_phone, close_phone);
     s_ph_title = label(s_phone, &ui_font_title_46, TEXT);
     lv_obj_set_width(s_ph_title, W - 80);
     lv_label_set_long_mode(s_ph_title, LV_LABEL_LONG_DOT);
@@ -5900,41 +6119,23 @@ static void build_phone(lv_obj_t *screen)
     lv_obj_set_pos(s_ph_pos, X, 184);
     s_ph_len = label(s_phone, &ui_font_12, CAPTION);
     lv_obj_align(s_ph_len, LV_ALIGN_TOP_RIGHT, -X, 184);
-    // transport: one box, three fields, pause / play filled (columns 1-2) | volume into the Nano (columns 3-4)
+    // volume into the Nano (columns 1-2) | the tuner mute (columns 3-4); the footswitch row along the bottom
     int half = (W - MARGIN) / 2;
-    lv_obj_t *tb = box(s_phone, X, 236, half, 84);
-    lv_obj_t *f = seg(tb, 0, half / 3, on_phone_prev);
-    lv_obj_t *l = label(f, &ui_font_28, TEXT);
-    lv_label_set_text(l, LV_SYMBOL_PREV);
-    lv_obj_center(l);
-    vline(tb, half / 3);
-    s_ph_pause = seg(tb, half / 3 + 1, half / 3, on_phone_toggle);
-    lv_obj_set_style_bg_color(s_ph_pause, lv_color_hex(0xECECEC), 0);
-    lv_obj_set_style_bg_color(s_ph_pause, lv_color_white(), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(s_ph_pause, 0, 0);
-    s_ph_pause_label = label(s_ph_pause, &ui_font_28, INK);
-    lv_label_set_text(s_ph_pause_label, LV_SYMBOL_PAUSE);
-    lv_obj_center(s_ph_pause_label);
-    vline(tb, 2 * (half / 3) + 1);
-    f = seg(tb, 2 * (half / 3) + 2, half - 2 - 2 * (half / 3) - 2, on_phone_next);
-    l = label(f, &ui_font_28, TEXT);
-    lv_label_set_text(l, LV_SYMBOL_NEXT);
-    lv_obj_center(l);
+    lv_obj_t *l;
     lv_obj_t *vc = label(s_phone, &ui_font_12, CAPTION);
     lv_obj_set_style_text_letter_space(vc, 1, 0);
     lv_label_set_text(vc, "VOLUME INTO THE NANO");
-    lv_obj_set_pos(vc, X + half + MARGIN, 220);
-    s_ph_vol = fill_bar(s_phone, X + half + MARGIN, 248, W - half - MARGIN, "Phone", &s_ph_vol_value);
+    lv_obj_set_pos(vc, X, 222);
+    s_ph_vol = fill_bar(s_phone, X, 242, half, "Phone", &s_ph_vol_value);
     lv_slider_set_range(s_ph_vol, -600, 60);   // dB x 10
     lv_obj_add_event_cb(s_ph_vol, on_phone_volume, LV_EVENT_VALUE_CHANGED, NULL);
-    // footswitch hint, then the tuner mute
-    lv_obj_t *hb = box(s_phone, X, 352, W, 60);
-    lv_obj_t *hi = ui_icon(hb, UI_ICON_FOOTSWITCH, 20, CAPTION);
-    lv_obj_align(hi, LV_ALIGN_LEFT_MID, 16, 0);
-    l = label(hb, &ui_font_16, CAPTION);
-    lv_label_set_text(l, "A footswitch can pause / play too \xE2\x80\x93 tile layout \xE2\x80\x9CPhone\xE2\x80\x9D.");
-    lv_obj_align(l, LV_ALIGN_LEFT_MID, 48, 0);
-    lv_obj_t *mb = box(s_phone, X, 424, W, 60);
+    static const lv_event_cb_t PH_CB[4] = { on_phone_prev, on_phone_toggle, on_phone_next, on_player_row_out };
+    build_transport(&s_ph_tr, s_phone, PH_CB);
+    lv_obj_t *mc = label(s_phone, &ui_font_12, CAPTION);
+    lv_obj_set_style_text_letter_space(mc, 1, 0);
+    lv_label_set_text(mc, "WHILE TUNING");
+    lv_obj_set_pos(mc, X + half + MARGIN, 222);
+    lv_obj_t *mb = box(s_phone, X + half + MARGIN, 242, W - half - MARGIN, 60);
     l = label(mb, &ui_font_16, TEXT);
     lv_label_set_text(l, "Mute the phone while the tuner is on");
     lv_obj_align(l, LV_ALIGN_LEFT_MID, 16, 0);
@@ -5986,7 +6187,8 @@ void ui_set_phone(const ui_phone_t *p)
     set_num_prop(s_ph_knob, LV_STYLE_X, 24 - 8 + (int)(w * k));
     set_text(s_ph_pos, pos);
     set_text(s_ph_len, len);
-    set_text(s_ph_pause_label, p->playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+    show_transport(&s_ph_tr, p->playing);
+    s_ph_playing = p->playing;
     if (!lv_obj_has_state(s_ph_vol, LV_STATE_PRESSED)) {
         lv_slider_set_value(s_ph_vol, (int)lroundf(p->volume_db * 10), LV_ANIM_OFF);
         snprintf(text, sizeof(text), "%s%.1f dB", p->volume_db < 0 ? "\xE2\x88\x92" : "", fabsf(p->volume_db));
@@ -6033,6 +6235,57 @@ static lv_obj_t *s_lb_left, *s_lb_right, *s_lb_bars_value, *s_rec_mark;
 static lv_obj_t *s_jam_list, *s_jam_caption, *s_jam_title, *s_jam_scrub_fill, *s_jam_knob, *s_jam_pos, *s_jam_len;
 static lv_obj_t *s_jam_pause_label, *s_jam_vol, *s_jam_vol_value, *s_jam_level_value, *s_jam_foot;
 static int s_jam_list_count = -1, s_jam_list_current = -2, s_jam_list_playing = -1;
+static lv_obj_t *s_gr_row;              // the FX editor's gain reduction row (a compressor), see build_gr_row
+static void show_gr_row(void);
+static uint32_t s_jam_list_sig;          // the names (and the album in view) the list was filled with
+static lv_obj_t *s_jam_albums, *s_jam_album_name, *s_jam_album_pos;
+static int s_jam_view = -1;              // the album in view: its first track; follows the playing one
+static int s_jam_view_current = -2;      // (the current track the view last followed)
+
+// ---- jam tracks in albums (2026-11-27: the Jam Player's folders become albums on the card, p4_jam.c) ----
+// A track's name is "Album/Title"; a loose one (in the jam folder itself) just "Title" - those form the album
+// "Jam tracks". The list is sorted by album, so an album's tracks stand together. The jam page shows one album at a
+// time with arrows to the others (draft C, chosen by the user 2026-11-27: drafts/entwurf-p4-14-alben-*).
+static const char *jam_name(int i) { return s_jam_names && i >= 0 && i < s_jam_st.count ? s_jam_names(i) : ""; }
+static const char *jam_title(const char *name) { const char *s = strchr(name, '/'); return s ? s + 1 : name; }
+static int jam_album_len(const char *name) { const char *s = strchr(name, '/'); return s ? (int)(s - name) : 0; }
+static bool jam_same_album(int a, int b)
+{
+    const char *x = jam_name(a), *y = jam_name(b);
+    int n = jam_album_len(x);
+    return n == jam_album_len(y) && !strncmp(x, y, (size_t)n);
+}
+static void jam_album_range(int i, int *first, int *last)   // the album of track i: its first and last track
+{
+    int a = i, b = i;
+    while (a > 0 && jam_same_album(a - 1, i)) a--;
+    while (b + 1 < s_jam_st.count && jam_same_album(b + 1, i)) b++;
+    *first = a;
+    *last = b;
+}
+static void jam_album_name(int i, char *out, size_t n, bool caption)   // caption: in capitals, as captions are
+{
+    const char *name = jam_name(i);
+    int len = jam_album_len(name);
+    if (len) snprintf(out, n, "%.*s", len, name);
+    else snprintf(out, n, "Jam tracks");
+    if (caption)
+        for (char *p = out; *p; p++)
+            if (*p >= 'a' && *p <= 'z') *p -= 32;
+}
+static int jam_album_count(void)
+{
+    int n = 0;
+    for (int i = 0; i < s_jam_st.count; i++) n += i == 0 || !jam_same_album(i - 1, i);
+    return n;
+}
+static uint32_t jam_names_sig(void)   // (a list read again can hold other names with the same count: moved tracks)
+{
+    uint32_t h = 2166136261u ^ (uint32_t)s_jam_st.count;
+    for (int i = 0; i < s_jam_st.count; i++)
+        for (const char *p = jam_name(i); *p; p++) h = (h ^ (uint8_t)*p) * 16777619u;
+    return h;
+}
 
 static uint32_t loop_color(int state)
 {
@@ -6170,6 +6423,239 @@ static void show_loopbar(void)
 // Part A and B are two loops of their own; a tap on the other one switches at the end of the loop that plays.
 #define DRUM_ORANGE 0xFF8A3D
 #define PART_TEAL 0x2EC4B6
+
+// ---- the player mode (P4, 2026-11-26, after the looper mode): footswitch 1 held - the tiles become the player's
+//      switches in fixed places and the signal chain becomes the player's bar. 1 back (out of the mode), 2 tuner,
+//      3 jam tracks / phone, 4 the player's page (the list), 5 back, 6 play, 7 pause, 8 next. ----
+// The player's stage (2026-11-27, user: "take the preset out, put the title and the player in the centre"; draft C
+// with the cover instead of the record and the previous title instead of the one after next): in player mode the
+// preset row and the bar give their place (y 72-234) to one box - the cover at the left (the record with the
+// track's number while there is none), what plays and its time in the middle, NEXT and PREVIOUS at the right.
+#define PB_Y 72
+#define PB_H 162
+#define PB_STRIP_X 172
+#define PB_STRIP_W 520
+static lv_obj_t *s_playerbar, *s_pb_dot, *s_pb_state, *s_pb_title, *s_pb_track, *s_pb_fill, *s_pb_left, *s_pb_right, *s_pb_value;
+static lv_obj_t *s_pb_head, *s_pb_prev, *s_pb_prev_cap, *s_pb_disc, *s_pb_disc_label, *s_pb_disc_text, *s_pb_cover;
+static uint32_t s_player_sig;
+// the cover of the jam track that plays (p4_cover.c, through ui_set_cover_source)
+static ui_cover_cb s_cover_get;
+static uint16_t *s_cover_px;
+static lv_image_dsc_t s_cover_dsc;
+static bool s_cover_has;
+static uint32_t s_cover_seq = UINT32_MAX;
+
+static lv_obj_t *pb_plain(lv_obj_t *parent)
+{
+    lv_obj_t *o = lv_obj_create(parent);
+    lv_obj_remove_style_all(o);
+    lv_obj_set_scrollable(o, false);
+    lv_obj_set_clickable(o, false);
+    return o;
+}
+
+static lv_obj_t *pb_ring(lv_obj_t *parent, int cx, int cy, int d, uint32_t fill, uint32_t line)
+{
+    lv_obj_t *o = pb_plain(parent);
+    lv_obj_set_size(o, d, d);
+    lv_obj_set_pos(o, cx - d / 2, cy - d / 2);
+    lv_obj_set_style_radius(o, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(o, lv_color_hex(fill), 0);
+    lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
+    if (line) {
+        lv_obj_set_style_border_width(o, 1, 0);
+        lv_obj_set_style_border_color(o, lv_color_hex(line), 0);
+    }
+    return o;
+}
+
+static void build_playerbar(lv_obj_t *parent)
+{
+    s_playerbar = box(parent, MARGIN, PB_Y, SCREEN_W - 2 * MARGIN, PB_H);
+    // the record while there is no cover: black with three grooves, the label in the source tile's teal
+    s_pb_disc = pb_plain(s_playerbar);
+    lv_obj_set_size(s_pb_disc, 130, 130);
+    lv_obj_set_pos(s_pb_disc, 16, PB_H / 2 - 66);
+    pb_ring(s_pb_disc, 65, 65, 130, 0x08090A, 0x2A2F35);
+    pb_ring(s_pb_disc, 65, 65, 108, 0x08090A, 0x24282D);
+    pb_ring(s_pb_disc, 65, 65, 86, 0x08090A, 0x24282D);
+    s_pb_disc_label = pb_ring(s_pb_disc, 65, 65, 58, 0x2EC4B6, 0);
+    s_pb_disc_text = label(s_pb_disc_label, &ui_font_title_22, INK);
+    lv_obj_align(s_pb_disc_text, LV_ALIGN_CENTER, 0, -6);
+    pb_ring(s_pb_disc_label, 29, 43, 5, 0x08090A, 0);   // (the spindle hole, below the number)
+    // the cover, square with round corners, where the record is
+    s_cover_px = lv_malloc(UI_COVER_PX * UI_COVER_PX * 2);
+    s_cover_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+    s_cover_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+    s_cover_dsc.header.w = UI_COVER_PX;
+    s_cover_dsc.header.h = UI_COVER_PX;
+    s_cover_dsc.header.stride = UI_COVER_PX * 2;
+    s_cover_dsc.data_size = UI_COVER_PX * UI_COVER_PX * 2;
+    s_cover_dsc.data = (const uint8_t *)s_cover_px;
+    s_pb_cover = lv_image_create(s_playerbar);
+    lv_obj_set_pos(s_pb_cover, 17, (PB_H - 2 - UI_COVER_PX) / 2);
+    lv_obj_set_size(s_pb_cover, UI_COVER_PX, UI_COVER_PX);
+    lv_obj_set_style_radius(s_pb_cover, 8, 0);
+    lv_obj_set_style_clip_corner(s_pb_cover, true, 0);
+    if (s_cover_px) lv_image_set_src(s_pb_cover, &s_cover_dsc);
+    lv_obj_set_hidden(s_pb_cover, true);
+    // the state line: a dot and NOW PLAYING / PAUSED with the source, in one row
+    s_pb_head = pb_plain(s_playerbar);
+    lv_obj_set_size(s_pb_head, LV_SIZE_CONTENT, 20);
+    lv_obj_set_flex_flow(s_pb_head, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(s_pb_head, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(s_pb_head, 8, 0);
+    lv_obj_set_pos(s_pb_head, PB_STRIP_X, 16);
+    s_pb_dot = pb_plain(s_pb_head);
+    lv_obj_set_size(s_pb_dot, 9, 9);
+    lv_obj_set_style_radius(s_pb_dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_border_color(s_pb_dot, lv_color_hex(DIMMED), 0);
+    s_pb_state = label(s_pb_head, &ui_font_12, CAPTION);
+    lv_obj_set_style_text_letter_space(s_pb_state, 1, 0);
+    // the title large, the time as a thin line with the times below its ends
+    s_pb_title = label(s_playerbar, &ui_font_title_40, TEXT);
+    lv_label_set_long_mode(s_pb_title, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(s_pb_title, PB_STRIP_W);
+    lv_obj_set_pos(s_pb_title, PB_STRIP_X, 38);
+    s_pb_track = pb_plain(s_playerbar);
+    lv_obj_set_style_bg_color(s_pb_track, lv_color_hex(SURF_ON), 0);
+    lv_obj_set_style_bg_opa(s_pb_track, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(s_pb_track, 3, 0);
+    lv_obj_set_style_clip_corner(s_pb_track, true, 0);
+    lv_obj_set_size(s_pb_track, PB_STRIP_W, 6);
+    lv_obj_set_pos(s_pb_track, PB_STRIP_X, 104);
+    s_pb_fill = pb_plain(s_pb_track);
+    lv_obj_set_style_bg_opa(s_pb_fill, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(s_pb_fill, 3, 0);
+    lv_obj_set_size(s_pb_fill, 0, 6);
+    s_pb_left = label(s_playerbar, &ui_font_14, CAPTION);
+    lv_obj_set_pos(s_pb_left, PB_STRIP_X, 118);
+    s_pb_right = label(s_playerbar, &ui_font_14, CAPTION);
+    lv_obj_set_width(s_pb_right, PB_STRIP_W);
+    lv_obj_set_style_text_align(s_pb_right, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_pos(s_pb_right, PB_STRIP_X, 118);
+    // at the right: the next song, and the one before
+    int fx = PB_STRIP_X + PB_STRIP_W + 24, fw = SCREEN_W - 2 * MARGIN - 2 - fx - 36;
+    vline(s_playerbar, fx);
+    lv_obj_t *c = label(s_playerbar, &ui_font_12, CAPTION);
+    lv_obj_set_style_text_letter_space(c, 1, 0);
+    lv_label_set_text(c, "NEXT");
+    lv_obj_set_pos(c, fx + 20, 18);
+    s_pb_value = label(s_playerbar, &ui_font_title_22, TEXT);
+    lv_obj_set_width(s_pb_value, fw);
+    lv_label_set_long_mode(s_pb_value, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(s_pb_value, fx + 20, 40);
+    s_pb_prev_cap = label(s_playerbar, &ui_font_12, CAPTION);
+    lv_obj_set_style_text_letter_space(s_pb_prev_cap, 1, 0);
+    lv_label_set_text(s_pb_prev_cap, "PREVIOUS");
+    lv_obj_set_pos(s_pb_prev_cap, fx + 20, 88);
+    s_pb_prev = label(s_playerbar, &ui_font_16, CAPTION);
+    lv_obj_set_width(s_pb_prev, fw);
+    lv_label_set_long_mode(s_pb_prev, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(s_pb_prev, fx + 20, 108);
+    lv_obj_set_hidden(s_playerbar, true);
+}
+
+// A new cover (its number moved): copied into the screen's own picture, which is then drawn again.
+static void cover_refresh(uint32_t seq)
+{
+    if (seq == s_cover_seq) return;
+    s_cover_seq = seq;
+    s_cover_has = s_cover_px && s_cover_get && s_cover_get(s_cover_px, NULL);
+    if (s_pb_cover) lv_obj_invalidate(s_pb_cover);   // (no image cache here: CONFIG_LV_CACHE_DEF_SIZE=0, drawn from the data)
+}
+
+void ui_set_cover_source(ui_cover_cb get)
+{
+    lvgl_port_lock(0);
+    s_cover_get = get;
+    s_cover_seq = UINT32_MAX;   // (read it at the next look)
+    lvgl_port_unlock();
+}
+
+static void show_playerbar(void)
+{
+    bool jam = s_source == 1;
+    const ui_jam_t *j = &s_jam_st;
+    const ui_phone_t *ph = &s_phone_state;
+    bool playing = jam ? j->playing : ph->playing;
+    int pos = jam ? j->pos_s : ph->pos_s, len = jam ? j->len_s : ph->len_s;
+    char text[96], a[12], b[12];
+    bool listed = jam && j->card && j->count && j->current >= 0 && j->current < j->count && s_jam_names;
+    int first = 0, last = -1;   // the playing track's album
+    if (listed) jam_album_range(j->current, &first, &last);
+    if (jam) {
+        char album[72];
+        if (listed) jam_album_name(j->current, album, sizeof(album), true);
+        if (!j->card) snprintf(text, sizeof(text), "JAM TRACKS \xC2\xB7 %s", j->unreadable ? "CARD NOT READABLE" : "NO CARD");
+        else if (!listed) snprintf(text, sizeof(text), "JAM TRACKS \xC2\xB7 %d", j->count);
+        else snprintf(text, sizeof(text), "%s \xC2\xB7 %.28s \xC2\xB7 %d / %d", playing ? "NOW PLAYING" : "PAUSED", album,
+                      j->current - first + 1, last - first + 1);
+        set_text(s_pb_title, listed ? jam_title(jam_name(j->current)) : "No track");
+    } else {
+        snprintf(text, sizeof(text), "%s \xC2\xB7 PHONE", !ph->connected ? "NOT CONNECTED" : playing ? "NOW PLAYING" : "PAUSED");
+        set_text(s_pb_title, ph->connected && ph->title[0] ? ph->title : ph->connected ? (ph->device[0] ? ph->device : "Phone") : "Connect the phone");
+    }
+    set_text(s_pb_state, text);
+    uint32_t color = playing ? 0x45F862 : 0x9AA0A6;
+    set_color_prop(s_pb_state, LV_STYLE_TEXT_COLOR, playing ? color : CAPTION);
+    set_dot(s_pb_dot, playing, color);
+    float k = len > 0 ? (float)pos / len : 0;
+    if (k > 1) k = 1;
+    set_num_prop(s_pb_fill, LV_STYLE_WIDTH, (int)(k * PB_STRIP_W));
+    set_color_prop(s_pb_fill, LV_STYLE_BG_COLOR, playing ? 0x45F862 : 0x5A6067);
+    fmt_time(a, sizeof(a), pos);
+    fmt_time(b, sizeof(b), len);
+    set_text(s_pb_left, a);
+    set_text(s_pb_right, len > 0 ? b : "");
+    // the next and the previous song as the switches go - inside the album (Next stops at its last track, Back at its
+    // first; the jam tracks play on to the album's end); the phone does not say
+    bool has_next = listed && j->current < last, has_prev = listed && j->current > first;
+    set_text(s_pb_value, has_next ? jam_title(jam_name(j->current + 1)) : !jam ? "On the phone" : listed ? "End of the album" : "\xE2\x80\x93");
+    set_color_prop(s_pb_value, LV_STYLE_TEXT_COLOR, has_next ? TEXT : CAPTION);
+    set_hidden(s_pb_prev_cap, !jam);
+    set_hidden(s_pb_prev, !jam);
+    if (jam) set_text(s_pb_prev, has_prev ? jam_title(jam_name(j->current - 1)) : listed ? "Start of the album" : "\xE2\x80\x93");
+    // the cover (dimmed while paused), else the record: its label teal while playing, grey while paused, with the
+    // track's number or the phone's mark
+    bool cover = listed && s_cover_has;
+    set_hidden(s_pb_cover, !cover);
+    set_hidden(s_pb_disc, cover);
+    if (cover) set_num_prop(s_pb_cover, LV_STYLE_IMAGE_OPA, playing ? LV_OPA_COVER : 110);
+    else {
+        set_color_prop(s_pb_disc_label, LV_STYLE_BG_COLOR, !playing ? 0x3A3F45 : 0x2EC4B6);
+        if (listed) snprintf(text, sizeof(text), "%d", j->current + 1);
+        else snprintf(text, sizeof(text), "%s", jam ? "\xE2\x80\x93" : LV_SYMBOL_BLUETOOTH);
+        set_text(s_pb_disc_text, text);
+        set_color_prop(s_pb_disc_text, LV_STYLE_TEXT_COLOR, playing ? INK : TEXT);
+    }
+}
+
+static void show_player_tiles(void)
+{
+    bool jam = s_source == 1;
+    bool playing = jam ? s_jam_st.playing : s_phone_state.playing;
+    // top row: 1 jam tracks / phone, 2 tuner, 3 the player's page, 4 to the looper
+    set_tile(0, "SOURCE", jam ? "Jam tracks" : "Phone", 0x2EC4B6, true, false, NULL, jam ? LV_SYMBOL_SD_CARD : LV_SYMBOL_BLUETOOTH);
+    s_tile_note[0] = jam ? "Tap: phone" : "Tap: jam tracks";
+    set_tile(1, "TUNER", "Tuner", 0xBDBDBD, false, false, NANO_ICONS[NANO_ICON_TUNER], NANO_ICONS[NANO_ICON_TUNER] ? NULL : LV_SYMBOL_AUDIO);
+    set_tile(2, jam ? "TRACKS" : "PHONE", jam ? "List" : "Volume", 0x9AA0A6, false, false, NULL, LV_SYMBOL_LIST);
+    {   // (the volume into the Nano, as the bar has the next song)
+        static char vol[32];
+        float db = jam ? s_jam_st.volume_db : s_phone_state.volume_db;
+        snprintf(vol, sizeof(vol), "%s %s%.1f dB", jam ? "Jam" : "Phone", db < -0.05f ? "\xE2\x88\x92" : "", fabsf(db));
+        s_tile_note[2] = vol;
+    }
+    set_tile(3, "LOOPER", "Looper", 0x9AA0A6, false, false, NULL, LV_SYMBOL_LOOP);
+    s_tile_note[3] = "Loop over it";
+    // bottom row: 5 back, 6 play / pause, 7 next, 8 back out (as in looper mode)
+    set_tile(4, "BACK", "Back", 0x9AA0A6, false, false, NULL, LV_SYMBOL_PREV);
+    set_tile(5, "PLAY / PAUSE", playing ? "Pause" : "Play", 0x45F862, playing, false, NULL, playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+    set_tile(6, "NEXT", "Next", 0x9AA0A6, false, false, NULL, LV_SYMBOL_NEXT);
+    set_tile(7, "MODE", "Player", 0x8A9099, false, false, NULL, LV_SYMBOL_AUDIO);
+    s_tile_note[7] = "Press: back";
+}
+
 static void show_onboard_looper_tiles(void)
 {
     const ui_loop_t *l = &s_loop;
@@ -6194,8 +6680,8 @@ static void show_onboard_looper_tiles(void)
     set_tile(3, "PAUSE", l->paused ? "Go on" : "Pause", LOOP_GREY, l->paused, !l->ready, NULL, l->paused ? LV_SYMBOL_PLAY : LV_SYMBOL_PAUSE);
     s_tile_note[3] = "Drums + loop";
 
-    set_tile(4, "MODE", "Looper", LOOP_GREY, false, false, NULL, LV_SYMBOL_LOOP);
-    s_tile_note[4] = "Press: back";
+    set_tile(7, "MODE", "Looper", LOOP_GREY, false, false, NULL, LV_SYMBOL_LOOP);
+    s_tile_note[7] = "Press: back";
     bool rec = l->state == UI_LOOP_REC, dub = l->state == UI_LOOP_DUB, first = l->state == UI_LOOP_EMPTY || rec;
     set_tile(5, "REC / DUB", !l->ready ? "No memory" : first ? (rec ? "Recording" : "Record") : "Overdub",
              first ? LOOP_RED : LOOP_AMBER, rec || dub, !l->ready, NULL, " ");
@@ -6226,30 +6712,442 @@ static void show_onboard_looper_tiles(void)
     bool loop = l->state != UI_LOOP_EMPTY, stopped = l->state == UI_LOOP_STOP || l->state == UI_LOOP_REC || !loop;
     set_tile(6, "PLAY / STOP", stopped ? "Play" : "Stop", LOOP_GREEN, l->state == UI_LOOP_PLAY, !loop, NULL,
              stopped ? LV_SYMBOL_PLAY : LV_SYMBOL_STOP);
-    set_tile(7, "UNDO / REDO", l->can_undo || !l->can_redo ? "Undo" : "Redo", LOOP_GREY, false, !loop, NULL, LV_SYMBOL_REFRESH);
-    s_tile_note[7] = "Hold: clear";
+    set_tile(4, "UNDO / REDO", l->can_undo || !l->can_redo ? "Undo" : "Redo", LOOP_GREY, false, !loop, NULL, LV_SYMBOL_REFRESH);
+    s_tile_note[4] = "Hold: clear";
 }
 
+// ---- Level (a tap on OUT in the signal chain): the Nano's loudness and auto level, after the QC board's sheet and the
+//      desktop editor's Auto level - play 4 s, the preset's capture volume is set so that it lands on the target of its
+//      kind: Clean at the base, Edge +1.5, Drive / Fuzz +3, Lead +3 over Drive, minus the profile's correction; peaks
+//      at or under -1 dBFS. The sound on USB 3/4 follows the Nano's LEVEL knob: it is set to 10 for the measurement
+//      (asked first when lower), as the editor does. ----
+#define LV_KINDS 5
+static const char *const LV_KIND_NAME[LV_KINDS] = { "Clean", "Edge", "Drive", "Fuzz", "Lead" };
+static const float LV_STEP[LV_KINDS] = { 0, 1.5f, 3, 3, 6 };
+static const float LV_CORR[2][LV_KINDS] = { { 0, -0.5f, -0.5f, -0.5f, -0.5f }, { 0, -0.5f, -2, -1, -2 } };   // rehearsal, quiet
+#define LV_CHIP 0xE8EAED
+static lv_obj_t *s_lvs, *s_lv_sub, *s_lv_short, *s_lv_mom, *s_lv_peak, *s_lv_target, *s_lv_bar, *s_lv_mark;
+static lv_obj_t *s_lv_kind[LV_KINDS], *s_lv_prof[2], *s_lv_base, *s_lv_cap_name, *s_lv_cap_val, *s_lv_lvl_val, *s_lv_lvl_note;
+static lv_obj_t *s_lv_go, *s_lv_prog, *s_lv_result, *s_lv_undo, *s_lv_count;
+static uint32_t s_lv_count_until;      // the countdown before a measurement ends then (lv_tick), 0 = none
+#define LV_COUNTDOWN_MS 5000          // time to stand up and start playing (2026-11-27: 4 s straight away was too soon)
+#define LV_MEASURE_BLOCKS 80          // 100 ms blocks of played sound (8 s) - p4_audio.c LV_MEASURE
+static int s_lv_shown_key = -1;          // kind / profile / base as last drawn
+static bool s_lv_waiting;                // a measurement runs, its result is to be applied
+static unsigned s_lv_seen_seq;
+static bool s_lv_level_asked;            // the LEVEL knob's question was shown once
+static int s_lv_undo_cap = -1, s_lv_undo_lvl = -1;
+#define LV_BAR_W 288
+
+static float lv_target(void)
+{
+    int k = s_loop.lv_kind >= 0 && s_loop.lv_kind < LV_KINDS ? s_loop.lv_kind : 0, p = s_loop.lv_profile ? 1 : 0;
+    return s_loop.lv_base_x10 / 10.0f + LV_STEP[k] + LV_CORR[p][k];
+}
+static void lv_send_settings(void)
+{
+    phone_action(UI_LEVEL_SET, s_loop.lv_kind | s_loop.lv_profile << 4 | (s_loop.lv_base_x10 + 1000) << 8);
+}
+static void lv_chip_look(lv_obj_t *b, bool on)
+{
+    set_color_prop(b, LV_STYLE_BG_COLOR, on ? LV_CHIP : TILE_OFF_BG);
+    set_color_prop(b, LV_STYLE_BORDER_COLOR, on ? LV_CHIP : 0x2E3237);
+    set_color_prop(lv_obj_get_child(b, 0), LV_STYLE_TEXT_COLOR, on ? INK : TEXT);
+}
+static void lv_number(lv_obj_t *l, float v, const char *unit)
+{
+    char t[24];
+    if (v < -70) snprintf(t, sizeof(t), "\xE2\x80\x93");
+    else snprintf(t, sizeof(t), "%s%.1f%s", v < -0.05f ? "\xE2\x88\x92" : "", fabsf(v), unit);
+    set_text(l, t);
+}
+
+static void lv_apply_result(void)
+{
+    const ui_loop_t *l = &s_loop;
+    if (!l->lv_result_ok) { set_text(s_lv_result, "Nothing measured - play a little louder."); return; }
+    float target = lv_target(), delta = target - l->lv_result_lufs;
+    char note[96] = "", text[320];
+    if (l->lv_result_peak_db + delta > -1) {
+        delta = -1 - l->lv_result_peak_db;
+        snprintf(note, sizeof(note), " Kept lower so that the peaks stay under -1 dBFS.");
+    }
+    float now = nano_capture_volume_db(s_capture_volume), want = now + delta, next = want < -24 ? -24 : want > 12 ? 12 : want;
+    if (next != want) strlcat(note, next == 12 ? " The capture volume is at its maximum." : " The capture volume is at its minimum.", sizeof(note));
+    if (fabsf(delta) < 0.25f) {
+        snprintf(text, sizeof(text), "Measured %.1f LUFS (peaks %.1f dBFS), target %.1f: it fits already.", l->lv_result_lufs, l->lv_result_peak_db, target);
+    } else {
+        int raw = nano_capture_volume_raw(next);
+        if (s_lv_undo_cap < 0) s_lv_undo_cap = s_capture_volume;
+        s_capture_volume = raw;
+        s_volume_tick = lv_tick_get();
+        send('v', 0 << 16 | raw);
+        snprintf(text, sizeof(text), "Measured %.1f LUFS (peaks %.1f dBFS), target %.1f: capture volume %+.1f " LV_SYMBOL_RIGHT
+                 " %+.1f dB.%s Save the preset to keep it.", l->lv_result_lufs, l->lv_result_peak_db, target, now, next, note);
+    }
+    set_text(s_lv_result, text);
+    set_hidden(s_lv_undo, s_lv_undo_cap < 0 && s_lv_undo_lvl < 0);
+}
+
+// 10 times a second while it shows (loop_poll)
+static void show_level_sheet(void)
+{
+    const ui_loop_t *l = &s_loop;
+    lv_number(s_lv_short, l->lv_short, "");
+    lv_number(s_lv_mom, l->lv_mom, "");
+    lv_number(s_lv_peak, l->lv_peak_db, " dBFS");
+    float k = l->lv_short < -60 ? 0 : l->lv_short > 0 ? 1 : (l->lv_short + 60) / 60;
+    set_num_prop(s_lv_bar, LV_STYLE_WIDTH, (int)(k * LV_BAR_W));
+    int key = l->lv_kind | l->lv_profile << 4 | (l->lv_base_x10 + 1000) << 8;
+    if (key != s_lv_shown_key) {
+        s_lv_shown_key = key;
+        for (int i = 0; i < LV_KINDS; i++) lv_chip_look(s_lv_kind[i], l->lv_kind == i);
+        for (int i = 0; i < 2; i++) lv_chip_look(s_lv_prof[i], l->lv_profile == i);
+        char t[24];
+        snprintf(t, sizeof(t), "%s%.0f LUFS", l->lv_base_x10 < 0 ? "\xE2\x88\x92" : "", fabsf(l->lv_base_x10 / 10.0f));
+        set_text(s_lv_base, t);
+        float target = lv_target();
+        lv_number(s_lv_target, target, "");
+        float tk = (target + 60) / 60;
+        set_num_prop(s_lv_mark, LV_STYLE_X, 16 + (int)(tk * LV_BAR_W));
+    }
+    char t[64];
+    const char *name = s_current_preset >= 1 && s_current_preset <= NANO_PRESETS ? s_preset_names[s_current_preset - 1] : "";
+    snprintf(t, sizeof(t), "%d \xC2\xB7 %s", s_current_preset, name[0] ? name : "-");
+    set_text(s_lv_sub, t);
+    set_text(s_lv_cap_name, s_capture ? lv_label_get_text(s_capture) : "");
+    snprintf(t, sizeof(t), "%+.1f dB", nano_capture_volume_db(s_capture_volume));
+    set_text(s_lv_cap_val, t);
+    float lvl = s_amp_values[NANO_AMP_LEVEL] / 25.5f;
+    bool full = s_amp_values[NANO_AMP_LEVEL] >= 250;
+    snprintf(t, sizeof(t), "%.1f", lvl);
+    set_text(s_lv_lvl_val, t);
+    set_color_prop(s_lv_lvl_val, LV_STYLE_TEXT_COLOR, full ? TEXT : 0xFFB020);
+    set_text(s_lv_lvl_note, full ? "The sound on USB follows it" : "Below 10 - Measure sets it to 10 first");
+    int m = l->lv_measuring;
+    if (s_lv_count_until) {   // the countdown: the seconds large, then the measurement starts by itself
+        int32_t left = (int32_t)(s_lv_count_until - lv_tick_get());
+        if (left <= 0) {
+            s_lv_count_until = 0;
+            s_lv_waiting = true;
+            s_lv_seen_seq = l->lv_result_seq;
+            phone_action(UI_LEVEL_MEASURE, 1);
+            set_text(s_lv_result, "Play now - as you would on stage.");
+        } else {
+            char c[16];
+            snprintf(c, sizeof(c), "%d", (int)((left + 999) / 1000));
+            set_text(s_lv_count, c);
+            set_color_prop(s_lv_count, LV_STYLE_TEXT_COLOR, 0xFFB020);
+        }
+    }
+    if (s_lv_waiting && m >= 0) {   // measuring: the seconds of played sound still wanted
+        char c[16];
+        snprintf(c, sizeof(c), "%d", (LV_MEASURE_BLOCKS - m + 9) / 10);
+        set_text(s_lv_count, c);
+        set_color_prop(s_lv_count, LV_STYLE_TEXT_COLOR, GREEN);
+    }
+    set_hidden(s_lv_count, !s_lv_count_until && !s_lv_waiting);
+    set_text(lv_obj_get_child(s_lv_go, 0), s_lv_count_until || s_lv_waiting ? LV_SYMBOL_STOP "  Stop" : LV_SYMBOL_PLAY "  Measure");
+    set_num_prop(s_lv_prog, LV_STYLE_WIDTH, m < 0 ? (s_lv_waiting ? 0 : lv_obj_get_style_width(s_lv_prog, 0)) : m * 300 / LV_MEASURE_BLOCKS);
+    if (s_lv_waiting && m < 0 && l->lv_result_seq != s_lv_seen_seq) {
+        s_lv_waiting = false;
+        s_lv_seen_seq = l->lv_result_seq;
+        set_num_prop(s_lv_prog, LV_STYLE_WIDTH, 300);
+        lv_apply_result();
+    }
+}
+
+static void on_lv_kind(lv_event_t *e) { s_loop.lv_kind = (int)(intptr_t)lv_event_get_user_data(e); lv_send_settings(); show_level_sheet(); }
+static void on_lv_prof(lv_event_t *e) { s_loop.lv_profile = (int)(intptr_t)lv_event_get_user_data(e); lv_send_settings(); show_level_sheet(); }
+static void on_lv_base(lv_event_t *e)
+{
+    int b = s_loop.lv_base_x10 + ((int)(intptr_t)lv_event_get_user_data(e) ? 10 : -10);
+    if (b < -400 || b > -80) return;
+    s_loop.lv_base_x10 = b;
+    lv_send_settings();
+    show_level_sheet();
+}
+static void on_lv_go(lv_event_t *e)
+{
+    if (s_lv_waiting || s_lv_count_until) {   // (pressed again while it counts down or measures: stop)
+        if (s_lv_waiting) phone_action(UI_LEVEL_MEASURE, 0);
+        s_lv_waiting = false;
+        s_lv_count_until = 0;
+        set_text(s_lv_result, "Stopped.");
+        show_level_sheet();
+        return;
+    }
+    if (s_loop.lv_short < -90 && s_loop.lv_mom < -90) {
+        set_text(s_lv_result, "No sound from the Nano - it has to be on the USB-A socket.");
+        return;
+    }
+    if (s_amp_values[NANO_AMP_LEVEL] < 250) {
+        if (!s_lv_level_asked) {
+            s_lv_level_asked = true;
+            char t[200];
+            snprintf(t, sizeof(t), "The Nano's LEVEL knob is at %.1f. The sound on USB follows it, so the board sets it to 10 to "
+                     "measure - the Nano gets louder. Tap Measure again.", s_amp_values[NANO_AMP_LEVEL] / 25.5f);
+            set_text(s_lv_result, t);
+            return;
+        }
+        if (s_lv_undo_lvl < 0) s_lv_undo_lvl = s_amp_values[NANO_AMP_LEVEL];
+        s_amp_values[NANO_AMP_LEVEL] = 255;
+        s_amp_tick = lv_tick_get();
+        send('v', 8 << 16 | 255);   // (main.c: SRC_AMP_LEVEL)
+    }
+    s_lv_count_until = lv_tick_get() + LV_COUNTDOWN_MS;   // (first the countdown: time to stand up and play)
+    if (!s_lv_count_until) s_lv_count_until = 1;
+    char t[128];
+    snprintf(t, sizeof(t), "Get ready: when it reaches 0, play for 8 seconds as you would for %s.", LV_KIND_NAME[s_loop.lv_kind % LV_KINDS]);
+    set_text(s_lv_result, t);
+    set_hidden(s_lv_undo, true);
+    set_num_prop(s_lv_prog, LV_STYLE_WIDTH, 0);
+    show_level_sheet();
+}
+static void on_lv_undo(lv_event_t *e)
+{
+    if (s_lv_undo_cap >= 0) {
+        s_capture_volume = s_lv_undo_cap;
+        s_volume_tick = lv_tick_get();
+        send('v', 0 << 16 | s_lv_undo_cap);
+    }
+    if (s_lv_undo_lvl >= 0) {
+        s_amp_values[NANO_AMP_LEVEL] = s_lv_undo_lvl;
+        s_amp_tick = lv_tick_get();
+        send('v', 8 << 16 | s_lv_undo_lvl);
+    }
+    s_lv_undo_cap = s_lv_undo_lvl = -1;
+    set_hidden(s_lv_undo, true);
+    set_text(s_lv_result, "Set back.");
+}
+static void on_lv_close(lv_event_t *e)
+{
+    (void)e;
+    if (s_lv_waiting) phone_action(UI_LEVEL_MEASURE, 0);
+    s_lv_waiting = false;
+    s_lv_count_until = 0;
+    lv_obj_set_hidden(s_lvs, true);
+}
+
+static lv_obj_t *lv_caption(lv_obj_t *parent, int x, int y, const char *text)
+{
+    lv_obj_t *c = label(parent, CAPTION_FONT, CAPTION);
+    lv_label_set_text(c, text);
+    lv_obj_set_style_text_letter_space(c, 2, 0);
+    lv_obj_set_pos(c, x, y);
+    return c;
+}
+static lv_obj_t *lv_chip(lv_obj_t *parent, int x, int y, int w, int h, const char *text, lv_event_cb_t cb, int arg)
+{
+    lv_obj_t *b = small_button(parent, x, y, w, h, text, cb, arg);
+    lv_obj_set_style_radius(b, h / 2, 0);
+    lv_obj_set_style_bg_grad_dir(b, LV_GRAD_DIR_NONE, 0);
+    lv_obj_set_style_border_width(b, 2, 0);
+    return b;
+}
+static lv_obj_t *lv_line(lv_obj_t *parent, int x, int y, int w, int h, uint32_t color)
+{
+    lv_obj_t *o = lv_obj_create(parent);
+    lv_obj_remove_style_all(o);
+    lv_obj_set_pos(o, x, y);
+    lv_obj_set_size(o, w, h);
+    lv_obj_set_style_bg_color(o, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_opa(o, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(o, 3, 0);
+    return o;
+}
+
+static void build_level_sheet(lv_obj_t *screen)
+{
+    s_lvs = dialog_full(screen);
+    dialog_title(s_lvs, "Level");
+    s_lv_sub = label(s_lvs, HINT_FONT, MUTED);
+    lv_obj_set_pos(s_lv_sub, 20, 48);
+    close_button(s_lvs, DLG_W - 60, 16, on_lv_close, 0);
+    // the meter
+    lv_obj_t *m = box(s_lvs, 20, 84, 320, 236);
+    lv_caption(m, 16, 12, "SHORT-TERM");
+    s_lv_short = label(m, &ui_font_title_54, TEXT);
+    lv_obj_set_pos(s_lv_short, 14, 30);
+    lv_obj_t *u = label(m, HINT_FONT, MUTED);
+    lv_label_set_text(u, "LUFS");
+    lv_obj_set_pos(u, 236, 62);
+    static const char *const ROWS[3] = { "MOMENTARY", "PEAK", "TARGET" };
+    lv_obj_t **vals[3] = { &s_lv_mom, &s_lv_peak, &s_lv_target };
+    for (int i = 0; i < 3; i++) {
+        lv_caption(m, 16, 112 + i * 32, ROWS[i]);
+        *vals[i] = label(m, &ui_font_title_18, i == 2 ? GREEN : TEXT);
+        lv_obj_align(*vals[i], LV_ALIGN_TOP_RIGHT, -16, 108 + i * 32);
+    }
+    lv_obj_t *track = lv_line(m, 16, 212, LV_BAR_W, 6, HAIRLINE);
+    s_lv_bar = lv_line(track, 0, 0, 0, 6, TEXT);
+    s_lv_mark = lv_line(m, 16, 204, 3, 22, GREEN);
+    // kind, profile, base
+    int kw = DLG_W - 20 - 352;
+    lv_obj_t *k = box(s_lvs, 352, 84, kw, 236);
+    lv_caption(k, 16, 12, "THIS PRESET IS");
+    for (int i = 0; i < LV_KINDS; i++) s_lv_kind[i] = lv_chip(k, 16 + i * 120, 34, 114, 46, LV_KIND_NAME[i], on_lv_kind, i);
+    lv_caption(k, 16, 96, "LISTENING AT");
+    static const char *const PROF[2] = { "Rehearsal", "Quiet" };
+    for (int i = 0; i < 2; i++) s_lv_prof[i] = lv_chip(k, 16 + i * 160, 118, 152, 46, PROF[i], on_lv_prof, i);
+    lv_caption(k, 352, 96, "CLEAN AT");
+    lv_chip(k, 352, 118, 46, 46, LV_SYMBOL_MINUS, on_lv_base, 0);
+    s_lv_base = label(k, &ui_font_title_18, TEXT);
+    lv_obj_set_width(s_lv_base, 112);
+    lv_obj_set_style_text_align(s_lv_base, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(s_lv_base, 400, 130);
+    lv_chip(k, 514, 118, 46, 46, LV_SYMBOL_PLUS, on_lv_base, 1);
+    lv_obj_t *h = label(k, &ui_font_14, MUTED);
+    lv_obj_set_width(h, kw - 32);
+    lv_label_set_long_mode(h, LV_LABEL_LONG_WRAP);
+    lv_obj_set_pos(h, 16, 180);
+    lv_label_set_text(h, "Edge +1.5 \xC2\xB7 Drive +3 \xC2\xB7 Fuzz +3 \xC2\xB7 Lead +3 over Drive, as in the editor and the LUFS Meter.\n"
+                         "Rehearsal: the louder kinds -0.5 dB \xC2\xB7 Quiet: Drive and Lead -2, Fuzz -1 (they seem louder).");
+    // what auto level turns
+    lv_obj_t *c = box(s_lvs, 20, 332, 620, DLG_H - 16 - 332);
+    lv_caption(c, 16, 12, "WHAT AUTO LEVEL TURNS");
+    lv_obj_t *r1 = box(c, 10, 36, 600, 52);
+    lv_caption(r1, 14, 6, "CAPTURE VOLUME \xC2\xB7 SAVED WITH THE PRESET");
+    s_lv_cap_name = label(r1, &ui_font_16, TEXT);
+    lv_obj_set_pos(s_lv_cap_name, 14, 24);
+    lv_obj_set_width(s_lv_cap_name, 400);
+    lv_label_set_long_mode(s_lv_cap_name, LV_LABEL_LONG_DOT);
+    s_lv_cap_val = label(r1, &ui_font_title_18, TEXT);
+    lv_obj_align(s_lv_cap_val, LV_ALIGN_RIGHT_MID, -14, 0);
+    lv_obj_t *r2 = box(c, 10, 96, 600, 52);
+    lv_caption(r2, 14, 6, "LEVEL \xC2\xB7 THE NANO'S KNOB, FOR ALL PRESETS");
+    s_lv_lvl_note = label(r2, &ui_font_16, MUTED);
+    lv_label_set_text(s_lv_lvl_note, "The sound on USB follows it");
+    lv_obj_set_pos(s_lv_lvl_note, 14, 24);
+    s_lv_lvl_val = label(r2, &ui_font_title_18, TEXT);
+    lv_obj_align(s_lv_lvl_val, LV_ALIGN_RIGHT_MID, -14, 0);
+    // measure
+    int gx = 652, gw = DLG_W - 20 - gx;
+    lv_obj_t *g = box(s_lvs, gx, 332, gw, DLG_H - 16 - 332);
+    s_lv_go = small_button(g, 14, 12, 188, 56, LV_SYMBOL_PLAY "  Measure", on_lv_go, 0);
+    primary(s_lv_go);
+    lv_obj_set_style_text_font(lv_obj_get_child(s_lv_go, 0), &ui_font_title_18, 0);
+    s_lv_undo = small_button(g, 210, 12, gw - 224, 56, LV_SYMBOL_REFRESH "  Undo", on_lv_undo, 0);
+    lv_obj_set_hidden(s_lv_undo, true);
+    s_lv_count = label(g, &ui_font_title_54, 0xFFB020);   // the countdown / the seconds still to play, beside the button
+    lv_obj_set_width(s_lv_count, gw - 224);
+    lv_obj_set_style_text_align(s_lv_count, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_pos(s_lv_count, 210, 4);
+    lv_obj_set_hidden(s_lv_count, true);
+    lv_obj_t *pt = lv_line(g, 14, 78, 300, 6, HAIRLINE);
+    s_lv_prog = lv_line(pt, 0, 0, 0, 6, GREEN);
+    s_lv_result = label(g, &ui_font_14, TEXT);
+    lv_obj_set_pos(s_lv_result, 14, 92);
+    lv_obj_set_width(s_lv_result, gw - 28);
+    lv_label_set_long_mode(s_lv_result, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(s_lv_result, "Choose what the preset is, then measure while you play.");
+    lv_obj_set_hidden(s_lvs, true);
+}
+
+static void open_level_sheet(void)
+{
+    lv_obj_set_hidden(s_lvs, false);
+    lv_obj_move_foreground(s_lvs);
+    s_lv_shown_key = -1;
+    s_lv_level_asked = false;
+    if (!s_lv_waiting) {   // (a new start: what the last time said is gone, the undo too)
+        s_lv_undo_cap = s_lv_undo_lvl = -1;
+        set_hidden(s_lv_undo, true);
+        set_num_prop(s_lv_prog, LV_STYLE_WIDTH, 0);
+        set_text(s_lv_result, "Choose what the preset is, then measure while you play.");
+    }
+    show_level_sheet();
+}
+static void on_level_open(lv_event_t *e) { (void)e; open_level_sheet(); }
+
 // ---- the drum menu (looper mode: the drums' tile or footswitch 1 held) ----
-// The groove by style (the Duo DAW's 54), the level, and whether the drums start with a part's first take.
-static lv_obj_t *s_drums, *s_drum_style[8], *s_drum_grid, *s_drum_now, *s_drum_level, *s_drum_level_value;
+// The groove by style, a looper part's own groove, the kit, the level, and how a part's first take starts.
+#define DRUM_STYLES 10
+#define DRUM_PICK 15                       // grooves shown per style
+#define DRUM_CHIP 0xE8EAED                 // the chosen part / kit
+static lv_obj_t *s_drums, *s_drum_style[DRUM_STYLES], *s_drum_pick[DRUM_PICK], *s_drum_part[3], *s_drum_kit[2];
+static lv_obj_t *s_drum_now, *s_drum_level, *s_drum_level_value;
 static lv_obj_t *s_drum_switch[4];   // start with the first take, count in, on the bar lines, the first note starts it
 static const ui_phone_action_t DRUM_SWITCH_ACTION[4] = { UI_DRUM_SYNC, UI_DRUM_COUNT, UI_LOOP_QUANTIZE, UI_LOOP_ARM };
-static int s_drum_style_shown = -1, s_drum_groove_shown = -1;
-static const char *s_drum_styles[8];
+static int s_drum_style_shown = -1, s_drum_groove_shown = -1, s_drum_kit_shown = -1, s_drum_parts_shown = -999;
+static int s_drum_pick_groove[DRUM_PICK];  // the groove a button plays (-1 = none)
+static int s_drum_edit = -1;               // what a groove tap sets: -1 the common groove (A = B), 0 / 1 part A / B's own
+static const char *s_drum_styles[DRUM_STYLES];
 static int s_drum_style_count;
 
 static int groove_style(int groove)
 {
-    for (int i = 0; i < s_drum_style_count; i++)
+    for (int i = 0; groove >= 0 && groove < DRUM_GROOVE_COUNT && i < s_drum_style_count; i++)
         if (!strcmp(s_drum_styles[i], DRUM_GROOVES[groove].style)) return i;
     return 0;
 }
 
-static void drum_menu_fill(int style);
+// The groove the picker marks: the common one, or the edited part's own (else the common one).
+static int drum_marked(void)
+{
+    if (s_drum_edit >= 0 && s_loop.part_groove[s_drum_edit] >= 0) return s_loop.part_groove[s_drum_edit];
+    return s_loop.groove;
+}
+static int drum_parts_key(void) { return (s_drum_edit + 1) | (s_loop.part_groove[0] + 1) << 2 | (s_loop.part_groove[1] + 1) << 10; }
 
-static void on_drum_groove(lv_event_t *e) { phone_action(UI_DRUM_GROOVE, (int)(intptr_t)lv_event_get_user_data(e)); }
+static void drum_chip(lv_obj_t *b, uint32_t color, bool on)
+{
+    style_frame_button(b, color, on, false);
+    set_color_prop(lv_obj_get_child(b, 0), LV_STYLE_TEXT_COLOR, on ? ink_for(color) : TEXT);
+}
+
+// The grooves of one style on the buttons; the marked one filled.
+static void drum_menu_fill(int style)
+{
+    s_drum_style_shown = style;
+    s_drum_groove_shown = s_loop.groove;
+    s_drum_parts_shown = drum_parts_key();
+    int marked = drum_marked();
+    for (int i = 0; i < s_drum_style_count; i++) drum_chip(s_drum_style[i], DRUM_ORANGE, i == style);
+    for (int i = 0; i < 3; i++) {   // A = B (no own grooves), Part A, Part B
+        bool on = i == 0 ? s_drum_edit < 0 : s_drum_edit == i - 1;
+        drum_chip(s_drum_part[i], DRUM_CHIP, on);
+        if (i && !on && s_loop.part_groove[i - 1] >= 0)   // (has its own groove)
+            lv_obj_set_style_border_color(s_drum_part[i], lv_color_hex(DRUM_ORANGE), 0);
+    }
+    int n = 0;
+    for (int g = 0; g < DRUM_GROOVE_COUNT && n < DRUM_PICK; g++) {
+        if (strcmp(DRUM_GROOVES[g].style, s_drum_styles[style])) continue;
+        s_drum_pick_groove[n] = g;
+        lv_obj_t *l = lv_obj_get_child(s_drum_pick[n], 0);
+        set_text(l, DRUM_GROOVES[g].name);
+        set_ptr_prop(l, LV_STYLE_TEXT_FONT, strlen(DRUM_GROOVES[g].name) > 16 ? &ui_font_16 : &ui_font_20);
+        drum_chip(s_drum_pick[n], DRUM_ORANGE, g == marked);
+        set_hidden(s_drum_pick[n], false);
+        n++;
+    }
+    for (; n < DRUM_PICK; n++) {
+        set_hidden(s_drum_pick[n], true);
+        s_drum_pick_groove[n] = -1;
+    }
+    set_text(s_drum_now, marked >= 0 && marked < DRUM_GROOVE_COUNT ? DRUM_GROOVES[marked].name : "");
+}
+
 static void on_drum_style(lv_event_t *e) { drum_menu_fill((int)(intptr_t)lv_event_get_user_data(e)); }
+static void on_drum_groove(lv_event_t *e)
+{
+    int k = (int)(intptr_t)lv_event_get_user_data(e);
+    if (k < 0 || k >= DRUM_PICK || s_drum_pick_groove[k] < 0) return;
+    if (s_drum_edit < 0) phone_action(UI_DRUM_GROOVE, s_drum_pick_groove[k]);
+    else phone_action(UI_PART_GROOVE, s_drum_edit << 8 | (s_drum_pick_groove[k] + 1));
+}
+static void on_drum_part(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    // (A = B tapped again while a part has its own groove: both back to the common one)
+    if (i == 0 && s_drum_edit < 0 && (s_loop.part_groove[0] >= 0 || s_loop.part_groove[1] >= 0)) phone_action(UI_PART_GROOVE, 2 << 8);
+    s_drum_edit = i - 1;
+    drum_menu_fill(groove_style(drum_marked()));
+}
+static void on_drum_kit(lv_event_t *e)
+{
+    phone_action(UI_DRUM_KIT, (int)(intptr_t)lv_event_get_user_data(e) ? DRUM_KIT_COMPUTED : DRUM_KIT_ACOUSTIC);
+}
 static void on_drum_close(lv_event_t *e) { (void)e; lv_obj_set_hidden(s_drums, true); }
 static void on_drum_switch(lv_event_t *e)
 {
@@ -6274,43 +7172,18 @@ static void on_drum_level(lv_event_t *e)
     phone_action(lv_event_get_code(e) == LV_EVENT_RELEASED ? UI_DRUM_LEVEL_KEEP : UI_DRUM_LEVEL, v * 10);
 }
 
-// The grooves of one style as buttons; the one that plays filled.
-static void drum_menu_fill(int style)
-{
-    int groove = s_loop.groove;
-    s_drum_style_shown = style;
-    s_drum_groove_shown = groove;
-    for (int i = 0; i < s_drum_style_count; i++) {
-        bool on = i == style;
-        style_frame_button(s_drum_style[i], DRUM_ORANGE, on, false);
-        lv_obj_set_style_text_color(lv_obj_get_child(s_drum_style[i], 0), lv_color_hex(on ? ink_for(DRUM_ORANGE) : TEXT), 0);
-    }
-    lv_obj_clean(s_drum_grid);
-    int n = 0;
-    for (int g = 0; g < DRUM_GROOVE_COUNT && n < 12; g++) {
-        if (strcmp(DRUM_GROOVES[g].style, s_drum_styles[style])) continue;
-        lv_obj_t *b = frame_button(s_drum_grid);
-        lv_obj_set_pos(b, (n % 3) * 204, (n / 3) * 70);
-        lv_obj_set_size(b, 196, 62);
-        bool on = g == groove;
-        style_frame_button(b, DRUM_ORANGE, on, false);
-        lv_obj_add_event_cb(b, on_drum_groove, LV_EVENT_CLICKED, (void *)(intptr_t)g);
-        lv_obj_t *l = label(b, DRUM_GROOVES[g].name[0] && strlen(DRUM_GROOVES[g].name) > 16 ? &ui_font_16 : &ui_font_20,
-                            on ? ink_for(DRUM_ORANGE) : TEXT);
-        lv_obj_set_width(l, 184);
-        lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
-        lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
-        lv_label_set_text_static(l, DRUM_GROOVES[g].name);
-        lv_obj_center(l);
-        n++;
-    }
-    set_text(s_drum_now, groove >= 0 && groove < DRUM_GROOVE_COUNT ? DRUM_GROOVES[groove].name : "");
-}
-
-// While it shows (10 times a second): the groove that plays and the sync switch as the board has them.
+// While it shows (10 times a second): the grooves, the kit and the switches as the board has them.
 static void drum_menu_show(void)
 {
-    if (s_loop.groove != s_drum_groove_shown) drum_menu_fill(s_drum_style_shown >= 0 ? s_drum_style_shown : groove_style(s_loop.groove));
+    if (s_loop.groove != s_drum_groove_shown || drum_parts_key() != s_drum_parts_shown)
+        drum_menu_fill(s_drum_style_shown >= 0 ? s_drum_style_shown : groove_style(drum_marked()));
+    int kit = s_loop.acoustic_kit ? s_loop.drum_kit : DRUM_KIT_COMPUTED;
+    if (kit != s_drum_kit_shown) {
+        s_drum_kit_shown = kit;
+        drum_chip(s_drum_kit[0], DRUM_CHIP, kit == DRUM_KIT_ACOUSTIC);
+        drum_chip(s_drum_kit[1], DRUM_CHIP, kit == DRUM_KIT_COMPUTED);
+        if (!s_loop.acoustic_kit) set_color_prop(lv_obj_get_child(s_drum_kit[0], 0), LV_STYLE_TEXT_COLOR, DIMMED);   // (its samples are not on the board)
+    }
     const bool want[4] = { s_loop.drum_sync, s_loop.count_in, s_loop.quantize, s_loop.arm };
     for (int i = 0; i < 4; i++) {
         lv_obj_t *sw = s_drum_switch[i];
@@ -6328,7 +7201,8 @@ void ui_drum_menu_toggle(void)
     } else {
         lv_obj_set_hidden(s_drums, false);
         lv_obj_move_foreground(s_drums);
-        drum_menu_fill(groove_style(s_loop.groove));
+        s_drum_kit_shown = -1;
+        drum_menu_fill(groove_style(drum_marked()));
         int v = (int)lroundf(s_loop.drum_level_db);
         lv_slider_set_value(s_drum_level, v, LV_ANIM_OFF);
         char text[24];
@@ -6339,9 +7213,24 @@ void ui_drum_menu_toggle(void)
     lvgl_port_unlock();
 }
 
+static lv_obj_t *drum_button(int x, int y, int w, int h, const lv_font_t *font, const char *text, lv_event_cb_t cb, int data)
+{
+    lv_obj_t *b = frame_button(s_drums);
+    lv_obj_set_pos(b, x, y);
+    lv_obj_set_size(b, w, h);
+    lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, (void *)(intptr_t)data);
+    lv_obj_t *l = label(b, font, TEXT);
+    lv_obj_set_width(l, w - 12);
+    lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(l, text);
+    lv_obj_center(l);
+    return b;
+}
+
 static void build_drums(lv_obj_t *screen)
 {
-    for (int g = 0; g < DRUM_GROOVE_COUNT && s_drum_style_count < 8; g++) {   // the styles in the groove table's order
+    for (int g = 0; g < DRUM_GROOVE_COUNT && s_drum_style_count < DRUM_STYLES; g++) {   // the styles in the groove table's order
         bool seen = false;
         for (int i = 0; i < s_drum_style_count; i++) seen |= !strcmp(s_drum_styles[i], DRUM_GROOVES[g].style);
         if (!seen) s_drum_styles[s_drum_style_count++] = DRUM_GROOVES[g].style;
@@ -6349,48 +7238,43 @@ static void build_drums(lv_obj_t *screen)
     s_drums = dialog_full(screen);
     dialog_title(s_drums, "Drums");
     lv_obj_t *sub = label(s_drums, HINT_FONT, MUTED);
-    lv_label_set_text(sub, "The Duo DAW's kit, in the Nano's tempo \xC2\xB7 54 grooves \xC2\xB7 and how a part's first take starts");
+    char st[96];
+    snprintf(st, sizeof(st), "In the Nano's tempo \xC2\xB7 %d grooves \xC2\xB7 a new one starts at the bar line", DRUM_GROOVE_COUNT);
+    lv_label_set_text(sub, st);
     lv_obj_set_pos(sub, 20, 48);
     close_button(s_drums, DLG_W - 60, 16, on_drum_close, 0);
+    int lw = 624;   // the left column: the groove, whose it is, styles, grooves
     s_drum_now = label(s_drums, &ui_font_title_26, TEXT);
-    lv_obj_set_pos(s_drum_now, 20, 96);
-    lv_obj_t *now_hint = label(s_drums, HINT_FONT, MUTED);
-    lv_label_set_text(now_hint, "Groove \xC2\xB7 a new one starts at the bar line");
-    lv_obj_set_pos(now_hint, 20, 130);
-    for (int i = 0; i < s_drum_style_count; i++) {
-        lv_obj_t *b = frame_button(s_drums);
-        lv_obj_set_pos(b, 20 + i * 76, 160);
-        lv_obj_set_size(b, 70, 44);
-        lv_obj_add_event_cb(b, on_drum_style, LV_EVENT_CLICKED, (void *)(intptr_t)i);
-        lv_obj_t *l = label(b, &ui_font_14, TEXT);
-        lv_label_set_text_static(l, s_drum_styles[i]);
-        lv_obj_center(l);
-        s_drum_style[i] = b;
+    lv_obj_set_pos(s_drum_now, 20, 84);
+    lv_obj_set_size(s_drum_now, lw - 3 * 104 - 8, lv_font_get_line_height(&ui_font_title_26));   // (one line)
+    lv_label_set_long_mode(s_drum_now, LV_LABEL_LONG_DOT);
+    static const char *const PARTS[3] = { "A = B", "Part A", "Part B" };   // the looper parts' own grooves
+    for (int i = 0; i < 3; i++) s_drum_part[i] = drum_button(20 + lw - (3 - i) * 104 + 6, 80, 98, 40, &ui_font_14, PARTS[i], on_drum_part, i);
+    for (int i = 0; i < s_drum_style_count; i++) {   // two rows of five
+        int w = (lw - 4 * 6) / 5;
+        s_drum_style[i] = drum_button(20 + (i % 5) * (w + 6), 130 + (i / 5) * 44, w, 38, &ui_font_14, s_drum_styles[i], on_drum_style, i);
     }
-    s_drum_grid = lv_obj_create(s_drums);
-    lv_obj_remove_style_all(s_drum_grid);
-    lv_obj_set_pos(s_drum_grid, 20, 220);
-    lv_obj_set_size(s_drum_grid, 3 * 204, 4 * 70);
-    lv_obj_set_scrollable(s_drum_grid, false);
-    int rx = 660, rw = DLG_W - rx - 20;
+    for (int n = 0; n < DRUM_PICK; n++) {
+        int w = (lw - 2 * 8) / 3;
+        s_drum_pick[n] = drum_button(20 + (n % 3) * (w + 8), 222 + (n / 3) * 58, w, 52, &ui_font_20, "", on_drum_groove, n);
+        s_drum_pick_groove[n] = -1;
+    }
+    // the right column: kit, level, the looper's first takes (the drum menu is the looper's menu as well)
+    int rx = 20 + lw + 20, rw = DLG_W - rx - 20;
     lv_obj_t *cap = label(s_drums, CAPTION_FONT, MUTED);
-    lv_label_set_text(cap, "TEMPO");
+    lv_label_set_text(cap, "KIT");
     lv_obj_set_style_text_letter_space(cap, 2, 0);
-    lv_obj_set_pos(cap, rx, 92);
-    lv_obj_t *hint = label(s_drums, HINT_FONT, MUTED);
-    lv_obj_set_width(hint, rw);
-    lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(hint, "The Nano's tempo - the metronome button in the top bar sets it.");
-    lv_obj_set_pos(hint, rx, 116);
-    s_drum_level = fill_bar(s_drums, rx, 220, rw, "Level", &s_drum_level_value);
+    lv_obj_set_pos(cap, rx, 84);
+    static const char *const KITS[2] = { "Acoustic", "Electronic" };
+    for (int i = 0; i < 2; i++) s_drum_kit[i] = drum_button(rx + i * (rw / 2 + 3), 108, rw / 2 - 3, 46, &ui_font_16, KITS[i], on_drum_kit, i);
+    s_drum_level = fill_bar(s_drums, rx, 170, rw, "Level", &s_drum_level_value);
     lv_slider_set_range(s_drum_level, -40, 6);
     lv_obj_add_event_cb(s_drum_level, on_drum_level, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_add_event_cb(s_drum_level, on_drum_level, LV_EVENT_RELEASED, NULL);
-    // the looper's first takes (the drum menu is the looper's menu as well)
     static const char *const SWITCHES[4] = { "Drums start with the take", "Count in one bar", "Takes on the drums' bars",
                                              "The first note starts it" };
     for (int i = 0; i < 4; i++) {
-        lv_obj_t *row = box(s_drums, rx, 284 + i * 56, rw, 50);
+        lv_obj_t *row = box(s_drums, rx, 240 + i * 58, rw, 52);
         lv_obj_t *t = label(row, &ui_font_16, TEXT);
         lv_label_set_text_static(t, SWITCHES[i]);
         lv_obj_align(t, LV_ALIGN_LEFT_MID, 14, 0);
@@ -6411,7 +7295,7 @@ static void show_jam_field(void)
     bool track = j->card && j->count && j->current >= 0;
     char pos[12];
     fmt_time(pos, sizeof(pos), j->pos_s);
-    set_text(s_phone_title, track && s_jam_names ? s_jam_names(j->current)
+    set_text(s_phone_title, track && s_jam_names ? jam_title(jam_name(j->current))
                             : !j->card ? j->unreadable ? "Card not readable" : "No card" : "Jam tracks");
     set_color_prop(s_phone_title, LV_STYLE_TEXT_COLOR, track ? TEXT : CAPTION);
     set_text(s_phone_time, track ? pos : "");
@@ -6428,6 +7312,8 @@ static void on_jam_row(lv_event_t *e) { phone_action(UI_JAM_PLAY, (int)(intptr_t
 static void on_jam_toggle(lv_event_t *e) { phone_action(UI_JAM_TOGGLE, 0); }
 static void on_jam_prev(lv_event_t *e) { phone_action(UI_JAM_PREV, 0); }
 static void on_jam_next(lv_event_t *e) { phone_action(UI_JAM_NEXT, 0); }
+static void on_jam_play(lv_event_t *e) { if (!s_jam_st.playing) phone_action(UI_JAM_TOGGLE, 0); }
+static void on_jam_pause(lv_event_t *e) { if (s_jam_st.playing) phone_action(UI_JAM_TOGGLE, 0); }
 static void close_jam(lv_event_t *e) { lv_obj_set_hidden(s_jam, true); }
 
 static void on_jam_level(lv_event_t *e)
@@ -6447,6 +7333,7 @@ static void on_jam_volume(lv_event_t *e)
 }
 
 static void show_jam(void);
+static void on_jam_album(lv_event_t *e);
 
 static void on_net_switch(lv_event_t *e) { phone_action(UI_NET_ON, lv_obj_has_state(s_net_switch, LV_STATE_CHECKED)); }
 
@@ -6502,6 +7389,34 @@ static void open_source(int source)
 
 static void on_source(lv_event_t *e) { open_source((int)(intptr_t)lv_event_get_user_data(e)); }
 
+void ui_player_hide(void)
+{
+    lvgl_port_lock(0);
+    lv_obj_set_hidden(s_phone, true);
+    lv_obj_set_hidden(s_jam, true);
+    lvgl_port_unlock();
+}
+
+void ui_player_action(int action)
+{
+    lvgl_port_lock(0);
+    bool jam = s_source == 1, playing = jam ? s_jam_st.playing : s_ph_playing;
+    ui_phone_action_t prev = jam ? UI_JAM_PREV : UI_PHONE_PREV, next = jam ? UI_JAM_NEXT : UI_PHONE_NEXT;
+    ui_phone_action_t toggle = jam ? UI_JAM_TOGGLE : UI_PHONE_TOGGLE;
+    switch (action) {
+    case UI_PLAYER_BACK: phone_action(prev, 0); break;
+    case UI_PLAYER_NEXT: phone_action(next, 0); break;
+    case UI_PLAYER_PLAY: if (!playing) phone_action(toggle, 0); break;
+    case UI_PLAYER_PAUSE: if (playing) phone_action(toggle, 0); break;
+    case UI_PLAYER_TOGGLE: phone_action(toggle, 0); break;
+    case UI_PLAYER_SOURCE:   // jam tracks <-> phone; its page follows if it shows
+        if (!lv_obj_is_hidden(s_phone) || !lv_obj_is_hidden(s_jam)) open_source(!s_source);
+        else s_source = !s_source;
+        break;
+    }
+    lvgl_port_unlock();
+}
+
 void ui_player_toggle(void)
 {
     lvgl_port_lock(0);
@@ -6517,17 +7432,19 @@ void ui_player_toggle(void)
 // "Phone | Jam tracks" at the top left of both players: the chosen one filled.
 static void source_chooser(lv_obj_t *parent, int x, int y, int chosen)
 {
-    static const char *const NAMES[2] = { "Phone", "Jam tracks" };
+    // (2026-11-26: the jam tracks first, the phone second; `chosen` and the events stay the source, 0 phone / 1 jam)
+    static const char *const NAMES[2] = { "Jam tracks", "Phone" };
     lv_obj_t *b = box(parent, x, y, 2 * 124 + 3, 44);
     for (int i = 0; i < 2; i++) {
+        int source = i == 0 ? 1 : 0;
         lv_obj_t *f = seg(b, i * 125, 124, NULL);
         lv_obj_set_clickable(f, true);
-        lv_obj_add_event_cb(f, on_source, LV_EVENT_CLICKED, (void *)(intptr_t)i);
-        if (i == chosen) {
+        lv_obj_add_event_cb(f, on_source, LV_EVENT_CLICKED, (void *)(intptr_t)source);
+        if (source == chosen) {
             lv_obj_set_style_bg_color(f, lv_color_hex(TEXT), 0);
             lv_obj_set_style_bg_color(f, lv_color_white(), LV_STATE_PRESSED);
         }
-        lv_obj_t *l = label(f, &ui_font_title_14, i == chosen ? INK : CAPTION);
+        lv_obj_t *l = label(f, &ui_font_title_14, source == chosen ? INK : CAPTION);
         lv_label_set_text(l, NAMES[i]);
         lv_obj_center(l);
         if (i == 0) vline(b, 124);
@@ -6542,15 +7459,36 @@ static void build_jam(lv_obj_t *screen)
     lv_obj_set_clickable(s_jam, true);
     const int X = 24, PX = X + JAM_LIST_W + 22, PW = SCREEN_W - 2 * MARGIN - 2 - PX - X;
     source_chooser(s_jam, X, 14, 1);
-    lv_obj_t *cb = box(s_jam, SCREEN_W - 2 * MARGIN - 2 - 24 - 52, 10, 52, 52);
-    lv_obj_t *x = seg(cb, 0, 50, close_jam);
-    lv_obj_t *xi = ui_icon(x, UI_ICON_CLOSE, 20, TEXT);
-    lv_obj_center(xi);
+    player_close(s_jam, close_jam);
+    {   // the album in view: arrows to the one before / after (hidden while all tracks are in one album)
+        int ax = X + 2 * 124 + 3 + 16, aw = SCREEN_W - 2 * MARGIN - 2 - 24 - 150 - 16 - ax;
+        s_jam_albums = box(s_jam, ax, 14, aw, 44);
+        lv_obj_t *a = seg(s_jam_albums, 0, 56, on_jam_album);
+        lv_obj_set_user_data(a, (void *)(intptr_t)-1);
+        lv_obj_t *l = label(a, &ui_font_20, TEXT);
+        lv_label_set_text(l, LV_SYMBOL_LEFT);
+        lv_obj_center(l);
+        vline(s_jam_albums, 56);
+        a = seg(s_jam_albums, aw - 2 - 56, 56, on_jam_album);
+        lv_obj_set_user_data(a, (void *)(intptr_t)1);
+        l = label(a, &ui_font_20, TEXT);
+        lv_label_set_text(l, LV_SYMBOL_RIGHT);
+        lv_obj_center(l);
+        vline(s_jam_albums, aw - 2 - 57);
+        s_jam_album_name = label(s_jam_albums, &ui_font_title_16, TEXT);
+        lv_obj_set_width(s_jam_album_name, aw - 2 - 2 * 57 - 32 - 70);
+        lv_label_set_long_mode(s_jam_album_name, LV_LABEL_LONG_DOT);
+        lv_obj_align(s_jam_album_name, LV_ALIGN_LEFT_MID, 57 + 16, 0);
+        s_jam_album_pos = label(s_jam_albums, &ui_font_12, CAPTION);
+        lv_obj_set_style_text_letter_space(s_jam_album_pos, 1, 0);
+        lv_obj_align(s_jam_album_pos, LV_ALIGN_RIGHT_MID, -57 - 16, 0);
+        lv_obj_set_hidden(s_jam_albums, true);
+    }
 
     s_jam_list = lv_obj_create(s_jam);
     lv_obj_remove_style_all(s_jam_list);
     lv_obj_set_pos(s_jam_list, X, 74);
-    lv_obj_set_size(s_jam_list, JAM_LIST_W, 346);
+    lv_obj_set_size(s_jam_list, JAM_LIST_W, 4 * 58 + 2);   // (four tracks in sight: the footswitch row below)
     lv_obj_set_style_bg_color(s_jam_list, lv_color_hex(SURF), 0);
     lv_obj_set_style_bg_opa(s_jam_list, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_jam_list, 1, 0);
@@ -6562,7 +7500,7 @@ static void build_jam(lv_obj_t *screen)
     lv_obj_set_scrollbar_mode(s_jam_list, LV_SCROLLBAR_MODE_OFF);
 
     // Wi-Fi for tracks from the Mac: status and switch | the network
-    lv_obj_t *nb = box(s_jam, X, 432, JAM_LIST_W, 60);
+    lv_obj_t *nb = box(s_jam, X, 320, JAM_LIST_W, 60);
     lv_obj_t *nf = seg(nb, 0, JAM_LIST_W - 2 - 111, NULL);
     s_net_caption = label(nf, &ui_font_12, CAPTION);
     lv_obj_set_style_text_letter_space(s_net_caption, 1, 0);
@@ -6618,39 +7556,23 @@ static void build_jam(lv_obj_t *screen)
     lv_obj_set_style_text_align(s_jam_len, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_pos(s_jam_len, PX, 166);
 
-    // transport: three fields, pause / play filled
-    lv_obj_t *tb = box(s_jam, PX, 196, PW, 72);
-    int third = (PW - 2) / 3;
-    lv_obj_t *f = seg(tb, 0, third, on_jam_prev);
-    lv_obj_t *l = label(f, &ui_font_28, TEXT);
-    lv_label_set_text(l, LV_SYMBOL_PREV);
-    lv_obj_center(l);
-    vline(tb, third);
-    lv_obj_t *pause = seg(tb, third + 1, third, on_jam_toggle);
-    lv_obj_set_style_bg_color(pause, lv_color_hex(0xECECEC), 0);
-    lv_obj_set_style_bg_color(pause, lv_color_white(), LV_STATE_PRESSED);
-    lv_obj_set_style_radius(pause, 0, 0);
-    s_jam_pause_label = label(pause, &ui_font_28, INK);
-    lv_label_set_text(s_jam_pause_label, LV_SYMBOL_PLAY);
-    lv_obj_center(s_jam_pause_label);
-    vline(tb, 2 * third + 1);
-    f = seg(tb, 2 * third + 2, PW - 2 - 2 * third - 2, on_jam_next);
-    l = label(f, &ui_font_28, TEXT);
-    lv_label_set_text(l, LV_SYMBOL_NEXT);
-    lv_obj_center(l);
+    // the footswitch row along the bottom: Back | Play | Pause | Next
+    static const lv_event_cb_t JAM_CB[4] = { on_jam_prev, on_jam_toggle, on_jam_next, on_player_row_out };
+    build_transport(&s_jam_tr, s_jam, JAM_CB);
+    lv_obj_t *l, *f;
 
     lv_obj_t *c = label(s_jam, &ui_font_12, CAPTION);
     lv_obj_set_style_text_letter_space(c, 1, 0);
     lv_label_set_text(c, "JAM VOLUME INTO THE NANO");
-    lv_obj_set_pos(c, PX, 284);
-    s_jam_vol = fill_bar(s_jam, PX, 304, PW, "Jam", &s_jam_vol_value);
+    lv_obj_set_pos(c, PX, 192);
+    s_jam_vol = fill_bar(s_jam, PX, 212, PW, "Jam", &s_jam_vol_value);
     lv_slider_set_range(s_jam_vol, -400, 60);
     lv_obj_add_event_cb(s_jam_vol, on_jam_volume, LV_EVENT_VALUE_CHANGED, NULL);
     c = label(s_jam, &ui_font_12, CAPTION);
     lv_obj_set_style_text_letter_space(c, 1, 0);
     lv_label_set_text(c, "THIS TRACK \xC2\xB7 BY EAR");
-    lv_obj_set_pos(c, PX, 380);
-    lv_obj_t *lb = box(s_jam, PX, 400, PW, 60);
+    lv_obj_set_pos(c, PX, 288);
+    lv_obj_t *lb = box(s_jam, PX, 308, PW, 60);
     f = seg(lb, 0, 72, NULL);
     lv_obj_set_clickable(f, true);
     lv_obj_add_event_cb(f, on_jam_level, LV_EVENT_CLICKED, (void *)(intptr_t)-5);
@@ -6669,52 +7591,65 @@ static void build_jam(lv_obj_t *screen)
     lv_obj_center(l);
     s_jam_foot = label(s_jam, &ui_font_12, CAPTION);
     lv_obj_set_style_text_letter_space(s_jam_foot, 1, 0);
-    lv_obj_set_pos(s_jam_foot, PX, 476);
+    lv_obj_set_pos(s_jam_foot, PX, 374);
     lv_obj_set_hidden(s_jam, true);
+}
+
+// The tracks of the list: those of the album in view. Each row keeps its track's number as its user data.
+static void jam_list_row(int i, bool line)
+{
+    lv_obj_t *r = lv_button_create(s_jam_list);
+    lv_obj_remove_style_all(r);
+    lv_obj_set_size(r, JAM_LIST_W - 2, 58);
+    lv_obj_set_style_bg_color(r, lv_color_hex(SURF), 0);
+    lv_obj_set_style_bg_opa(r, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(r, lv_color_hex(SURF_ON), LV_STATE_PRESSED);
+    if (line) {
+        lv_obj_set_style_border_side(r, LV_BORDER_SIDE_TOP, 0);
+        lv_obj_set_style_border_width(r, 1, 0);
+        lv_obj_set_style_border_color(r, lv_color_hex(HAIRLINE), 0);
+    }
+    lv_obj_set_user_data(r, (void *)(intptr_t)i);
+    lv_obj_add_event_cb(r, on_jam_row, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+    lv_obj_t *n = label(r, &ui_font_12, CAPTION);
+    lv_obj_set_width(n, 24);
+    lv_obj_align(n, LV_ALIGN_LEFT_MID, 14, 0);
+    lv_obj_t *t = label(r, &ui_font_title_16, TEXT);
+    lv_obj_set_width(t, JAM_LIST_W - 2 - 48 - 90);
+    lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
+    lv_label_set_text(t, jam_title(jam_name(i)));
+    lv_obj_align(t, LV_ALIGN_LEFT_MID, 44, 0);
+    lv_obj_t *v = label(r, &ui_font_12, CAPTION);
+    lv_obj_align(v, LV_ALIGN_RIGHT_MID, -16, 0);
 }
 
 static void jam_fill_list(void)
 {
     lv_obj_clean(s_jam_list);
-    for (int i = 0; i < s_jam_st.count; i++) {
-        lv_obj_t *r = lv_button_create(s_jam_list);
-        lv_obj_remove_style_all(r);
-        lv_obj_set_size(r, JAM_LIST_W - 2, 58);
-        lv_obj_set_style_bg_color(r, lv_color_hex(SURF), 0);
-        lv_obj_set_style_bg_opa(r, LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(r, lv_color_hex(SURF_ON), LV_STATE_PRESSED);
-        if (i) {
-            lv_obj_set_style_border_side(r, LV_BORDER_SIDE_TOP, 0);
-            lv_obj_set_style_border_width(r, 1, 0);
-            lv_obj_set_style_border_color(r, lv_color_hex(HAIRLINE), 0);
-        }
-        lv_obj_add_event_cb(r, on_jam_row, LV_EVENT_CLICKED, (void *)(intptr_t)i);
-        lv_obj_t *n = label(r, &ui_font_12, CAPTION);
-        lv_obj_set_width(n, 24);
-        lv_obj_align(n, LV_ALIGN_LEFT_MID, 14, 0);
-        lv_obj_t *t = label(r, &ui_font_title_16, TEXT);
-        lv_obj_set_width(t, JAM_LIST_W - 2 - 48 - 90);
-        lv_label_set_long_mode(t, LV_LABEL_LONG_DOT);
-        lv_label_set_text(t, s_jam_names ? s_jam_names(i) : "");
-        lv_obj_align(t, LV_ALIGN_LEFT_MID, 44, 0);
-        lv_obj_t *v = label(r, &ui_font_12, CAPTION);
-        lv_obj_align(v, LV_ALIGN_RIGHT_MID, -16, 0);
-    }
+    int first = 0, last = -1;
+    if (s_jam_view >= 0 && s_jam_view < s_jam_st.count) jam_album_range(s_jam_view, &first, &last);
+    for (int i = first; i <= last; i++) jam_list_row(i, i > first);
     s_jam_list_count = s_jam_st.count;
     s_jam_list_current = -2;
 }
 
-// The rows: the current one lit with its play / pause mark, the others numbered; each with its correction.
+// The rows: the current one lit with its play / pause mark, the others numbered in their album; each with its
+// correction.
 static void jam_mark_list(void)
 {
-    for (int i = 0; i < s_jam_list_count; i++) {
-        lv_obj_t *r = lv_obj_get_child(s_jam_list, i);
-        if (!r) break;
+    uint32_t n_children = lv_obj_get_child_count(s_jam_list);
+    for (uint32_t c = 0; c < n_children; c++) {
+        lv_obj_t *r = lv_obj_get_child(s_jam_list, c);
+        int i = (int)(intptr_t)lv_obj_get_user_data(r);
+        if (i < 0 || i >= s_jam_st.count) continue;
         bool cur = i == s_jam_st.current;
         set_color_prop(r, LV_STYLE_BG_COLOR, cur ? SURF_ON : SURF);
+        if (cur && s_jam_list_current != s_jam_st.current) lv_obj_scroll_to_view(r, LV_ANIM_OFF);   // (the playing row in sight)
+        int first, last;
+        jam_album_range(i, &first, &last);
         char text[16];
         if (cur) snprintf(text, sizeof(text), "%s", s_jam_st.playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
-        else snprintf(text, sizeof(text), "%d", i + 1);
+        else snprintf(text, sizeof(text), "%d", i - first + 1);
         lv_obj_t *n = lv_obj_get_child(r, 0), *v = lv_obj_get_child(r, 2);
         set_text(n, text);
         set_color_prop(n, LV_STYLE_TEXT_COLOR, cur ? TEXT : CAPTION);
@@ -6726,18 +7661,71 @@ static void jam_mark_list(void)
     s_jam_list_playing = s_jam_st.playing;
 }
 
+// The album in view: it follows the playing track when that changes; the arrows step through the albums.
+static void jam_show_albums(void)
+{
+    if (!s_jam_albums) return;
+    const ui_jam_t *j = &s_jam_st;
+    if (j->current != s_jam_view_current) {
+        s_jam_view_current = j->current;
+        if (j->current >= 0) s_jam_view = j->current;
+    }
+    if (s_jam_view >= j->count) s_jam_view = j->count ? 0 : -1;
+    if (s_jam_view < 0 && j->count) s_jam_view = 0;
+    int albums = jam_album_count();
+    set_hidden(s_jam_albums, albums < 2);
+    if (albums < 2 || s_jam_view < 0) return;
+    int first, last, k = 0;
+    jam_album_range(s_jam_view, &first, &last);
+    s_jam_view = first;
+    for (int i = 0; i <= first; i++) k += i == 0 || !jam_same_album(i - 1, i);
+    char album[72], text[32];
+    jam_album_name(first, album, sizeof(album), false);
+    set_text(s_jam_album_name, album);
+    snprintf(text, sizeof(text), "ALBUM %d / %d", k, albums);
+    set_text(s_jam_album_pos, text);
+}
+
+static void on_jam_album(lv_event_t *e)
+{
+    int step = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_current_target(e));
+    const int n = s_jam_st.count;
+    if (n <= 0 || s_jam_view < 0) return;
+    int first, last;
+    jam_album_range(s_jam_view, &first, &last);
+    if (step > 0) s_jam_view = last + 1 < n ? last + 1 : 0;   // (round: after the last album the first)
+    else {
+        int prev = first > 0 ? first - 1 : n - 1;
+        jam_album_range(prev, &first, &last);
+        s_jam_view = first;
+    }
+    show_jam();
+}
+
 static void show_jam(void)
 {
     const ui_jam_t *j = &s_jam_st;
-    if (j->count != s_jam_list_count) jam_fill_list();
+    jam_show_albums();
+    uint32_t sig = jam_names_sig() ^ (uint32_t)(s_jam_view + 2) * 2654435761u;
+    if (j->count != s_jam_list_count || sig != s_jam_list_sig) {
+        s_jam_list_sig = sig;
+        jam_fill_list();
+    }
     if (j->current != s_jam_list_current || j->playing != s_jam_list_playing) jam_mark_list();
-    char text[64], pos[12], len[12];
+    char text[128], pos[12], len[12];
     if (!j->card) snprintf(text, sizeof(text), j->unreadable ? "CARD NOT READABLE \xC2\xB7 FORMAT IT AS MS-DOS (FAT32)" : "NO MICROSD CARD");
     else if (!j->count) snprintf(text, sizeof(text), "NO WAV FILES IN THE FOLDER JAM");
     else if (j->current < 0) snprintf(text, sizeof(text), "%d TRACKS", j->count);
-    else snprintf(text, sizeof(text), "%s \xC2\xB7 %d / %d", j->playing ? "PLAYING" : "PAUSED", j->current + 1, j->count);
+    else {
+        int first, last;
+        char album[72];
+        jam_album_range(j->current, &first, &last);
+        jam_album_name(j->current, album, sizeof(album), true);
+        snprintf(text, sizeof(text), "%s \xC2\xB7 %.28s \xC2\xB7 %d / %d", j->playing ? "PLAYING" : "PAUSED", album,
+                 j->current - first + 1, last - first + 1);
+    }
     set_text(s_jam_caption, text);
-    set_text(s_jam_title, j->current >= 0 && s_jam_names ? s_jam_names(j->current)
+    set_text(s_jam_title, j->current >= 0 && s_jam_names ? jam_title(jam_name(j->current))
                           : !j->card ? j->unreadable ? "Card not readable" : "No card" : "Jam tracks");
     fmt_time(pos, sizeof(pos), j->pos_s);
     fmt_time(len, sizeof(len), j->len_s);
@@ -6749,7 +7737,7 @@ static void show_jam(void)
     int w = lv_obj_get_style_width(track, 0);
     set_num_prop(s_jam_scrub_fill, LV_STYLE_WIDTH, (int)(w * k));
     set_num_prop(s_jam_knob, LV_STYLE_X, lv_obj_get_style_x(track, 0) - 2 + (int)(w * k));
-    set_text(s_jam_pause_label, j->playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+    show_transport(&s_jam_tr, j->playing);
     if (!lv_obj_has_state(s_jam_vol, LV_STATE_PRESSED)) {
         lv_slider_set_value(s_jam_vol, (int)lroundf(j->volume_db * 10), LV_ANIM_OFF);
         snprintf(text, sizeof(text), "%s%.1f dB", j->volume_db < 0 ? "\xE2\x88\x92" : "", fabsf(j->volume_db));
@@ -6760,7 +7748,11 @@ static void show_jam(void)
     set_text(s_jam_level_value, text);
     int target = (int)lroundf(-j->target_lufs);
     if (j->measuring) snprintf(text, sizeof(text), "LEVELLED TO \xE2\x88\x92%d LUFS \xC2\xB7 MEASURING, %d TO GO", target, j->measuring);
-    else snprintf(text, sizeof(text), "LEVELLED TO \xE2\x88\x92%d LUFS \xC2\xB7 THEN THE NEXT TRACK \xC2\xB7 %d TRACK%s", target, j->count, j->count == 1 ? "" : "S");
+    else {
+        int albums = jam_album_count();
+        if (albums > 1) snprintf(text, sizeof(text), "LEVELLED TO \xE2\x88\x92%d LUFS \xC2\xB7 THEN THE ALBUM'S NEXT \xC2\xB7 %d ALBUMS", target, albums);
+        else snprintf(text, sizeof(text), "LEVELLED TO \xE2\x88\x92%d LUFS \xC2\xB7 THEN THE NEXT TRACK \xC2\xB7 %d TRACK%s", target, j->count, j->count == 1 ? "" : "S");
+    }
     set_text(s_jam_foot, text);
     show_net();
     static int shown_measuring = -1;   // a track was measured: its note changes
@@ -6792,14 +7784,17 @@ static void loop_poll(lv_timer_t *t)
     if (s_set_page[SET_WIFI] && !lv_obj_is_hidden(s_settings) && s_set_topic == SET_WIFI) show_wifi_page();
     s_loop = l;
     s_jam_st = j;
+    cover_refresh(j.cover_seq);
     if (!lv_obj_is_hidden(s_loopbar)) show_loopbar();
     uint32_t sig = (uint32_t)l.ready | (uint32_t)l.state << 1 | (uint32_t)l.to_bar_line << 4 | (uint32_t)l.can_undo << 5
                  | (uint32_t)l.can_redo << 6 | (uint32_t)j.card << 7 | (uint32_t)j.playing << 8
                  | (uint32_t)((j.current + 1) & 0x7F) << 9 | (uint32_t)(j.count & 0x7F) << 16 | (uint32_t)(j.pos_s & 0xFF) << 24;
+    sig ^= (uint32_t)(j.current + 1) * 0x85EBCA6Bu ^ (uint32_t)j.count * 0xC2B2AE35u;   // (256 tracks: more than 7 bits)
     // (P4: the parts and the drums change the tiles too)
     sig ^= ((uint32_t)l.part | (uint32_t)(l.next_part + 1) << 1 | (uint32_t)l.paused << 3 | (uint32_t)l.drums_on << 4 | (uint32_t)l.counting << 31 | (uint32_t)l.armed << 30
             | (uint32_t)l.drums_ready << 5 | (uint32_t)l.part_state[0] << 6 | (uint32_t)l.part_state[1] << 9
             | (uint32_t)(l.groove & 0x3F) << 12 | (uint32_t)lroundf(l.part_len_s[0] * 10) << 18 | (uint32_t)lroundf(l.part_len_s[1] * 10) << 25) * 2654435761u;
+    sig ^= (uint32_t)(l.groove + 1) * 0x9E3779B1u;   // (more than 64 grooves: the six bits above are not enough)
     if (s_looper_mode && s_tiles_drawn && sig != s_loop_sig) {
         s_loop_sig = sig;
         show_onboard_looper_tiles();
@@ -6809,6 +7804,20 @@ static void loop_poll(lv_timer_t *t)
     }
     if (s_source == 1) show_jam_field();
     if (!lv_obj_is_hidden(s_jam)) show_jam();
+    if (s_player_mode) {
+        if (!lv_obj_is_hidden(s_playerbar)) show_playerbar();
+        bool pl = s_source == 1 ? j.playing : s_phone_state.playing;
+        uint32_t ps = (uint32_t)s_source | (uint32_t)pl << 1;
+        if (s_tiles_drawn && ps != s_player_sig) {
+            s_player_sig = ps;
+            show_player_tiles();
+            show_tile_extras();
+            fit_names();
+            s_tiles_stale = true;
+        }
+    }
+    if (s_lvs && !lv_obj_is_hidden(s_lvs)) show_level_sheet();
+    if (s_gr_row && !lv_obj_is_hidden(s_editor)) show_gr_row();
 }
 
 void ui_set_loop_source(ui_loop_source_cb source, ui_jam_name_cb names, ui_jam_note_cb notes)
@@ -6979,7 +7988,14 @@ static void style_scene_chip(void);
 static bool scene_panel_open(void);
 static void close_expression(void);
 
-// ---- start screen: shown until the Nano's presets are loaded (or a tap) ----
+// ---- start screen (2026-11-27): the seven symbols light up one after another as the board gets ready - screen,
+//      footswitches, the Nano found, its presets, the drum kit, the sound; then it goes (or a tap). The newest one
+//      glows softly; those not reached yet stay dark. ----
+#define SPLASH_ICONS 7
+static lv_obj_t *s_splash_sq[SPLASH_ICONS];
+static uint32_t s_splash_color[SPLASH_ICONS];
+static unsigned s_splash_mask;      // UI_SPLASH_* reached
+static lv_timer_t *s_splash_timer;  // closes it: all reached, or the fallback after the presets
 
 static void splash_glow(void *obj, int32_t v)
 {
@@ -6989,6 +8005,8 @@ static void splash_glow(void *obj, int32_t v)
 static void splash_hide(void)
 {
     if (!s_splash) return;
+    if (s_splash_timer) lv_timer_delete(s_splash_timer), s_splash_timer = NULL;
+    for (int i = 0; i < SPLASH_ICONS; i++) if (s_splash_sq[i]) lv_anim_delete(s_splash_sq[i], splash_glow), s_splash_sq[i] = NULL;
     lv_obj_fade_out(s_splash, 400, 0);
     lv_obj_delete_delayed(s_splash, 450);
     s_splash = s_splash_status = s_splash_version = NULL;
@@ -6999,15 +8017,53 @@ static void on_splash_tap(lv_event_t *e)
     splash_hide();
 }
 
+static void splash_timer_cb(lv_timer_t *t)
+{
+    (void)t;
+    s_splash_timer = NULL;   // (one-shot: LVGL deletes it)
+    splash_hide();
+}
+
+// Lit: the symbol in its colour; not yet: a dark square with the symbol in its colour, dimmed.
+static void splash_show_steps(void)
+{
+    int newest = -1;
+    for (int i = 0; i < SPLASH_ICONS; i++) if (s_splash_mask & (1u << i)) newest = i;
+    for (int i = 0; i < SPLASH_ICONS; i++) {
+        lv_obj_t *sq = s_splash_sq[i];
+        if (!sq) continue;
+        bool lit = s_splash_mask & (1u << i);
+        uint32_t c = s_splash_color[i];
+        set_color_prop(sq, LV_STYLE_BG_COLOR, lit ? c : blend(c, 0x000000, 0.16f));
+        set_color_prop(sq, LV_STYLE_BORDER_COLOR, lit ? c : blend(c, 0x000000, 0.40f));
+        set_color_prop(lv_obj_get_child(sq, 0), LV_STYLE_IMAGE_RECOLOR, lit ? ink_for(c) : blend(c, 0x000000, 0.55f));
+        lv_anim_delete(sq, splash_glow);
+        if (i == newest && s_splash_mask != (1u << SPLASH_ICONS) - 1) {   // the newest: a soft, slow glow
+            lv_anim_t a;
+            lv_anim_init(&a);
+            lv_anim_set_var(&a, sq);
+            lv_anim_set_exec_cb(&a, splash_glow);
+            lv_anim_set_values(&a, 20, 120);
+            lv_anim_set_duration(&a, 900);
+            lv_anim_set_reverse_duration(&a, 900);
+            lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+            lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+            lv_anim_start(&a);
+        } else {
+            lv_obj_set_style_shadow_opa(sq, lit ? 45 : 0, 0);
+        }
+    }
+}
+
 static void build_splash(lv_obj_t *screen)
 {
-    // The effect categories in their colours, glowing one after another.
-    static const struct { int icon; uint32_t color; } GLOW[] = {
+    // The effect categories in their colours, one per step of the start.
+    static const struct { int icon; uint32_t color; } GLOW[SPLASH_ICONS] = {
         { NANO_ICON_OVERDRIVE, 0xFF7000 }, { NANO_ICON_COMPRESSOR, 0x45F862 }, { NANO_ICON_EQUALIZER, 0x0A74E0 },
         { NANO_ICON_MODULATION, 0x8A5CFF }, { NANO_ICON_PITCH, 0xFFD236 }, { NANO_ICON_FILTER, 0x87DAFF },
         { NANO_ICON_REVERB, 0x00FFDD },
     };
-    const int count = sizeof(GLOW) / sizeof(GLOW[0]), size = 62, gap = 26;
+    const int count = SPLASH_ICONS, size = 62, gap = 26;
     s_splash = lv_obj_create(screen);
     lv_obj_remove_style_all(s_splash);
     lv_obj_set_size(s_splash, SCREEN_W, SCREEN_H);
@@ -7025,27 +8081,21 @@ static void build_splash(lv_obj_t *screen)
     lv_label_set_text(sub, "CONTROLLER");
     lv_obj_align(sub, LV_ALIGN_TOP_MID, 7, 168);
 
-    int x = (SCREEN_W - count * size - (count - 1) * gap) / 2;   // (was 800: the row sat 112 px left of the title)
+    int x = (SCREEN_W - count * size - (count - 1) * gap) / 2;
     for (int i = 0; i < count; i++) {
         lv_obj_t *sq = icon_square(s_splash, size);
         lv_obj_set_pos(sq, x + i * (size + gap), 246);
         set_icon_square(sq, GLOW[i].color, NANO_ICONS[GLOW[i].icon], true);
+        lv_obj_set_style_border_width(sq, 2, 0);
         lv_obj_set_style_shadow_color(sq, lv_color_hex(GLOW[i].color), 0);
-        lv_obj_set_style_shadow_width(sq, 34, 0);
-        lv_obj_set_style_shadow_spread(sq, 3, 0);
-        lv_obj_set_style_shadow_opa(sq, 30, 0);
-        lv_anim_t a;
-        lv_anim_init(&a);
-        lv_anim_set_var(&a, sq);
-        lv_anim_set_exec_cb(&a, splash_glow);
-        lv_anim_set_values(&a, 30, 230);
-        lv_anim_set_duration(&a, 1100);
-        lv_anim_set_reverse_duration(&a, 1100);
-        lv_anim_set_delay(&a, i * 220);
-        lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-        lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
-        lv_anim_start(&a);
+        lv_obj_set_style_shadow_width(sq, 30, 0);
+        lv_obj_set_style_shadow_spread(sq, 2, 0);
+        lv_obj_set_style_shadow_opa(sq, 0, 0);
+        s_splash_sq[i] = sq;
+        s_splash_color[i] = GLOW[i].color;
     }
+    s_splash_mask = 1u << UI_SPLASH_SCREEN;
+    splash_show_steps();
 
     s_splash_status = label(s_splash, HINT_FONT, MUTED);
     lv_obj_set_style_text_letter_space(s_splash_status, 2, 0);
@@ -7062,6 +8112,24 @@ void ui_splash_status(const char *status, const char *version)
         lv_obj_align(s_splash_status, LV_ALIGN_TOP_MID, 0, 360);
     }
     if (s_splash && version) lv_label_set_text(s_splash_version, version);
+    lvgl_port_unlock();
+}
+
+void ui_splash_step(int step)
+{
+    if (step < 0 || step >= SPLASH_ICONS) return;
+    lvgl_port_lock(0);
+    if (s_splash) {
+        s_splash_mask |= 1u << step;
+        bool presets = s_splash_mask & (1u << UI_SPLASH_PRESETS), sound = s_splash_mask & (1u << UI_SPLASH_SOUND);
+        if (presets && sound) s_splash_mask = (1u << SPLASH_ICONS) - 1;   // ready: all of them, a moment, then away
+        splash_show_steps();
+        if (s_splash_timer) lv_timer_delete(s_splash_timer), s_splash_timer = NULL;
+        if (presets) {   // away when all is there (0.7 s to see it) - with the presets, at most 12 s later
+            s_splash_timer = lv_timer_create(splash_timer_cb, sound ? 700 : 12000, NULL);
+            lv_timer_set_repeat_count(s_splash_timer, 1);
+        }
+    }
     lvgl_port_unlock();
 }
 
@@ -7220,12 +8288,12 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     s_save_button = seg(b4, 160, 79, on_save_button);
     top_word(s_save_button, ui_icon(s_save_button, UI_ICON_SAVE, 20, TEXT), "Save");
 
-    lv_obj_t *ab = box(preset, MARGIN, 72, 72, 80);
+    lv_obj_t *ab = s_prev_box = box(preset, MARGIN, 72, 72, 80);
     lv_obj_t *prev = seg(ab, 0, 70, on_previous);
     lv_obj_t *prev_label = label(prev, &ui_font_28, TEXT);
     lv_label_set_text(prev_label, LV_SYMBOL_LEFT);
     lv_obj_center(prev_label);
-    ab = box(preset, SCREEN_W - MARGIN - 72, 72, 72, 80);
+    ab = s_next_box = box(preset, SCREEN_W - MARGIN - 72, 72, 72, 80);
     lv_obj_t *next = seg(ab, 0, 70, on_next);
     lv_obj_t *next_label = label(next, &ui_font_28, TEXT);
     lv_label_set_text(next_label, LV_SYMBOL_RIGHT);
@@ -7325,6 +8393,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
 
     build_chain(s_main);
     build_loopbar(s_main);
+    build_playerbar(s_main);
 
     for (int i = 0; i < TILES; i++) build_tile(s_main, i);
     build_pedals(s_main);
@@ -7356,6 +8425,7 @@ void ui_init(ui_command_cb on_command, ui_param_cb on_param, ui_text_cb on_text)
     build_jam(screen);
     build_netlist(screen);
     build_drums(screen);
+    build_level_sheet(screen);
     build_toast(screen);
     build_splash(screen);
 
@@ -7368,8 +8438,9 @@ static void set_fullscreen(bool on)
     if (on == s_fullscreen) return;
     s_fullscreen = on;
     lv_obj_set_hidden(s_preset_card, on);
-    lv_obj_set_hidden(s_chain, on || s_looper_mode);
+    lv_obj_set_hidden(s_chain, on || s_looper_mode || s_player_mode);
     lv_obj_set_hidden(s_loopbar, on || !s_looper_mode);
+    lv_obj_set_hidden(s_playerbar, on || !s_player_mode);
     lv_obj_set_hidden(s_gig_bar, !on);
     if (!on) s_pedals_shown = false, lv_obj_set_hidden(s_pedals, true);   // (the pedals belong to the full-screen view)
     for (int i = 0; i < TILES; i++) place_tile(i);
@@ -7450,17 +8521,19 @@ static void set_tile_pedal(int i, uint32_t type)
 }
 
 // Footswitch 1 (mode) and 2 (tuner) tiles.
+#define MODE_BLUE 0x4F8CFF
+#define LOOPER_ORANGE 0xFF8A3D
 static void show_fixed_tiles(const ui_view_t *view)
 {
     // Tile 1: always MODE, the mode it is in large. (Bank, preset and song are in the top bar.)
     bool fx = view->fx_mode, scenes = !fx && view->scenes;
+    // P4 (2026-11-27, draft): MODE in blue with the grid of the presets, LOOPER in orange with its loop - switch 2
+    // pressed is the looper, held the tuner.
     set_tile(0, "MODE", fx ? "FX" : scenes ? "Scenes" : view->setlist_on && view->setlist_count ? "Songs" : "Presets",
-             0x8A9099, false, false, NULL, LV_SYMBOL_LOOP);
-    set_tile(1, "TUNER", "Tuner", 0xBDBDBD, false, false, NANO_ICONS[NANO_ICON_TUNER], NANO_ICONS[NANO_ICON_TUNER] ? NULL : LV_SYMBOL_AUDIO);
-    // Under the caption: what holding the footswitch does (as the other effect of an A/B slot on its tile) - P4: the
-    // player (jam tracks / phone) and the looper mode. (Scenes / presets: the Scenes button of the top bar.)
+             MODE_BLUE, false, false, UI_ICONS[UI_ICON_GRID], NULL);
+    set_tile(1, "LOOPER", "Looper", LOOPER_ORANGE, false, false, NULL, LV_SYMBOL_LOOP);
     s_tile_note[0] = LV_SYMBOL_PLAY " Hold: Player";
-    s_tile_note[1] = LV_SYMBOL_LOOP " Hold: Looper";
+    s_tile_note[1] = "Hold: Tuner";
     s_tile_hint[0] = s_tile_hint[1] = true;
 }
 
@@ -7511,7 +8584,9 @@ static void show_fx_tiles(const nano_state_t *st, const ui_view_t *view)
             set_color_prop(s_tile[2 + slot], LV_STYLE_BORDER_COLOR, 0x24272B);
         }
         // A wah with auto-wah: under the caption how it moves ("Hold": while its footswitch is held)
-        else if (!empty && view->wah_mode[slot] && view->wah_rate[slot] < UI_WAH_RATES) {
+        else if (!empty && view->wah_mode[slot] && view->wah_rate[slot] == UI_WAH_FOLLOWS_RATE) {
+            s_tile_note[2 + slot] = view->wah_mode[slot] == UI_WAH_HELD ? "Hold: auto, playing" : "Auto: playing";
+        } else if (!empty && view->wah_mode[slot] && view->wah_rate[slot] < UI_WAH_RATES) {
             s_tile_note[2 + slot] = WAH_NOTES[view->wah_mode[slot] == UI_WAH_HELD][view->wah_rate[slot]];
         } else if (pedal_amount || pedal_switch) {
             s_tile_note[2 + slot] = pedal_amount && pedal_switch ? "Pedal, on/off" : pedal_amount ? "Pedal" : "Pedal: on/off";
@@ -7646,9 +8721,16 @@ static void show_preset_tiles(const nano_state_t *st, const ui_view_t *view)
         const char *name = st->preset_names[preset - 1];
         uint32_t color = BANK_COLORS[view->bank_colors[i] < UI_BANK_COLOR_COUNT ? view->bank_colors[i] : 0];
         int icon = view->bank_icons[i];
-        bool lit = setlist && view->setlist_song >= 0 ? song == view->setlist_song : preset == st->current_preset;
+        bool lit = setlist && view->setlist_song >= 0 ? song == view->setlist_song
+                 : preset == st->current_preset || (view->bank_presets2[i] && view->bank_presets2[i] == st->current_preset);   // (its second preset is on: lit too)
         set_tile(2 + i, caption, st->names_loaded && name[0] ? name : "-", color, lit, false,
                  icon >= 1 && icon <= PRESET_ICON_COUNT ? PRESET_ICONS[icon - 1].image : NULL, NULL);
+        int second = view->bank_presets2[i];
+        if (!setlist && second >= 1 && second <= NANO_PRESETS) {   // under the caption: the second preset, held (P4)
+            const char *n2 = st->preset_names[second - 1];
+            snprintf(s_tile_note_text[2 + i], sizeof(s_tile_note_text[2 + i]), "Hold: %s", st->names_loaded && n2[0] ? n2 : "-");
+            s_tile_note[2 + i] = s_tile_note_text[2 + i];
+        }
         int scene = setlist && song < UI_SETLIST_MAX ? view->setlist_scenes[song] : 0;
         if (scene >= 1 && scene <= UI_SCENES) {   // under the caption: the scene the song starts with
             if (view->setlist_scene_names[i][0]) snprintf(s_tile_note_text[2 + i], sizeof(s_tile_note_text[2 + i]), "%s", view->setlist_scene_names[i]);
@@ -7686,8 +8768,9 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     lvgl_port_lock(0);
 
     s_fx_mode = view->fx_mode;
-    bool looper_changed = s_looper_mode != view->looper;
+    bool looper_changed = s_looper_mode != view->looper || s_player_mode != (view->player && !view->looper);
     s_looper_mode = view->looper;
+    s_player_mode = view->player && !view->looper;
     if (looper_changed) for (int i = 0; i < TILES; i++) place_tile(i);   // (the looper's fixed places, or the layout's)
     s_current_preset = st->current_preset;
     bool slots_changed = false;
@@ -7716,7 +8799,7 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
         style_scene_chip();
         if (scenes_changed && scene_panel_open()) lv_obj_invalidate(s_panel_list);
     }
-    if (!view->looper) show_fixed_tiles(view);
+    if (!view->looper && !s_player_mode) show_fixed_tiles(view);
     if (view->mix_slot >= 0) {
         snprintf(s_mix_model, sizeof(s_mix_model), "%s  -  %s", nano_fx_name(st->fx_type[view->mix_slot]),
                  NANO_FX_SLOT_NAMES[view->mix_slot]);
@@ -7754,7 +8837,10 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     int half = (name_size.x < PRESET_NAME_W ? name_size.x : PRESET_NAME_W) / 2;
     set_num_prop(s_edited, LV_STYLE_X, SCREEN_W / 2 + half + 12);
     set_num_prop(s_edited, LV_STYLE_Y, 107);
-    set_hidden(s_edited, !st->dirty);
+    set_hidden(s_edited, !st->dirty || s_player_mode);
+    set_hidden(s_preset_name, s_player_mode);   // player mode: its stage takes the preset's row
+    set_hidden(s_prev_box, s_player_mode);
+    set_hidden(s_next_box, s_player_mode);
 
     // Gig view bar
     snprintf(text, sizeof(text), "%d", st->current_preset);
@@ -7821,11 +8907,15 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     }
 
     if (s_rec_mark) set_hidden(s_rec_mark, !view->looper);
-    set_hidden(s_chain, s_fullscreen || view->looper);
+    set_hidden(s_chain, s_fullscreen || view->looper || s_player_mode);
     set_hidden(s_loopbar, s_fullscreen || !view->looper);
+    set_hidden(s_playerbar, s_fullscreen || !s_player_mode);
     if (view->looper) {   // P4: the looper on the board
         show_onboard_looper_tiles();
         if (!lv_obj_is_hidden(s_loopbar)) show_loopbar();
+    } else if (s_player_mode) {   // P4: the player's switches
+        show_player_tiles();
+        if (!lv_obj_is_hidden(s_playerbar)) show_playerbar();
     }
     else if (view->fx_mode) show_fx_tiles(st, view);
     else if (view->scenes) show_scene_tiles(view);
@@ -7932,8 +9022,27 @@ static const nano_param_t WAH_ROWS[UI_WAH_ROWS] = {
     [UI_WAH_TOE] = { "Toe", NANO_PARAM_RANGE, 0, 100, 1, 1, "%", 0, 0, NULL },
     [UI_WAH_TEMPO] = { "Tempo", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Nano\nOwn" },
     [UI_WAH_BPM] = { "BPM", NANO_PARAM_RANGE, UI_WAH_BPM_MIN, UI_WAH_BPM_MAX, 1, 1, "", 0, 0, NULL },
+    [UI_WAH_FOLLOWS] = { "Follows", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Tempo\nPlaying" },
+    [UI_WAH_SENS] = { "Sensitivity", NANO_PARAM_RANGE, 0, 100, 1, 1, "%", 0, 0, NULL },
+    [UI_WAH_ATTACK] = { "Attack", NANO_PARAM_RANGE, 5, 200, 1, 1, "ms", 0, 0, NULL },
+    [UI_WAH_RELEASE] = { "Release", NANO_PARAM_RANGE, 20, 1000, 1, 1, "ms", 0, 0, NULL },
 };
-static ui_autowah_t s_wah = { .rate = 3, .toe = 100, .bpm = 120 };
+// The rows shown: in the tempo the round's settings, following the playing its sensitivity and times
+// (2026-11-27, drafts/entwurf-p4-16-autowah-spiel-b.png).
+static const uint8_t WAH_TEMPO_ROWS[] = { UI_WAH_MODE, UI_WAH_FOLLOWS, UI_WAH_RATE, UI_WAH_HEEL, UI_WAH_TOE, UI_WAH_SHAPE, UI_WAH_TEMPO, UI_WAH_BPM };   // (heel and toe side by side)
+static const uint8_t WAH_PLAY_ROWS[] = { UI_WAH_MODE, UI_WAH_FOLLOWS, UI_WAH_SENS, UI_WAH_HEEL, UI_WAH_TOE, UI_WAH_ATTACK, UI_WAH_RELEASE };
+static ui_autowah_t s_wah = { .rate = 3, .toe = 100, .bpm = 120, .sens = 60, .attack_ms = 15, .release_ms = 250 };
+static int wah_rows(const uint8_t **list)
+{
+    *list = s_wah.follows ? WAH_PLAY_ROWS : WAH_TEMPO_ROWS;
+    return s_wah.follows ? (int)sizeof(WAH_PLAY_ROWS) : (int)sizeof(WAH_TEMPO_ROWS);
+}
+static int wah_row_id(int pos)   // the row at a place below the wah's own parameter
+{
+    const uint8_t *l;
+    int n = wah_rows(&l);
+    return pos >= 0 && pos < n ? l[pos] : UI_WAH_MODE;
+}
 
 static int ed_model_params(void)
 {
@@ -7945,13 +9054,15 @@ static int ed_param_count(void)
 {
     const nano_fx_model_t *m = s_editor_model_def;
     int count = ed_model_params();
-    return m && m->icon == NANO_ICON_WAH && count + UI_WAH_ROWS <= NANO_MAX_PARAMS ? count + UI_WAH_ROWS : count;
+    const uint8_t *l;
+    int rows = wah_rows(&l);
+    return m && m->icon == NANO_ICON_WAH && count + rows <= NANO_MAX_PARAMS ? count + rows : count;
 }
 
 static const nano_param_t *ed_param(int idx)
 {
     int count = ed_model_params();
-    return idx < count ? &s_editor_model_def->params[idx] : &WAH_ROWS[idx - count];
+    return idx < count ? &s_editor_model_def->params[idx] : &WAH_ROWS[wah_row_id(idx - count)];
 }
 
 // Value of an auto-wah row as the bars hold it (0-1).
@@ -7960,7 +9071,9 @@ static float wah_row_norm(int row)
     const nano_param_t *p = &WAH_ROWS[row];
     float bpm = s_wah.own_tempo || s_wah.nano_bpm < UI_WAH_BPM_MIN ? (float)s_wah.bpm : s_wah.nano_bpm;
     float v = row == UI_WAH_MODE ? s_wah.mode : row == UI_WAH_RATE ? s_wah.rate : row == UI_WAH_SHAPE ? s_wah.shape
-            : row == UI_WAH_HEEL ? s_wah.heel : row == UI_WAH_TOE ? s_wah.toe : row == UI_WAH_TEMPO ? s_wah.own_tempo : bpm;
+            : row == UI_WAH_HEEL ? s_wah.heel : row == UI_WAH_TOE ? s_wah.toe : row == UI_WAH_TEMPO ? s_wah.own_tempo
+            : row == UI_WAH_FOLLOWS ? s_wah.follows : row == UI_WAH_SENS ? s_wah.sens : row == UI_WAH_ATTACK ? s_wah.attack_ms
+            : row == UI_WAH_RELEASE ? s_wah.release_ms : bpm;
     float max = p->kind == NANO_PARAM_ENUM ? (float)(p->option_count - 1) : p->max, min = p->kind == NANO_PARAM_ENUM ? 0 : p->min;
     float n = max > min ? (v - min) / (max - min) : 0;
     return n < 0 ? 0 : n > 1 ? 1 : n;
@@ -7974,9 +9087,10 @@ static void row_changed(int idx, float n)
         if (s_on_param) s_on_param(s_editor_slot_index, idx, n);
         return;
     }
-    const nano_param_t *p = &WAH_ROWS[idx - count];
+    int id = wah_row_id(idx - count);
+    const nano_param_t *p = &WAH_ROWS[id];
     int value = p->kind == NANO_PARAM_ENUM ? option_index(p, n) : (int)lroundf(param_from_normalized(p, n));
-    send('|', (idx - count) << 16 | (value & 0xFFFF));
+    send('|', id << 16 | (value & 0xFFFF));
 }
 
 static void on_fxp_chip(lv_event_t *e);
@@ -8553,6 +9667,251 @@ static void on_bar_event(lv_event_t *e)
 }
 
 // One bar per parameter, two columns, in the model's display order.
+// ---- the gain reduction of a compressor, as a row below its knobs (2026-11-27) ----
+// The Nano does not report it; the board works it out (p4_audio.c) and the loop source brings it: a bar from the right
+// (0 to -20 dB) in the effect's colour, the peak held as a white mark, and where the level came from.
+#define GR_RANGE_DB 20.0f
+static lv_obj_t *s_gr_fill, *s_gr_peak, *s_gr_value, *s_gr_note;
+static int s_gr_bar_x, s_gr_bar_w;
+
+static void build_gr_row(int row)
+{
+    const int W = 2 * ED_BAR_W + 12;
+    s_gr_row = lv_obj_create(s_editor_body);
+    lv_obj_remove_style_all(s_gr_row);
+    lv_obj_set_size(s_gr_row, W, ED_BAR_H);
+    lv_obj_set_pos(s_gr_row, MARGIN, row * ED_BAR_PITCH);
+    lv_obj_set_scrollable(s_gr_row, false);
+    lv_obj_set_style_radius(s_gr_row, RADIUS, 0);
+    lv_obj_set_style_border_width(s_gr_row, 2, 0);
+    lv_obj_set_style_border_color(s_gr_row, lv_color_hex(blend(s_editor_color, TILE_OFF_BG, ED_DIM)), 0);
+    lv_obj_set_style_bg_color(s_gr_row, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_gr_row, LV_OPA_COVER, 0);
+    lv_obj_t *c = label(s_gr_row, &ui_font_12, CAPTION);
+    lv_obj_set_style_text_letter_space(c, 1, 0);
+    lv_label_set_text(c, "GAIN REDUCTION \xC2\xB7 ESTIMATED");
+    lv_obj_set_pos(c, 16, 10);
+    s_gr_note = label(s_gr_row, &ui_font_12, DIMMED);
+    lv_obj_set_pos(s_gr_note, 16, 34);
+    s_gr_bar_x = 300;
+    s_gr_bar_w = W - 4 - s_gr_bar_x - 130;
+    lv_obj_t *track = lv_obj_create(s_gr_row);
+    lv_obj_remove_style_all(track);
+    lv_obj_set_size(track, s_gr_bar_w, 14);
+    lv_obj_set_pos(track, s_gr_bar_x, (ED_BAR_H - 4 - 14) / 2);
+    lv_obj_set_style_radius(track, 7, 0);
+    lv_obj_set_style_clip_corner(track, true, 0);
+    lv_obj_set_style_bg_color(track, lv_color_hex(0x1B1E21), 0);
+    lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
+    for (int k = 1; k < 4; k++) {   // -5, -10, -15 dB
+        lv_obj_t *t = lv_obj_create(track);
+        lv_obj_remove_style_all(t);
+        lv_obj_set_size(t, 1, 14);
+        lv_obj_set_pos(t, s_gr_bar_w - s_gr_bar_w * k / 4, 0);
+        lv_obj_set_style_bg_color(t, lv_color_hex(0x2C3035), 0);
+        lv_obj_set_style_bg_opa(t, LV_OPA_COVER, 0);
+    }
+    s_gr_fill = lv_obj_create(track);
+    lv_obj_remove_style_all(s_gr_fill);
+    lv_obj_set_size(s_gr_fill, 0, 14);
+    lv_obj_set_align(s_gr_fill, LV_ALIGN_RIGHT_MID);
+    lv_obj_set_style_bg_color(s_gr_fill, lv_color_hex(s_editor_color), 0);
+    lv_obj_set_style_bg_opa(s_gr_fill, LV_OPA_COVER, 0);
+    s_gr_peak = lv_obj_create(track);
+    lv_obj_remove_style_all(s_gr_peak);
+    lv_obj_set_size(s_gr_peak, 2, 14);
+    lv_obj_set_style_bg_color(s_gr_peak, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(s_gr_peak, LV_OPA_COVER, 0);
+    lv_obj_set_hidden(s_gr_peak, true);
+    s_gr_value = label(s_gr_row, &ui_font_title_22, TEXT);
+    lv_obj_set_width(s_gr_value, 104);
+    lv_obj_set_style_text_align(s_gr_value, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_align(s_gr_value, LV_ALIGN_RIGHT_MID, -18, 0);
+}
+
+// The compressor in the editor as numbers (as the desktop editor's duoCompModel): threshold, ratio, a soft knee of
+// 6 dB, attack and release in seconds, make-up. Legendary 87 has no threshold - more input, more compression, like
+// the original - so its threshold is taken from Input (a guess). false: a value is not known yet.
+typedef struct { float thr, ratio, knee, attack, release, makeup; } gr_comp_t;
+
+static bool gr_param(const char *name, float *value, const char **text)
+{
+    const nano_fx_model_t *m = s_editor_model_def;
+    for (int i = 0; m && i < m->param_count && i < NANO_MAX_PARAMS; i++) {
+        const nano_param_t *p = &m->params[i];
+        if (strcasecmp(p->name, name)) continue;
+        if (s_param_norm[i] < 0) return false;
+        if (p->kind == NANO_PARAM_ENUM) {   // the option's text ("4", "All")
+            static char opt[16];
+            int k = option_index(p, s_param_norm[i]);
+            const char *o = p->options;
+            for (int j = 0; j < k && o; j++) { o = strchr(o, '\n'); if (o) o++; }
+            size_t n = o ? strcspn(o, "\n") : 0;
+            snprintf(opt, sizeof(opt), "%.*s", (int)n, o ? o : "");
+            *text = opt;
+            *value = strtof(opt, NULL);
+        } else {
+            *value = param_from_normalized(p, s_param_norm[i]);
+            *text = p->unit ? p->unit : "";
+        }
+        return true;
+    }
+    return false;
+}
+
+static bool gr_comp(gr_comp_t *c)
+{
+    float v;
+    const char *t;
+    c->knee = 6;
+    if (gr_param("Threshold", &v, &t)) c->thr = v;
+    else if (gr_param("Input", &v, &t)) c->thr = -10 - (v + 24);
+    else return false;
+    if (!gr_param("Ratio", &v, &t)) return false;
+    c->ratio = !strcasecmp(t, "All") || !strncasecmp(t, "inf", 3) ? 20 : v > 1 ? v : 4;
+    c->attack = gr_param("Attack", &v, &t) ? (!strcmp(t, "ms") ? v / 1000 : v) : 0.01f;
+    c->release = gr_param("Release", &v, &t) ? (!strcmp(t, "ms") ? v / 1000 : v) : 0.25f;
+    c->makeup = gr_param("Makeup", &v, &t) ? v : 0;
+    c->thr = c->thr < -60 ? -60 : c->thr > 0 ? 0 : c->thr;
+    c->ratio = c->ratio > 40 ? 40 : c->ratio;
+    c->attack = c->attack < 0.0002f ? 0.0002f : c->attack > 1 ? 1 : c->attack;
+    c->release = c->release < 0.02f ? 0.02f : c->release > 5 ? 5 : c->release;
+    return true;
+}
+
+static float gr_curve(const gr_comp_t *c, float level)   // the level that comes out (dB)
+{
+    float over = level - c->thr;
+    if (over <= -c->knee / 2) return level;
+    if (over >= c->knee / 2) return c->thr + over / c->ratio;
+    return level + (1 / c->ratio - 1) * (over + c->knee / 2) * (over + c->knee / 2) / (2 * c->knee);
+}
+
+// Every look (100 ms): the level the compressor sees - the dry input for one before the capture (a good estimate),
+// the sound less its make-up for one after it (rough: the capture, the effects after it and the Level are in it);
+// the peak for a fast compressor (attack up to 10 ms catches the pick), else the RMS - through its curve, following
+// its attack and release; the peak held 1.5 s.
+static struct { float gr, peak, in_shown; uint32_t peak_at, shown_at; } s_grv;
+
+static void show_gr_row(void)
+{
+    if (!s_gr_row) return;
+    const ui_loop_t *l = &s_loop;
+    gr_comp_t c;
+    bool model = gr_comp(&c), pre = s_editor_slot_index < 2;
+    float in = -100;
+    if (model && l->gr_levels) {
+        int k = pre ? 0 : 1;
+        in = c.attack <= 0.01f ? l->gr_peak_in_db[k] : l->gr_rms_db[k];
+        if (!pre && in > -100) in -= c.makeup;
+    }
+    float target = model && in > -100 ? in - gr_curve(&c, in) : 0;
+    if (target < 0) target = 0;
+    float dt = 0.1f;
+    if (model) s_grv.gr += (target - s_grv.gr) * (1 - expf(-dt / (target > s_grv.gr ? c.attack : c.release)));
+    else s_grv.gr = 0;
+    uint32_t now = lv_tick_get();
+    if (s_grv.gr >= s_grv.peak) { s_grv.peak = s_grv.gr; s_grv.peak_at = now; }
+    else if (now - s_grv.peak_at > 1500) s_grv.peak = fmaxf(s_grv.gr, s_grv.peak - 10 * dt);
+    if (in >= s_grv.in_shown || now - s_grv.shown_at > 400) { s_grv.in_shown = in; s_grv.shown_at = now; }   // (held a moment to read)
+
+    char text[64];
+    bool live = model && l->gr_levels;
+    float gr = live ? s_grv.gr : 0, peak = live ? s_grv.peak : 0;
+    int w = (int)(s_gr_bar_w * (gr > GR_RANGE_DB ? 1 : gr / GR_RANGE_DB));
+    set_num_prop(s_gr_fill, LV_STYLE_WIDTH, w);
+    int px = (int)(s_gr_bar_w * (peak > GR_RANGE_DB ? 1 : peak / GR_RANGE_DB));
+    set_hidden(s_gr_peak, !live || peak < 0.3f);
+    set_num_prop(s_gr_peak, LV_STYLE_X, s_gr_bar_w - px - 1);
+    if (!live) snprintf(text, sizeof(text), "\xE2\x80\x93");
+    else if (gr < 0.05f) snprintf(text, sizeof(text), "0.0 dB");
+    else snprintf(text, sizeof(text), "\xE2\x88\x92%.1f dB", gr);
+    set_text(s_gr_value, text);
+    if (!model) snprintf(text, sizeof(text), "READING ITS VALUES \xE2\x80\xA6");
+    else if (!l->gr_levels) snprintf(text, sizeof(text), "NO SOUND FROM THE NANO YET");
+    else {
+        char inb[12], thr[12];
+        if (s_grv.in_shown > -90) snprintf(inb, sizeof(inb), "%s%d", s_grv.in_shown < -0.5f ? "\xE2\x88\x92" : "", (int)lroundf(fabsf(s_grv.in_shown)));
+        else snprintf(inb, sizeof(inb), "\xE2\x80\x93");
+        snprintf(thr, sizeof(thr), "%s%d", c.thr < -0.5f ? "\xE2\x88\x92" : "", (int)lroundf(fabsf(c.thr)));
+        snprintf(text, sizeof(text), "%s \xC2\xB7 IN %s / THR %s dB", pre ? "DI" : "\xE2\x89\x88 OUTPUT", inb, thr);
+    }
+    set_text(s_gr_note, text);
+}
+
+// Following the playing: a row below the settings - how loud the playing is now (the fill, 0 = quiet, full = loud
+// for the sensitivity) over the heel-toe range, and where that puts the wah (the white mark and the number).
+static lv_obj_t *s_env_row, *s_env_fill, *s_env_range, *s_env_mark, *s_env_value, *s_env_note;
+static int s_env_bw;
+
+static void build_env_row(int row)
+{
+    const int W = 2 * ED_BAR_W + 12, BX = 300;
+    s_env_bw = W - 4 - BX - 130;
+    s_env_row = lv_obj_create(s_editor_body);
+    lv_obj_remove_style_all(s_env_row);
+    lv_obj_set_size(s_env_row, W, ED_BAR_H);
+    lv_obj_set_pos(s_env_row, MARGIN, row * ED_BAR_PITCH);
+    lv_obj_set_scrollable(s_env_row, false);
+    lv_obj_set_style_radius(s_env_row, RADIUS, 0);
+    lv_obj_set_style_border_width(s_env_row, 2, 0);
+    lv_obj_set_style_border_color(s_env_row, lv_color_hex(blend(s_editor_color, TILE_OFF_BG, ED_DIM)), 0);
+    lv_obj_set_style_bg_color(s_env_row, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(s_env_row, LV_OPA_COVER, 0);
+    lv_obj_t *c = label(s_env_row, &ui_font_12, CAPTION);
+    lv_obj_set_style_text_letter_space(c, 1, 0);
+    lv_label_set_text(c, "YOUR PLAYING \xC2\xB7 WAH POSITION");
+    lv_obj_set_pos(c, 16, 10);
+    s_env_note = label(s_env_row, &ui_font_12, DIMMED);
+    lv_obj_set_pos(s_env_note, 16, 34);
+    lv_obj_t *track = lv_obj_create(s_env_row);
+    lv_obj_remove_style_all(track);
+    lv_obj_set_size(track, s_env_bw, 14);
+    lv_obj_set_pos(track, BX, (ED_BAR_H - 4 - 14) / 2);
+    lv_obj_set_style_radius(track, 7, 0);
+    lv_obj_set_style_clip_corner(track, true, 0);
+    lv_obj_set_style_bg_color(track, lv_color_hex(0x1B1E21), 0);
+    lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
+    s_env_range = lv_obj_create(track);
+    lv_obj_remove_style_all(s_env_range);
+    lv_obj_set_size(s_env_range, 0, 14);
+    lv_obj_set_style_bg_color(s_env_range, lv_color_hex(0x2C3035), 0);
+    lv_obj_set_style_bg_opa(s_env_range, LV_OPA_COVER, 0);
+    s_env_fill = lv_obj_create(track);
+    lv_obj_remove_style_all(s_env_fill);
+    lv_obj_set_size(s_env_fill, 0, 14);
+    lv_obj_set_style_bg_color(s_env_fill, lv_color_hex(s_editor_color), 0);
+    lv_obj_set_style_bg_opa(s_env_fill, LV_OPA_COVER, 0);
+    s_env_mark = lv_obj_create(track);
+    lv_obj_remove_style_all(s_env_mark);
+    lv_obj_set_size(s_env_mark, 2, 14);
+    lv_obj_set_style_bg_color(s_env_mark, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(s_env_mark, LV_OPA_COVER, 0);
+    s_env_value = label(s_env_row, &ui_font_title_22, TEXT);
+    lv_obj_set_width(s_env_value, 104);
+    lv_obj_set_style_text_align(s_env_value, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_align(s_env_value, LV_ALIGN_RIGHT_MID, -18, 0);
+}
+
+static void show_env_row(void)
+{
+    if (!s_env_row) return;
+    const ui_autowah_t *w = &s_wah;
+    int heel = w->heel * s_env_bw / 100, toe = w->toe * s_env_bw / 100;
+    if (toe < heel) { int t = toe; toe = heel; heel = t; }
+    set_num_prop(s_env_range, LV_STYLE_X, heel);
+    set_num_prop(s_env_range, LV_STYLE_WIDTH, toe - heel);
+    float lv = w->live ? w->level : 0, pos = w->position < 0 ? 0 : w->position > 1 ? 1 : w->position;
+    set_num_prop(s_env_fill, LV_STYLE_WIDTH, (int)(s_env_bw * (lv < 0 ? 0 : lv > 1 ? 1 : lv)));
+    set_hidden(s_env_mark, !w->live);
+    set_num_prop(s_env_mark, LV_STYLE_X, (int)(s_env_bw * pos) - 1);
+    char text[16];
+    if (w->live) snprintf(text, sizeof(text), "%.2f", (double)pos);
+    else snprintf(text, sizeof(text), "\xE2\x80\x93");
+    set_text(s_env_value, text);
+    set_text(s_env_note, w->live ? "FROM THE DRY INPUT (DI)" : w->mode ? "SWITCH THE WAH ON TO SEE IT MOVE" : "AUTO-WAH IS OFF");
+}
+
 static void build_param_rows(void)
 {
     stop_drag();
@@ -8566,7 +9925,7 @@ static void build_param_rows(void)
         if (p->kind == NANO_PARAM_RANGE && p->unit && p->unit[0])
             lv_text_get_size(&size, p->unit, &ui_font_14, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
         s_param_unit_w[i] = (int16_t)size.x;
-        set_param_norm(i, i < own ? -1 : wah_row_norm(i - own));
+        set_param_norm(i, i < own ? -1 : wah_row_norm(wah_row_id(i - own)));
     }
     if (!m) return;
     int pos = 0;
@@ -8585,6 +9944,13 @@ static void build_param_rows(void)
         s_param_bar[idx] = bar;
         pos++;
     }
+    s_gr_row = NULL;
+    if (m->icon == NANO_ICON_COMPRESSOR) {   // a compressor: its gain reduction below (drafts/entwurf-p4-15-gain-reduction-b.png)
+        build_gr_row((pos + 1) / 2);
+        memset(&s_grv, 0, sizeof(s_grv));
+    }
+    s_env_row = NULL;
+    if (m->icon == NANO_ICON_WAH && s_wah.follows) build_env_row((pos + 1) / 2);   // (following the playing: live)
 }
 
 // ---- Building the editor ----
@@ -9791,15 +11157,24 @@ void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, i
 void ui_set_autowah(const ui_autowah_t *wah)
 {
     lvgl_port_lock(0);
+    bool rows_change = wah->follows != s_wah.follows;
     s_wah = *wah;
     int own = ed_model_params();
-    if (!lv_obj_is_hidden(s_editor) && ed_param_count() > own) {
-        for (int row = 0; row < UI_WAH_ROWS; row++) {
+    if (!lv_obj_is_hidden(s_editor) && s_editor_model_def && s_editor_model_def->icon == NANO_ICON_WAH) {
+        if (rows_change && !s_dragging) {   // tempo <-> playing: other rows (the wah's own value kept)
+            float keep[NANO_MAX_PARAMS];
+            memcpy(keep, s_param_norm, sizeof(keep));
+            build_param_rows();
+            for (int i = 0; i < own; i++) set_param_norm(i, keep[i]);
+        }
+        int rows = ed_param_count() - own;
+        for (int row = 0; row < rows; row++) {
             int idx = own + row;
             if (s_dragging && idx == s_drag_param) continue;   // the finger has it
-            float n = wah_row_norm(row);
+            float n = wah_row_norm(wah_row_id(row));
             if (n != s_param_norm[idx]) set_param_norm(idx, n);   // only what changed is drawn again
         }
+        show_env_row();
     }
     lvgl_port_unlock();
 }

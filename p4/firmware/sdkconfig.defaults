@@ -1,7 +1,7 @@
 # P4 board: Waveshare ESP32-P4-WIFI6-Touch-LCD-7B
 CONFIG_IDF_TARGET="esp32p4"
-# Flash: 16 MB at least (check the size on the board: esptool flash-id)
-CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+# Flash: 32 MB (the 7B's; the partitions below 16 MB are as before, the drum kit's samples lie above - partitions.csv)
+CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
 
 # Serial monitor on the USB-C port of the P4 (USB Serial/JTAG)
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
@@ -79,3 +79,9 @@ CONFIG_BT_NIMBLE_SVC_GAP_DEVICE_NAME="Nano Cortex Controller"
 #   PSRAM, not on the CPU;
 # - the PPA for plain fills (CONFIG_LV_USE_PPA, needs CONFIG_LV_DRAW_BUF_ALIGN=64): 20-25 % faster, but twice the
 #   unsent audio packets (43 against 19 in the same two minutes) - left off, the sound comes first.
+
+# Jam tracks over Wi-Fi (2026-11-27): the default TCP window (4 x MSS, 5.7 KB) held a transfer to ~200 KB/s - the Mac
+# waited for an answer after every few packets. 32 KB lets it keep sending (received frames lie in esp_hosted's PSRAM
+# pool, so internal RAM is not what fills).
+CONFIG_LWIP_TCP_WND_DEFAULT=32768
+CONFIG_LWIP_TCP_RECVMBOX_SIZE=32

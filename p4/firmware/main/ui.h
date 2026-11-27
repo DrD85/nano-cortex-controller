@@ -53,7 +53,8 @@
 //   'X', 1 / 0     Bluetooth MIDI dialog opened / closed (search for devices while open)
 //   'P', n         connect MIDI device n of the list (-1 = disconnect and forget)
 //   'D', n         footswitch learn: 1-8 = the next pressed footswitch becomes switch n, 0 = cancel,
-//                  -1 = default order (answer with ui_learn_done)
+//                  -1 = default order (answer with ui_learn_done); n | UI_LEARN_ALL = and then the switches after
+//                  it, one after the other up to the last (ui_learn_next before each, ui_learn_done at the end)
 //   '$', -1        the Scenes button: scenes on the tiles, or the bank's presets again if scenes are showing
 //                  (1 / 0 = scenes / presets)
 //   '&', n         FX editor, scene button: the settings of the edited effect as they are now belong to scene n (0-5)
@@ -130,7 +131,9 @@ typedef struct {
     uint8_t bank_presets[6];   // own bank: preset per switch 3-8, 0 = empty
     uint8_t bank_colors[6];    // colour index (UI_BANK_COLOR_COUNT)
     uint8_t bank_icons[6];     // symbol: 0 = none, n = PRESET_ICONS[n - 1]
+    uint8_t bank_presets2[6];  // P4: the second preset per switch 3-8, loaded when it was held (0 = none)
     bool looper;         // looper mode: the tiles are the switches of a looper app on a phone
+    bool player;         // P4: player mode - the tiles are the player's switches (jam tracks / phone)
     bool phone;          // that phone is connected (Bluetooth MIDI)
     int looper_sent;     // looper mode: controller number of the last press, < 0 if it could not be sent, 0 = none yet
     char looper_names[UI_LOOPER_SWITCHES][UI_LOOPER_NAME];   // looper mode: tiles of footswitches 2-8
@@ -220,7 +223,9 @@ void ui_set_usb_gain(float db);
 // the FX editor of a wah below the wah's own parameter: the mode (off, moving while the effect is on, or the
 // footswitch switches the wah on only while it is held), the rate as a note value, the shape, the heel and toe ends
 // (0-100 %) and the tempo - the Nano's (nano_bpm, 0 = not known) or an own one.
-enum { UI_WAH_MODE, UI_WAH_RATE, UI_WAH_SHAPE, UI_WAH_HEEL, UI_WAH_TOE, UI_WAH_TEMPO, UI_WAH_BPM, UI_WAH_ROWS };
+// (2026-11-27: or it follows the playing - the dry input's level opens it, with a sensitivity, an attack and a release)
+enum { UI_WAH_MODE, UI_WAH_RATE, UI_WAH_SHAPE, UI_WAH_HEEL, UI_WAH_TOE, UI_WAH_TEMPO, UI_WAH_BPM,
+       UI_WAH_FOLLOWS, UI_WAH_SENS, UI_WAH_ATTACK, UI_WAH_RELEASE, UI_WAH_ROWS };
 enum { UI_WAH_OFF, UI_WAH_ON, UI_WAH_HELD };
 #define UI_WAH_RATES 6         // 2 bars, 1 bar, 1/2, 1/4, 1/8, 1/16
 #define UI_WAH_SHAPES 3        // triangle, sine, up
@@ -231,7 +236,14 @@ typedef struct {
     bool own_tempo;
     uint16_t bpm;        // the own tempo
     float nano_bpm;
+    uint8_t follows;     // 0 = the tempo, 1 = the playing
+    uint8_t sens;        // 0-100 %: how lightly played the wah reaches the toe
+    uint16_t attack_ms, release_ms;
+    bool live;           // it moves now (the editor's live row)
+    float level;         // the playing now, 0-1 between quiet and loud (follows the playing)
+    float position;      // where the wah is now, 0-1
 } ui_autowah_t;
+#define UI_WAH_FOLLOWS_RATE UI_WAH_RATES   // (ui_view_t.wah_rate: a wah that follows the playing)
 void ui_set_autowah(const ui_autowah_t *wah);
 
 // FX presets of the model in the FX editor (a row above its parameters): names of the places ("" = empty), the one
@@ -266,6 +278,9 @@ void ui_set_app(bool connected);
 
 // Footswitch learn finished (or not possible): closes the learn window and shows the message.
 void ui_learn_done(const char *message);
+// Learning all switches ('D' with UI_LEARN_ALL): the one before is learned (message), switch `number` is waited for now.
+#define UI_LEARN_ALL 0x100
+void ui_learn_next(int number, const char *message);
 
 // Bluetooth MIDI: connection and the devices found while the MIDI dialog is open.
 typedef struct {
@@ -283,6 +298,10 @@ void ui_set_midi(const ui_midi_t *midi);
 // Start screen (from ui_init until ui_splash_done or a tap): status line and version; NULL keeps the old text.
 void ui_splash_status(const char *status, const char *version);
 void ui_splash_done(void);
+// P4 (2026-11-27): a step of the start reached - its symbol on the start screen lights up. With the presets and the
+// sound both there it closes by itself (at most 12 s after the presets).
+enum { UI_SPLASH_SCREEN, UI_SPLASH_SWITCHES, UI_SPLASH_NANO, UI_SPLASH_PRESETS, UI_SPLASH_DRUMS, UI_SPLASH_SOUND, UI_SPLASH_READY };
+void ui_splash_step(int step);
 
 // Short message at the top of the screen.
 void ui_show_message(const char *text);
@@ -347,6 +366,10 @@ typedef enum {
     UI_DRUM_GROOVE, UI_DRUM_LEVEL, UI_DRUM_LEVEL_KEEP, UI_DRUM_SYNC, UI_DRUM_COUNT,   // groove index; level dB x 10; 0 / 1
     UI_LOOP_QUANTIZE, UI_LOOP_ARM,   // 0 / 1: takes on the drums' bar lines; Rec arms (the first note starts the take)
     UI_BRIGHTNESS, UI_BRIGHTNESS_KEEP,   // the screen's brightness in percent: while the bar moves / let go (kept)
+    UI_DRUM_KIT,                         // DRUM_KIT_* (computed / acoustic)
+    UI_PART_GROOVE,                      // part << 8 | (groove + 1): a looper part's own groove (0 = none); part 2 = both none
+    UI_LEVEL_SET,                        // the Level sheet's choice: kind | profile << 4 | (Clean base x 10 + 1000) << 8 (kept)
+    UI_LEVEL_MEASURE,                    // 1: measure the next 4 s of played sound, 0: stop
 } ui_phone_action_t;
 // value: UI_PHONE_VOLUME / UI_JAM_VOLUME / UI_JAM_LEVEL dB x 10 (the level: correction of the current jam track),
 // UI_PHONE_MUTE_TUNER / UI_LOOP_BARS / UI_NET_ON 0 / 1, UI_JAM_PLAY the track (0-based). Called from the LVGL task.
@@ -358,6 +381,10 @@ void ui_set_phone(const ui_phone_t *p);
 // The player (jam tracks or the phone, whichever the top bar's field shows) on the screen, or away again -
 // footswitch 1 held.
 void ui_player_toggle(void);
+// P4, player mode: what a footswitch does to the player (jam tracks or phone, the one chosen): UI_PLAYER_*.
+enum { UI_PLAYER_BACK, UI_PLAYER_PLAY, UI_PLAYER_PAUSE, UI_PLAYER_NEXT, UI_PLAYER_TOGGLE, UI_PLAYER_SOURCE };
+void ui_player_action(int action);
+void ui_player_hide(void);   // the player's page away (out of player mode)
 // The drum menu (looper mode: footswitch 1 held, or the drums' tile held) on the screen, or away again.
 void ui_drum_menu_toggle(void);
 // The Nano's output (USB capture 3/4): loudness and a level 0..1 for the bar; known = false shows a dash.
@@ -385,6 +412,20 @@ typedef struct {
     bool quantize, arm, armed;  // armed: the part waits for the first note
     int groove;                 // index into DRUM_GROOVES
     float drum_level_db;
+    int drum_kit;               // DRUM_KIT_*
+    bool acoustic_kit;          // the acoustic kit's samples are there
+    int part_groove[2];         // the parts' own grooves (-1 = the common one)
+    // the Level sheet (the Nano's sound on USB 3/4, BS.1770): -100 = nothing played
+    float lv_short, lv_mom, lv_peak_db;   // the last 3 s, the last 0.4 s, the highest sample peak of the last 3 s
+    int lv_kind, lv_profile, lv_base_x10; // what the preset is (UI_LEVEL_SET), the listening profile, Clean's level
+    int lv_measuring;                     // 100 ms blocks taken so far while measuring (of 40), -1 = not measuring
+    unsigned lv_result_seq;               // goes up with every finished measurement
+    bool lv_result_ok;                    // ... it found played sound
+    float lv_result_lufs, lv_result_peak_db;
+    // P4: the levels a compressor sees, for its gain reduction in the FX editor (the Nano does not report it; ui.c
+    // works it out from the compressor's knobs): since the last look, [0] the dry input (USB 1/2), [1] the sound (3/4)
+    bool gr_levels;                       // levels came (the Nano's audio runs)
+    float gr_rms_db[2], gr_peak_in_db[2]; // dBFS, -100 = silence
 } ui_loop_t;
 typedef struct {
     bool card;                  // the microSD card is there
@@ -396,6 +437,7 @@ typedef struct {
     float level_db;             // correction by ear of the current track
     int measuring;              // tracks still to be measured
     float target_lufs;          // where the measured tracks play
+    uint32_t cover_seq;         // P4: goes up whenever the current track's cover changed (ui_set_cover_source)
 } ui_jam_t;
 // Wi-Fi for tracks from the Mac (its switch and status in the jam player; the network's name and password come
 // from the keyboard as text 'W' and 'K').
@@ -414,3 +456,7 @@ typedef void (*ui_loop_source_cb)(ui_loop_t *loop, ui_jam_t *jam, ui_net_t *net)
 typedef const char *(*ui_jam_name_cb)(int i);
 typedef void (*ui_jam_note_cb)(int i, char *out, size_t n);   // the track list's note: "-17.3 LUFS · +1.5"
 void ui_set_loop_source(ui_loop_source_cb source, ui_jam_name_cb names, ui_jam_note_cb notes);
+// P4: the cover of the jam track that plays - get copies it (UI_COVER_PX square, RGB565) into dst, false: none.
+#define UI_COVER_PX 128
+typedef bool (*ui_cover_cb)(uint16_t *dst, uint32_t *seq);
+void ui_set_cover_source(ui_cover_cb get);

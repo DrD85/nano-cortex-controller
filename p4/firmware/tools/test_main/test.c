@@ -180,10 +180,19 @@ void ui_set_pedal(int value, int min, int max) { (void)value; (void)min; (void)m
 void ui_set_jack(int mode) { (void)mode; }
 void ui_set_layout(int count, const uint8_t order[8], int switch1) { (void)count; (void)order; (void)switch1; }
 void ui_set_app(bool connected) { (void)connected; }
-void ui_learn_done(const char *message) { (void)message; }
+// (P4: the learn's answers are kept - learning all switches one after the other is checked below)
+static int t_learn_next = -1;
+static char t_learn_done[128];
+void ui_learn_done(const char *message) { strlcpy(t_learn_done, message, sizeof(t_learn_done)); t_learn_next = 0; }
+void ui_learn_next(int number, const char *message) { (void)message; t_learn_next = number; }
+// (P4: the player on the screen and what the footswitches asked of it - checked below)
+static int t_player_action = -1, t_player_toggles, t_player_hides;
+void ui_player_action(int action) { t_player_action = action; }
+void ui_player_hide(void) { t_player_hides++; }
 void ui_set_midi(const ui_midi_t *midi) { (void)midi; }
 void ui_splash_status(const char *status, const char *version) { (void)status; (void)version; }
 void ui_splash_done(void) { }
+void ui_splash_step(int step) { (void)step; }
 void ui_show_message(const char *text) { strlcpy(t_message, text, sizeof(t_message)); }
 void ui_capture_show(const ui_capture_t *c) { (void)c; }
 void ui_capture_meter(int which, int value) { (void)which; (void)value; }
@@ -196,7 +205,8 @@ lv_display_t *board_display_init(void) { return NULL; }
 i2c_master_bus_handle_t board_i2c_bus(void) { return NULL; }
 void pedal_assets_init(void) { }
 bool footswitches_start(i2c_master_bus_handle_t bus, footswitch_cb on_press, footswitch_learn_cb on_learn) { (void)bus; (void)on_press; (void)on_learn; return true; }
-void footswitches_learn(int number) { (void)number; }
+static int t_fsw_learn = -1;   // (P4: what the footswitch task was last asked to learn)
+void footswitches_learn(int number) { t_fsw_learn = number; }
 void footswitches_reset(void) { }
 void midi_switches_start(footswitch_cb on_event, footswitch_learn_cb on_learn) { (void)on_event; (void)on_learn; }
 bool midi_switches_take(uint8_t status, uint8_t data1, uint8_t data2) { (void)status; (void)data1; (void)data2; return false; }
@@ -226,10 +236,11 @@ void app_link_send(uint32_t type, const uint8_t *payload, size_t len) { (void)ty
 // (none of it takes part in what is checked here)
 const char *nano_link_way(void) { return "USB"; }
 void ui_set_link_way(bool usb) { (void)usb; }
-void ui_player_toggle(void) { }
+void ui_player_toggle(void) { t_player_toggles++; }
 void ui_drum_menu_toggle(void) { }
 void p4_audio_start(void) { }
 void p4_audio_show(void) { }
+float p4_audio_di_peak(void) { return 0; }
 bool p4_looper_ready(void) { return false; }
 void p4_looper_command(looper_cmd_t cmd) { (void)cmd; }
 void p4_looper_info(looper_info_t *out) { memset(out, 0, sizeof(*out)); }
@@ -851,6 +862,114 @@ int main(int argc, char **argv)
     t_on_link(false);
     advance(3000);
     check(s_newp.phase == NEWP_IDLE, "the link lost: the run is over");
+
+    // ---- (P4) the settings' footswitch learn goes through all switches, one after the other ----
+    command('D', 1 | UI_LEARN_ALL);
+    advance(50);
+    check(s_learning == 1 && t_fsw_learn == 1, "learn all: waits for switch 1 (%d, footswitch task %d)", s_learning, t_fsw_learn);
+    for (int n = 1; n < FOOTSWITCH_COUNT; n++) {
+        command('Z', n << 8 | (n == 1 ? 2 : 0));   // (switch 1 was on switch 2's pin: swapped)
+        advance(50);
+        if (s_learning != n + 1 || t_fsw_learn != n + 1 || t_learn_next != n + 1) break;
+    }
+    check(s_learning == FOOTSWITCH_COUNT && t_fsw_learn == FOOTSWITCH_COUNT && t_learn_next == FOOTSWITCH_COUNT,
+          "learn all: after each press the next switch is waited for, up to the last (%d, %d, %d)", s_learning, t_fsw_learn, t_learn_next);
+    command('Z', FOOTSWITCH_COUNT << 8);
+    advance(50);
+    check(!s_learning && t_learn_next == 0 && strstr(t_learn_done, "learned"), "learn all: the last press ends it (\"%s\")", t_learn_done);
+    command('D', 3 | UI_LEARN_ALL);
+    advance(50);
+    command('Z', 0);   // nothing pressed in 15 s
+    advance(50);
+    check(!s_learning && !s_learn_all && t_learn_next == 0, "learn all: nothing pressed ends it (\"%s\")", t_learn_done);
+    command('D', 4);   // one switch only (the bank editor's Learn switch): as before
+    advance(50);
+    command('Z', 4 << 8);
+    advance(50);
+    check(!s_learning && t_learn_next == 0 && t_fsw_learn == 4, "one switch learned: no next one (footswitch task %d)", t_fsw_learn);
+
+    // ---- (P4) player mode: footswitch 1 held - the switches are the player's, each on its press; 8 back out ----
+    int preset_before = s_state.current_preset, toggles = t_player_toggles, hides = t_player_hides;
+    command('w', UI_SWITCH_HOLD | 1);
+    advance(50);
+    check(s_player && s_player_live && s_hold_switches == 0, "player mode: on, and no switch waits for a hold (%u)", (unsigned)s_hold_switches);
+    static const int WANT[3] = { UI_PLAYER_BACK, UI_PLAYER_TOGGLE, UI_PLAYER_NEXT };
+    bool row_ok = true;
+    for (int k = 0; k < 3; k++) {
+        t_player_action = -1;
+        command('w', 5 + k);
+        advance(50);
+        if (t_player_action != WANT[k]) row_ok = false;
+    }
+    check(row_ok && s_state.current_preset == preset_before, "player mode: 5-7 are back, play / pause, next - no preset changed");
+    t_player_action = -1;
+    command('w', 1);
+    advance(50);
+    check(t_player_action == UI_PLAYER_SOURCE && s_player && s_state.current_preset == preset_before, "player mode: 1 switches jam tracks / phone");
+    command('w', 3);
+    advance(50);
+    check(t_player_toggles == toggles + 1, "player mode: 3 opens the player's page");
+    check(layout_switch(6) == 6, "player mode: the switches in fixed places, whatever the layout");
+    command('w', 8);
+    advance(50);
+    check(!s_player && !s_player_live && t_player_hides == hides + 1 && s_state.current_preset == preset_before,
+          "player mode: 8 goes back out (no preset, the page away)");
+    t_player_action = -1;
+    command('w', 6);
+    advance(50);
+    check(t_player_action == -1, "out of player mode: footswitch 6 is not the player's");
+    advance(3000);
+    // ---- (P4) looper mode: 8 back out too; 5 is undo (held: clear) ----
+    command('w', UI_SWITCH_HOLD | 1);
+    advance(50);
+    command('w', 4);   // player mode -> the looper
+    advance(50);
+    check(s_looper && !s_player && (s_hold_switches & (1u << 5)) && !(s_hold_switches & (1u << 8)),
+          "player mode, switch 4: into looper mode (5 waits for a hold, 8 does not: %X)", (unsigned)s_hold_switches);
+    command('w', 8);
+    advance(50);
+    check(!s_looper && !s_player && s_state.current_preset == preset_before, "looper mode: 8 goes back out");
+    advance(3000);
+
+    // ---- (P4, 2026-11-27) switch 2: a press = looper mode, held = the tuner ----
+    t_link = true;   // (the link came back after the run above)
+    t_on_link(true);
+    advance(8000);
+    command('w', 2);
+    advance(50);
+    check(s_looper && !s_tuner_on, "switch 2 pressed: looper mode");
+    command('w', 8);
+    advance(50);
+    command('w', UI_SWITCH_HOLD | 2);
+    advance(50);
+    check(!s_looper && s_tuner_on, "switch 2 held: the tuner");
+    command('w', 2);
+    advance(50);
+    check(!s_looper && !s_tuner_on, "switch 2 pressed while the tuner shows: the tuner closes (no looper)");
+    advance(2000);
+    // ---- (P4) a second preset on a switch: held and let go = that preset; a short press = the first ----
+    s_fx_mode = false, s_scene_mode = false;
+    int slot = 5, first = s_banks[s_bank][slot].preset ? s_banks[s_bank][slot].preset : 6, second = first == 12 ? 13 : 12;
+    command('B', second << 23 | s_bank << 14 | slot << 11 | 0 << 7 | first);
+    advance(200);
+    check(s_bank2[s_bank][slot] == second && ((s_release_hold_switches >> (slot + 3)) & 1) && ((s_hold_switches >> (slot + 3)) & 1),
+          "second preset %d on switch %d: the switch waits, its held function comes on the release", second, slot + 3);
+    on_footswitch(slot + 3, FOOTSWITCH_PRESS);
+    advance(10);
+    on_footswitch(slot + 3, FOOTSWITCH_HOLD);
+    advance(300);
+    check(s_state.current_preset != second, "held: nothing yet while the switch is down (preset %d)", s_state.current_preset);
+    on_footswitch(slot + 3, FOOTSWITCH_RELEASE);
+    advance(3000);
+    check(s_state.current_preset == second, "held and let go: the second preset (%d, wanted %d)", s_state.current_preset, second);
+    on_footswitch(slot + 3, FOOTSWITCH_PRESS);
+    advance(10);
+    on_footswitch(slot + 3, FOOTSWITCH_RELEASE);
+    advance(3000);
+    check(s_state.current_preset == first, "a short press: the first preset (%d, wanted %d)", s_state.current_preset, first);
+    command('B', s_bank << 14 | slot << 11 | 0 << 7 | first);   // (no second preset again)
+    advance(200);
+    check(!s_bank2[s_bank][slot] && !((s_release_hold_switches >> (slot + 3)) & 1), "second preset removed: the switch acts on its press again");
 
     printf("%d checks, %d failed\n", t_checks, t_failed);
     printf(t_failed ? "main: FAILED\n" : "main: all checks passed\n");

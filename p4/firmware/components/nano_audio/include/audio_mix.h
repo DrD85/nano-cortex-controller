@@ -22,9 +22,14 @@
 
 typedef enum { AUDIO_SRC_PHONE, AUDIO_SRC_TRACK, AUDIO_SRC_LOOPER, AUDIO_SRC_DRUMS, AUDIO_SRC_COUNT } audio_src_t;
 
-#define MIX_CAP_RING 1024       // capture frames waiting for the render (power of two)
-#define MIX_CUSHION 192         // capture frames kept in hand (4 ms), so the render never waits for them
-#define MIX_SLACK 384           // more than cushion + this waiting (a start, a restart): back to the cushion
+#define MIX_CAP_RING 2048       // capture frames waiting for the render (power of two; 1024 until the render got a
+                                //     task of its own, 2026-11-26: while that task is held up the capture goes on)
+#define MIX_CUSHION 384         // capture frames kept in hand (8 ms), so the render never waits for them (192 / 4 ms ran dry
+                                //     while the screen redrew: capture gaps of up to 6.6 ms measured 2026-11-21)
+#define MIX_SLACK 1440          // more than cushion + this waiting (a start, a restart): back to the cushion
+                                //     (384 cut short piles after a redraw held the render back - 431 frames dropped
+                                //     each time; cushion + slack stays below the ring. 600 until 2026-11-26: a render
+                                //     held up for up to 30 ms now takes the whole pile when it goes on)
 #define MIX_SETTLE 24000        // render frames after the cushion is there (0.5 s): its lowest fill is measured ...
 #define MIX_SETTLE_END 48000    // ... until here, then again every second; brought back to MIX_CUSHION when off
                                 //     (the fill swings by a transfer of 48 above it)

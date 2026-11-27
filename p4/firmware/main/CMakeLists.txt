@@ -2,7 +2,7 @@
 # Nano over USB (nano_link_usb.c), the 7B's display (board_p4.c), the USB audio (p4_audio.c + components/nano_audio).
 # The Nano: USB while its cable is in, Bluetooth otherwise (nano_link.c chooses, nano_link_usb.c / nano_link_ble.c).
 # Bluetooth (the Nano without cable, MIDI controller, app bridge, phone MIDI) through the ESP32-C6 (esp_hosted).
-set(srcs "main.c" "nano_link.c" "nano_link_usb.c" "nano_link_ble.c" "midi_ble.c" "app_link.c" "phone_midi.c" "nano_state.c" "board_p4.c" "p4_audio.c" "p4_jam.c" "p4_net.c" "p4_ota.c" "ui.c" "ui_fonts.c"
+set(srcs "main.c" "nano_link.c" "nano_link_usb.c" "nano_link_ble.c" "midi_ble.c" "app_link.c" "phone_midi.c" "nano_state.c" "board_p4.c" "p4_audio.c" "p4_jam.c" "p4_cover.c" "tjpgd/tjpgd.c" "p4_net.c" "p4_ota.c" "ui.c" "ui_fonts.c"
          "footswitches.c" "midi_switches.c" "fx_models.c" "fx_focus.c" "fx_info.c" "preset_icons.c" "library.c" "ui_mem.c" "pedal_assets.c")
 
 # Own builds may use private artwork from main/private (ignored by git). A published build: -DNANO_PUBLIC=1.
@@ -19,7 +19,7 @@ idf_component_register(SRCS ${srcs}
                        INCLUDE_DIRS "."
                        REQUIRES bt nvs_flash esp_app_format esp_driver_uart esp_driver_usb_serial_jtag esp_driver_gpio esp_driver_ledc
                                 esp_driver_i2c esp_driver_i2s esp_lcd esp_timer esp_partition spi_flash esp_hw_support nano_audio
-                                fatfs sdmmc esp_driver_sdmmc esp_http_server esp_netif esp_event esp_wifi app_update
+                                fatfs sdmmc esp_driver_sdmmc esp_http_server esp_netif esp_event esp_wifi app_update esp_mm
                        EMBED_TXTFILES "web/upload.html")
 target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_P4=1)
 
@@ -57,3 +57,8 @@ endif()
 if(NANO_BENCH)
     target_compile_definitions(${COMPONENT_LIB} PRIVATE NANO_BENCH=1)
 endif()
+
+# Measuring (p4_audio.c "trace"): every write to / erase of the flash memory is timed.
+target_link_options(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=esp_flash_write" "-Wl,--wrap=esp_flash_erase_region")
+# The screen driver's large cache write-backs in small pieces (p4_audio.c: __wrap_esp_cache_msync).
+target_link_options(${COMPONENT_LIB} INTERFACE "-Wl,--wrap=esp_cache_msync" "-Wl,--wrap=nvs_set_blob")

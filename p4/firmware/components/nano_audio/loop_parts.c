@@ -15,6 +15,8 @@ void loop_parts_init(loop_parts_t *p, int16_t *mem, uint32_t frames, uint32_t ra
     looper_init(&p->part[1], mem + 4 * (size_t)frames, frames, rate);
     p->next = -1;
     atomic_init(&p->want_part, -1);
+    atomic_init(&p->part_groove[0], -1);
+    atomic_init(&p->part_groove[1], -1);
     atomic_init(&p->want_pause, -1);
     atomic_init(&p->want_drums, -1);
     atomic_init(&p->drum_sync, 1);
@@ -48,6 +50,7 @@ void loop_parts_command(loop_parts_t *p, looper_cmd_t cmd)
 }
 
 void loop_parts_choose(loop_parts_t *p, int part) { if (part == 0 || part == 1) atomic_store(&p->want_part, part); }
+void loop_parts_set_part_groove(loop_parts_t *p, int part, int groove) { if (part == 0 || part == 1) atomic_store(&p->part_groove[part], groove); }
 void loop_parts_pause(loop_parts_t *p) { atomic_store(&p->want_pause, atomic_load(&p->i_paused) ? 0 : 1); }
 void loop_parts_drums(loop_parts_t *p, bool on) { atomic_store(&p->want_drums, on ? 1 : 0); }
 void loop_parts_set_drum_sync(loop_parts_t *p, bool on) { atomic_store(&p->drum_sync, on ? 1 : 0); }
@@ -151,6 +154,8 @@ static void switch_part(loop_parts_t *p, uint32_t at)
     } else {
         looper_enter(nu);
     }
+    int groove = atomic_load(&p->part_groove[p->active]);   // the part's own groove: taken at the restart below (or the next start)
+    if (groove >= 0 && p->drums) drum_machine_set_groove(p->drums, groove);
     if (p->drums && p->drums->running) drums_to_loop(p, at, 0);   // (a part begins on a bar line)
 }
 

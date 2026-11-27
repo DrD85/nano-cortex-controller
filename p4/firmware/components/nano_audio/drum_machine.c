@@ -213,6 +213,7 @@ bool drum_machine_init(drum_machine_t *d, uint32_t rate, void *(*alloc)(size_t))
     d->rate = rate;
     atomic_init(&d->want_groove, -1);
     atomic_init(&d->want_run, 2);
+    atomic_init(&d->want_kit, -1);
     atomic_init(&d->bpm_x100, 12000);
     atomic_init(&d->level_bits, fbits(0.35f));   // -9 dB: under the guitar (the kit peaks near 2 at 0 dB)
     uint32_t most = sound_length(DRUM_RIDE, rate);
@@ -240,6 +241,39 @@ bool drum_machine_init(drum_machine_t *d, uint32_t rate, void *(*alloc)(size_t))
     }
     free(work);
     return true;
+}
+
+bool drum_machine_load_kit(drum_machine_t *d, const uint8_t *file, size_t size)
+{
+    if (size < 16 || memcmp(file, "NDK1", 4)) return false;
+    uint32_t head[4];
+    memcpy(head, file, 16);
+    uint32_t count = head[2], data = head[3];
+    if (head[1] != d->rate || count > DRUM_PADS * DRUM_LAYERS * DRUM_TAKES || data != 16 + 16 * count || data > size) return false;
+    memset(d->take, 0, sizeof(d->take));
+    memset(d->takes, 0, sizeof(d->takes));
+    for (uint32_t i = 0; i < count; i++) {
+        const uint8_t *e = file + 16 + 16 * i;
+        uint32_t off, frames;
+        float gain;
+        memcpy(&off, e + 4, 4);
+        memcpy(&frames, e + 8, 4);
+        memcpy(&gain, e + 12, 4);
+        int pad = e[0], layer = e[1], take = e[2], ch = e[3];
+        if (pad >= DRUM_PADS || layer >= DRUM_LAYERS || take >= DRUM_TAKES || (ch != 1 && ch != 2)) return false;
+        if ((uint64_t)data + off + (uint64_t)frames * ch * 2 > size) return false;
+        d->take[pad][layer][take] = (drum_take_t){ (const int16_t *)(file + data + off), frames, (uint8_t)ch };
+        if (take + 1 > d->takes[pad][layer]) d->takes[pad][layer] = (uint8_t)(take + 1);
+        d->kit_gain[pad] = gain;
+    }
+    d->has_samples = true;
+    return true;
+}
+void drum_machine_set_kit(drum_machine_t *d, int kit) { if (kit >= 0 && kit < DRUM_KITS) atomic_store(&d->want_kit, kit); }
+int drum_machine_kit(drum_machine_t *d)
+{
+    int want = atomic_load(&d->want_kit);
+    return want >= 0 ? want : d->kit;
 }
 
 void drum_machine_start(drum_machine_t *d) { atomic_store(&d->want_run, 1); }
@@ -273,6 +307,26 @@ static void trigger(drum_machine_t *d, int pad, float gain)
     d->voice[slot].pad = pad;
     d->voice[slot].pos = 0;
     d->voice[slot].wait = 0;
+    if (d->kit == DRUM_KIT_ACOUSTIC && d->has_samples) {
+        // the layer the velocity asks for (the recording carries the loudness); without it the next one, softer
+        int layer = gain >= 0.9f ? 2 : gain >= 0.55f ? 1 : 0;
+        float extra = 1;
+        while (layer < DRUM_LAYERS - 1 && !d->takes[pad][layer]) layer++, extra *= 0.5f;
+        while (layer > 0 && !d->takes[pad][layer]) layer--;
+        int n = d->takes[pad][layer];
+        if (n) {
+            const drum_take_t *t = &d->take[pad][layer][d->next_take[pad] % n];
+            d->next_take[pad]++;
+            d->voice[slot].data = t->data;
+            d->voice[slot].len = t->frames;
+            d->voice[slot].channels = t->channels;
+            d->voice[slot].gain = extra * d->kit_gain[pad];
+            return;
+        }
+    }
+    d->voice[slot].data = d->sound[pad];
+    d->voice[slot].len = d->length[pad];
+    d->voice[slot].channels = 2;
     d->voice[slot].gain = gain * d->gain[pad];
 }
 
@@ -307,6 +361,8 @@ void drum_machine_render(drum_machine_t *d, float *out, uint32_t frames)
     double bpm = atomic_load(&d->bpm_x100) / 100.0;
     double step_frames = d->rate * 60.0 / bpm * 4.0 / g->steps_per_bar;   // a bar is four beats (12 steps: triplets)
     float level = bitsf(atomic_load(&d->level_bits));
+    int kit = atomic_exchange(&d->want_kit, -1);
+    if (kit >= 0) d->kit = kit;
 
     for (uint32_t k = 0; k < frames; k++) {
         // the hits that fall on this frame
@@ -329,7 +385,6 @@ void drum_machine_render(drum_machine_t *d, float *out, uint32_t frames)
         for (int v = 0; v < DRUM_VOICES; v++) {
             if (!d->voice[v].on) continue;
             if (d->voice[v].wait) { d->voice[v].wait--; continue; }
-            int p = d->voice[v].pad;
             uint32_t pos = d->voice[v].pos;
             float gain = d->voice[v].gain;
             if (gain < 0) {   // choked: fading out
@@ -337,9 +392,16 @@ void drum_machine_render(drum_machine_t *d, float *out, uint32_t frames)
                 d->voice[v].gain = -(gain * 0.93f);   // about 2 ms to -60 dB
                 if (gain < 0.001f) { d->voice[v].on = false; continue; }
             }
-            if (pos >= d->length[p]) { d->voice[v].on = false; continue; }
-            l += d->sound[p][2 * pos] * (1.0f / 32768) * gain;
-            r += d->sound[p][2 * pos + 1] * (1.0f / 32768) * gain;
+            if (pos >= d->voice[v].len || !d->voice[v].data) { d->voice[v].on = false; continue; }
+            const int16_t *x = d->voice[v].data;
+            if (d->voice[v].channels == 2) {
+                l += x[2 * pos] * (1.0f / 32768) * gain;
+                r += x[2 * pos + 1] * (1.0f / 32768) * gain;
+            } else {
+                float m = x[pos] * (1.0f / 32768) * gain;
+                l += m;
+                r += m;
+            }
             d->voice[v].pos = pos + 1;
         }
         out[2 * k] += l * level;

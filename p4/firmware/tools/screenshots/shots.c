@@ -168,8 +168,40 @@ static ui_net_t s_fake_net;
 static void fake_source(ui_loop_t *l, ui_jam_t *j, ui_net_t *n) { *l = s_fake_loop; *j = s_fake_jam; *n = s_fake_net; }
 static const char *fake_name(int i)
 {
-    static const char *const N[] = { "Slow Blues in A", "Funk Groove E9", "Minor Swing Dm", "Rock Shuffle G", "Ballad in C", "Texas Blues E", "Modal Jam Dorian" };
+    // (2026-11-27: in albums - the Jam Player's folders; the loose ones first, as the board sorts them)
+    static const char *const N[] = { "Ballad in C", "Slow Blues in A", "Blues/Minor Blues Gm", "Blues/Texas Blues E",
+                                     "Blues/Twelve Bar Shuffle", "Funk/Funk Groove E9", "Funk/Modal Jam Dorian" };
     return i >= 0 && i < 7 ? N[i] : "";
+}
+// an example cover (drawn here, no real artwork): a sunset with a striped sun over a grid
+static bool s_fake_cover_has;
+static bool fake_cover(uint16_t *dst, uint32_t *seq)
+{
+    if (!s_fake_cover_has) return false;
+    const int T = UI_COVER_PX;
+    for (int y = 0; y < T; y++)
+        for (int x = 0; x < T; x++) {
+            float r, g, b, k = y / (float)(T * 0.62f);
+            if (y < T * 0.62f) {   // the sky: deep blue - magenta - orange at the horizon
+                if (k < 0.5f) { float m = k * 2; r = 27 + m * (192 - 27); g = 31 + m * (57 - 31); b = 75 + m * (107 - 75); }
+                else { float m = (k - 0.5f) * 2; r = 192 + m * (245 - 192); g = 57 + m * (161 - 57); b = 107 + m * (66 - 107); }
+                float dx = x - T / 2.0f, dy = y - T * 0.55f, d = sqrtf(dx * dx + dy * dy);
+                bool cut = y > T * 0.40f && ((int)(y - T * 0.40f) % 7) < 2;
+                if (d < T * 0.27f && !cut) { r = 255; g = 214 - (y - T * 0.28f) * 1.2f; b = 90; }
+            } else {   // the ground: dark violet with a grid going to the horizon
+                float h = (y - T * 0.62f) / (T * 0.38f);
+                r = 22; g = 12; b = 40;
+                float sx = (x - T / 2.0f) / (0.15f + h);
+                bool line = fabsf(fmodf(sx + 400, 18)) < 1.6f + h || fmodf(powf(h, 0.5f) * 40, 6) < 0.6f + h;
+                if (line) { r = 232; g = 72; b = 170; }
+            }
+            if (r < 0) r = 0;
+            if (g < 0) g = 0;
+            if (b < 0) b = 0;
+            dst[y * T + x] = (uint16_t)(((int)r & 0xF8) << 8 | ((int)g & 0xFC) << 3 | (int)b >> 3);
+        }
+    if (seq) *seq = 0;
+    return true;
 }
 static void fake_note(int i, char *out, size_t n)
 {
@@ -202,7 +234,13 @@ int main(void)
     ui_init(on_command, on_param_cb, on_text_cb);
     ui_set_scene_names_source(example_scene_names);
     ui_splash_status("Connected - loading presets ...", "v1.4.1");
+    ui_splash_step(UI_SPLASH_SWITCHES);
+    ui_splash_step(UI_SPLASH_NANO);   // (the start screen at the third step: screen, footswitches, the Nano found)
     shot("15-start-screen");
+    ui_splash_status("Presets loaded - the sound is starting ...", NULL);
+    ui_splash_step(UI_SPLASH_PRESETS);
+    ui_splash_step(UI_SPLASH_DRUMS);
+    shot("15b-start-screen-drums");
     ui_splash_done();
     ui_set_link(true);
     example_state();
@@ -216,8 +254,11 @@ int main(void)
         ui_set_phone(&ph);
         ui_set_output_level(true, -14.2f, 0.64f);
     }
+    view.bank_presets2[3] = 12, view.bank_presets2[4] = 10;   // (2026-11-27: second presets, held, on two switches of the bottom row)
+    ui_show_state(&st, &view);
+    s_source = 0;   // (the shots show the phone in the top bar; the board starts with the jam tracks since 2026-11-26)
     shot("01-preset-mode");
-    open_phone(NULL);
+    open_source(0);
     shot("50-phone");
     lv_obj_set_hidden(s_phone, true);
 
@@ -229,7 +270,7 @@ int main(void)
     view.looper = true;
     s_fake_loop = (ui_loop_t){ .ready = true, .state = UI_LOOP_DUB, .pos_s = 5.0f, .len_s = 8.0f, .max_s = 45, .can_undo = true,
                                .bar_lines = true, .passes = 2, .bars = 4, .bpm = 120 };
-    s_fake_jam = (ui_jam_t){ .card = true, .count = 7, .current = 0, .playing = true, .pos_s = 134, .len_s = 372, .volume_db = -6, .level_db = -2.5f, .measuring = 3, .target_lufs = -21 };
+    s_fake_jam = (ui_jam_t){ .card = true, .count = 7, .current = 1, .playing = true, .pos_s = 134, .len_s = 372, .volume_db = -6, .level_db = -2.5f, .measuring = 3, .target_lufs = -21 };
     ui_set_loop_source(fake_source, fake_name, fake_note);
     ui_show_state(&st, &view);
     shot("18-looper-mode");
@@ -241,7 +282,7 @@ int main(void)
     shot("18c-looper-recording");
     s_fake_loop = (ui_loop_t){ .ready = true, .state = UI_LOOP_PLAY, .pos_s = 2.1f, .len_s = 12.0f, .max_s = 45, .can_undo = false, .can_redo = true,
                                .bar_lines = true, .bars = 6, .bpm = 120, .passes = 5 };
-    s_fake_jam.current = 0;
+    s_fake_jam.current = 1;
     s_fake_jam.playing = true;
     shot("18d-looper-playing");
     // two parts and the drums
@@ -255,9 +296,49 @@ int main(void)
     shot("18f-looper-paused");
     s_fake_loop.paused = false;
     loop_poll(NULL);
+    s_fake_loop.part_groove[0] = s_fake_loop.part_groove[1] = -1, s_fake_loop.acoustic_kit = true, s_fake_loop.drum_kit = DRUM_KIT_ACOUSTIC;
+    loop_poll(NULL);
     ui_drum_menu_toggle();
     shot("18g-drum-menu");
     ui_drum_menu_toggle();
+    s_fake_loop.part_groove[1] = 60;   // part B with its own groove, and that part chosen in the menu
+    loop_poll(NULL);
+    s_drum_edit = 1;
+    ui_drum_menu_toggle();
+    shot("18h-drum-menu-part-groove");
+    ui_drum_menu_toggle();
+    s_drum_edit = -1, s_fake_loop.part_groove[1] = -1;
+    loop_poll(NULL);
+    {   // the Level sheet (a tap on OUT): the meter, the preset's kind, what auto level turns - and after a measurement
+        s_fake_loop.lv_short = -21.4f, s_fake_loop.lv_mom = -19.8f, s_fake_loop.lv_peak_db = -6.2f;
+        s_fake_loop.lv_kind = 2, s_fake_loop.lv_profile = 0, s_fake_loop.lv_base_x10 = -200, s_fake_loop.lv_measuring = -1;
+        s_amp_values[NANO_AMP_LEVEL] = 255;
+        loop_poll(NULL);
+        open_level_sheet();
+        shot("76-level");
+        s_lv_waiting = true, s_lv_seen_seq = 0;
+        s_fake_loop.lv_result_seq = 1, s_fake_loop.lv_result_ok = true, s_fake_loop.lv_result_lufs = -21.4f, s_fake_loop.lv_result_peak_db = -6.2f;
+        loop_poll(NULL);
+        shot("77-level-measured");
+        s_lv_waiting = false, s_lv_undo_cap = s_lv_undo_lvl = -1;
+        s_fake_loop.lv_measuring = -1;
+        on_lv_go(NULL);   // the countdown
+        s_lv_count_until = lv_tick_get() + 3200;
+        loop_poll(NULL);
+        shot("77b-level-countdown");
+        s_lv_count_until = 0;
+        on_lv_close(NULL);
+        s_amp_values[NANO_AMP_LEVEL] = 160;   // the LEVEL knob below 10: the question first
+        s_lv_undo_cap = -1, s_lv_undo_lvl = -1;
+        open_level_sheet();
+        on_lv_go(NULL);
+        shot("78-level-knob");
+        on_lv_close(NULL);
+        loop_poll(NULL);
+    }
+    ui_learn_next(3, "");   // Settings > Footswitches: all switches one after the other
+    shot("75-learn-all");
+    lv_obj_set_hidden(s_learn, true);   // (not ui_learn_done: its empty message would stay on the shots after it)
     {   // Settings > Wi-Fi and the list of networks around
         s_fake_net = (ui_net_t){ .state = UI_NET_STATION, .ssid = "FRITZ!Box 7590", .addr = "192.168.178.41", .scan_count = 5,
             .scan = { { "FRITZ!Box 7590", -48, true }, { "FRITZ!Box 7590 Gast", -55, true }, { "Telekom-8F21", -71, true },
@@ -285,11 +366,45 @@ int main(void)
     s_fake_jam.measuring = 0;
     shot("51c-jam-own-network");
     s_fake_net = (ui_net_t){ 0 };
+    s_fake_jam.current = 3;   // (an album's track: the albums in the list)
+    loop_poll(NULL);
+    shot("51d-jam-albums");
+    s_fake_jam.current = 1;
+    loop_poll(NULL);
     open_source(0);
     shot("52-phone-chooser");
     lv_obj_set_hidden(s_phone, true);
-    s_source = 0;
     view.looper = false;
+    // the player mode (footswitch 1 held): the jam tracks with a cover, paused, without one; then the phone
+    view.player = true;
+    s_source = 1;
+    s_fake_jam.playing = true;
+    s_fake_jam.current = 3;
+    s_fake_cover_has = true;
+    s_fake_jam.cover_seq = 1;
+    ui_set_cover_source(fake_cover);
+    ui_show_state(&st, &view);
+    loop_poll(NULL);
+    shot("79-player-mode");
+    s_fake_jam.playing = false;
+    s_player_sig = 0xFFFF;
+    loop_poll(NULL);
+    shot("79b-player-mode-paused");
+    s_fake_jam.playing = true;
+    s_fake_jam.current = 6;
+    s_fake_cover_has = false;
+    s_fake_jam.cover_seq = 2;
+    s_player_sig = 0xFFFF;
+    loop_poll(NULL);
+    shot("79c-player-mode-no-cover");
+    s_fake_jam.current = 1;
+    s_source = 0;
+    s_player_sig = 0xFFFF;
+    ui_show_state(&st, &view);
+    loop_poll(NULL);
+    shot("80-player-mode-phone");
+    view.player = false;
+    s_source = 0;
     ui_show_state(&st, &view);
 
     // Scenes of the preset: which effects are on and which of them the scene carries settings for (bit n = FX
@@ -380,6 +495,16 @@ int main(void)
     static const char fx_presets[UI_FX_PRESETS][16] = { "Slapback", "Ambient Wash", "", "" };
     ui_fx_presets_show(fx_presets, 1, true);
     shot("04-fx-editor");
+    {   // a compressor: its gain reduction below the knobs (2026-11-27, draft)
+        static const float comp[6] = { 0.5f, 0.3f, 0.2f, 0.4f, 0.5f, 1.0f };
+        s_fake_loop.gr_levels = true;
+        s_fake_loop.gr_rms_db[0] = -16, s_fake_loop.gr_peak_in_db[0] = -8;
+        ui_fx_editor_show(0, 5007, true, comp, 6);
+        for (int i = 0; i < 6; i++) loop_poll(NULL);
+        shot("81-fx-editor-compressor");
+        s_fake_loop.gr_levels = false;
+        ui_fx_editor_show(3, st.fx_type[3], true, values, 11);
+    }
     // The pad, the editor's second page: PAD beside the FX presets, or a long press on a pedal of the pedal view
     s_padv.prefer = true;
     ui_fx_editor_show(3, st.fx_type[3], true, values, 11);
@@ -526,6 +651,14 @@ int main(void)
     static const char no_presets[UI_FX_PRESETS][16] = { "", "", "", "" };
     ui_fx_presets_show(no_presets, 0, true);
     shot("26-auto-wah");
+    {   // following the playing (2026-11-27): its rows and the live row
+        static const ui_autowah_t env = { .mode = UI_WAH_ON, .rate = 3, .heel = 15, .toe = 85, .bpm = 120, .nano_bpm = 120,
+                                          .follows = 1, .sens = 60, .attack_ms = 15, .release_ms = 250, .live = true,
+                                          .level = 0.55f, .position = 0.54f };
+        ui_set_autowah(&env);
+        shot("26b-auto-wah-playing");
+        ui_set_autowah(&wah);
+    }
     ui_fx_editor_close();
     close_all();
     st.fx_type[1] = pre2;
@@ -534,7 +667,7 @@ int main(void)
 
     view.fx_mode = false;
     ui_show_state(&st, &view);
-    open_bank_editor(1);
+    open_bank_editor(4);   // (a switch with a second preset: both lists)
     shot("05-bank-editor");
     close_all();
 
@@ -760,6 +893,19 @@ int main(void)
         ui_fx_editor_close();
         close_all();
         break;
+    }
+    // The tempo typed: a tap on the BPM value of the tempo dialog opens the number pad
+    {
+        ui_tempo_t typed = { .supported = true, .open = true, .tempo = 120, .muted = true, .volume_db = -6, .time_sig = 2, .global = true };
+        ui_set_tempo(&typed);
+        lv_obj_send_event(s_metro_bpm, LV_EVENT_SHORT_CLICKED, NULL);
+        shot("73-tempo-typed-empty");
+        lv_textarea_set_text(s_rename_area, "300");
+        submit_rename();
+        shot("74-tempo-typed-refused");
+        close_all();
+        typed.open = false;
+        ui_set_tempo(&typed);
     }
     return 0;
 }

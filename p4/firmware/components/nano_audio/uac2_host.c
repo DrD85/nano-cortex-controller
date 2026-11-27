@@ -131,17 +131,36 @@ static void play_fill(usb_transfer_t *t)
     t->num_bytes = total;
 }
 
+__attribute__((weak)) void uac2_host_stall(char kind, uint32_t us) { (void)kind; (void)us; }
+#define STALL_GAP_US 3000      // transfers come every 1000 us
+#define STALL_RENDER_US 800
+
 static void play_done(usb_transfer_t *t)
 {
     s_inflight--;
     if (s_gone || s_step != STEP_RUN) return;
+    {
+        static int64_t play_last_us;
+        int64_t play_now = esp_timer_get_time();
+        if (play_last_us && play_now - play_last_us > STALL_GAP_US) uac2_host_stall('P', (uint32_t)(play_now - play_last_us));
+        play_last_us = play_now;
+    }
     if (t->status != USB_TRANSFER_STATUS_COMPLETED) s_stats.errors++;
-    for (int k = 0; k < PACKETS; k++)
-        if (t->isoc_packet_desc[k].status == USB_TRANSFER_STATUS_SKIPPED) s_stats.packets_skipped++;
+    {   // (measuring, 2026-11-27: 'K' in the trace = skipped packets of one transfer: first index * 256 + count)
+        int first = -1, n = 0;
+        for (int k = 0; k < PACKETS; k++)
+            if (t->isoc_packet_desc[k].status == USB_TRANSFER_STATUS_SKIPPED) {
+                s_stats.packets_skipped++;
+                if (first < 0) first = k;
+                n++;
+            }
+        if (n) uac2_host_stall('K', (uint32_t)(first * 256 + n));
+    }
     int64_t t0 = esp_timer_get_time();
     play_fill(t);
     uint32_t took = (uint32_t)(esp_timer_get_time() - t0);
     if (took > s_stats.render_max_us) s_stats.render_max_us = took;
+    if (took > STALL_RENDER_US) uac2_host_stall('R', took);
     if (usb_host_transfer_submit(t) == ESP_OK) s_inflight++;
     else s_stats.errors++;
     s_stats.rate_q16 = s_pacer.rate_q16;
@@ -159,11 +178,18 @@ static void cap_done(usb_transfer_t *t)
     static int64_t last_us;
     int64_t now = esp_timer_get_time();
     if (last_us && (uint32_t)(now - last_us) > s_stats.cap_gap_max_us) s_stats.cap_gap_max_us = (uint32_t)(now - last_us);
+    if (last_us && now - last_us > STALL_GAP_US) uac2_host_stall('C', (uint32_t)(now - last_us));
     last_us = now;
     // The received data through the cache once more before it is read (the driver does so at the dequeue too).
     // Test, 2026-11-19: a capture packet now and then held three frames of old data in its middle ("robotic").
-    esp_cache_msync(t->data_buffer, t->data_buffer_size, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+    // (2026-11-26: taken out again - the driver does it at the dequeue, and every such call waits for the cache lock)
     if (t->status == USB_TRANSFER_STATUS_COMPLETED) {
+        {   // (measuring, 2026-11-27: 'Q' in the trace = capture packets not received: first index * 256 + count)
+            int first = -1, n = 0;
+            for (int k = 0; k < PACKETS; k++)
+                if (t->isoc_packet_desc[k].status != USB_TRANSFER_STATUS_COMPLETED) { if (first < 0) first = k; n++; }
+            if (n) uac2_host_stall('Q', (uint32_t)(first * 256 + n));
+        }
         for (int k = 0; k < PACKETS; k++) {
             int bytes = t->isoc_packet_desc[k].actual_num_bytes;
             if (bytes == 0 || t->isoc_packet_desc[k].status != USB_TRANSFER_STATUS_COMPLETED) s_stats.capture_empty++;

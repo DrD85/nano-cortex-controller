@@ -5,6 +5,8 @@
 // STATUS: builds; not yet run on hardware. To check on the board first: the LDO channel / voltage of the DSI PHY,
 // the backlight's polarity, the GT911's address.
 #include "board.h"
+#include <string.h>
+#include "esp_cache.h"
 
 #include "driver/gpio.h"
 #include "driver/ledc.h"
@@ -154,6 +156,16 @@ static esp_lcd_panel_handle_t init_panel(void)
     ESP_ERROR_CHECK(esp_lcd_new_panel_ek79007(io, &dev_config, &panel));
     ESP_ERROR_CHECK(esp_lcd_panel_reset(panel));
     ESP_ERROR_CHECK(esp_lcd_panel_init(panel));
+    // (2026-11-27: the frame buffers hold whatever the memory held - after a restart the last picture, else noise,
+    // light blue on the user's board - and the panel shows them from here on. Black before the light comes on.)
+    void *fb[2] = { NULL, NULL };
+    if (esp_lcd_dpi_panel_get_frame_buffer(panel, 2, &fb[0], &fb[1]) == ESP_OK) {
+        for (int i = 0; i < 2; i++) {
+            if (!fb[i]) continue;
+            memset(fb[i], 0, LCD_H_RES * LCD_V_RES * 2);
+            esp_cache_msync(fb[i], LCD_H_RES * LCD_V_RES * 2, ESP_CACHE_MSYNC_FLAG_DIR_C2M | ESP_CACHE_MSYNC_FLAG_UNALIGNED);
+        }
+    }
     return panel;
 }
 
