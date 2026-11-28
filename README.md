@@ -263,12 +263,12 @@ and the Nano is plugged into the board's USB-A socket instead of connecting over
 board plays its own sound into the Nano:
 
 - **Nano over USB** – no pairing and no Bluetooth window. Without a cable it uses Bluetooth
-- **Looper on the board** – two parts A / B, overdub, undo / redo, loops rounded to bars of the Nano's tempo
-- **Drum machine** – 88 grooves in the Nano's tempo, a groove per looper part, a count-in, and drums that start with the take
-- **Jam player** – backing tracks in albums with covers from a microSD card, levelled to the same loudness, sent from the Jam Player on a Mac over Wi-Fi; a player mode on the footswitches
-- **Level, gain reduction, auto-wah from your playing** – loudness per preset, a compressor's gain reduction in its editor, a wah that follows the picking
+- **Looper on the board** – two parts A / B, overdub, undo / redo, loops rounded to bars of the Nano's tempo; loops saved to the card as WAV files, for the Jam Player on a Mac to fetch
+- **Drum machine** – two computed kits (electronic and Lo-Fi), 108 grooves in the Nano's tempo, a groove per looper part, a count-in, and drums that start with the take
+- **Jam player** – backing tracks in albums with covers from a microSD card, levelled to the same loudness, sent from the Jam Player on a Mac over Wi-Fi; a player mode on the footswitches: choose a song, then play it
+- **Level, gain reduction, auto-wah from your playing, EQ spectrum** – loudness per preset, a compressor's gain reduction in its editor, a wah that follows the picking, the Nano's sound as a live spectrum under the EQ's curve
 - **Bluetooth** through its ESP32-C6 – MIDI controllers with MIDI learn, a looper app, the editor through the board
-- **Firmware updates over Wi-Fi**, eight footswitches straight on the board (no extra board needed)
+- **Firmware updates over Wi-Fi**, eight footswitches straight on the board (no extra board needed), FX mode with its own footswitch order
 
 <table>
 <tr>

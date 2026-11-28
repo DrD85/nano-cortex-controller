@@ -137,11 +137,11 @@ void audio_pipe_render_stereo(audio_pipe_t *p, float *lr, uint32_t frames)
         control(p, frames, fill);
     }
 
-    double step = p->step * (1.0 + p->corr);
+    float step = (float)(p->step * (1.0 + p->corr));   // (in float per frame: see frac)
     for (uint32_t i = 0; i < frames; i++) {
         if (p->state == PIPE_PREFILL) break;
-        while (p->frac >= 1.0) {
-            p->frac -= 1.0;
+        while (p->frac >= 1.0f) {
+            p->frac -= 1.0f;
             if (!pull(p) && p->state == PIPE_RUN) {
                 // dry: hold the last frame and fade it out
                 p->st.underruns++;
@@ -149,7 +149,7 @@ void audio_pipe_render_stereo(audio_pipe_t *p, float *lr, uint32_t frames)
                 p->fade_step = -1.0f / FADE_OUT_FRAMES;
             }
         }
-        float t = (float)p->frac;
+        float t = p->frac;
         float l = cubic(p->win[0][0], p->win[1][0], p->win[2][0], p->win[3][0], t);
         float r = cubic(p->win[0][1], p->win[1][1], p->win[2][1], p->win[3][1], t);
         if (p->state == PIPE_FADEOUT) {   // the held value

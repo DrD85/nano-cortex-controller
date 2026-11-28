@@ -169,6 +169,7 @@ static int s_scene_last = -1;   // recalled last: the lit one if two scenes are 
 #define SCENE_VALUES_MAX (UI_SCENES * NANO_FX_SLOTS * (6 + 2 * NANO_MAX_PARAMS))
 #define SCENE_MODE_KEY "scenemode"
 #define LAYOUT_KEY "layout"   // { count, order[8] }
+#define LAYOUT_FX_KEY "layoutfx"   // { order[8] }: FX mode's own order (P4 1.2.0; the count is the one of "layout")
 #define PEDALS_KEY "pedals"   // 1 = the full-screen view shows the FX slots as pedals
 #define CLOUD_KEY "cloud"     // 1 = Cortex Cloud mode of the app bridge (the Nano's identity in the advertisement)
 static bool s_cloud;   // (loaded at the start, see cloud_load)
@@ -181,6 +182,13 @@ static volatile bool s_player_live;   // (the same, for the footswitch task)
 // s_layout_count (6 or 8); the switches themselves keep their numbers everywhere else. Set in the layout dialog.
 static volatile uint8_t s_layout[FOOTSWITCH_COUNT] = { 1, 2, 3, 4, 5, 6, 7, 8 };
 static volatile int s_layout_count = FOOTSWITCH_COUNT;
+// FX mode has its own order (user, 2026-11-27): the Pre FX on the top row, the Post FX below them - the amp between
+// the rows, as in a rig with an FX loop. Default (8 fields): 1 Pre FX 1, 2 Pre FX 2, 3 Post FX 3 (the reverb on / off),
+// 4 tuner / looper; 5 Post FX 1, 6 Post FX 2, 7 the reverb switch (user: "3 and 7 swapped"), 8 mode. With 6 fields:
+// Pre FX 1, Pre FX 2, mode; the Post FX.
+static const uint8_t LAYOUT_FX_DEFAULT[2][FOOTSWITCH_COUNT] = { { 3, 4, 1, 5, 6, 7, 2, 8 }, { 3, 4, 7, 2, 5, 6, 8, 1 } };
+static volatile uint8_t s_layout_fx[FOOTSWITCH_COUNT] = { 3, 4, 7, 2, 5, 6, 8, 1 };
+static volatile bool s_fx_live;   // FX mode, not the looper or player (set with s_looper_live, for the footswitch task)
 // What footswitch 1 changes between (UI_SWITCH1_*), chosen in the tile layout dialog.
 #define SWITCH1_KEY "switch1"
 static int s_switch1 = UI_SWITCH1_FX_PRESETS;
@@ -192,7 +200,8 @@ static int s_switch1 = UI_SWITCH1_FX_PRESETS;
 static int layout_switch(int p)
 {
     if (s_looper_live || s_player_live) return p >= 1 && p <= FOOTSWITCH_COUNT ? p : 0;   // (player mode: as the looper)
-    return p >= 1 && p <= s_layout_count ? s_layout[p - 1] : 0;
+    if (p < 1 || p > s_layout_count) return 0;
+    return s_fx_live ? s_layout_fx[p - 1] : s_layout[p - 1];
 }
 // Values of a scene on their way to the Nano: the first ones go out with the scene's switches, the rest a few at a
 // time (as an FX preset is sent; the Nano takes one write per 15 ms).
@@ -738,6 +747,8 @@ static void command(char c, int arg)
 // What a source of footswitch presses keeps between press and release: the footswitches (their task) and the
 // learned MIDI switches (midi_switches' task) each have their own, so the two never share one.
 typedef struct {
+    uint8_t pressed[FOOTSWITCH_COUNT + 1];   // per footswitch: the switch its press went to (0 = up) - hold and release
+                                             // go there too, even if the mode (and with it the order) changed meanwhile
     bool waiting[FOOTSWITCH_COUNT + 1];   // pressed, its held function may still come
     bool sounding[FOOTSWITCH_COUNT + 1];  // its looper controller is at 127
     bool held[FOOTSWITCH_COUNT + 1];      // a switch that acts while it is down: down
@@ -749,7 +760,11 @@ typedef struct {
 // millisecond between the foot and the looper counts.
 static void switch_event(switch_track_t *t, int number, footswitch_event_t event)
 {
-    number = layout_switch(number);   // the field at this footswitch's position
+    int position = number;   // the footswitch: 1-8
+    if (position < 1 || position > FOOTSWITCH_COUNT) return;
+    if (event == FOOTSWITCH_PRESS) t->pressed[position] = (uint8_t)layout_switch(position);   // the field at its position
+    number = t->pressed[position] ? t->pressed[position] : layout_switch(position);
+    if (event == FOOTSWITCH_RELEASE) t->pressed[position] = 0;
     if (!number) return;
     bool *const waiting = t->waiting, *const sounding = t->sounding, *const held = t->held;
     if (sounding[number] && event == FOOTSWITCH_RELEASE) {
@@ -1060,7 +1075,7 @@ static void print_help(void)
            "  1-64         go to a preset (Enter or wait a moment)\n"
            "  a-e          FX on/off: a = Pre FX 1 ... e = Post FX 3\n"
            "  A-E          FX mode: hold its footswitch (second effect, settings swap)\n"
-           "  m / t / x    mode (footswitch 1) / tuner (2) / reverb switch (8 in FX mode)\n"
+           "  m / t / x    as the mode / tuner / reverb switch (on whichever footswitch the tile layout puts them)\n"
 #ifdef NANO_P4
            "  o / O        looper mode on / off (footswitch 2 held; out: footswitch 8) / the player (1 held)\n"
 #else
@@ -1139,6 +1154,10 @@ static void layout_load(void)
         for (int p = 0; p < FOOTSWITCH_COUNT; p++) s_layout[p] = stored[1 + p];
         s_layout_count = stored[0];
     }
+    uint8_t fx[FOOTSWITCH_COUNT];
+    size = sizeof(fx);
+    bool fx_stored = nvs_get_blob(nvs, LAYOUT_FX_KEY, fx, &size) == ESP_OK && size == sizeof(fx) && layout_valid(s_layout_count, fx);
+    for (int p = 0; p < FOOTSWITCH_COUNT; p++) s_layout_fx[p] = fx_stored ? fx[p] : LAYOUT_FX_DEFAULT[s_layout_count == FOOTSWITCH_COUNT][p];
     uint8_t switch1;
     size = 1;
     if (nvs_get_blob(nvs, SWITCH1_KEY, &switch1, &size) == ESP_OK && size == 1 && switch1 < UI_SWITCH1_COUNT) s_switch1 = switch1;
@@ -1166,13 +1185,27 @@ static void pedal_view_set(bool on)
     if (nano_link_ready()) show();
 }
 
-// From the layout dialog: count << 24 | (switch at position p - 1) << 3p.
+// From the layout dialog: count << 24 | (switch at position p - 1) << 3p; with 1 << 30 the order of FX mode (the
+// dialog sends the presets' order first, then FX mode's - the count and switch 1 come with the first).
 static void layout_set(int packed)
 {
     uint8_t stored[1 + FOOTSWITCH_COUNT] = { (uint8_t)((packed >> 24) & 0xF) };
     int switch1 = (packed >> 28) & 3;
     for (int p = 0; p < FOOTSWITCH_COUNT; p++) stored[1 + p] = (uint8_t)(((packed >> (3 * p)) & 7) + 1);
     if (!layout_valid(stored[0], stored + 1)) return;
+    if ((packed >> 30) & 1) {   // FX mode's order
+        for (int p = 0; p < FOOTSWITCH_COUNT; p++) s_layout_fx[p] = stored[1 + p];
+        nvs_handle_t nvs;
+        if (nvs_open(BANK_STORE_NAMESPACE, NVS_READWRITE, &nvs) == ESP_OK) {
+            if (nvs_set_blob(nvs, LAYOUT_FX_KEY, stored + 1, FOOTSWITCH_COUNT) == ESP_OK) nvs_commit(nvs);
+            nvs_close(nvs);
+        }
+        ESP_LOGI(TAG, "Tile layout, FX mode: switches %d %d %d %d %d %d %d %d", stored[1], stored[2], stored[3], stored[4],
+                 stored[5], stored[6], stored[7], stored[8]);
+        ui_set_layout_fx(stored + 1);
+        if (nano_link_ready()) show();
+        return;
+    }
     s_layout_count = stored[0];
     for (int p = 0; p < FOOTSWITCH_COUNT; p++) s_layout[p] = stored[1 + p];
     s_switch1 = switch1;
@@ -1623,6 +1656,7 @@ static void looper_switches(void)
     s_momentary_switches = momentary;
     s_looper_live = s_looper;
     s_player_live = s_player;
+    s_fx_live = s_fx_mode && !s_looper && !s_player;
 }
 
 static void wah_load(int preset);
@@ -4647,8 +4681,10 @@ static bool looper_switch(int arg)
     // mode = the player (jam tracks / phone) on the screen, held again = away. (Scenes / presets, the small board's
     // "switch 2 held", are on the Scenes button of the top bar and on MIDI CC 60.)
     // Player mode (footswitch 1 held, 2026-11-26, after the looper mode): the switches in fixed places, each on its
-    // press - 1 jam tracks / phone, 2 the tuner, 3 the player's page, 4 to the looper, 5 back, 6 play / pause, 7 next,
-    // 8 back out to the presets (8 is the way back in every mode: the user's MODE switch is there).
+    // press. Player draft B (2026-11-28, user: songs chosen before they play, the albums on the switches): 1 jam
+    // tracks / phone, 2 the list (user, 2026-11-28: the list instead of the tuner), 3 the next album (round), 4 to the looper, 5 / 7 the song before / after - both only
+    // select (the song that plays goes on) -, 6 plays the selected song (or pauses / plays the one that plays), 8 back
+    // out to the presets (8 is the way back in every mode: the user's MODE switch is there).
     if (s_player) {
         if (number == 8) {
             ui_flash_tile(7);
@@ -4656,14 +4692,14 @@ static bool looper_switch(int arg)
             return true;
         }
         if (arg & UI_SWITCH_HOLD) return true;
-        if (number == 2) return false;   // (the tuner, as always)
         ui_flash_tile(number - 1);
         if (number == 1) ui_player_action(UI_PLAYER_SOURCE);
-        else if (number == 3) ui_player_toggle();
+        else if (number == 2) ui_player_toggle();   // the list (jam tracks' or the phone's page) on / off
+        else if (number == 3) ui_player_action(UI_PLAYER_ALBUM_NEXT);
         else if (number == 4) looper_set(true);   // (player mode goes off with it)
-        else if (number == 5) ui_player_action(UI_PLAYER_BACK);
-        else if (number == 6) ui_player_action(UI_PLAYER_TOGGLE);
-        else ui_player_action(UI_PLAYER_NEXT);
+        else if (number == 5) ui_player_action(UI_PLAYER_SONG_PREV);
+        else if (number == 6) ui_player_action(UI_PLAYER_START);
+        else ui_player_action(UI_PLAYER_SONG_NEXT);
         ESP_LOGI(TAG, "Player: footswitch %d", number);
         return true;
     }
@@ -6358,6 +6394,14 @@ static void handle_message(uint32_t type, const uint8_t *payload, size_t len)
         float values[NANO_MAX_PARAMS];
         int slot, count;
         int purpose = param_read_reply(payload, len, &slot, values, &count);
+#ifdef NANO_STORETEST   // (the Nano's own values of a model, read for the QC presets - 2026-11-27)
+        if (purpose != READ_NONE && slot >= 0 && slot < NANO_FX_SLOTS) {
+            printf("K VALUES %u %d %s:", (unsigned)s_state.fx_type[slot], slot, nano_fx_name(s_state.fx_type[slot]));
+            for (int i = 0; i < count; i++) printf(" %.4f", values[i]);
+            printf("\n");
+            fflush(stdout);
+        }
+#endif
         if (purpose != READ_NONE) rp_match(slot, values, count);
         switch (purpose) {
         case READ_AB: ab_values_read(slot, values, count); break;
@@ -6691,7 +6735,7 @@ static size_t tiles_settings(const ui_view_t *v, uint8_t *out)
 {
     size_t n = 0;
     out[n++] = (uint8_t)s_layout_count;
-    for (int p = 0; p < FOOTSWITCH_COUNT; p++) out[n++] = s_layout[p];
+    for (int p = 0; p < FOOTSWITCH_COUNT; p++) out[n++] = s_fx_live ? s_layout_fx[p] : s_layout[p];   // (the order shown now)
     out[n++] = (uint8_t)s_switch1;
     out[n++] = v->fx_mode;
     out[n++] = (uint8_t)(int8_t)v->mix_slot;
@@ -7420,7 +7464,8 @@ static void app_task(void *arg)
 }
 
 // Characters typed into the serial monitor: the letters of the help are commands. Digits select a preset: the number is
-// shown while typing and taken on Enter or after a short pause, so Enter is not required.
+// shown while typing and taken on Enter or after a short pause, so Enter is not required. (P4: ':' lines for the looper
+// test, see console_test_line.)
 // The console runs on the board's native "USB" port (USB Serial/JTAG) or, if configured, on the "UART" port.
 #define DIGIT_PAUSE_MS 1200
 #define CONSOLE_COMMANDS "npabcdemtxsrlh"
@@ -7539,6 +7584,62 @@ static void storetest_line(const char *line)
 }
 #endif
 
+#ifdef NANO_P4
+// Console ':' lines + Enter (2026-11-27, for ~/Coding/claude-werkzeuge/p4-loop-test.py: the looper tested on the normal
+// firmware, without a guitar; nothing of it is stored):
+//   ":w<n>" / ":h<n>"  footswitch n pressed / held - only in looper or player mode, where no switch selects a preset;
+//                      outside them only ":w2" (into looper mode)
+//   ":q"               REPORT lines (p4_audio_test_report), "REPORT board" last; ":s" the same with the loop's sounds
+//                      (reads the whole loop from PSRAM - not for polling)
+//   ":v"               "Save loops" as in the drum menu (parts A / B as WAVs on the card)
+//   ":c<dB>"           the test click: 10 ms of 1 kHz every 500 ms at -<dB> dBFS into the Nano's re-amp input
+//                      (playback 3/4, back on capture 3/4 through the preset - audible), ":c0" off
+// The mode is checked here, the switch acts later in the app task: after a switch that can change the mode (8, player
+// mode's 4, ":w2" outside the modes) the console waits up to 2 s for the change, so the next line is checked against
+// the mode it made. A mode ended at the same moment on the board itself is not caught: no test while someone plays.
+static volatile bool s_report_busy;
+
+static void report_task(void *arg)
+{
+    p4_audio_test_report(arg != NULL);
+    const char *whose = "?";
+    int left = stack_reserve(&whose);
+    ESP_LOGI(TAG, "REPORT board: looper mode %d, player mode %d, preset %d, stack reserve %d bytes (%s)", s_looper_live, s_player_live,
+             s_state.current_preset, left, whose);
+    s_report_busy = false;
+    vTaskDelete(NULL);
+}
+
+static void console_test_line(const char *line)
+{
+    char c = line[0];
+    int n = atoi(line + 1);
+    if (c == 'q' || c == 's') {
+        if (s_report_busy) return;
+        s_report_busy = true;
+        if (xTaskCreatePinnedToCore(report_task, "report", 4096, c == 's' ? (void *)1 : NULL, 2, NULL, 1) != pdPASS) {
+            s_report_busy = false;
+            ESP_LOGW(TAG, "REPORT: no memory for its task");
+        }
+    } else if (c == 'c' && n >= 0 && n <= 90) {
+        p4_audio_click_train(n);
+    } else if (c == 'v') {   // the drum menu's "Save loops" (a test of saving while the looper plays, 2026-11-28)
+        p4_loops_save();
+    } else if ((c == 'w' || c == 'h') && n >= 1 && n <= FOOTSWITCH_COUNT) {
+        bool looper = s_looper_live, player = s_player_live;
+        if (!looper && !player && (c == 'h' || n != 2)) {
+            ESP_LOGW(TAG, "Console :%c%d refused: switches only in looper or player mode (outside them only :w2)", c, n);
+            return;
+        }
+        command('w', c == 'h' ? UI_SWITCH_HOLD | n : n);
+        if (n == 8 || (player && n == 4 && c == 'w') || (!looper && !player))
+            for (int i = 0; i < 40 && s_looper_live == looper && s_player_live == player; i++) vTaskDelay(pdMS_TO_TICKS(50));
+    } else {
+        ESP_LOGW(TAG, "Console :%s not known (:w<n>, :h<n>, :q, :s, :v, :c<dB>)", line);
+    }
+}
+#endif
+
 static void console_task(void *arg)
 {
 #if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
@@ -7573,8 +7674,19 @@ static void console_task(void *arg)
         }
         count = 0;
 #ifdef NANO_P4
-        if (c == 'o') {   // looper mode: in with the tuner's switch held, out with switch 1
-            command('w', s_looper ? 5 : UI_SWITCH_HOLD | 2);
+        if (c == ':') {   // a test line up to Enter (console_test_line)
+            char line[16];
+            size_t n = 0;
+            uint8_t ch;
+            while (n < sizeof(line) - 1 && console_read(&ch, pdMS_TO_TICKS(2000)) == 1 && ch != '\n' && ch != '\r') line[n++] = (char)ch;
+            line[n] = 0;
+            console_test_line(line);
+            continue;
+        }
+        // 'o': looper mode, in with a press of switch 2, out with switch 8 (until 2026-11-27 switch 2 held and 5 - since
+        // the switches moved that was the tuner and, in the mode, undo)
+        if (c == 'o') {
+            command('w', s_looper_live ? 8 : 2);
             continue;
         }
         if (c == 'O') {   // the player on the screen: switch 1 held
@@ -7902,6 +8014,8 @@ void app_main(void)
     uint8_t order[FOOTSWITCH_COUNT];
     for (int p = 0; p < FOOTSWITCH_COUNT; p++) order[p] = s_layout[p];
     ui_set_layout(s_layout_count, order, s_switch1);
+    for (int p = 0; p < FOOTSWITCH_COUNT; p++) order[p] = s_layout_fx[p];
+    ui_set_layout_fx(order);
     ui_set_pedal_view(s_pedal_view);
     char version[40];
     snprintf(version, sizeof(version), "v%s", esp_app_get_description()->version);
@@ -7915,7 +8029,9 @@ void app_main(void)
     midi_switches_start(on_midi_switch, on_midi_learned);   // (MIDI comes only after the gate, MIDI_GATE_US)
 #ifndef NANO_WEB
     xTaskCreate(app_task, "app", 6144, NULL, 4, NULL);
-    xTaskCreate(console_task, "console", 3072, NULL, 3, NULL);
+    // On core 1 (2026-11-28): the console installs the UART driver, and its interrupt then runs on the core that
+    // installed it - not on core 0 with the USB audio (firmware/REALTIME.md rule 2).
+    xTaskCreatePinnedToCore(console_task, "console", 3072, NULL, 3, NULL, 1);
     s_app_beat = xTaskGetTickCount();
     const esp_timer_create_args_t watchdog_timer = { .callback = watchdog_cb, .name = "watchdog" };
     ESP_ERROR_CHECK(esp_timer_create(&watchdog_timer, &s_watchdog_timer));

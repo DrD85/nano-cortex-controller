@@ -4,6 +4,18 @@
 #include <math.h>
 #include <string.h>
 
+// fmaxf / fminf / lrintf are library calls on the P4 (__issignalingf per operand), here on every frame (2026-11-27).
+static inline float max2(float a, float b) { return a > b ? a : b; }
+
+// -1..1 to int16, rounded half away from zero (as the looper's sat16)
+static inline int16_t to16(float v)
+{
+    v *= 32767.0f;
+    if (v > 32767.0f) v = 32767.0f;
+    else if (v < -32767.0f) v = -32767.0f;
+    return (int16_t)(v + (v >= 0 ? 0.5f : -0.5f));
+}
+
 void loop_parts_init(loop_parts_t *p, int16_t *mem, uint32_t frames, uint32_t rate, int16_t *pre)
 {
     memset(p, 0, sizeof(*p));
@@ -13,6 +25,7 @@ void loop_parts_init(loop_parts_t *p, int16_t *mem, uint32_t frames, uint32_t ra
     p->floor = 0.001f;
     looper_init(&p->part[0], mem, frames, rate);
     looper_init(&p->part[1], mem + 4 * (size_t)frames, frames, rate);
+    p->pause_g = p->part[0].xfade;   // (full level)
     p->next = -1;
     atomic_init(&p->want_part, -1);
     atomic_init(&p->part_groove[0], -1);
@@ -73,8 +86,8 @@ static void pre_copy(loop_parts_t *p, const float *in, uint32_t k, uint32_t n, i
             dst[2 * j + 1] = p->pre[2 * w + 1];
             continue;
         }
-        dst[2 * j] = (int16_t)lrintf(fmaxf(-1, fminf(1, l)) * 32767);
-        dst[2 * j + 1] = (int16_t)lrintf(fmaxf(-1, fminf(1, r)) * 32767);
+        dst[2 * j] = to16(l);
+        dst[2 * j + 1] = to16(r);
     }
 }
 
@@ -103,6 +116,7 @@ static void start_on_bar(loop_parts_t *p, const float *in, uint32_t k)
     }
     if (since <= bar / 2 && (since <= lat || since - lat <= LOOP_PRE) && p->pre) {
         uint32_t n = since > lat ? (uint32_t)(since - lat) : 0;   // input frames that belong to the take already
+        looper_edit_begin(cur);   // (its buffer is written here: a copy being saved sees it, looper.h)
         looper_start_back(cur, (uint32_t)since, NULL, 0);
         int64_t first = (int64_t)since - cur->latency - n;        // their first frame in the loop
         uint32_t from_ring = n > k ? n - k : 0, from_in = n - from_ring;
@@ -110,9 +124,10 @@ static void start_on_bar(loop_parts_t *p, const float *in, uint32_t k)
             int64_t i = first + from_ring + j;
             uint32_t f = k - from_in + j;
             if (i < 0 || (uint64_t)i >= cur->cap) continue;
-            cur->base[2 * i] = (int16_t)lrintf(fmaxf(-1, fminf(1, in[2 * f])) * 32767);
-            cur->base[2 * i + 1] = (int16_t)lrintf(fmaxf(-1, fminf(1, in[2 * f + 1])) * 32767);
+            cur->base[2 * i] = to16(in[2 * f]);
+            cur->base[2 * i + 1] = to16(in[2 * f + 1]);
         }
+        looper_edit_end(cur);
         p->bf_part = p->active;                                   // the kept ones: oldest first, over the next renders
         p->bf_left = from_ring;
         p->bf_src = (p->pre_w + LOOP_PRE - from_ring) % LOOP_PRE;
@@ -140,6 +155,27 @@ static void drums_to_loop(loop_parts_t *p, uint32_t delay, uint32_t pos)
     if (!d || !bar) return;
     double steps = (double)(pos % bar) / bar * drum_machine_steps_per_bar(d);
     drum_machine_start_now(d, delay, steps);
+}
+
+// Pause: the loop fades out over the looper's crossfade time (xfade, 5 ms) first - loop and drums go on together
+// meanwhile - then both are held; going on, it fades in again. (Cut at once, it clicked at the pause and at the
+// restart, 2026-11-27.) The parts' output is faded, not a looper's own envelope: frame by frame, so it does not depend
+// on the render sizes, and a part switch or a stop / clear fade within it stays as it is.
+static void pause_fade(loop_parts_t *p, float *out, uint32_t frames)
+{
+    uint32_t full = p->part[0].xfade;
+    float step = 1.0f / (full ? full : 1);
+    for (uint32_t k = 0; k < frames; k++) {
+        if (p->pausing) { if (p->pause_g) p->pause_g--; }
+        else if (p->pause_g < full) p->pause_g++;
+        float g = p->pause_g * step;
+        out[2 * k] *= g;
+        out[2 * k + 1] *= g;
+    }
+    if (p->pausing && !p->pause_g) {   // (the drums follow at the next render: see loop_parts_process)
+        p->pausing = false;
+        p->paused = true;
+    }
 }
 
 // The other part takes over in frame `at` of this render.
@@ -177,9 +213,10 @@ void loop_parts_process(loop_parts_t *p, const float *in, float *out, uint32_t f
         }
     }
     int pause = atomic_exchange(&p->want_pause, -1);
-    if (pause >= 0) {
-        p->paused = pause == 1;
-        if (d) d->paused = p->paused;
+    if (pause == 1 && !p->paused) p->pausing = true;   // (held once faded out: pause_fade)
+    if (pause == 0) {
+        p->pausing = false;   // (a tap within the fade: back up from where it is)
+        p->paused = false;
     }
     int drums = atomic_exchange(&p->want_drums, -1);
     if (drums == 0 && d) drum_machine_stop(d);
@@ -187,8 +224,11 @@ void loop_parts_process(loop_parts_t *p, const float *in, float *out, uint32_t f
         looper_t *cur = &p->part[p->active];
         if (playing(cur)) drums_to_loop(p, 0, cur->pos);   // in step with the loop that plays
         else drum_machine_start_now(d, 0, 0);
-        d->paused = p->paused;
     }
+    // The drums held with the loop. The fade ends within a render the loop has run through, and the drums render after
+    // the parts: set there, they would stop up to a render before the loop's place (2026-11-27). So they take it here,
+    // at the next render, where both stand still.
+    if (d) d->paused = p->paused;
 
     // the count-in: one bar of the drums (or four clicks when they are off), then the first take
     int take = atomic_exchange(&p->want_take, 0);
@@ -225,7 +265,7 @@ void loop_parts_process(loop_parts_t *p, const float *in, float *out, uint32_t f
     if (p->armed && !p->paused) {   // waiting for the first note: the input's level against its noise
         memset(out, 0, sizeof(float) * 2 * frames);
         for (uint32_t k = 0; k < frames; k++) {
-            float v = fmaxf(fabsf(in[2 * k]), fabsf(in[2 * k + 1]));
+            float v = max2(fabsf(in[2 * k]), fabsf(in[2 * k + 1]));
             if (v > ARM_LEVEL && v > ARM_OVER_FLOOR * p->floor) {
                 p->armed = false;
                 looper_t *cur = &p->part[p->active];
@@ -299,11 +339,13 @@ void loop_parts_process(loop_parts_t *p, const float *in, float *out, uint32_t f
         }
     }
 keep:
+    if (!p->paused && (p->pausing || p->pause_g < p->part[0].xfade)) pause_fade(p, out, frames);
     // a take started back at the bar line gets its kept input, the oldest first - before this render overwrites it
     if (p->bf_left) {
         looper_t *lp = &p->part[p->bf_part];
         uint32_t n = p->bf_left < BACKFILL_PER_RENDER ? p->bf_left : BACKFILL_PER_RENDER;
         if (lp->st == LOOPER_EMPTY) n = p->bf_left;   // (the take was called off: nothing to copy any more)
+        looper_edit_begin(lp);
         for (uint32_t j = 0; j < n; j++) {
             int64_t i = p->bf_dst + j;
             uint32_t src = (p->bf_src + j) % LOOP_PRE;
@@ -311,6 +353,7 @@ keep:
             lp->base[2 * i] = p->pre[2 * src];
             lp->base[2 * i + 1] = p->pre[2 * src + 1];
         }
+        looper_edit_end(lp);
         p->bf_left -= n;
         p->bf_src = (p->bf_src + n) % LOOP_PRE;
         p->bf_dst += n;
@@ -319,15 +362,15 @@ keep:
     if (p->pre) {
         for (uint32_t k = 0; k < frames; k++) {
             uint32_t w = p->pre_w;
-            p->pre[2 * w] = (int16_t)lrintf(fmaxf(-1, fminf(1, in[2 * k])) * 32767);
-            p->pre[2 * w + 1] = (int16_t)lrintf(fmaxf(-1, fminf(1, in[2 * k + 1])) * 32767);
+            p->pre[2 * w] = to16(in[2 * k]);
+            p->pre[2 * w + 1] = to16(in[2 * k + 1]);
             p->pre_w = (w + 1) % LOOP_PRE;
         }
     }
     atomic_store(&p->i_armed, p->armed);
     atomic_store(&p->i_active, p->active);
     atomic_store(&p->i_next, p->next);
-    atomic_store(&p->i_paused, p->paused);
+    atomic_store(&p->i_paused, p->paused || p->pausing);   // (a second tap within the fade goes on again)
     atomic_store(&p->i_drums, d && d->running);
     atomic_store(&p->i_counting, p->counting > 0);
 }

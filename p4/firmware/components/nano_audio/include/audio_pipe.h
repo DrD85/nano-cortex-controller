@@ -34,7 +34,8 @@ typedef struct {
     uint32_t in_rate, out_rate;
     uint32_t target;           // fill level the controller aims for (frames)
     double step;               // in_rate / out_rate
-    double frac;               // position between win[1] and win[2]
+    float frac;                // position between win[1] and win[2] (float: a double is a library call per frame on
+                               // the P4; ~1e-7 of the rate, which the controller takes up, 2026-11-27)
     float win[4][2];           // last four input frames for the cubic interpolation
     double fill_avg;           // smoothed fill level
     double integ;              // integral part of the controller

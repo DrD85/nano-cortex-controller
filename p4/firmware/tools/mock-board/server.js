@@ -7,7 +7,10 @@
 // /api/covers/<name>.jpg, POST /api/move, POST /api/sources, POST /api/trims, POST /api/done; <name> "Album/Title"
 // or "Title", each part URL-encoded. PUT /api/firmware is checked as the board does (writes nothing).
 // Serves main/web/upload.html at / and the folder's files at /files/<file> (test files for the page to fetch).
-// node tools/mock-board/server.js [port] [folder]   (default 8765, $TMPDIR/mock-board)
+// The looper's saved loops (main/p4_loops.c, 2026-11-28) from a folder of their own (the card's /sdcard/loops): GET
+// /api/loops, GET /api/loops/<name> (in pieces, X-Size; a name with "(cut)" breaks off halfway, as a lost connection),
+// DELETE /api/loops/<name>, POST /api/time (logged).
+// node tools/mock-board/server.js [port] [folder] [loops folder]   (default 8765, $TMPDIR/mock-board, <folder>-loops)
 // (no node on the Mac: ELECTRON_RUN_AS_NODE=1 "/Applications/Jam Player.app/Contents/MacOS/Jam Player" server.js)
 'use strict';
 const http = require('http');
@@ -17,6 +20,10 @@ const port = Number(process.argv[2] || 8765);
 const dir = path.resolve(process.argv[3] || path.join(process.env.TMPDIR || '/tmp', 'mock-board'));
 fs.mkdirSync(dir, { recursive: true });
 const page = path.join(__dirname, '../../main/web/upload.html');
+const loopsDir = path.resolve(process.argv[4] || dir + '-loops');
+fs.mkdirSync(loopsDir, { recursive: true });
+// As loop_wav_name_ok: "Loop <digits> ....wav" of letters, digits, spaces and , . - ( ) - no path, nothing hidden.
+const loopNameOk = n => n.length >= 10 && n.length < 96 && /^Loop \d/.test(n) && /\.wav$/i.test(n) && !n.includes('..') && /^[A-Za-z0-9 ,.()-]+$/.test(n);
 const ALBUM_MAX = 60, TITLE_MAX = 78, STAMP_MAX = 40, MAX_TRACKS = 256;   // as main/p4_audio.h
 
 const bytes = s => Buffer.byteLength(s, 'utf8');
@@ -158,6 +165,38 @@ http.createServer((req, res) => {
     return send(res, 200, { firmware: '0.1.0', albums: true, card: true, measuring: 0, more: tracks.leftOut, tracks: list });
   }
   if (req.method === 'POST' && url === '/api/done') { console.log('done'); return send(res, 200, { ok: true }); }
+  if (req.method === 'GET' && url === '/api/loops') {
+    const loops = fs.readdirSync(loopsDir).filter(loopNameOk).map(name => ({ name, size: fs.statSync(path.join(loopsDir, name)).size }));
+    return send(res, 200, { card: true, loops });
+  }
+  if (raw.startsWith('/api/loops/') && (req.method === 'GET' || req.method === 'DELETE')) {
+    let name = null;
+    try { name = decodeURIComponent(raw.slice('/api/loops/'.length)); } catch (err) { /* refused below */ }
+    if (!name || !loopNameOk(name)) return send(res, 400, { ok: false, error: "not a loop's name" });
+    const f = path.join(loopsDir, name);
+    if (!exists(f)) return send(res, 404, { ok: false, error: 'no such loop' });
+    if (req.method === 'DELETE') {
+      fs.rmSync(f);
+      console.log('deleted loop ' + name);
+      return send(res, 200, { ok: true });
+    }
+    const size = fs.statSync(f).size;
+    res.writeHead(200, { 'Content-Type': 'audio/wav', 'X-Size': String(size) });   // (no length: in pieces, as the board)
+    if (name.includes('(cut)')) {   // a connection lost halfway
+      res.write(fs.readFileSync(f).subarray(0, size >> 1));
+      return setTimeout(() => res.destroy(), 50);
+    }
+    console.log('sending loop ' + name);
+    return fs.createReadStream(f).pipe(res);
+  }
+  if (req.method === 'POST' && url === '/api/time') {
+    return body(req, b => {
+      const [t, minutes] = b.toString('utf8').trim().split(/\s+/).map(Number);
+      if (!Number.isFinite(t) || !Number.isFinite(minutes)) return send(res, 400, { ok: false, error: 'not a time' });
+      console.log(`time ${new Date(t * 1000).toISOString()} (UTC ${minutes >= 0 ? '+' : ''}${minutes} min)`);
+      send(res, 200, { ok: true });
+    });
+  }
   if (req.method === 'POST' && url === '/api/trims') {   // merged into levels.txt as the board does (0 removes)
     return body(req, b => {
       const text = b.toString('utf8');
@@ -259,4 +298,4 @@ http.createServer((req, res) => {
   }
   res.writeHead(404);
   res.end();
-}).listen(port, () => console.log(`mock board on http://localhost:${port} (its card's jam folder: ${dir})`));
+}).listen(port, () => console.log(`mock board on http://localhost:${port} (its card's jam folder: ${dir}, loops: ${loopsDir})`));

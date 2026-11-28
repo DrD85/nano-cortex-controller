@@ -1,5 +1,5 @@
 // Drum machine (see drum_machine.h). The sounds are the Duo DAW's StartKit, computed the same way (same formulas,
-// same noise seeds), the levels the DAW's KitBalance.
+// same noise seeds), the levels the DAW's KitBalance (the Lo-Fi kit's sounds: drum_lofi.c, levelled the same way).
 #include "drum_machine.h"
 
 #include <math.h>
@@ -207,6 +207,38 @@ __attribute__((weak)) void drum_machine_yield(void) {}
 static inline uint32_t fbits(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
 static inline float bitsf(uint32_t u) { float f; memcpy(&f, &u, 4); return f; }
 
+// One computed kit: its sounds (`most` frames at most) into memory from alloc (NULL = malloc), each with its level;
+// false without memory (what was taken goes back: heap_caps memory is freed with free as well).
+static bool make_sounds(drum_sounds_t *k, uint32_t rate, uint32_t (*sound)(int, uint32_t, float *, uint32_t), uint32_t most,
+                        void *(*alloc)(size_t))
+{
+    float *work = malloc(sizeof(float) * 2 * most);
+    if (!work) return false;
+    for (int p = 0; p < DRUM_PADS; p++) {
+        drum_machine_yield();   // (between the sounds: the board lets its other tasks run)
+        uint32_t n = sound(p, rate, work, most);
+        k->sound[p] = !n ? NULL : alloc ? alloc(sizeof(int16_t) * 2 * n) : malloc(sizeof(int16_t) * 2 * n);
+        if (!k->sound[p]) {
+            while (p--) free(k->sound[p]), k->sound[p] = NULL;
+            free(work);
+            return false;
+        }
+        k->length[p] = n;
+        uint32_t a = (uint32_t)(0.3 * rate) < n ? (uint32_t)(0.3 * rate) : n;
+        double sum = 0;
+        for (uint32_t i = 0; i < 2 * a; i++) sum += (double)work[i] * work[i];
+        double attack_db = 10 * log10(fmax(sum / (2.0 * a), 1e-12));
+        double g = fmin(12, fmax(-30, balance_target(p) - attack_db));
+        k->gain[p] = (float)pow(10, g / 20);
+        for (uint32_t i = 0; i < 2 * n; i++) {
+            float v = work[i] * 32767.0f;
+            k->sound[p][i] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : lrintf(v));
+        }
+    }
+    free(work);
+    return true;
+}
+
 bool drum_machine_init(drum_machine_t *d, uint32_t rate, void *(*alloc)(size_t))
 {
     memset(d, 0, sizeof(*d));
@@ -214,32 +246,22 @@ bool drum_machine_init(drum_machine_t *d, uint32_t rate, void *(*alloc)(size_t))
     atomic_init(&d->want_groove, -1);
     atomic_init(&d->want_run, 2);
     atomic_init(&d->want_kit, -1);
+    atomic_init(&d->lofi_made, false);
     atomic_init(&d->bpm_x100, 12000);
     atomic_init(&d->level_bits, fbits(0.35f));   // -9 dB: under the guitar (the kit peaks near 2 at 0 dB)
-    uint32_t most = sound_length(DRUM_RIDE, rate);
-    float *work = malloc(sizeof(float) * 2 * most);
-    if (!work) return false;
+    return make_sounds(&d->computed, rate, drum_kit_sound, sound_length(DRUM_RIDE, rate), alloc);
+}
+
+bool drum_machine_make_lofi(drum_machine_t *d, void *(*alloc)(size_t))
+{
+    if (atomic_load(&d->lofi_made)) return true;
+    uint32_t most = 0;
     for (int p = 0; p < DRUM_PADS; p++) {
-        drum_machine_yield();   // (between the sounds: the board lets its other tasks run)
-        uint32_t n = drum_kit_sound(p, rate, work, most);
-        d->sound[p] = alloc ? alloc(sizeof(int16_t) * 2 * n) : malloc(sizeof(int16_t) * 2 * n);
-        if (!d->sound[p]) {
-            free(work);
-            return false;
-        }
-        d->length[p] = n;
-        uint32_t a = (uint32_t)(0.3 * rate) < n ? (uint32_t)(0.3 * rate) : n;
-        double sum = 0;
-        for (uint32_t i = 0; i < 2 * a; i++) sum += (double)work[i] * work[i];
-        double attack_db = 10 * log10(fmax(sum / (2.0 * a), 1e-12));
-        double g = fmin(12, fmax(-30, balance_target(p) - attack_db));
-        d->gain[p] = (float)pow(10, g / 20);
-        for (uint32_t i = 0; i < 2 * n; i++) {
-            float v = work[i] * 32767.0f;
-            d->sound[p][i] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : lrintf(v));
-        }
+        uint32_t n = drum_lofi_sound(p, d->rate, NULL, 0);
+        if (n > most) most = n;
     }
-    free(work);
+    if (!make_sounds(&d->lofi, d->rate, drum_lofi_sound, most, alloc)) return false;
+    atomic_store(&d->lofi_made, true);   // (after the sounds: the audio side takes them from here on)
     return true;
 }
 
@@ -324,10 +346,11 @@ static void trigger(drum_machine_t *d, int pad, float gain)
             return;
         }
     }
-    d->voice[slot].data = d->sound[pad];
-    d->voice[slot].len = d->length[pad];
+    const drum_sounds_t *k = d->kit == DRUM_KIT_LOFI && atomic_load(&d->lofi_made) ? &d->lofi : &d->computed;
+    d->voice[slot].data = k->sound[pad];
+    d->voice[slot].len = k->length[pad];
     d->voice[slot].channels = 2;
-    d->voice[slot].gain = gain * d->gain[pad];
+    d->voice[slot].gain = gain * k->gain[pad];
 }
 
 static float velocity(char mark) { return mark == 'X' ? 1.0f : mark == 'x' ? 0.75f : mark == 'o' ? 0.35f : 0; }
@@ -360,6 +383,9 @@ void drum_machine_render(drum_machine_t *d, float *out, uint32_t frames)
     const drum_groove_t *g = &DRUM_GROOVES[d->groove];
     double bpm = atomic_load(&d->bpm_x100) / 100.0;
     double step_frames = d->rate * 60.0 / bpm * 4.0 / g->steps_per_bar;   // a bar is four beats (12 steps: triplets)
+    // (one divide per render, not per frame: the P4 has no double unit, a soft __divdf3 costs some 200 cycles,
+    // 2026-11-27; the same quotient is added, so the steps are exactly as before)
+    double inc = 1.0 / step_frames;
     float level = bitsf(atomic_load(&d->level_bits));
     int kit = atomic_exchange(&d->want_kit, -1);
     if (kit >= 0) d->kit = kit;
@@ -373,13 +399,14 @@ void drum_machine_render(drum_machine_t *d, float *out, uint32_t frames)
                 d->groove = atomic_exchange(&d->want_groove, -1);
                 g = &DRUM_GROOVES[d->groove];
                 step_frames = d->rate * 60.0 / bpm * 4.0 / g->steps_per_bar;
+                inc = 1.0 / step_frames;
                 d->step_pos -= d->next_step;
                 d->next_step = 0;
             }
             hits_of_step(d, d->next_step);
             d->next_step++;
         }
-        if (d->running && !d->paused) d->step_pos += 1.0 / step_frames;
+        if (d->running && !d->paused) d->step_pos += inc;
 
         float l = 0, r = 0;
         for (int v = 0; v < DRUM_VOICES; v++) {

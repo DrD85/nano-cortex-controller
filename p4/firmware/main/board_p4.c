@@ -289,8 +289,11 @@ lv_display_t *board_display_init(void)
     } else {
         ESP_LOGW(TAG, "Touch controller not found");
     }
+    // Every refresh period, not every 1 ms (2026-11-27): a 1 ms timer never let LVGL's task sleep longer than that -
+    // about 500 lock rounds a second on core 1 (sound mix, Bluetooth host). A stale entry is then emptied within one
+    // refresh period, which keeps nearly all of the repair (its cause, an LVGL call without the lock, is fixed).
     if (lvgl_port_lock(0)) {
-        lv_timer_create(event_list_watch, 1, NULL);
+        lv_timer_create(event_list_watch, LV_DEF_REFR_PERIOD, NULL);
         lvgl_port_unlock();
     }
     backlight(true);

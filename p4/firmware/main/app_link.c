@@ -12,6 +12,7 @@
 #include "host/ble_hs.h"
 #include "nimble/nimble_port.h"
 #include "os/os_mbuf.h"
+#include "os/os_mempool.h"
 #include "nano_link.h"
 #include "phone_midi.h"
 #include "services/gap/ble_svc_gap.h"
@@ -23,7 +24,36 @@ static const char *TAG = "app_link";
 #define MAX_PACKET_DATA 510   // the Nano's packets carry at most 510 bytes after the 2-byte header
 // Bluetooth buffers (msys blocks) kept free while sending to the app. Without a reserve a long reply (the preset
 // list, 18 KB) took all of them, and the app's next request was dropped for lack of memory ("ble_att_svr_pkt rc=6").
-#define TX_RESERVE_BLOCKS 20
+#define TX_RESERVE_BLOCKS 12   // (of the small ones, msys_1: a 512-byte packet takes three)
+// The longest wait for buffers before a packet is given up. A sent packet's blocks come back when the C6 reports it
+// sent, at the air rate: the longest wait measured was 19 ms with the 13 KB preset list, 29 ms with a 22 KB reply
+// (2026-11-27), so a wait of seconds means a real stall - better the "not sent" line soon than the editor's own
+// time-out first.
+#define WAIT_MS 3000
+
+// The small buffers ("msys_1", 256 bytes): every packet and every short answer is made of them, and NimBLE never takes
+// a block of the larger pool ("msys_2") in their place - os_msys_num_free() counts both and said "96 free" while
+// msys_1 was empty (2026-11-27). Both looked up once in NimBLE's list of pools: they live as long as NimBLE, which the
+// board never stops. (tx_task only, and only while the app is subscribed - NimBLE runs then.)
+static struct os_mempool *s_msys1, *s_msys2;
+
+static void find_pools(void)
+{
+    static bool looked_up;
+    if (looked_up) return;
+    looked_up = true;
+    struct os_mempool_info info;
+    for (struct os_mempool *mp = NULL; (mp = os_mempool_info_get_next(mp, &info)) != NULL;) {
+        if (!strcmp(info.omi_name, "msys_1")) s_msys1 = mp;
+        else if (!strcmp(info.omi_name, "msys_2")) s_msys2 = mp;
+    }
+    if (!s_msys1) ESP_LOGW(TAG, "Bluetooth buffer pool msys_1 not found - counting all pools");
+}
+
+static int msys1_free(void)
+{
+    return s_msys1 ? s_msys1->mp_num_free : os_msys_num_free();
+}
 
 typedef struct {
     uint8_t *data;
@@ -289,8 +319,10 @@ static void guest_check(void *arg)
     for (int i = 0; i < PEERS; i++) {
         uint16_t conn = s_peer[i];
         if (conn == BLE_HS_CONN_HANDLE_NONE || conn == s_conn || conn == phone_midi_conn()) continue;
-        if (esp_timer_get_time() - s_peer_since[i] < (GUEST_MS - 1000) * 1000LL) continue;
-        ESP_LOGI(TAG, "Connection %u did not subscribe - dropped", conn);
+        int64_t since_us = esp_timer_get_time() - s_peer_since[i];
+        if (since_us < (GUEST_MS - 1000) * 1000LL) continue;
+        // (MTU 23: the guest never even exchanged the MTU; 517 only says it did - the board's own preferred MTU)
+        ESP_LOGI(TAG, "Connection %u did not subscribe in %lld s (MTU %u) - dropped", conn, since_us / 1000000, ble_att_mtu(conn));
         ble_gap_terminate(conn, BLE_ERR_REM_USER_CONN_TERM);
     }
 }
@@ -311,7 +343,16 @@ static int gap_event(struct ble_gap_event *event, void *arg)
         }
         s_peer[slot] = conn;
         s_peer_since[slot] = esp_timer_get_time();
-        ESP_LOGI(TAG, "Connection %u came in", conn);
+        // Who it is, to match a guest against the editor's log (2026-11-27). Without bonding a Mac or phone changes
+        // its private address now and then, so it only tells the connections of one session apart.
+        struct ble_gap_conn_desc d;
+        if (ble_gap_conn_find(conn, &d) == 0) {
+            const uint8_t *a = d.peer_id_addr.val;
+            ESP_LOGI(TAG, "Connection %u came in from %02X:%02X:%02X:%02X:%02X:%02X (address type %u)", conn, a[5], a[4], a[3],
+                     a[2], a[1], a[0], d.peer_id_addr.type);
+        } else {
+            ESP_LOGI(TAG, "Connection %u came in", conn);
+        }
         // A shorter connection interval (Apple's limits: min >= 15 ms, max >= min + 15 ms, timeout 2-6 s): long
         // replies such as the preset list reach the app sooner. The other side may keep its own choice; a phone
         // gets an even shorter one once it listens to MIDI (phone_midi).
@@ -396,7 +437,8 @@ static void tx_task(void *arg)
     uint8_t packet[MAX_PACKET_DATA + 2];
     for (;;) {
         xQueueReceive(s_tx_queue, &m, portMAX_DELAY);
-        int64_t started_us = esp_timer_get_time();
+        find_pools();
+        int64_t started_us = esp_timer_get_time(), longest_wait_ms = 0;   // (for the log line of a long message)
         size_t max = s_mtu > 10 ? s_mtu - 7 : 16;
         if (max > MAX_PACKET_DATA) max = MAX_PACKET_DATA;
         for (size_t off = 0; off < m.len && s_subscribed;) {
@@ -404,24 +446,34 @@ static void tx_task(void *arg)
             packet[0] = (uint8_t)chunk;
             packet[1] = (uint8_t)((off == 0 ? 0x40 : 0) | (off + chunk >= m.len ? 0x80 : 0) | ((chunk >> 8) & 0x3F));
             memcpy(packet + 2, m.data + off, chunk);
-            // Wait until the host has sent enough of the earlier packets (at most a second).
-            for (int wait = 0; os_msys_num_free() < TX_RESERVE_BLOCKS && wait < 200 && s_subscribed; wait++) {
+            // Wait until the host has sent enough of the earlier packets. A packet left out breaks the whole message
+            // (the editor waits for the rest and connects again), so wait as long as the app is there, up to WAIT_MS.
+            int64_t wait_from = esp_timer_get_time();
+            while (msys1_free() < TX_RESERVE_BLOCKS && s_subscribed && esp_timer_get_time() - wait_from < WAIT_MS * 1000LL) {
                 vTaskDelay(pdMS_TO_TICKS(5));
             }
-            int tries = 0, rc;
+            int rc;
             do {   // the host may still be out of buffers for a moment
                 struct os_mbuf *om = ble_hs_mbuf_from_flat(packet, (uint16_t)(chunk + 2));
                 rc = om ? ble_gatts_notify_custom(s_conn, s_c305_handle, om) : BLE_HS_ENOMEM;
                 if (rc == BLE_HS_ENOMEM) vTaskDelay(pdMS_TO_TICKS(5));
-            } while (rc == BLE_HS_ENOMEM && ++tries < 200 && s_subscribed);
+            } while (rc == BLE_HS_ENOMEM && s_subscribed && esp_timer_get_time() - wait_from < WAIT_MS * 1000LL);
+            int64_t waited_ms = (esp_timer_get_time() - wait_from) / 1000;
+            if (waited_ms > longest_wait_ms) longest_wait_ms = waited_ms;
             if (rc != 0) {
-                ESP_LOGW(TAG, "Packet to the app not sent (%d)", rc);
+                ESP_LOGW(TAG, "Packet to the app not sent (%d) after %lld ms, %d of %d small Bluetooth buffers free, %u of %u bytes sent",
+                         rc, waited_ms, msys1_free(), s_msys1 ? s_msys1->mp_num_blocks : 0, (unsigned)off, (unsigned)m.len);
                 break;
             }
             off += chunk;
         }
-        // (how long a long reply takes to go on to the app - beside the Nano link's "Long message from the Nano")
-        if (m.len >= 4096) ESP_LOGI(TAG, "Long message to the app: %u bytes in %lld ms", (unsigned)m.len, (esp_timer_get_time() - started_us) / 1000);
+        // (how long a long reply takes to go on to the app - beside the Nano link's "Long message from the Nano"; and
+        // the fewest free blocks each pool has had since the start, to size CONFIG_BT_NIMBLE_MSYS_1/2_BLOCK_COUNT by)
+        if (m.len >= 4096) ESP_LOGI(TAG, "Long message to the app: %u bytes in %lld ms (longest wait for buffers %lld ms; fewest free "
+                                    "buffers so far: %d of %d small, %d of %d large)", (unsigned)m.len,
+                                    (esp_timer_get_time() - started_us) / 1000, longest_wait_ms,
+                                    s_msys1 ? s_msys1->mp_min_free : -1, s_msys1 ? s_msys1->mp_num_blocks : 0,
+                                    s_msys2 ? s_msys2->mp_min_free : -1, s_msys2 ? s_msys2->mp_num_blocks : 0);
         free(m.data);
     }
 }

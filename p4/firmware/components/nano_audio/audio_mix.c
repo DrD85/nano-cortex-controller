@@ -10,6 +10,8 @@
 
 static inline uint32_t fbits(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
 static inline float bitsf(uint32_t u) { float f; memcpy(&f, &u, 4); return f; }
+// fmaxf is a library call on the P4 (__issignalingf per operand), here per source and frame (2026-11-27)
+static inline float max2(float a, float b) { return a > b ? a : b; }
 
 void audio_mix_init(audio_mix_t *m, audio_pipe_t *phone, track_player_t *track, looper_t *looper)
 {
@@ -200,14 +202,14 @@ void audio_mix_render(audio_mix_t *m, int32_t *out, uint32_t frames, int channel
             float r = a[2 * i + 1] * m->gain[0] + b[2 * i + 1] * m->gain[1] + c[2 * i + 1] * m->gain[2] + dr[2 * i + 1] * m->gain[3];
             const float *src[AUDIO_SRC_COUNT] = { a, b, c, dr };
             for (int s = 0; s < AUDIO_SRC_COUNT; s++) {
-                float v = fmaxf(fabsf(src[s][2 * i]), fabsf(src[s][2 * i + 1])) * m->gain[s];
+                float v = max2(fabsf(src[s][2 * i]), fabsf(src[s][2 * i + 1])) * m->gain[s];
                 if (v > m->peak_src[s]) m->peak_src[s] = v;
             }
 #if MIX_LOOKAHEAD
             // Look-ahead limiter: each frame's needed gain (ceiling / peak) holds for the next LIM_AHEAD frames (the
             // window's lowest), comes back slowly (release), and is averaged over LIM_AHEAD frames - so the gain has
             // come down smoothly by the time the delayed peak goes out, and never later than it.
-            float peak = fmaxf(fabsf(l), fabsf(r));
+            float peak = max2(fabsf(l), fabsf(r));
             if (peak > m->peak_sum) m->peak_sum = peak;
             uint32_t li = m->lim_i;
             m->lim_t[li] = peak > CEILING ? CEILING / peak : 1.0f;
@@ -236,7 +238,7 @@ void audio_mix_render(audio_mix_t *m, int32_t *out, uint32_t frames, int channel
             }
 #else
             // limiter: turns down at once when the sum would go over the ceiling, comes back slowly
-            float peak = fmaxf(fabsf(l), fabsf(r));
+            float peak = max2(fabsf(l), fabsf(r));
             if (peak > m->peak_sum) m->peak_sum = peak;
             if (peak * m->lim > CEILING) m->lim = CEILING / peak;
             if (m->lim < 1.0f) {

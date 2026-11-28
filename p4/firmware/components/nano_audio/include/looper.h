@@ -92,6 +92,12 @@ typedef struct {
     uint32_t clipped;
 
     _Atomic uint32_t i_state, i_len, i_pos, i_passes, i_clipped, i_flags;
+
+    // Saving the loop from another task (looper_save_*, 2026-11-28): `edit` is odd while the audio side changes the
+    // loop (its buffers, its length, whether the overdub counts), even otherwise; i_quiet: the loop is there and
+    // nothing writes it now. `editing`: audio side only, how deep the change that is open now is nested.
+    _Atomic uint32_t edit, i_quiet;
+    uint8_t editing;
 } looper_t;
 
 // mem: frames * 4 int16 (two stereo buffers of `frames` frames each).
@@ -113,3 +119,31 @@ void looper_command_now(looper_t *lp, looper_cmd_t cmd);
 void looper_start_back(looper_t *lp, uint32_t frames_ago, const int16_t *pre, uint32_t n);
 void looper_leave(looper_t *lp);
 void looper_enter(looper_t *lp);
+// Audio side only (loop_parts.h): around a write into the part's buffers from outside the looper (nests).
+void looper_edit_begin(looper_t *lp);
+void looper_edit_end(looper_t *lp);
+
+// ---- saving the loop (2026-11-28) ----
+// Another task copies a part's loop as it will sound from its next pass on (the take with its overdub, an undone
+// overdub left out, a merge or seam the audio side has not finished yet done as it will do it), in pieces, while the
+// audio runs - the audio side never waits for it. It works like a seqlock: the audio side makes `edit` odd before it
+// changes anything the copy depends on and even after; the copy keeps the count it began with and checks it after
+// every piece. A play / stop, a pause, a part switch or the loop simply playing on change nothing; a take, an
+// overdub (and its merge), undo / redo and clear do - the copy is then thrown away (looper_save_same false).
+typedef struct {
+    uint32_t edit;              // the change count the copy belongs to
+    uint32_t len;               // frames
+    uint32_t bar;               // frames per bar the take was rounded to (0 = free length; a take that filled the memory
+                                // keeps the bar of the one before: whole bars only if len % bar == 0)
+    uint32_t xfade, tail, tail_done, fold_p, fold_left;
+    bool layer_on, tail_pending, fold_on, fold_keep;
+} looper_save_t;
+// false: the part is empty, or a take / an overdub / its merge is being written just now (try again a little later).
+bool looper_save_begin(looper_t *lp, looper_save_t *s);
+// Frames [from, from + n) of the loop as int16 stereo (n <= len - from); samples beyond full scale are clipped and
+// counted in *clipped. Reads the part's buffers only (PSRAM on the board: call it in pieces).
+void looper_save_read(const looper_t *lp, const looper_save_t *s, uint32_t from, uint32_t n, int16_t *dst, uint32_t *clipped);
+// true: nothing the copy depends on has changed since looper_save_begin (call it after each piece read).
+bool looper_save_same(looper_t *lp, const looper_save_t *s);
+// The change count now (another task: "this loop is still the one saved").
+uint32_t looper_edit_count(looper_t *lp);

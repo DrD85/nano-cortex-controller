@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include "audio_mix.h"
+#include "loop_parts.h"
 #include "looper.h"
 #include "track_player.h"
 
@@ -22,6 +23,9 @@ void p4_looper_info(looper_info_t *out);
 void p4_looper_dump(void);             // console 'Y': the loop as text (its start and its last second)
 void p4_audio_raw_dump(void);          // console 'K': the next capture packets as they came
 void p4_audio_restart_streams(void);   // console 'J': the USB audio streams anew
+void p4_audio_test_report(bool scan);  // console ':q' / ':s': REPORT lines (looper, parts, settings, health; ':s' also
+                                         // scans the loop for its sounds) - 4 KB of stack
+void p4_audio_click_train(int db);     // console ':c': 10 ms of 1 kHz every 500 ms at -db dBFS on playback 3/4, 0 = off
 float p4_audio_di_peak(void);   // the dry input's peak (0-1) since the last call (the auto-wah that follows the playing)
 void p4_looper_set_bar_lines(bool on, int beats);   // round the first take to bars in the Nano's tempo
 void p4_looper_set_level_db(float db);
@@ -45,6 +49,24 @@ bool p4_drums_on(void);
 // ---- the looper's two parts (loop_parts.h) ----
 void p4_parts_choose(int part);                     // 0 = A, 1 = B: at the end of the loop that plays
 void p4_parts_pause(void);                          // loop and drums: pause / go on        // round trip, measured on the hardware (default 0)
+
+// ---- saving the loops (p4_loops.c, 2026-11-28): each part that holds a loop as a WAV file in /sdcard/loops, for
+// the Jam Player on the Mac (Wi-Fi, p4_net.c: GET /api/loops) ----
+#define P4_LOOPS_DIR "/sdcard/loops"
+void p4_loops_save(void);                           // the screen's "Save loops": a task of its own; the result as a message
+enum { P4_SAVE_NONE, P4_SAVE_READY, P4_SAVE_BUSY, P4_SAVE_DONE, P4_SAVE_NO_CARD };   // nothing / to save / saving /
+                                                                                     // saved as it is / no card (= UI_SAVE_*)
+int p4_loops_state(int *percent);                   // P4_SAVE_* (the screen asks 10 times a second); percent while saving
+void p4_loops_set_time(int64_t unix_s, int utc_minutes);   // the Jam Player's clock (Wi-Fi): names with the date
+// shared with p4_loops.c (p4_audio.c)
+loop_parts_t *p4_loop_parts(void);                  // NULL: the looper has no memory
+uint32_t p4_looper_bar_now(void);                   // frames per bar in the Nano's tempo now (0 = none)
+int p4_looper_beats(void);                          // beats per bar
+// The sound over a span of time: frames that went out as silence (the mix was late), playback packets not sent in
+// time, render frames without a capture frame (a click in a loop being recorded) - each counted since the start -
+// and the longest render of the mix (us) since the last look with restart_max.
+typedef struct { uint32_t late_frames, skipped, short_frames, mix_max_us; } p4_sound_marks_t;
+void p4_audio_marks(p4_sound_marks_t *out, bool restart_max);
 
 // ---- jam tracks (WAV files in /sdcard/jam, measured like the Jam Player on the Mac, corrections by ear) ----
 // Albums (2026-11-27): /sdcard/jam/<Album>/<Title>.wav, one folder level; the WAVs directly in /sdcard/jam are the

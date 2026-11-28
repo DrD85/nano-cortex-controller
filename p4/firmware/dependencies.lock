@@ -125,21 +125,10 @@ dependencies:
       type: service
     version: 1.15.1
   espressif/usb:
-    component_hash: 99eee72ea224d9117d4c342442717a1f20bf8112e2ab5d7d7038b827874f4c92
-    dependencies:
-    - name: idf
-      require: private
-      version: '>=5.5.3'
+    dependencies: []
     source:
-      registry_url: https://components.espressif.com/
-      type: service
-    targets:
-    - esp32s2
-    - esp32s3
-    - esp32s31
-    - esp32p4
-    - esp32h4
-    - linux
+      path: components/espressif__usb
+      type: local
     version: 1.6.0
   espressif/wifi_remote_over_eppp:
     component_hash: 1fd6968af20f0b19e421f6b519b0a8caf81d689afc3783b564c28559e45f66ef
@@ -200,6 +189,6 @@ direct_dependencies:
 - espressif/usb
 - idf
 - lvgl/lvgl
-manifest_hash: 081d269fbca4125df10c0bec66c6b2aa7dd3f19d22c30da2f23603657d572084
+manifest_hash: e30a4ae99d68609f2a5681d86c20c866bdc7d8b756d49863b863ce5e1484bf66
 target: esp32p4
 version: 3.0.0

@@ -166,7 +166,8 @@ lv_display_t *lvgl_port_add_disp_dsi(const lvgl_port_display_cfg_t *disp_cfg,
             cbs.on_color_trans_done = lvgl_port_flush_dpi_panel_ready_callback;
         }
         /* Register done callback */
-        esp_lcd_dpi_panel_register_event_callbacks(disp_ctx->panel_handle, &cbs, disp);
+        esp_lcd_dpi_panel_register_event_callbacks(disp_ctx->panel_handle, &cbs,
+                dsi_cfg->flags.avoid_tearing ? (void *)disp_ctx : (void *)disp);   // (P4 board: the VSYNC callback takes the context)
 
         /* Apply rotation from initial display configuration */
         lvgl_port_disp_rotation_update(disp_ctx);
@@ -527,16 +528,16 @@ static bool lvgl_port_flush_dpi_panel_ready_callback(esp_lcd_panel_handle_t pane
 
 static volatile int64_t s_vsync_us;   // P4 board: when the last VSYNC came (see the flush below)
 
-static bool lvgl_port_flush_dpi_vsync_ready_callback(esp_lcd_panel_handle_t panel_io,
+// P4 board (2026-11-28): in internal RAM and with the display context as user_ctx - the VSYNC interrupt runs at the
+// USB audio's level on core 0 60 times a second; from flash it waited on cache misses while the screen's frame-buffer
+// write-back held the cache, and so did the USB interrupt behind it (missing capture packets).
+static IRAM_ATTR bool lvgl_port_flush_dpi_vsync_ready_callback(esp_lcd_panel_handle_t panel_io,
         esp_lcd_dpi_panel_event_data_t *edata, void *user_ctx)
 {
     BaseType_t need_yield = pdFALSE;
     s_vsync_us = esp_timer_get_time();
 
-    lv_display_t *disp_drv = (lv_display_t *)user_ctx;
-    assert(disp_drv != NULL);
-    lvgl_port_display_ctx_t *disp_ctx = (lvgl_port_display_ctx_t *)lv_display_get_driver_data(disp_drv);
-    assert(disp_ctx != NULL);
+    lvgl_port_display_ctx_t *disp_ctx = (lvgl_port_display_ctx_t *)user_ctx;
 
     if (disp_ctx->trans_sem) {
         xSemaphoreGiveFromISR(disp_ctx->trans_sem, &need_yield);

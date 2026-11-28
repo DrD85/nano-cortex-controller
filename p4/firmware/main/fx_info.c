@@ -21,15 +21,17 @@ static const nano_focus_value_t i13_s_0[] = { { 0, 0.2000f }, { 1, 0.7000f } };
 static const nano_focus_value_t i13_s_1[] = { { 0, 0.5000f }, { 1, 0.5500f } };
 static const nano_focus_value_t i13_s_2[] = { { 0, 0.8000f }, { 1, 0.4500f } };
 static const nano_info_sound_t i13_s[] = {
-    { "Amp pusher", "Gain 2.0 · Level 70.0 %", "The classic use: low drive, high level, into a crunchy capture.", 2, i13_s_0 },
-    { "Mild crunch", "Gain 5.0 · Level 55.0 %", "On a clean capture.", 2, i13_s_1 },
-    { "Full drive", "Gain 8.0 · Level 45.0 %", "", 2, i13_s_2 },
+    { "Amp pusher", "Gain 2.0 · Level 7.0", "The classic use: low drive, high level, into a crunchy capture.", 2, i13_s_0 },
+    { "Mild crunch", "Gain 5.0 · Level 5.5", "On a clean capture.", 2, i13_s_1 },
+    { "Full drive", "Gain 8.0 · Level 4.5", "", 2, i13_s_2 },
 };
 static const nano_focus_value_t i13_p_0[] = { { 0, 0.7000f }, { 1, 0.3000f } };
+static const nano_focus_value_t i13_p_1[] = { { 0, 0.2000f }, { 1, 0.8000f } };
 static const nano_info_sound_t i13_p[] = {
-    { "Frusciante: SD-1", "Gain 7.0 · Level 30.0 %", "A Boss SD-1 on a fan's chart of his Unlimited Love tour board (r/John_Frusciante): Level at about ten o'clock, Tone at nine, Drive at about two. The OD-1 modelled here is its forerunner, without a tone control.", 2, i13_p_0 },
+    { "Frusciante: SD-1", "Gain 7.0 · Level 3.0", "A Boss SD-1 on a fan's chart of his Unlimited Love tour board (r/John_Frusciante): Level at about ten o'clock, Tone at nine, Drive at about two. The OD-1 modelled here is its forerunner, without a tone control.", 2, i13_p_0 },
+    { "Frusciante: SD-1 push", "Gain 2.0 · Level 8.0", "\"These Are The Ways\" and \"Here Ever After\": a Boss SD-1 with its drive at nine to ten o'clock, mostly pushing the Marshall; used as a booster its Level sits between three o'clock and full (note.com/ketunemikku's analysis). The OD-1 modelled here is the SD-1's forerunner, without a tone control.", 2, i13_p_1 },
 };
-static const char *const i13_t[] = { "The device list's tip: drive below 9 o'clock (about 2) and level above 2 o'clock (about 70 %) to make the amp work.", "No tone control – shape it with the capture or an EQ after it." };
+static const char *const i13_t[] = { "The device list's tip: drive below 9 o'clock (about 2) and level above 2 o'clock (about 7) to make the amp work.", "No tone control – shape it with the capture or an EQ after it." };
 static const nano_focus_value_t i6_s_0[] = { { 0, 0.1000f }, { 1, 0.6000f }, { 2, 0.4000f }, { 3, 0.7000f } };
 static const nano_focus_value_t i6_s_1[] = { { 0, 0.7000f }, { 1, 0.5000f }, { 2, 0.4000f }, { 3, 0.6000f } };
 static const nano_focus_value_t i6_s_2[] = { { 0, 0.8500f }, { 1, 0.5000f }, { 2, 0.5000f }, { 3, 0.6000f } };
@@ -79,6 +81,7 @@ static const nano_focus_value_t i22_p_2[] = { { 0, 0.8500f }, { 1, 0.6000f }, { 
 static const nano_focus_value_t i22_p_3[] = { { 0, 1.0000f }, { 1, 0.6000f }, { 2, 0.0000f }, { 3, 1.0000f } };
 static const nano_focus_value_t i22_p_4[] = { { 0, 1.0000f }, { 1, 0.7000f }, { 2, 1.0000f }, { 3, 1.0000f } };
 static const nano_focus_value_t i22_p_5[] = { { 0, 1.0000f }, { 1, 0.7500f }, { 2, 1.0000f }, { 3, 0.3500f } };
+static const nano_focus_value_t i22_p_6[] = { { 0, 0.8000f }, { 1, 0.9000f }, { 2, 0.0000f }, { 3, 1.0000f } };
 static const nano_info_sound_t i22_p[] = {
     { "Black Keys: thick fuzz", "Fuzz 10.0 · Volume 5.0 · Pickup HB · Pickup Level 7.0", "Dan Auerbach's fuzzes are a Big Muff and a Shin-ei Companion; he solos on the neck pickup with the treble rolled off (Premier Guitar). The Nano has neither pedal – this is the nearest: dark and woolly.", 4, i22_p_0 },
     { "Jack White: fuzz wall", "Fuzz 10.0 · Volume 6.5 · Pickup Single · Pickup Level 9.0", "His fuzz is a Big Muff next to the Whammy (Guitar.com). The Nano has no Muff – this is the nearest: full up and bright.", 4, i22_p_1 },
@@ -86,36 +89,39 @@ static const nano_info_sound_t i22_p[] = {
     { "Muse: gated fuzz", "Fuzz 10.0 · Volume 6.0 · Pickup HB · Pickup Level 10.0", "\"Stockholm Syndrome\" and \"Plug In Baby\": a Z.Vex Fuzz Factory built into Matt Bellamy's Manson (ToneMirror, which names no source). It grew out of the Fuzz Face, but the Nano cannot gate or sputter like it – the nearest: everything up, humbucker.", 4, i22_p_3 },
     { "Hendrix: Fuzz Face", "Fuzz 10.0 · Volume 7.0 · Pickup Single · Pickup Level 10.0", "His Fuzz Face sat between a Vox wah and the Uni-Vibe (Roger Mayer in MusicRadar; Ground Guitar on Woodstock). No knob positions are documented – ours: fuzz full up, single coils, guitar wide open.", 4, i22_p_4 },
     { "Hendrix: cleaned up", "Fuzz 10.0 · Volume 7.5 · Pickup Single · Pickup Level 3.5", "The same Fuzz Face with the guitar's volume rolled back for rhythm parts – here Pickup Level does that. Ours.", 4, i22_p_5 },
+    { "Geese: Fuzz Factory", "Fuzz 8.0 · Volume 9.0 · Pickup HB · Pickup Level 10.0", "Read off Emily Green's board in Premier Guitar's 2026 Rig Rundown photo: her Z.Vex Fuzz Factory with Drive at three o'clock and Vol almost full (Gate at ten, Comp at four, Stab at half past three). It grew out of the Fuzz Face, but Gate, Comp and Stab have no counterpart here – it cannot sputter like hers.", 4, i22_p_6 },
 };
 static const char *const i22_t[] = { "Pickup and Pickup Level stand for the guitar in front: the real fuzz sounds different with every pickup. Match them to your guitar.", "Place it first in the chain – after a buffer or a wah it can turn harsh.", "At full guitar volume it is dark and compressed; pull the volume back a little for solos so it cuts through." };
 static const nano_focus_value_t i27_s_0[] = { { 0, 0.0500f }, { 1, 0.6000f }, { 2, 0.8500f } };
 static const nano_focus_value_t i27_s_1[] = { { 0, 0.5000f }, { 1, 0.5500f }, { 2, 0.6000f } };
 static const nano_focus_value_t i27_s_2[] = { { 0, 0.7500f }, { 1, 0.5000f }, { 2, 0.5500f } };
 static const nano_info_sound_t i27_s[] = {
-    { "Metal tightener", "Overdrive 0.5 · Tone 6.0 · Level 85.0 %", "In front of a high-gain capture: tighter low end, more focus.", 3, i27_s_0 },
-    { "Texas blues", "Overdrive 5.0 · Tone 5.5 · Level 60.0 %", "Into a capture at the edge of breakup.", 3, i27_s_1 },
-    { "Smooth lead", "Overdrive 7.5 · Tone 5.0 · Level 55.0 %", "", 3, i27_s_2 },
+    { "Metal tightener", "Overdrive 0.5 · Tone 6.0 · Level 8.5", "In front of a high-gain capture: tighter low end, more focus.", 3, i27_s_0 },
+    { "Texas blues", "Overdrive 5.0 · Tone 5.5 · Level 6.0", "Into a capture at the edge of breakup.", 3, i27_s_1 },
+    { "Smooth lead", "Overdrive 7.5 · Tone 5.0 · Level 5.5", "", 3, i27_s_2 },
 };
 static const nano_focus_value_t i27_p_0[] = { { 0, 0.9000f }, { 1, 0.6000f }, { 2, 0.5000f } };
 static const nano_focus_value_t i27_p_1[] = { { 0, 0.6000f }, { 1, 0.5000f }, { 2, 0.4500f } };
+static const nano_focus_value_t i27_p_2[] = { { 0, 0.5000f }, { 1, 0.5000f }, { 2, 0.5000f } };
 static const nano_info_sound_t i27_p[] = {
-    { "John Mayer: high gain", "Overdrive 9.0 · Tone 6.0 · Level 50.0 %", "The first of his two TS10 Tube Screamers as read off a live board: Drive about 9, Tone 6, Level 5 (Guitar Chalk – its author is not sure of it).", 3, i27_p_0 },
-    { "John Mayer: low gain", "Overdrive 6.0 · Tone 5.0 · Level 45.0 %", "His second TS10, the subtler one: Drive about 6, Tone 4–6, Level 4–5 (Guitar Chalk).", 3, i27_p_1 },
+    { "John Mayer: high gain", "Overdrive 9.0 · Tone 6.0 · Level 5.0", "The first of his two TS10 Tube Screamers as read off a live board: Drive about 9, Tone 6, Level 5 (Guitar Chalk – its author is not sure of it).", 3, i27_p_0 },
+    { "John Mayer: low gain", "Overdrive 6.0 · Tone 5.0 · Level 4.5", "His second TS10, the subtler one: Drive about 6, Tone 4–6, Level 4–5 (Guitar Chalk).", 3, i27_p_1 },
+    { "Warpaint: 808 at 5", "Overdrive 5.0 · Tone 5.0 · Level 5.0", "Emily Kokal keeps her Ibanez TS808DX on all the time \"at 5\", just for a little grit in front of a very clean Roland JC-120 (Premier Guitar, 2017). Which knob \"5\" means is not said – here all three.", 3, i27_p_2 },
 };
-static const char *const i27_t[] = { "Level is in per cent here (50 % = the middle).", "Cut low end is part of the sound – if a capture gets thin, lower Overdrive rather than adding bass." };
+static const char *const i27_t[] = { "All three controls run from 0 to 10, as on the pedal.", "Cut low end is part of the sound – if a capture gets thin, lower Overdrive rather than adding bass." };
 static const nano_focus_value_t i3000_s_0[] = { { 0, 0.3000f }, { 1, 0.0000f }, { 2, 0.0000f }, { 3, 0.5000f }, { 4, 0.5000f }, { 5, 0.4000f } };
 static const nano_focus_value_t i3000_s_1[] = { { 0, 0.6500f }, { 1, 1.0000f }, { 2, 1.0000f }, { 3, 0.6000f }, { 4, 0.5000f }, { 5, 0.6000f } };
 static const nano_focus_value_t i3000_s_2[] = { { 0, 0.9000f }, { 1, 1.0000f }, { 2, 0.0000f }, { 3, 0.4000f }, { 4, 0.4500f }, { 5, 0.8000f } };
 static const nano_info_sound_t i3000_s[] = {
-    { "Warm-up", "Drive 3.0 · Growl Off · Midboost Off · Tone 5.0 · Level 50.0 % · Blend 4.0", "A little saturation, mostly clean bass.", 6, i3000_s_0 },
-    { "Modern grind", "Drive 6.5 · Growl On · Midboost On · Tone 6.0 · Level 50.0 % · Blend 6.0", "The classic metal / prog bass tone.", 6, i3000_s_1 },
-    { "Full fuzz", "Drive 9.0 · Growl On · Midboost Off · Tone 4.0 · Level 45.0 % · Blend 8.0", "", 6, i3000_s_2 },
+    { "Warm-up", "Drive 3.0 · Growl Off · Midboost Off · Tone 5.0 · Level 5.0 · Blend 4.0", "A little saturation, mostly clean bass.", 6, i3000_s_0 },
+    { "Modern grind", "Drive 6.5 · Growl On · Midboost On · Tone 6.0 · Level 5.0 · Blend 6.0", "The classic metal / prog bass tone.", 6, i3000_s_1 },
+    { "Full fuzz", "Drive 9.0 · Growl On · Midboost Off · Tone 4.0 · Level 4.5 · Blend 8.0", "", 6, i3000_s_2 },
 };
 static const nano_focus_value_t i3000_p_0[] = { { 0, 0.9000f }, { 1, 1.0000f }, { 2, 1.0000f }, { 3, 0.6000f }, { 4, 0.5000f }, { 5, 0.7000f } };
 static const nano_info_sound_t i3000_p[] = {
-    { "Muse: Hysteria bass", "Drive 9.0 · Growl On · Midboost On · Tone 6.0 · Level 50.0 % · Blend 7.0", "\"Hysteria\": Chris Wolstenholme's bass through three amps – one clean, one through a Big Muff, one through an Animato distortion; much of the record's sound is a synth doubling it (producer Rich Costey, via ToneMirror). Ours: heavy drive with the clean bass blended in.", 6, i3000_p_0 },
+    { "Muse: Hysteria bass", "Drive 9.0 · Growl On · Midboost On · Tone 6.0 · Level 5.0 · Blend 7.0", "\"Hysteria\": Chris Wolstenholme's bass through three amps – one clean, one through a Big Muff, one through an Animato distortion; much of the record's sound is a synth doubling it (producer Rich Costey, via ToneMirror). Ours: heavy drive with the clean bass blended in.", 6, i3000_p_0 },
 };
-static const char *const i3000_t[] = { "Blend mixes the clean bass back in – it keeps the low end and the attack. Above 7 the distortion dominates.", "Growl adds low-end weight, Midboost helps the bass cut through a dense mix.", "Level is in per cent; set it so the pedal is not louder than bypassed." };
+static const char *const i3000_t[] = { "Blend mixes the clean bass back in – it keeps the low end and the attack. Above 7 the distortion dominates.", "Growl adds low-end weight, Midboost helps the bass cut through a dense mix.", "Set Level so the pedal is not louder than bypassed." };
 static const nano_focus_value_t i3_s_0[] = { { 0, 0.1000f }, { 1, 0.7500f } };
 static const nano_focus_value_t i3_s_1[] = { { 0, 0.7000f }, { 1, 0.7000f } };
 static const nano_focus_value_t i3_s_2[] = { { 0, 0.3000f }, { 1, 0.8000f } };
@@ -146,11 +152,15 @@ static const nano_focus_value_t i4_p_0[] = { { 0, 0.7500f }, { 1, 0.4500f }, { 2
 static const nano_focus_value_t i4_p_1[] = { { 0, 0.3500f }, { 1, 0.5500f }, { 2, 0.6000f } };
 static const nano_focus_value_t i4_p_2[] = { { 0, 0.5000f }, { 1, 0.6500f }, { 2, 0.5000f } };
 static const nano_focus_value_t i4_p_3[] = { { 0, 0.7000f }, { 1, 0.6500f }, { 2, 0.5000f } };
+static const nano_focus_value_t i4_p_4[] = { { 0, 0.8000f }, { 1, 0.6500f }, { 2, 0.5000f } };
+static const nano_focus_value_t i4_p_5[] = { { 0, 1.0000f }, { 1, 0.1000f }, { 2, 0.6500f } };
 static const nano_info_sound_t i4_p[] = {
     { "Wednesday: wall of dirt", "Distortion 7.5 · Filter 4.5 · Volume 5.5", "Karly Hartzman's only pedal is a ProCo RAT – a \"heavy midrange wall of dirt\" (Mixdown). Settings are ours.", 3, i4_p_0 },
     { "Wednesday: steel grit", "Distortion 3.5 · Filter 5.5 · Volume 6.0", "Xandy Chelmis runs a RAT 2 on the pedal steel (Mixdown). Settings are ours: low gain, soft top end.", 3, i4_p_1 },
     { "Frusciante: DS-2 rhythm", "Distortion 5.0 · Filter 6.5 · Volume 5.0", "His main distortion is a Boss DS-2 on Turbo II; a fan's chart of his Unlimited Love tour board (r/John_Frusciante) shows Level and Tone at nine o'clock and Dist at noon. The Nano has no DS-2 – carried over to the nearest distortion: Dist as on the chart, a dark Filter for the low Tone.", 3, i4_p_2 },
     { "Frusciante: DS-2 lead", "Distortion 7.0 · Filter 6.5 · Volume 5.0", "The second DS-2 on a fan's chart of his Unlimited Love tour board (r/John_Frusciante): as the rhythm one, with Dist at about two o'clock. The Nano has no DS-2 – the nearest distortion.", 3, i4_p_3 },
+    { "Warpaint: DS-1 wiry", "Distortion 8.0 · Filter 6.5 · Volume 5.0", "Read off Theresa Wayman's board in Guitar Player's 2022 photo: a Boss DS-1 with Dist at three o'clock, Tone and Level at nine; she plays it with the bridge pickup for a \"wiry\" sound. The Nano has no DS-1 – the nearest distortion, carried over as the DS-2s above.", 3, i4_p_4 },
+    { "Frusciante: Slane DS-2", "Distortion 10.0 · Filter 1.0 · Volume 6.5", "Slane Castle 2003: two fan readings agree on his DS-2 with Tone and Dist full up, Turbo II, Level between one and three o'clock (a 2021 Reddit reply and D-D-Distortion.com, 2016, collected by note.com/ketunemikku) – not his confirmed setting. The nearest distortion, Filter almost open for the full Tone.", 3, i4_p_5 },
 };
 static const char *const i4_t[] = { "Filter is a low-pass that works backwards: turning it up makes the sound darker. Most players live between 3 and 5.", "It pairs well with British-voiced captures – the classic RAT + Marshall / AC30 combination.", "Set Volume so that on and off are equally loud, then add a little for solos." };
 static const nano_focus_value_t i16001_s_0[] = { { 0, 0.2500f } };
@@ -162,40 +172,44 @@ static const nano_info_sound_t i16001_s[] = {
     { "Tight", "Noise Reduction 75.0 %", "High gain with palm mutes and stops.", 1, i16001_s_2 },
 };
 static const char *const i16001_t[] = { "Raise it until hiss and hum disappear in the pauses – stop before sustained notes get cut.", "In Pre FX in front of a drive it removes noise before it gets amplified." };
-static const nano_focus_value_t i4005_s_0[] = { { 0, 0.3750f }, { 1, 0.4167f }, { 2, 0.5000f }, { 3, 0.6250f }, { 4, 0.6667f }, { 5, 0.5833f }, { 6, 0.5000f }, { 7, 0.4167f }, { 8, 0.3750f }, { 9, 0.1026f }, { 10, 0.4667f }, { 11, 0.6250f } };
-static const nano_focus_value_t i4005_s_1[] = { { 0, 0.5833f }, { 1, 0.6250f }, { 2, 0.5000f }, { 3, 0.3750f }, { 4, 0.3333f }, { 5, 0.4167f }, { 6, 0.5833f }, { 7, 0.6250f }, { 8, 0.5000f }, { 9, 0.0513f }, { 10, 0.7333f }, { 11, 0.5000f } };
-static const nano_focus_value_t i4005_s_2[] = { { 0, 0.5000f }, { 1, 0.5000f }, { 2, 0.4167f }, { 3, 0.5000f }, { 4, 0.5000f }, { 5, 0.5000f }, { 6, 0.4167f }, { 7, 0.3750f }, { 8, 0.3333f }, { 9, 0.0769f }, { 10, 0.5333f }, { 11, 0.5000f } };
+static const nano_focus_value_t i4005_s_0[] = { { 0, 0.3434f }, { 1, 0.3750f }, { 2, 0.4167f }, { 3, 0.5000f }, { 4, 0.6250f }, { 5, 0.6667f }, { 6, 0.5833f }, { 7, 0.5000f }, { 8, 0.4167f }, { 9, 0.3750f }, { 10, 0.5493f }, { 11, 0.5750f } };
+static const nano_focus_value_t i4005_s_1[] = { { 0, 0.2282f }, { 1, 0.5833f }, { 2, 0.6250f }, { 3, 0.5000f }, { 4, 0.3750f }, { 5, 0.3333f }, { 6, 0.4167f }, { 7, 0.5833f }, { 8, 0.6250f }, { 9, 0.5000f }, { 10, 0.7204f }, { 11, 0.5000f } };
+static const nano_focus_value_t i4005_s_2[] = { { 0, 0.2897f }, { 1, 0.5000f }, { 2, 0.5000f }, { 3, 0.4167f }, { 4, 0.5000f }, { 5, 0.5000f }, { 6, 0.5000f }, { 7, 0.4167f }, { 8, 0.3750f }, { 9, 0.3333f }, { 10, 0.5951f }, { 11, 0.5000f } };
 static const nano_info_sound_t i4005_s[] = {
     { "Mid boost (pre)", "65Hz -3.0 dB · 125Hz -2.0 dB · 250Hz 0.0 dB · 500hz 3.0 dB · 1kHz 4.0 dB · 2kHz 2.0 dB · 4kHz 0.0 dB · 8kHz -2.0 dB · 16kHz -3.0 dB · HPF 100 Hz · LPF 8.00 kHz · Output 3.0 dB", "Before a driven capture: tighter and more focused, like a Tube Screamer.", 12, i4005_s_0 },
     { "Scooped", "65Hz 2.0 dB · 125Hz 3.0 dB · 250Hz 0.0 dB · 500hz -3.0 dB · 1kHz -4.0 dB · 2kHz -2.0 dB · 4kHz 2.0 dB · 8kHz 3.0 dB · 16kHz 0.0 dB · HPF 60 Hz · LPF 12.0 kHz · Output 0.0 dB", "80s / thrash rhythm after the capture.", 12, i4005_s_1 },
     { "Clean-up (post)", "65Hz 0.0 dB · 125Hz 0.0 dB · 250Hz -2.0 dB · 500hz 0.0 dB · 1kHz 0.0 dB · 2kHz 0.0 dB · 4kHz -2.0 dB · 8kHz -3.0 dB · 16kHz -4.0 dB · HPF 80 Hz · LPF 9.00 kHz · Output 0.0 dB", "Less mud and fizz on a high-gain sound.", 12, i4005_s_2 },
 };
+static const nano_focus_value_t i4005_p_0[] = { { 1, 0.6667f }, { 2, 0.6250f }, { 3, 0.5000f }, { 4, 0.5000f }, { 5, 0.5000f }, { 6, 0.5000f }, { 7, 0.6250f }, { 8, 0.6667f }, { 9, 0.5833f } };
+static const nano_info_sound_t i4005_p[] = {
+    { "Geese: Pearl EQ", "65Hz 4.0 dB · 125Hz 3.0 dB · 250Hz 0.0 dB · 500hz 0.0 dB · 1kHz 0.0 dB · 2kHz 0.0 dB · 4kHz 3.0 dB · 8kHz 4.0 dB · 16kHz 2.0 dB", "Emily Green's Pearl PE-10 parametric EQ sits after her fuzz: she uses it to bring out the highs and the lows and leaves the mids alone (Guitar World, 2026). The amounts are ours.", 9, i4005_p_0 },
+};
 static const char *const i4005_t[] = { "Cut before you boost: removing 250 Hz mud or 4–8 kHz fizz usually helps more than adding.", "The EQ view shows the curve – click the small curve on the card." };
 static const nano_focus_value_t i4003_s_0[] = { { 0, 0.2500f }, { 1, 0.1909f }, { 2, 0.2500f }, { 3, 0.7294f }, { 4, 0.5000f } };
 static const nano_focus_value_t i4003_s_1[] = { { 0, 0.5000f }, { 1, 0.2041f }, { 2, 0.2500f }, { 3, 0.6964f }, { 4, 0.5000f } };
-static const nano_focus_value_t i4003_s_2[] = { { 0, 0.5000f }, { 1, 0.3458f }, { 2, 0.5000f }, { 3, 0.5650f }, { 4, 0.6250f } };
+static const nano_focus_value_t i4003_s_2[] = { { 0, 0.5000f }, { 1, 0.3458f }, { 2, 0.5000f }, { 3, 0.5650f }, { 4, 0.5750f } };
 static const nano_info_sound_t i4003_s[] = {
     { "Band mix", "HPF Slope -12 · HPF Freq 100 Hz · LPF Slope -12 · LPF Freq 7.00 kHz · Output 0.0 dB", "Room for bass and vocals.", 5, i4003_s_0 },
     { "Tight high gain", "HPF Slope -24 · HPF Freq 120 Hz · LPF Slope -12 · LPF Freq 6.00 kHz · Output 0.0 dB", "", 5, i4003_s_1 },
     { "Lo-fi / radio", "HPF Slope -24 · HPF Freq 600 Hz · LPF Slope -24 · LPF Freq 3.00 kHz · Output 3.0 dB", "Telephone sound for an intro.", 5, i4003_s_2 },
 };
 static const char *const i4003_t[] = { "High-pass around 80–100 Hz tightens a guitar; low-pass around 6–8 kHz tames fizz.", "Steeper slopes (−24 and more) cut harder but can sound unnatural on clean sounds." };
-static const nano_focus_value_t i4001_s_0[] = { { 1, 0.0035f }, { 3, 0.2500f }, { 4, 1.0000f }, { 5, 0.3750f }, { 6, 0.0140f }, { 7, 0.1111f }, { 8, 0.0000f }, { 9, 1.0000f }, { 10, 0.3333f }, { 11, 0.2993f }, { 13, 0.7500f }, { 14, 1.0000f } };
-static const nano_focus_value_t i4001_s_1[] = { { 4, 0.0000f }, { 5, 0.6250f }, { 6, 0.0791f }, { 7, 0.0707f }, { 8, 0.0000f }, { 9, 1.0000f }, { 14, 0.0000f } };
-static const nano_focus_value_t i4001_s_2[] = { { 4, 0.0000f }, { 5, 0.2500f }, { 6, 0.1241f }, { 7, 0.3939f }, { 8, 0.0000f }, { 9, 1.0000f }, { 14, 0.0000f } };
+static const nano_focus_value_t i4001_s_0[] = { { 1, 0.1834f }, { 3, 0.2500f }, { 4, 1.0000f }, { 5, 0.3750f }, { 6, 0.2780f }, { 7, 0.1111f }, { 8, 0.0000f }, { 9, 1.0000f }, { 10, 0.3333f }, { 11, 0.6964f }, { 13, 0.7500f }, { 14, 1.0000f } };
+static const nano_focus_value_t i4001_s_1[] = { { 4, 0.0000f }, { 5, 0.6250f }, { 6, 0.4671f }, { 7, 0.0707f }, { 8, 0.0000f }, { 9, 1.0000f }, { 14, 0.0000f } };
+static const nano_focus_value_t i4001_s_2[] = { { 4, 0.0000f }, { 5, 0.2500f }, { 6, 0.5348f }, { 7, 0.3939f }, { 8, 0.0000f }, { 9, 1.0000f }, { 14, 0.0000f } };
 static const nano_info_sound_t i4001_s[] = {
     { "Tame fizz", "1 Active On · 1 Type Hi Pass · 1 Freq 90 Hz · 2 Active On · 2 Type Peak · 2 Freq 300 Hz · 2 Gain -3.0 dB · 2 Q 1.2 · 3 Active On · 3 Type Hi Shelf · 3 Freq 6.00 kHz · 3 Gain -4.0 dB", "Tighter bass, less mud and fizz after a high-gain capture.", 12, i4001_s_0 },
     { "Presence lift", "1 Active Off · 2 Active On · 2 Type Peak · 2 Freq 1.60 kHz · 2 Gain 3.0 dB · 2 Q 0.8 · 3 Active Off", "Helps a guitar cut through the band.", 7, i4001_s_1 },
     { "Notch a peak", "1 Active Off · 2 Active On · 2 Type Peak · 2 Freq 2.50 kHz · 2 Gain -6.0 dB · 2 Q 4.0 · 3 Active Off", "Sweep 2 Freq until the harsh note disappears.", 7, i4001_s_2 },
 };
 static const char *const i4001_t[] = { "A narrow Q (above 3) fixes a single problem frequency, a wide Q (below 1) shapes the tone broadly.", "Find a problem frequency by boosting a narrow band, sweeping it until it hurts, then cutting there." };
-static const nano_focus_value_t i16002_s_0[] = { { 0, 0.5173f }, { 1, 0.0010f }, { 2, 0.1081f }, { 3, 0.1441f }, { 4, 0.8964f } };
-static const nano_focus_value_t i16002_s_1[] = { { 0, 0.6147f }, { 1, 0.0000f }, { 2, 0.0612f }, { 3, 0.0824f }, { 4, 0.5391f } };
-static const nano_focus_value_t i16002_s_2[] = { { 0, 0.6598f }, { 1, 0.0000f }, { 2, 0.0240f }, { 3, 0.0446f }, { 4, 0.0000f } };
+static const nano_focus_value_t i16002_s_0[] = { { 0, 0.5173f }, { 1, 0.0202f }, { 2, 0.1081f }, { 3, 0.1441f }, { 4, 0.8964f } };
+static const nano_focus_value_t i16002_s_1[] = { { 0, 0.6147f }, { 1, 0.0105f }, { 2, 0.0612f }, { 3, 0.0824f }, { 4, 0.5391f } };
+static const nano_focus_value_t i16002_s_2[] = { { 0, 0.6598f }, { 1, 0.0105f }, { 2, 0.0240f }, { 3, 0.0446f }, { 4, 0.0000f } };
 static const nano_info_sound_t i16002_s[] = {
-    { "Natural", "Threshold -60.0 dB · Attack 2 ms · Hold 50 ms · Release 200 ms · Range -20.0 dB", "Lowers the noise without hard cut-offs.", 5, i16002_s_0 },
-    { "High gain", "Threshold -50.0 dB · Attack 1 ms · Hold 20 ms · Release 80 ms · Range -60.0 dB", "Closes quickly between chugs.", 5, i16002_s_1 },
-    { "Staccato", "Threshold -45.0 dB · Attack 1 ms · Hold 5 ms · Release 30 ms · Range -90.0 dB", "Machine-gun stops – very tight.", 5, i16002_s_2 },
+    { "Natural", "Threshold -60.0 dB · Attack 2.0 ms · Hold 50 ms · Release 200 ms · Range -20.0 dB", "Lowers the noise without hard cut-offs.", 5, i16002_s_0 },
+    { "High gain", "Threshold -50.0 dB · Attack 1.0 ms · Hold 20 ms · Release 80 ms · Range -60.0 dB", "Closes quickly between chugs.", 5, i16002_s_1 },
+    { "Staccato", "Threshold -45.0 dB · Attack 1.0 ms · Hold 5 ms · Release 30 ms · Range -90.0 dB", "Machine-gun stops – very tight.", 5, i16002_s_2 },
 };
 static const char *const i16002_t[] = { "Set Threshold just above the noise floor (play nothing, raise it until the hiss stops).", "Range sets how far the gate closes: −20 dB sounds natural, −90 dB is a hard mute.", "A longer Release keeps note tails; a short one is tighter." };
 static const nano_focus_value_t i16006_s_0[] = { { 0, 1.0000f }, { 1, 1.0000f } };
@@ -231,43 +245,45 @@ static const nano_info_sound_t i9013_s[] = {
     { "Toe down", "Wah 0.90", "", 1, i9013_s_1 },
 };
 static const nano_focus_value_t i9013_p_0[] = { { 0, 0.4500f } };
+static const nano_focus_value_t i9013_p_1[] = { { 0, 0.8500f } };
 static const nano_info_sound_t i9013_p[] = {
     { "Wednesday: fixed filter", "Wah 0.45", "MJ Lenderman leaves a Cry Baby in one place, as a filter that brings out harmonics (Mixdown). Find the spot by ear.", 1, i9013_p_0 },
+    { "Frusciante: parked wah", "Wah 0.85", "\"Don't Forget Me\": the WH-10 left on with the treadle parked toward the treble end (John in Total Guitar, 2002, via note.com/ketunemikku). Move Wah until it sings.", 1, i9013_p_1 },
 };
 static const char *const i9013_t[] = { "Play Wah with an expression pedal (Expression panel).", "Before the drive: classic and vocal. After a high-gain capture: more extreme and piercing." };
-static const nano_focus_value_t i24006_s_0[] = { { 0, 0.6000f }, { 1, 0.0040f }, { 2, 0.4000f }, { 3, 0.5000f }, { 4, 0.5000f }, { 5, 0.0190f }, { 6, 0.7000f }, { 7, 0.5556f }, { 8, 1.0000f } };
-static const nano_focus_value_t i24006_s_1[] = { { 0, 0.5000f }, { 1, 0.0140f }, { 2, 0.6000f }, { 3, 0.0000f }, { 4, 0.5500f }, { 5, 0.0090f }, { 6, 0.6000f }, { 7, 0.4444f }, { 8, 1.0000f } };
-static const nano_focus_value_t i24006_s_2[] = { { 0, 0.4000f }, { 1, 0.0190f }, { 2, 0.5000f }, { 3, 0.0000f }, { 4, 0.5000f }, { 5, 0.0290f }, { 6, 0.4000f }, { 7, 0.2222f }, { 8, 0.6000f } };
+static const nano_focus_value_t i24006_s_0[] = { { 0, 0.6000f }, { 1, 0.0000f }, { 2, 0.4000f }, { 3, 0.5000f }, { 4, 0.5000f }, { 5, 0.3751f }, { 6, 0.8500f }, { 7, 0.8383f }, { 8, 1.0000f } };
+static const nano_focus_value_t i24006_s_1[] = { { 0, 0.5000f }, { 1, 0.0051f }, { 2, 0.6000f }, { 3, 0.0000f }, { 4, 0.5492f }, { 5, 0.2998f }, { 6, 0.8000f }, { 7, 0.7841f }, { 8, 1.0000f } };
+static const nano_focus_value_t i24006_s_2[] = { { 0, 0.4000f }, { 1, 0.0101f }, { 2, 0.5000f }, { 3, 0.0000f }, { 4, 0.5000f }, { 5, 0.4259f }, { 6, 0.7000f }, { 7, 0.6368f }, { 8, 0.6000f } };
 static const nano_info_sound_t i24006_s[] = {
-    { "Funk", "Sens 6.0 · Attack 5 ms · Decay 4.0 · LP/BP/HP 0.00 · Freq 400 Hz · Freq Depth 70.0 % · Reso 6.00 · Mix 100.0 % · Level 50.0 %", "Band-pass quack for clean rhythm parts.", 9, i24006_s_0 },
-    { "Bass synth", "Sens 5.0 · Attack 15 ms · Decay 6.0 · LP/BP/HP -1.00 · Freq 200 Hz · Freq Depth 60.0 % · Reso 5.00 · Mix 100.0 % · Level 55.0 %", "", 9, i24006_s_1 },
-    { "Gentle", "Sens 4.0 · Attack 20 ms · Decay 5.0 · LP/BP/HP -1.00 · Freq 600 Hz · Freq Depth 40.0 % · Reso 3.00 · Mix 60.0 % · Level 50.0 %", "", 9, i24006_s_2 },
+    { "Funk", "Sens 32.4 dB · Attack 10 ms · Decay 406 ms · LP/BP/HP 0.00 · Freq 400 Hz · Freq Depth 7.00 kHz · Reso 6.00 · Mix 100.0 % · Level 0.0 dB", "Band-pass quack for clean rhythm parts.", 9, i24006_s_0 },
+    { "Bass synth", "Sens 27.0 dB · Attack 15 ms · Decay 604 ms · LP/BP/HP -1.00 · Freq 200 Hz · Freq Depth 6.00 kHz · Reso 5.00 · Mix 100.0 % · Level 1.5 dB", "", 9, i24006_s_1 },
+    { "Gentle", "Sens 21.6 dB · Attack 20 ms · Decay 505 ms · LP/BP/HP -1.00 · Freq 600 Hz · Freq Depth 4.00 kHz · Reso 3.00 · Mix 60.0 % · Level 0.0 dB", "", 9, i24006_s_2 },
 };
-static const nano_focus_value_t i24006_p_0[] = { { 0, 0.6000f }, { 1, 0.0040f }, { 2, 0.4000f }, { 3, 0.5000f }, { 4, 0.5000f }, { 5, 0.0190f }, { 6, 0.7000f }, { 7, 0.5556f }, { 8, 1.0000f } };
-static const nano_focus_value_t i24006_p_1[] = { { 0, 0.7000f }, { 1, 0.0020f }, { 2, 0.2500f }, { 3, 0.0000f }, { 4, 0.5000f }, { 5, 0.0140f }, { 6, 0.8500f }, { 7, 0.7222f }, { 8, 1.0000f } };
+static const nano_focus_value_t i24006_p_0[] = { { 0, 0.6000f }, { 1, 0.0000f }, { 2, 0.4000f }, { 3, 0.5000f }, { 4, 0.5000f }, { 5, 0.3751f }, { 6, 0.8500f }, { 7, 0.8383f }, { 8, 1.0000f } };
+static const nano_focus_value_t i24006_p_1[] = { { 0, 0.7000f }, { 1, 0.0000f }, { 2, 0.2505f }, { 3, 0.0000f }, { 4, 0.5000f }, { 5, 0.3423f }, { 6, 0.9250f }, { 7, 0.9070f }, { 8, 1.0000f } };
 static const nano_info_sound_t i24006_p[] = {
-    { "John Mayer: Q-Tron funk", "Sens 6.0 · Attack 5 ms · Decay 4.0 · LP/BP/HP 0.00 · Freq 400 Hz · Freq Depth 70.0 % · Reso 6.00 · Mix 100.0 % · Level 50.0 %", "A Q-Tron Plus for funky parts, also on his 2019 board with Dead & Company (Guitar Chalk, MusicRadar). That photo is too small to read; settings are ours.", 9, i24006_p_0 },
-    { "Frusciante: fast filter", "Sens 7.0 · Attack 3 ms · Decay 2.5 · LP/BP/HP -1.00 · Freq 300 Hz · Freq Depth 85.0 % · Reso 7.50 · Mix 100.0 % · Level 50.0 %", "Moog low-pass filters with a fast, wah-like sweep on \"Dani California\" and \"Storm in a Teacup\" (Ground Guitar). Settings are ours.", 9, i24006_p_1 },
+    { "John Mayer: Q-Tron funk", "Sens 32.4 dB · Attack 10 ms · Decay 406 ms · LP/BP/HP 0.00 · Freq 400 Hz · Freq Depth 7.00 kHz · Reso 6.00 · Mix 100.0 % · Level 0.0 dB", "A Q-Tron Plus for funky parts, also on his 2019 board with Dead & Company (Guitar Chalk, MusicRadar). That photo is too small to read; settings are ours.", 9, i24006_p_0 },
+    { "Frusciante: fast filter", "Sens 37.8 dB · Attack 10 ms · Decay 258 ms · LP/BP/HP -1.00 · Freq 300 Hz · Freq Depth 8.50 kHz · Reso 7.50 · Mix 100.0 % · Level 0.0 dB", "Moog low-pass filters with a fast, wah-like sweep on \"Dani California\" and \"Storm in a Teacup\" (Ground Guitar). Settings are ours.", 9, i24006_p_1 },
 };
 static const char *const i24006_t[] = { "Sens: how strongly it reacts. Set it with your normal picking strength, then play harder for the full sweep.", "LP/BP/HP morphs the filter type from low-pass (−1) over band-pass (0) to high-pass (+1); Reso sets the peak.", "Put it before the drive and compressor for the most dynamic response." };
-static const nano_focus_value_t i24001_s_0[] = { { 0, 0.6000f }, { 1, 0.0090f }, { 2, 0.4000f }, { 3, 0.6000f }, { 4, 0.6000f }, { 5, 1.0000f }, { 6, 1.0000f }, { 8, 0.3333f }, { 9, 0.5000f }, { 10, 0.5000f } };
-static const nano_focus_value_t i24001_s_1[] = { { 0, 0.5000f }, { 1, 0.0290f }, { 2, 0.6000f }, { 3, 0.7000f }, { 4, 0.7000f }, { 5, 0.8000f }, { 6, 1.0000f }, { 8, 0.0000f }, { 9, 0.0000f }, { 10, 0.5500f } };
-static const nano_focus_value_t i24001_s_2[] = { { 0, 0.4000f }, { 1, 0.0490f }, { 2, 0.5000f }, { 3, 0.4000f }, { 4, 0.4000f }, { 5, 0.5000f }, { 6, 1.0000f }, { 8, 0.6667f }, { 9, 0.0000f }, { 10, 0.5000f } };
+static const nano_focus_value_t i24001_s_0[] = { { 0, 0.6000f }, { 1, 0.0100f }, { 2, 0.4000f }, { 3, 0.6000f }, { 4, 0.6000f }, { 5, 1.0000f }, { 6, 1.0000f }, { 8, 0.3333f }, { 9, 0.5000f }, { 10, 0.5000f } };
+static const nano_focus_value_t i24001_s_1[] = { { 0, 0.5000f }, { 1, 0.0300f }, { 2, 0.6000f }, { 3, 0.7000f }, { 4, 0.7000f }, { 5, 0.8000f }, { 6, 1.0000f }, { 8, 0.0000f }, { 9, 0.0000f }, { 10, 0.5492f } };
+static const nano_focus_value_t i24001_s_2[] = { { 0, 0.4000f }, { 1, 0.0500f }, { 2, 0.5000f }, { 3, 0.4000f }, { 4, 0.4000f }, { 5, 0.5000f }, { 6, 1.0000f }, { 8, 0.6667f }, { 9, 0.0000f }, { 10, 0.5000f } };
 static const nano_info_sound_t i24001_s[] = {
-    { "Funk quack", "Sensitivity 6.0 · Attack 10 ms · Decay 4.0 · Color 6.0 · Intensity 6.0 · Blend 10.0 · Trig Detection Up · Filter Type Bandpass · Filter Cutoff A · Level 50.0 %", "Clean guitar or bass, played with dynamics.", 10, i24001_s_0 },
-    { "Synth bass", "Sensitivity 5.0 · Attack 30 ms · Decay 6.0 · Color 7.0 · Intensity 7.0 · Blend 8.0 · Trig Detection Up · Filter Type Lowpass · Filter Cutoff Low · Level 55.0 %", "", 10, i24001_s_1 },
-    { "Subtle movement", "Sensitivity 4.0 · Attack 50 ms · Decay 5.0 · Color 4.0 · Intensity 4.0 · Blend 5.0 · Trig Detection Up · Filter Type Lowpass · Filter Cutoff B · Level 50.0 %", "", 10, i24001_s_2 },
+    { "Funk quack", "Sensitivity 6.0 · Attack 0.1 · Decay 4.0 · Color 6.0 · Intensity 6.0 · Blend 10.0 · Trig Detection Up · Filter Type Bandpass · Filter Cutoff A · Level 0.0 dB", "Clean guitar or bass, played with dynamics.", 10, i24001_s_0 },
+    { "Synth bass", "Sensitivity 5.0 · Attack 0.3 · Decay 6.0 · Color 7.0 · Intensity 7.0 · Blend 8.0 · Trig Detection Up · Filter Type Lowpass · Filter Cutoff Low · Level 1.5 dB", "", 10, i24001_s_1 },
+    { "Subtle movement", "Sensitivity 4.0 · Attack 0.5 · Decay 5.0 · Color 4.0 · Intensity 4.0 · Blend 5.0 · Trig Detection Up · Filter Type Lowpass · Filter Cutoff B · Level 0.0 dB", "", 10, i24001_s_2 },
 };
 static const char *const i24001_t[] = { "Sensitivity sets how hard you have to play to open the filter – too high and it stays open all the time.", "Trig Detection Down sweeps the other way (closing on the attack).", "Blend mixes the dry signal back in – essential on bass." };
-static const nano_focus_value_t i5001_s_0[] = { { 0, 0.5000f }, { 1, 0.0000f }, { 2, 0.7473f }, { 3, 0.5968f }, { 4, 0.5625f }, { 5, 1.0000f } };
-static const nano_focus_value_t i5001_s_1[] = { { 0, 0.7083f }, { 1, 0.2500f }, { 2, 0.8371f }, { 3, 0.4149f }, { 4, 0.6042f }, { 5, 1.0000f } };
-static const nano_focus_value_t i5001_s_2[] = { { 0, 0.6250f }, { 1, 1.0000f }, { 2, 0.5408f }, { 3, 0.3002f }, { 4, 0.5625f }, { 5, 0.5000f } };
+static const nano_focus_value_t i5001_s_0[] = { { 0, 0.5000f }, { 1, 0.0000f }, { 2, 0.7487f }, { 3, 0.5987f }, { 4, 0.5625f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5001_s_1[] = { { 0, 0.7083f }, { 1, 0.2500f }, { 2, 0.8380f }, { 3, 0.4180f }, { 4, 0.6042f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5001_s_2[] = { { 0, 0.6250f }, { 1, 1.0000f }, { 2, 0.5438f }, { 3, 0.3046f }, { 4, 0.5625f }, { 5, 0.5000f } };
 static const nano_info_sound_t i5001_s[] = {
-    { "Clean sparkle", "Input -24.0 dB · Ratio 4 · Attack 0.50 ms · Release 0.50 s · Makeup 6.00 dB · Mix 100.0 %", "Even, present clean and funk rhythm.", 6, i5001_s_0 },
-    { "Country squash", "Input -14.0 dB · Ratio 8 · Attack 0.60 ms · Release 0.30 s · Makeup 10.00 dB · Mix 100.0 %", "Chicken picking and snappy leads.", 6, i5001_s_1 },
-    { "All buttons in", "Input -18.0 dB · Ratio All · Attack 0.30 ms · Release 0.20 s · Makeup 6.00 dB · Mix 50.0 %", "The aggressive \"British mode\", blended in parallel.", 6, i5001_s_2 },
+    { "Clean sparkle", "Input -24.0 dB · Ratio 4 · Attack 0.500 ms · Release 0.500 s · Makeup 6.00 dB · Mix 100.0 %", "Even, present clean and funk rhythm.", 6, i5001_s_0 },
+    { "Country squash", "Input -14.0 dB · Ratio 8 · Attack 0.600 ms · Release 0.300 s · Makeup 10.00 dB · Mix 100.0 %", "Chicken picking and snappy leads.", 6, i5001_s_1 },
+    { "All buttons in", "Input -18.0 dB · Ratio All · Attack 0.300 ms · Release 0.200 s · Makeup 6.00 dB · Mix 50.0 %", "The aggressive \"British mode\", blended in parallel.", 6, i5001_s_2 },
 };
-static const char *const i5001_t[] = { "Attack here is in milliseconds below 1 – 0.02 ms is the fastest. A slower Attack lets the pick attack through.", "Ratio All is the famous \"all buttons in\" mode: aggressive, distorted pumping – best with Mix below 60 %.", "Mix blends the uncompressed signal back in (parallel compression). (M) runs in the Pre slots, (ST) in stereo in the Post slots." };
+static const char *const i5001_t[] = { "Attack here is in milliseconds below 1 – 0.016 ms is the fastest. A slower Attack lets the pick attack through.", "Ratio All is the famous \"all buttons in\" mode: aggressive, distorted pumping – best with Mix below 60 %.", "Mix blends the uncompressed signal back in (parallel compression). (M) runs in the Pre slots, (ST) in stereo in the Post slots." };
 static const nano_focus_value_t i5007_s_0[] = { { 0, 0.5000f }, { 1, 0.1765f }, { 2, 0.1364f }, { 3, 0.5695f }, { 4, 0.5417f }, { 5, 1.0000f } };
 static const nano_focus_value_t i5007_s_1[] = { { 0, 0.3611f }, { 1, 0.4056f }, { 2, 0.1778f }, { 3, 0.7738f }, { 4, 0.5833f }, { 5, 1.0000f } };
 static const nano_focus_value_t i5007_s_2[] = { { 0, 0.4444f }, { 1, 0.2676f }, { 2, 0.2136f }, { 3, 0.4898f }, { 4, 0.5521f }, { 5, 1.0000f } };
@@ -277,33 +293,37 @@ static const nano_info_sound_t i5007_s[] = {
     { "Bass", "Threshold -28.0 dB · Ratio 4.00 · Attack 20.00 ms · Release 400 ms · Makeup 5.00 dB · Mix 100.0 %", "", 6, i5007_s_2 },
 };
 static const char *const i5007_t[] = { "The original has only two knobs (Peak Reduction and Gain); here Threshold does the first job, Makeup the second.", "Opto compression is slow by nature – for snappy country compression use Legendary 87.", "Mix blends the uncompressed signal back in (parallel compression). (M) runs in the Pre slots, (ST) in stereo in the Post slots." };
-static const nano_focus_value_t i5004_s_0[] = { { 0, 0.5833f }, { 1, 0.0000f }, { 2, 0.5152f }, { 3, 0.4287f }, { 4, 0.5208f }, { 5, 1.0000f } };
-static const nano_focus_value_t i5004_s_1[] = { { 0, 0.5278f }, { 1, 0.5000f }, { 2, 1.0000f }, { 3, 0.2124f }, { 4, 0.5417f }, { 5, 1.0000f } };
-static const nano_focus_value_t i5004_s_2[] = { { 0, 0.4167f }, { 1, 1.0000f }, { 2, 0.1222f }, { 3, 0.2124f }, { 4, 0.6042f }, { 5, 0.3500f } };
+static const nano_focus_value_t i5004_s_0[] = { { 0, 0.6250f }, { 1, 0.0000f }, { 2, 0.5152f }, { 3, 0.4287f }, { 4, 0.5208f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5004_s_1[] = { { 0, 0.5417f }, { 1, 0.5000f }, { 2, 1.0000f }, { 3, 0.2124f }, { 4, 0.5417f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5004_s_2[] = { { 0, 0.3750f }, { 1, 1.0000f }, { 2, 0.1222f }, { 3, 0.2124f }, { 4, 0.6042f }, { 5, 0.3500f } };
 static const nano_info_sound_t i5004_s[] = {
     { "Glue", "Threshold -18.0 dB · Ratio 2 · Attack 10.00 ms · Release 0.30 s · Makeup 2.00 dB · Mix 100.0 %", "Classic bus setting: 2:1, 10 ms attack, auto-like release.", 6, i5004_s_0 },
     { "Punch", "Threshold -22.0 dB · Ratio 4 · Attack 30.00 ms · Release 0.10 s · Makeup 4.00 dB · Mix 100.0 %", "Slow attack lets the pick through, fast release breathes.", 6, i5004_s_1 },
     { "Parallel smash", "Threshold -30.0 dB · Ratio 10 · Attack 1.00 ms · Release 0.10 s · Makeup 10.00 dB · Mix 35.0 %", "", 6, i5004_s_2 },
 };
 static const char *const i5004_t[] = { "Aim for 2–4 dB of gain reduction – the editor's gain reduction meter shows it.", "After the capture (ST in Post FX 1) it is the \"finishing\" compressor of the whole sound.", "Mix blends the uncompressed signal back in (parallel compression)." };
-static const nano_focus_value_t i5005_s_0[] = { { 0, 0.5000f }, { 1, 0.2872f }, { 2, 0.0361f }, { 3, 0.2946f }, { 4, 0.5417f }, { 5, 1.0000f } };
-static const nano_focus_value_t i5005_s_1[] = { { 0, 0.4722f }, { 1, 0.4353f }, { 2, 0.0763f }, { 3, 0.2310f }, { 4, 0.5521f }, { 5, 1.0000f } };
-static const nano_focus_value_t i5005_s_2[] = { { 0, 0.3333f }, { 1, 0.8415f }, { 2, 0.0161f }, { 3, 0.5695f }, { 4, 0.6042f }, { 5, 0.7000f } };
+static const nano_focus_value_t i5005_s_0[] = { { 0, 0.5000f }, { 1, 0.2872f }, { 2, 0.0968f }, { 3, 0.2946f }, { 4, 0.5417f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5005_s_1[] = { { 0, 0.4722f }, { 1, 0.4353f }, { 2, 0.1871f }, { 3, 0.2310f }, { 4, 0.5521f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5005_s_2[] = { { 0, 0.3333f }, { 1, 0.8415f }, { 2, 0.0000f }, { 3, 0.5695f }, { 4, 0.6042f }, { 5, 0.7000f } };
 static const nano_info_sound_t i5005_s[] = {
     { "Even rhythm", "Threshold -24.0 dB · Ratio 3.00 · Attack 10.00 ms · Release 200 ms · Makeup 4.00 dB · Mix 100.0 %", "", 6, i5005_s_0 },
     { "Bass control", "Threshold -26.0 dB · Ratio 4.00 · Attack 20.00 ms · Release 150 ms · Makeup 5.00 dB · Mix 100.0 %", "Every note equally loud.", 6, i5005_s_1 },
     { "Sustainer", "Threshold -36.0 dB · Ratio 8.00 · Attack 5.00 ms · Release 500 ms · Makeup 10.00 dB · Mix 70.0 %", "Long clean leads.", 6, i5005_s_2 },
 };
-static const nano_focus_value_t i5005_p_0[] = { { 0, 0.4444f }, { 1, 0.4353f }, { 2, 0.0763f }, { 3, 0.3501f }, { 4, 0.5521f }, { 5, 0.7000f } };
-static const nano_focus_value_t i5005_p_1[] = { { 0, 0.3333f }, { 1, 0.8415f }, { 2, 0.0161f }, { 3, 0.7738f }, { 4, 0.5833f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5005_p_0[] = { { 0, 0.4444f }, { 1, 0.4353f }, { 2, 0.1871f }, { 3, 0.3501f }, { 4, 0.5521f }, { 5, 0.7000f } };
+static const nano_focus_value_t i5005_p_1[] = { { 0, 0.3333f }, { 1, 0.8415f }, { 2, 0.0000f }, { 3, 0.7738f }, { 4, 0.5833f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5005_p_2[] = { { 0, 0.3611f }, { 1, 0.6598f }, { 2, 0.0000f }, { 3, 0.4898f }, { 4, 0.5313f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5005_p_3[] = { { 0, 0.5556f }, { 1, 0.1895f }, { 2, 0.1871f }, { 3, 0.4003f }, { 4, 0.5208f }, { 5, 1.0000f } };
 static const nano_info_sound_t i5005_p[] = {
     { "Geese: Compressor Plus", "Threshold -28.0 dB · Ratio 4.00 · Attack 20.00 ms · Release 250 ms · Makeup 5.00 dB · Mix 70.0 %", "A Keeley Compressor Plus was seen on Cameron Winter's board (Equipboard). Settings are ours: some dry signal left in, as its blend allows.", 6, i5005_p_0 },
     { "Frusciante: Dyna Comp", "Threshold -36.0 dB · Ratio 8.00 · Attack 5.00 ms · Release 800 ms · Makeup 8.00 dB · Mix 100.0 %", "Two MXR Dyna Comps sit on his board (Guitar World); a fan's chart of his Unlimited Love tour board (r/John_Frusciante) shows Output and Sensitivity both at about two o'clock. Carried over to this compressor's controls by us: squeezed hard, slow to let go.", 6, i5005_p_1 },
+    { "Warpaint: CP10 sustain", "Threshold -34.0 dB · Ratio 6.00 · Attack 5.00 ms · Release 400 ms · Makeup 3.00 dB · Mix 100.0 %", "Read off Theresa Wayman's board in Guitar Player's 2022 photo: an Ibanez CP10 Compressor/Sustainer with Attack at the minimum, Sustain at about two o'clock and Level at half past eight – for sustain, as she says, together with the reverb. Carried over to this compressor's controls by us.", 6, i5005_p_2 },
+    { "Frusciante: light comp", "Threshold -20.0 dB · Ratio 2.50 · Attack 20.00 ms · Release 300 ms · Makeup 2.00 dB · Mix 100.0 %", "\"One Way Traffic\" and \"Whatchu Thinkin'\": a Dyna Comp applied very lightly – sensitivity at nine to ten o'clock, the output as loud as bypassed, just below where you hear it work (note.com/ketunemikku's analysis). Carried over to this compressor by us.", 6, i5005_p_3 },
 };
 static const char *const i5005_t[] = { "A slower Attack (15 ms and more) keeps the pick attack; a fast one smooths it away.", "Mix blends the uncompressed signal back in (parallel compression). (M) runs in the Pre slots, (ST) in stereo in the Post slots." };
-static const nano_focus_value_t i18001_s_0[] = { { 0, 1.0000f }, { 1, 0.4583f }, { 2, 0.5000f } };
-static const nano_focus_value_t i18001_s_1[] = { { 0, 1.0000f }, { 1, 0.4167f }, { 2, 0.5000f } };
-static const nano_focus_value_t i18001_s_2[] = { { 0, 0.4000f }, { 1, 0.0000f }, { 2, 0.5000f } };
+static const nano_focus_value_t i18001_s_0[] = { { 0, 1.0000f }, { 1, 0.4792f }, { 2, 0.5000f } };
+static const nano_focus_value_t i18001_s_1[] = { { 0, 1.0000f }, { 1, 0.4583f }, { 2, 0.5000f } };
+static const nano_focus_value_t i18001_s_2[] = { { 0, 0.4000f }, { 1, 0.2500f }, { 2, 0.5000f } };
 static const nano_info_sound_t i18001_s[] = {
     { "Eb tuning", "Mix 100.0 % · Semitones -1 Sem · Pitch Fine 0 Cent", "Half a step down – Hendrix, SRV, Guns N' Roses.", 3, i18001_s_0 },
     { "Drop to D standard", "Mix 100.0 % · Semitones -2 Sem · Pitch Fine 0 Cent", "", 3, i18001_s_1 },
@@ -320,9 +340,11 @@ static const nano_info_sound_t i18004_s[] = {
 };
 static const nano_focus_value_t i18004_p_0[] = { { 0, 0.7000f }, { 1, 0.5500f }, { 2, 0.8000f } };
 static const nano_focus_value_t i18004_p_1[] = { { 0, 0.6000f }, { 1, 0.6500f }, { 2, 0.4000f } };
+static const nano_focus_value_t i18004_p_2[] = { { 0, 0.6500f }, { 1, 0.7500f }, { 2, 0.0000f } };
 static const nano_info_sound_t i18004_p[] = {
     { "Jack White: Blue Orchid", "Dry 70.0 % · Oct 55.0 % · Sub 80.0 %", "A POG with the octaves below and one above (Guitar World); players hear dry and sub loud and the octave up a little lower. The Nano has one sub octave only.", 3, i18004_p_0 },
     { "Frusciante: organ", "Dry 60.0 % · Oct 65.0 % · Sub 40.0 %", "POG octaves for an organ-like sound in the outro of \"Snow (Hey Oh)\" (Ground Guitar). Settings are ours.", 3, i18004_p_1 },
+    { "Warpaint: octave up", "Dry 65.0 % · Oct 75.0 % · Sub 0.0 %", "Read off Theresa Wayman's board in Guitar Player's 2022 photo: a TC Electronic Sub'n'Up with Dry at about half past one, Up at half past two and both sub octaves at the minimum – the octave above, a little louder than the guitar.", 3, i18004_p_2 },
 };
 static const char *const i18004_t[] = { "Before a fuzz or distortion: dry all the way up, sub around 80 %, octave up around 50 % (device list).", "It tracks best with the neck pickup and a clean signal in front of it." };
 static const nano_focus_value_t i18006_s_0[] = { { 0, 1.0000f }, { 2, 0.5000f }, { 3, 0.7500f }, { 6, 0.0000f } };
@@ -363,16 +385,20 @@ static const nano_info_sound_t i16011_s[] = {
     { "Wide wall", "Spread 30.00 ms · Dry Level 0.0 dB · FX Level 0.0 dB", "Big stereo rhythm guitars.", 3, i16011_s_1 },
     { "Slapback double", "Spread 55.00 ms · Dry Level 0.0 dB · FX Level -4.0 dB", "", 3, i16011_s_2 },
 };
-static const char *const i16011_t[] = { "Spread sets how far apart the two takes are; around 10–30 ms is a convincing double.", "Only works in stereo – check it in mono, too, if you play through one speaker.", "Only in Post FX 1." };
-static const nano_focus_value_t i5012_s_0[] = { { 0, 0.5000f }, { 1, 0.0000f }, { 2, 0.7473f }, { 3, 0.5968f }, { 4, 0.5625f }, { 5, 1.0000f } };
-static const nano_focus_value_t i5012_s_1[] = { { 0, 0.7083f }, { 1, 0.2500f }, { 2, 0.8371f }, { 3, 0.4149f }, { 4, 0.6042f }, { 5, 1.0000f } };
-static const nano_focus_value_t i5012_s_2[] = { { 0, 0.6250f }, { 1, 1.0000f }, { 2, 0.5408f }, { 3, 0.3002f }, { 4, 0.5625f }, { 5, 0.5000f } };
-static const nano_info_sound_t i5012_s[] = {
-    { "Clean sparkle", "Input -24.0 dB · Ratio 4 · Attack 0.50 ms · Release 0.50 s · Makeup 6.00 dB · Mix 100.0 %", "Even, present clean and funk rhythm.", 6, i5012_s_0 },
-    { "Country squash", "Input -14.0 dB · Ratio 8 · Attack 0.60 ms · Release 0.30 s · Makeup 10.00 dB · Mix 100.0 %", "Chicken picking and snappy leads.", 6, i5012_s_1 },
-    { "All buttons in", "Input -18.0 dB · Ratio All · Attack 0.30 ms · Release 0.20 s · Makeup 6.00 dB · Mix 50.0 %", "The aggressive \"British mode\", blended in parallel.", 6, i5012_s_2 },
+static const nano_focus_value_t i16011_p_0[] = { { 0, 0.2105f }, { 1, 0.7692f }, { 2, 0.6538f } };
+static const nano_info_sound_t i16011_p[] = {
+    { "Warpaint: Elephants", "Spread 15.00 ms · Dry Level 0.0 dB · FX Level -6.0 dB", "Theresa Wayman keeps an EHX Pitch Fork in its detune mode on a low setting, nearly always on, and plays \"Elephants\" with it in Premier Guitar's 2017 Rig Rundown. The Doubler is the nearest: a second, slightly shifted voice. Settings are ours.", 3, i16011_p_0 },
 };
-static const char *const i5012_t[] = { "Attack here is in milliseconds below 1 – 0.02 ms is the fastest. A slower Attack lets the pick attack through.", "Ratio All is the famous \"all buttons in\" mode: aggressive, distorted pumping – best with Mix below 60 %.", "Mix blends the uncompressed signal back in (parallel compression). (M) runs in the Pre slots, (ST) in stereo in the Post slots." };
+static const char *const i16011_t[] = { "Spread sets how far apart the two takes are; around 10–30 ms is a convincing double.", "Only works in stereo – check it in mono, too, if you play through one speaker.", "Only in Post FX 1." };
+static const nano_focus_value_t i5012_s_0[] = { { 0, 0.5000f }, { 1, 0.0000f }, { 2, 0.7487f }, { 3, 0.5987f }, { 4, 0.5625f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5012_s_1[] = { { 0, 0.7083f }, { 1, 0.2500f }, { 2, 0.8380f }, { 3, 0.4180f }, { 4, 0.6042f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5012_s_2[] = { { 0, 0.6250f }, { 1, 1.0000f }, { 2, 0.5438f }, { 3, 0.3046f }, { 4, 0.5625f }, { 5, 0.5000f } };
+static const nano_info_sound_t i5012_s[] = {
+    { "Clean sparkle", "Input -24.0 dB · Ratio 4 · Attack 0.500 ms · Release 0.500 s · Makeup 6.00 dB · Mix 100.0 %", "Even, present clean and funk rhythm.", 6, i5012_s_0 },
+    { "Country squash", "Input -14.0 dB · Ratio 8 · Attack 0.600 ms · Release 0.300 s · Makeup 10.00 dB · Mix 100.0 %", "Chicken picking and snappy leads.", 6, i5012_s_1 },
+    { "All buttons in", "Input -18.0 dB · Ratio All · Attack 0.300 ms · Release 0.200 s · Makeup 6.00 dB · Mix 50.0 %", "The aggressive \"British mode\", blended in parallel.", 6, i5012_s_2 },
+};
+static const char *const i5012_t[] = { "Attack here is in milliseconds below 1 – 0.016 ms is the fastest. A slower Attack lets the pick attack through.", "Ratio All is the famous \"all buttons in\" mode: aggressive, distorted pumping – best with Mix below 60 %.", "Mix blends the uncompressed signal back in (parallel compression). (M) runs in the Pre slots, (ST) in stereo in the Post slots." };
 static const nano_focus_value_t i5015_s_0[] = { { 0, 0.5000f }, { 1, 0.1765f }, { 2, 0.1364f }, { 3, 0.5695f }, { 4, 0.5417f }, { 5, 1.0000f } };
 static const nano_focus_value_t i5015_s_1[] = { { 0, 0.3611f }, { 1, 0.4056f }, { 2, 0.1778f }, { 3, 0.7738f }, { 4, 0.5833f }, { 5, 1.0000f } };
 static const nano_focus_value_t i5015_s_2[] = { { 0, 0.4444f }, { 1, 0.2676f }, { 2, 0.2136f }, { 3, 0.4898f }, { 4, 0.5521f }, { 5, 1.0000f } };
@@ -382,28 +408,32 @@ static const nano_info_sound_t i5015_s[] = {
     { "Bass", "Threshold -28.0 dB · Ratio 4.00 · Attack 20.00 ms · Release 400 ms · Makeup 5.00 dB · Mix 100.0 %", "", 6, i5015_s_2 },
 };
 static const char *const i5015_t[] = { "The original has only two knobs (Peak Reduction and Gain); here Threshold does the first job, Makeup the second.", "Opto compression is slow by nature – for snappy country compression use Legendary 87.", "Mix blends the uncompressed signal back in (parallel compression). (M) runs in the Pre slots, (ST) in stereo in the Post slots." };
-static const nano_focus_value_t i5013_s_0[] = { { 0, 0.5833f }, { 1, 0.0000f }, { 2, 0.5152f }, { 3, 0.4287f }, { 4, 0.5208f }, { 5, 1.0000f } };
-static const nano_focus_value_t i5013_s_1[] = { { 0, 0.5278f }, { 1, 0.5000f }, { 2, 1.0000f }, { 3, 0.2124f }, { 4, 0.5417f }, { 5, 1.0000f } };
-static const nano_focus_value_t i5013_s_2[] = { { 0, 0.4167f }, { 1, 1.0000f }, { 2, 0.1222f }, { 3, 0.2124f }, { 4, 0.6042f }, { 5, 0.3500f } };
+static const nano_focus_value_t i5013_s_0[] = { { 0, 0.6250f }, { 1, 0.0000f }, { 2, 0.5152f }, { 3, 0.4287f }, { 4, 0.5208f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5013_s_1[] = { { 0, 0.5417f }, { 1, 0.5000f }, { 2, 1.0000f }, { 3, 0.2124f }, { 4, 0.5417f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5013_s_2[] = { { 0, 0.3750f }, { 1, 1.0000f }, { 2, 0.1222f }, { 3, 0.2124f }, { 4, 0.6042f }, { 5, 0.3500f } };
 static const nano_info_sound_t i5013_s[] = {
     { "Glue", "Threshold -18.0 dB · Ratio 2 · Attack 10.00 ms · Release 0.30 s · Makeup 2.00 dB · Mix 100.0 %", "Classic bus setting: 2:1, 10 ms attack, auto-like release.", 6, i5013_s_0 },
     { "Punch", "Threshold -22.0 dB · Ratio 4 · Attack 30.00 ms · Release 0.10 s · Makeup 4.00 dB · Mix 100.0 %", "Slow attack lets the pick through, fast release breathes.", 6, i5013_s_1 },
     { "Parallel smash", "Threshold -30.0 dB · Ratio 10 · Attack 1.00 ms · Release 0.10 s · Makeup 10.00 dB · Mix 35.0 %", "", 6, i5013_s_2 },
 };
 static const char *const i5013_t[] = { "Aim for 2–4 dB of gain reduction – the editor's gain reduction meter shows it.", "After the capture (ST in Post FX 1) it is the \"finishing\" compressor of the whole sound.", "Mix blends the uncompressed signal back in (parallel compression)." };
-static const nano_focus_value_t i5014_s_0[] = { { 0, 0.5000f }, { 1, 0.2872f }, { 2, 0.0361f }, { 3, 0.2946f }, { 4, 0.5417f }, { 5, 1.0000f } };
-static const nano_focus_value_t i5014_s_1[] = { { 0, 0.4722f }, { 1, 0.4353f }, { 2, 0.0763f }, { 3, 0.2310f }, { 4, 0.5521f }, { 5, 1.0000f } };
-static const nano_focus_value_t i5014_s_2[] = { { 0, 0.3333f }, { 1, 0.8415f }, { 2, 0.0161f }, { 3, 0.5695f }, { 4, 0.6042f }, { 5, 0.7000f } };
+static const nano_focus_value_t i5014_s_0[] = { { 0, 0.5000f }, { 1, 0.2872f }, { 2, 0.0968f }, { 3, 0.2946f }, { 4, 0.5417f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5014_s_1[] = { { 0, 0.4722f }, { 1, 0.4353f }, { 2, 0.1871f }, { 3, 0.2310f }, { 4, 0.5521f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5014_s_2[] = { { 0, 0.3333f }, { 1, 0.8415f }, { 2, 0.0000f }, { 3, 0.5695f }, { 4, 0.6042f }, { 5, 0.7000f } };
 static const nano_info_sound_t i5014_s[] = {
     { "Even rhythm", "Threshold -24.0 dB · Ratio 3.00 · Attack 10.00 ms · Release 200 ms · Makeup 4.00 dB · Mix 100.0 %", "", 6, i5014_s_0 },
     { "Bass control", "Threshold -26.0 dB · Ratio 4.00 · Attack 20.00 ms · Release 150 ms · Makeup 5.00 dB · Mix 100.0 %", "Every note equally loud.", 6, i5014_s_1 },
     { "Sustainer", "Threshold -36.0 dB · Ratio 8.00 · Attack 5.00 ms · Release 500 ms · Makeup 10.00 dB · Mix 70.0 %", "Long clean leads.", 6, i5014_s_2 },
 };
-static const nano_focus_value_t i5014_p_0[] = { { 0, 0.4444f }, { 1, 0.4353f }, { 2, 0.0763f }, { 3, 0.3501f }, { 4, 0.5521f }, { 5, 0.7000f } };
-static const nano_focus_value_t i5014_p_1[] = { { 0, 0.3333f }, { 1, 0.8415f }, { 2, 0.0161f }, { 3, 0.7738f }, { 4, 0.5833f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5014_p_0[] = { { 0, 0.4444f }, { 1, 0.4353f }, { 2, 0.1871f }, { 3, 0.3501f }, { 4, 0.5521f }, { 5, 0.7000f } };
+static const nano_focus_value_t i5014_p_1[] = { { 0, 0.3333f }, { 1, 0.8415f }, { 2, 0.0000f }, { 3, 0.7738f }, { 4, 0.5833f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5014_p_2[] = { { 0, 0.3611f }, { 1, 0.6598f }, { 2, 0.0000f }, { 3, 0.4898f }, { 4, 0.5313f }, { 5, 1.0000f } };
+static const nano_focus_value_t i5014_p_3[] = { { 0, 0.5556f }, { 1, 0.1895f }, { 2, 0.1871f }, { 3, 0.4003f }, { 4, 0.5208f }, { 5, 1.0000f } };
 static const nano_info_sound_t i5014_p[] = {
     { "Geese: Compressor Plus", "Threshold -28.0 dB · Ratio 4.00 · Attack 20.00 ms · Release 250 ms · Makeup 5.00 dB · Mix 70.0 %", "A Keeley Compressor Plus was seen on Cameron Winter's board (Equipboard). Settings are ours: some dry signal left in, as its blend allows.", 6, i5014_p_0 },
     { "Frusciante: Dyna Comp", "Threshold -36.0 dB · Ratio 8.00 · Attack 5.00 ms · Release 800 ms · Makeup 8.00 dB · Mix 100.0 %", "Two MXR Dyna Comps sit on his board (Guitar World); a fan's chart of his Unlimited Love tour board (r/John_Frusciante) shows Output and Sensitivity both at about two o'clock. Carried over to this compressor's controls by us: squeezed hard, slow to let go.", 6, i5014_p_1 },
+    { "Warpaint: CP10 sustain", "Threshold -34.0 dB · Ratio 6.00 · Attack 5.00 ms · Release 400 ms · Makeup 3.00 dB · Mix 100.0 %", "Read off Theresa Wayman's board in Guitar Player's 2022 photo: an Ibanez CP10 Compressor/Sustainer with Attack at the minimum, Sustain at about two o'clock and Level at half past eight – for sustain, as she says, together with the reverb. Carried over to this compressor's controls by us.", 6, i5014_p_2 },
+    { "Frusciante: light comp", "Threshold -20.0 dB · Ratio 2.50 · Attack 20.00 ms · Release 300 ms · Makeup 2.00 dB · Mix 100.0 %", "\"One Way Traffic\" and \"Whatchu Thinkin'\": a Dyna Comp applied very lightly – sensitivity at nine to ten o'clock, the output as loud as bypassed, just below where you hear it work (note.com/ketunemikku's analysis). Carried over to this compressor by us.", 6, i5014_p_3 },
 };
 static const char *const i5014_t[] = { "A slower Attack (15 ms and more) keeps the pick attack; a fast one smooths it away.", "Mix blends the uncompressed signal back in (parallel compression). (M) runs in the Pre slots, (ST) in stereo in the Post slots." };
 static const nano_focus_value_t i7024_s_0[] = { { 0, 0.5000f }, { 1, 0.3000f }, { 2, 0.5000f }, { 3, 0.0000f }, { 4, 0.6000f } };
@@ -419,12 +449,16 @@ static const nano_focus_value_t i7024_p_1[] = { { 0, 1.0000f }, { 1, 0.4000f }, 
 static const nano_focus_value_t i7024_p_2[] = { { 0, 0.5000f }, { 1, 0.6000f }, { 2, 1.0000f }, { 3, 0.5000f }, { 4, 1.0000f } };
 static const nano_focus_value_t i7024_p_3[] = { { 0, 0.5000f }, { 1, 0.3000f }, { 2, 0.5500f }, { 3, 0.0000f }, { 4, 0.6000f } };
 static const nano_focus_value_t i7024_p_4[] = { { 0, 0.4500f }, { 1, 0.2500f }, { 2, 0.4500f }, { 3, 0.0000f }, { 4, 1.0000f } };
+static const nano_focus_value_t i7024_p_5[] = { { 0, 0.5000f }, { 1, 0.7500f }, { 2, 1.0000f }, { 3, 0.0000f }, { 4, 0.5000f } };
+static const nano_focus_value_t i7024_p_6[] = { { 0, 1.0000f }, { 1, 0.5000f }, { 2, 0.7500f }, { 3, 1.0000f }, { 4, 0.5000f } };
 static const nano_info_sound_t i7024_p[] = {
     { "Frusciante: CE-1 chorus", "Mix 50.0 % · Rate 35 % · Depth 60.0 % · Type CE1-C · Width 80.0 %", "His Boss CE-1: the chorus in the outro of \"Under the Bridge\" and at the start of \"Soul to Squeeze\" (Ground Guitar, Boss). On a fan's chart of his Unlimited Love tour board (r/John_Frusciante) its Chorus Intensity sits at about one o'clock – Depth here; Rate and Width are ours.", 5, i7024_p_0 },
     { "Frusciante: CE-1 vibrato", "Mix 100.0 % · Rate 40 % · Depth 60.0 % · Type CE1-V · Width 50.0 %", "The CE-1's vibrato side on a fan's chart of his Unlimited Love tour board (r/John_Frusciante): Depth at about one o'clock, Rate at about eleven.", 5, i7024_p_1 },
     { "Frusciante: full chorus", "Mix 50.0 % · Rate 60 % · Depth 100.0 % · Type CE1-C · Width 100.0 %", "\"Animal Bar\" has a chorus set to maximum (Ground Guitar). Settings are ours.", 5, i7024_p_2 },
     { "Wednesday: CE-2", "Mix 50.0 % · Rate 30 % · Depth 55.0 % · Type CE2-C · Width 60.0 %", "Xandy Chelmis has a Boss CE-2 on the pedal steel (Mixdown). Settings are ours.", 5, i7024_p_3 },
     { "Deftones: clean chorus", "Mix 45.0 % · Rate 25 % · Depth 45.0 % · Type CE2-C · Width 100.0 %", "Chino Moreno appears to use a Boss CH-1 Super Chorus in the \"Digital Bath\" video (Equipboard). Settings are ours: slow and wide under a clean part.", 5, i7024_p_4 },
+    { "Warpaint: warble", "Mix 50.0 % · Rate 75 % · Depth 100.0 % · Type CE2-C · Width 50.0 %", "Emily Kokal's warble: an EHX Neo Clone with its depth switch on high and the rate turned up until it gets grindy, almost a vibrato (Premier Guitar Rig Rundown, 2017). The Nano has no Small Clone – the nearest analog chorus; Rate is ours.", 5, i7024_p_5 },
+    { "Klinghoffer: thick vibe", "Mix 100.0 % · Rate 50 % · Depth 75.0 % · Type CE1-V · Width 50.0 %", "Josh Klinghoffer's Boss VB-2, a \"fairly noticeable thick vibrato\" with distortion on \"Suck My Kiss\" (his tech in Premier Guitar's 2012 Rig Rundown). The CE-1's vibrato side is the nearest; settings are ours.", 5, i7024_p_6 },
 };
 static const char *const i7024_t[] = { "Type CE1-V is a true vibrato (pitch only) – Mix at 100 % for the full effect.", "Width spreads it in stereo; Sync locks the rate to the tempo." };
 static const nano_focus_value_t i7027_s_0[] = { { 0, 1.0000f }, { 1, 0.0000f }, { 2, 0.0000f } };
@@ -458,15 +492,17 @@ static const nano_focus_value_t i7021_s_0[] = { { 0, 0.5000f }, { 1, 0.4000f }, 
 static const nano_focus_value_t i7021_s_1[] = { { 0, 0.5000f }, { 1, 0.0000f }, { 2, 0.1500f }, { 3, 0.3500f }, { 4, 0.0000f } };
 static const nano_focus_value_t i7021_s_2[] = { { 0, 0.5000f }, { 1, 0.6000f }, { 2, 0.8000f }, { 3, 0.1500f }, { 4, 0.8000f } };
 static const nano_info_sound_t i7021_s[] = {
-    { "Van Halen", "Mix 50.0 % · Manual 4.0 · Width 35.0 % · Speed 50 % · Regen 6.5", "Device list: manual 11, width 10, speed 12, regen 1:30 o'clock.", 5, i7021_s_0 },
-    { "Cantrell", "Mix 50.0 % · Manual 0.0 · Width 15.0 % · Speed 35 % · Regen 0.0", "Device list: manual min, width 8, speed 10, regen min.", 5, i7021_s_1 },
-    { "Jet", "Mix 50.0 % · Manual 6.0 · Width 80.0 % · Speed 15 % · Regen 8.0", "", 5, i7021_s_2 },
+    { "Van Halen", "Mix 50.0 % · Manual 40.0 % · Width 35.0 % · Speed 50 % · Regen 65.0 %", "Device list: manual 11, width 10, speed 12, regen 1:30 o'clock.", 5, i7021_s_0 },
+    { "Cantrell", "Mix 50.0 % · Manual 0.0 % · Width 15.0 % · Speed 35 % · Regen 0.0 %", "Device list: manual min, width 8, speed 10, regen min.", 5, i7021_s_1 },
+    { "Jet", "Mix 50.0 % · Manual 60.0 % · Width 80.0 % · Speed 15 % · Regen 80.0 %", "", 5, i7021_s_2 },
 };
 static const nano_focus_value_t i7021_p_0[] = { { 0, 0.5000f }, { 1, 0.4000f }, { 2, 0.5500f }, { 3, 0.2000f }, { 4, 0.4000f } };
 static const nano_focus_value_t i7021_p_1[] = { { 0, 0.5000f }, { 1, 0.5000f }, { 2, 0.7000f }, { 3, 0.1200f }, { 4, 0.6000f } };
+static const nano_focus_value_t i7021_p_2[] = { { 0, 0.5000f }, { 1, 0.5000f }, { 2, 0.6500f }, { 3, 0.2500f }, { 4, 0.3500f } };
 static const nano_info_sound_t i7021_p[] = {
-    { "Frusciante: Mistress", "Mix 50.0 % · Manual 4.0 · Width 55.0 % · Speed 20 % · Regen 4.0", "An Electric Mistress in the bridge of \"Hard to Concentrate\"; on his 2022 board the flanger is an MXR (Ground Guitar, Guitar World). Its photo is too small to read; settings are ours: slow and soft.", 5, i7021_p_0 },
-    { "Deftones: slow flange", "Mix 50.0 % · Manual 5.0 · Width 70.0 % · Speed 12 % · Regen 6.0", "The band has used a Boss BF-3 flanger (Killer Rig). Settings are ours.", 5, i7021_p_1 },
+    { "Frusciante: Mistress", "Mix 50.0 % · Manual 40.0 % · Width 55.0 % · Speed 20 % · Regen 40.0 %", "An Electric Mistress in the bridge of \"Hard to Concentrate\"; on his 2022 board the flanger is an MXR (Ground Guitar, Guitar World). Its photo is too small to read; settings are ours: slow and soft.", 5, i7021_p_0 },
+    { "Deftones: slow flange", "Mix 50.0 % · Manual 50.0 % · Width 70.0 % · Speed 12 % · Regen 60.0 %", "The band has used a Boss BF-3 flanger (Killer Rig). Settings are ours.", 5, i7021_p_1 },
+    { "Frusciante: Place flange", "Mix 50.0 % · Manual 50.0 % · Width 65.0 % · Speed 25 % · Regen 35.0 %", "\"This Is the Place\": an Electric Mistress with Rate at nine to ten o'clock, Range at one to two and Color at ten to eleven (note.com/ketunemikku's recipe; the pedal is seen in live videos and board photos) – Rate to Speed, Range to Width, Color to Regen.", 5, i7021_p_2 },
 };
 static const char *const i7021_t[] = { "Regen (feedback) makes it more metallic; Manual sets the centre of the sweep.", "At Speed 0 it becomes a fixed comb filter – a \"frozen\" flange." };
 static const nano_focus_value_t i7028_s_0[] = { { 0, 0.5000f }, { 1, 0.2500f }, { 2, 0.0000f }, { 3, 1.0000f } };
@@ -507,7 +543,7 @@ static const nano_focus_value_t i7004_s_2[] = { { 0, 0.5745f }, { 1, 1.0000f }, 
 static const nano_info_sound_t i7004_s[] = {
     { "Surf amp", "Rate 5.5 Hz · Depth 60.0 % · Waveform Sine · Smoothing 60.0 % · LFO Active On", "Fender-style amp tremolo.", 5, i7004_s_0 },
     { "Slow pulse", "Rate 2.5 Hz · Depth 50.0 % · Waveform Triangle · LFO Active On", "Under ambient chords.", 4, i7004_s_1 },
-    { "Stutter", "Rate 8.0 Hz · Depth 100.0 % · Waveform Square · Duty Cycle 50.0 % · Smoothing 10.0 % · LFO Active On", "Choppy, with Sync on for tempo-locked chops.", 6, i7004_s_2 },
+    { "Stutter", "Rate 8.0 Hz · Depth 100.0 % · Waveform Square · Duty Cycle 0.0 % · Smoothing 10.0 % · LFO Active On", "Choppy, with Sync on for tempo-locked chops.", 6, i7004_s_2 },
 };
 static const nano_focus_value_t i7004_p_0[] = { { 0, 0.4313f }, { 1, 0.4000f }, { 2, 0.2500f }, { 5, 0.6000f }, { 6, 1.0000f } };
 static const nano_info_sound_t i7004_p[] = {
@@ -518,35 +554,41 @@ static const nano_focus_value_t i6010_s_0[] = { { 0, 0.3000f }, { 1, 0.0500f }, 
 static const nano_focus_value_t i6010_s_1[] = { { 0, 0.2500f }, { 1, 0.3500f }, { 3, 0.3413f }, { 5, 0.4294f }, { 6, 0.1458f }, { 7, 0.2000f }, { 9, 0.4000f } };
 static const nano_focus_value_t i6010_s_2[] = { { 0, 0.4000f }, { 1, 0.9000f }, { 5, 0.3413f }, { 7, 0.3000f }, { 9, 0.7000f } };
 static const nano_info_sound_t i6010_s[] = {
-    { "Slapback", "Mix 30.0 % · Feedback 5.0 % · Delay Time 200.0 ms · Mod Depth 0.0 % · Drive 3.0", "Rockabilly, country, blues.", 5, i6010_s_0 },
-    { "Warm lead", "Mix 25.0 % · Feedback 35.0 % · Delay Time 420.0 ms · Mod Rate 0.5 Hz · Mod Depth 20.0 % · Drive 4.0 · Low Pass 3.50 kHz", "", 7, i6010_s_1 },
-    { "Self-oscillation", "Mix 40.0 % · Feedback 90.0 % · Delay Time 350.0 ms · Mod Depth 30.0 % · Drive 7.0", "Careful – it builds up. Lower Feedback to stop it.", 5, i6010_s_2 },
+    { "Slapback", "Mix 30.0 % · Feedback 5.0 % · Delay Time 200.0 ms · Mod Depth 0.0 % · Drive 30 %", "Rockabilly, country, blues.", 5, i6010_s_0 },
+    { "Warm lead", "Mix 25.0 % · Feedback 35.0 % · Delay Time 420.0 ms · Mod Rate 0.5 Hz · Mod Depth 20.0 % · Drive 40 % · Low Pass 3.50 kHz", "", 7, i6010_s_1 },
+    { "Self-oscillation", "Mix 40.0 % · Feedback 90.0 % · Delay Time 350.0 ms · Mod Depth 30.0 % · Drive 70 %", "Careful – it builds up. Lower Feedback to stop it.", 5, i6010_s_2 },
 };
 static const nano_focus_value_t i6010_p_0[] = { { 0, 0.3000f }, { 1, 0.1000f }, { 5, 0.0000f }, { 7, 0.0000f }, { 9, 0.3000f } };
 static const nano_focus_value_t i6010_p_1[] = { { 0, 0.4000f }, { 1, 0.8500f }, { 5, 0.3413f }, { 7, 0.1000f }, { 9, 0.5000f } };
 static const nano_focus_value_t i6010_p_2[] = { { 0, 0.2800f }, { 1, 0.3500f }, { 3, 0.2985f }, { 5, 0.3807f }, { 6, 0.1458f }, { 7, 0.2000f } };
 static const nano_focus_value_t i6010_p_3[] = { { 0, 0.1500f }, { 1, 0.1500f }, { 3, 0.3807f }, { 5, 0.4056f }, { 7, 0.1000f } };
+static const nano_focus_value_t i6010_p_4[] = { { 0, 0.4000f }, { 1, 0.5000f }, { 5, 0.4963f }, { 7, 0.0000f } };
+static const nano_focus_value_t i6010_p_5[] = { { 0, 0.4000f }, { 1, 0.5000f }, { 5, 0.4176f }, { 7, 0.0000f } };
+static const nano_focus_value_t i6010_p_6[] = { { 0, 0.2500f }, { 1, 0.3000f }, { 5, 0.2676f }, { 7, 0.0000f } };
 static const nano_info_sound_t i6010_p[] = {
-    { "John Mayer: Aqua-Puss", "Mix 30.0 % · Feedback 10.0 % · Delay Time 200.0 ms · Mod Depth 0.0 % · Drive 3.0", "A Way Huge Aqua-Puss (20–300 ms) is his main delay; none of his settings are published (Ground Guitar). Ours: a short slap – 200 ms is the shortest this model goes.", 5, i6010_p_0 },
-    { "Frusciante: by hand", "Mix 40.0 % · Feedback 85.0 % · Delay Time 350.0 ms · Mod Depth 10.0 % · Drive 5.0", "A DOD analog delay whose feedback he turns by hand on the closing solo of \"We Believe\" (Ground Guitar). Ours: close to runaway – ride Feedback.", 5, i6010_p_1 },
+    { "John Mayer: Aqua-Puss", "Mix 30.0 % · Feedback 10.0 % · Delay Time 200.0 ms · Mod Depth 0.0 % · Drive 30 %", "A Way Huge Aqua-Puss (20–300 ms) is his main delay; none of his settings are published (Ground Guitar). Ours: a short slap – 200 ms is the shortest this model goes.", 5, i6010_p_0 },
+    { "Frusciante: by hand", "Mix 40.0 % · Feedback 85.0 % · Delay Time 350.0 ms · Mod Depth 10.0 % · Drive 50 %", "A DOD analog delay whose feedback he turns by hand on the closing solo of \"We Believe\" (Ground Guitar). Ours: close to runaway – ride Feedback.", 5, i6010_p_1 },
     { "Wednesday: Carbon Copy", "Mix 28.0 % · Feedback 35.0 % · Delay Time 380.0 ms · Mod Rate 0.5 Hz · Mod Depth 20.0 % · Low Pass 3.00 kHz", "Xandy Chelmis has an MXR Carbon Copy on the pedal steel (Mixdown). Settings are ours.", 6, i6010_p_2 },
     { "Deftones: Change", "Mix 15.0 % · Feedback 15.0 % · Delay Time 400.0 ms · Mod Depth 10.0 % · Low Pass 4.00 kHz", "For \"Change\" the delay sits low in the mix with few repeats; the band has used a Carbon Copy (Killer Rig). Settings are ours.", 5, i6010_p_3 },
+    { "Deftones: Carbon Copy", "Mix 40.0 % · Feedback 50.0 % · Delay Time 480.0 ms · Mod Depth 0.0 %", "Read off Chino Moreno's 2016 board in MusicRadar's rig tour photo: an MXR Carbon Copy with Mix at three o'clock, Regen at noon, Delay at three o'clock and the modulation off – the delay he uses for most of the set. The Carbon Copy runs 20–600 ms; Mix is carried over to this model's scale by us.", 4, i6010_p_4 },
+    { "Deftones: faster echo", "Mix 40.0 % · Feedback 50.0 % · Delay Time 410.0 ms · Mod Depth 0.0 %", "The second Carbon Copy on the same board (MusicRadar), set \"a little faster\" for some of the Gore songs, as he says: Delay at about two o'clock, Regen at noon, Mix at three o'clock.", 4, i6010_p_5 },
+    { "Deftones: Sextape", "Mix 25.0 % · Feedback 30.0 % · Delay Time 300.0 ms · Mod Depth 0.0 %", "Chino's own signature delay, the KHDK Digital Bath, goes up to 400 ms; Guitar World's review used Delay Time at three-quarters (about 300 ms) for his chiming parts on \"Sextape\" and \"Rosemary\". Mix and Feedback are ours.", 4, i6010_p_6 },
 };
 static const char *const i6010_t[] = { "Delay Time runs from 200 to 1100 ms – shorter slapbacks need the Digital or Tape Delay.", "Keep Low Pass between 2.5 and 4 kHz for the classic dark repeats.", "Sync locks the time to the tempo." };
-static const nano_focus_value_t i6015_s_0[] = { { 0, 0.3500f }, { 1, 0.3750f }, { 2, 0.2904f }, { 3, 0.5000f }, { 4, 0.7000f }, { 8, 0.3000f } };
-static const nano_focus_value_t i6015_s_1[] = { { 0, 0.3000f }, { 1, 0.1250f }, { 2, 0.2144f }, { 3, 0.3000f }, { 4, 0.1500f } };
-static const nano_focus_value_t i6015_s_2[] = { { 0, 0.4000f }, { 1, 0.8750f }, { 2, 0.3918f }, { 3, 0.6000f }, { 4, 0.6000f }, { 6, 0.1333f }, { 9, 1.0000f } };
+static const nano_focus_value_t i6015_s_0[] = { { 0, 0.3500f }, { 1, 0.3750f }, { 2, 0.2904f }, { 3, 0.5263f }, { 4, 0.7000f }, { 8, 0.3000f } };
+static const nano_focus_value_t i6015_s_1[] = { { 0, 0.3000f }, { 1, 0.1250f }, { 2, 0.2144f }, { 3, 0.3158f }, { 4, 0.1500f } };
+static const nano_focus_value_t i6015_s_2[] = { { 0, 0.4000f }, { 1, 0.8750f }, { 2, 0.3918f }, { 3, 0.6316f }, { 4, 0.6000f }, { 6, 0.3109f }, { 9, 1.0000f } };
 static const nano_info_sound_t i6015_s[] = {
     { "Ambient cloud", "Mix 35.0 % · Tap Preset 4 · Delay Time 600.00 ms · Feedback 50.0 % · Diffusion 70.0 % · Mod Depth 30.0 %", "", 6, i6015_s_0 },
     { "Rhythmic taps", "Mix 30.0 % · Tap Preset 2 · Delay Time 450.00 ms · Feedback 30.0 % · Diffusion 15.0 %", "", 5, i6015_s_1 },
     { "Lo-fi wash", "Mix 40.0 % · Tap Preset 6 · Delay Time 800.00 ms · Feedback 60.0 % · Diffusion 60.0 % · Vintage Mode On · Low Pass 3.00 kHz", "", 7, i6015_s_2 },
 };
 static const char *const i6015_t[] = { "Diffusion smears the repeats towards a reverb; Tap Preset picks the tap pattern.", "Vintage Mode darkens and roughens the repeats." };
-static const nano_focus_value_t i6011_s_0[] = { { 0, 0.3000f }, { 1, 0.3500f }, { 5, 0.2095f }, { 7, 0.1000f }, { 9, 0.6000f }, { 10, 0.5000f }, { 11, 0.4545f } };
+static const nano_focus_value_t i6011_s_0[] = { { 0, 0.3000f }, { 1, 0.3500f }, { 5, 0.2095f }, { 7, 0.1000f }, { 9, 0.5999f }, { 10, 0.5000f }, { 11, 0.4545f } };
 static const nano_focus_value_t i6011_s_1[] = { { 0, 0.3000f }, { 1, 0.3000f }, { 4, 0.0000f }, { 16, 1.0000f }, { 17, 0.6000f } };
 static const nano_focus_value_t i6011_s_2[] = { { 0, 0.2500f }, { 1, 0.4000f }, { 4, 1.0000f }, { 5, 0.1890f }, { 8, 1.0000f } };
 static const nano_info_sound_t i6011_s[] = {
-    { "Lead (ducked)", "Mix 30.0 % · Feedback 35.0 % · Delay Time 450 ms · Dyn Mode Duck · Dyn Depth 60.0 % · Threshold -40.0 dB · Mod Depth 10.0 %", "The repeats get quieter while you play and swell up in the gaps.", 7, i6011_s_0 },
+    { "Lead (ducked)", "Mix 30.0 % · Feedback 35.0 % · Delay Time 450 ms · Dyn Mode Duck · Dyn Depth 25.6 dB · Threshold -40.0 dB · Mod Depth 10.0 %", "The repeats get quieter while you play and swell up in the gaps.", 7, i6011_s_0 },
     { "Dotted eighths", "Mix 30.0 % · Feedback 30.0 % · Sync On · Sync Note 1/8D · Ping Pong Off", "The U2 / Edge rhythm – needs the preset tempo.", 5, i6011_s_1 },
     { "Wide ping pong", "Mix 25.0 % · Feedback 40.0 % · Delay Time 380 ms · Ping Pong On · Width 100.0 %", "", 5, i6011_s_2 },
 };
@@ -556,13 +598,21 @@ static const nano_focus_value_t i6011_p_2[] = { { 0, 0.3300f }, { 1, 0.4000f }, 
 static const nano_focus_value_t i6011_p_3[] = { { 0, 0.5000f }, { 1, 0.9500f }, { 4, 0.0000f }, { 5, 0.1635f }, { 7, 0.0000f }, { 10, 0.0000f } };
 static const nano_focus_value_t i6011_p_4[] = { { 0, 0.3300f }, { 1, 0.0000f }, { 4, 0.0000f }, { 5, 0.0995f }, { 7, 0.0000f }, { 10, 0.0000f } };
 static const nano_focus_value_t i6011_p_5[] = { { 0, 0.3000f }, { 1, 0.2500f }, { 4, 0.0000f }, { 5, 0.1443f }, { 7, 0.0000f }, { 10, 0.0000f }, { 17, 0.5000f } };
+static const nano_focus_value_t i6011_p_6[] = { { 0, 0.3500f }, { 1, 0.4500f }, { 4, 0.0000f }, { 5, 0.0971f }, { 7, 0.0000f }, { 10, 0.0000f } };
+static const nano_focus_value_t i6011_p_7[] = { { 0, 0.4000f }, { 1, 0.9800f }, { 4, 0.0000f }, { 5, 0.0586f }, { 7, 0.0000f }, { 10, 0.0000f } };
+static const nano_focus_value_t i6011_p_8[] = { { 0, 0.3000f }, { 1, 0.1500f }, { 4, 0.0000f }, { 5, 0.1797f }, { 7, 0.0000f }, { 10, 0.0000f } };
+static const nano_focus_value_t i6011_p_9[] = { { 0, 0.4500f }, { 1, 0.4500f }, { 4, 0.0000f }, { 7, 0.0000f }, { 10, 0.0000f }, { 16, 1.0000f }, { 17, 0.4000f } };
 static const nano_info_sound_t i6011_p[] = {
     { "Deftones: Digital Bath", "Mix 15.0 % · Feedback 25.0 % · Delay Time 400 ms · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Off · Low Pass 8.00 kHz", "A slight delay of about 400 ms at 15 % mix (Guitar Chalk's reading of the song). Feedback is ours.", 7, i6011_p_0 },
     { "Frusciante: quick delay", "Mix 30.0 % · Feedback 15.0 % · Delay Time 130 ms · Ping Pong Off · Mod Rate 1.0 Hz · Mod Depth 20.0 % · Dyn Mode Off", "A DeltaLab Effectron II set to a quick delay with slight modulation on \"She's Only 18\" (Ground Guitar). Settings are ours.", 7, i6011_p_1 },
-    { "MJ Lenderman: Flashback", "Mix 33.0 % · Feedback 40.0 % · Delay Time 500 ms · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Duck · Dyn Depth 50.0 %", "Read off his TC Flashback 2 in Premier Guitar's Rig Rundown photo (his board with The Wind): Delay and Level at noon, Feedback at eleven, the type on DYN – repeats that duck while he plays. The time behind \"noon\" is our estimate.", 7, i6011_p_2 },
+    { "MJ Lenderman: Flashback", "Mix 33.0 % · Feedback 40.0 % · Delay Time 500 ms · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Duck · Dyn Depth 18.9 dB", "Read off his TC Flashback 2 in Premier Guitar's Rig Rundown photo (his board with The Wind): Delay and Level at noon, Feedback at eleven, the type on DYN – repeats that duck while he plays. The time behind \"noon\" is our estimate.", 7, i6011_p_2 },
     { "Wednesday: noise delay", "Mix 50.0 % · Feedback 95.0 % · Delay Time 300 ms · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Off", "MJ Lenderman uses a TC Flashback as a noise generator: repeats cranked, the time moved by hand (Mixdown). Ours – turn Delay Time while it rings, and mind the volume.", 6, i6011_p_3 },
     { "Geese: DD-5", "Mix 33.0 % · Feedback 0.0 % · Delay Time 135 ms · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Off", "Read off Emily Green's Boss DD-5 in Premier Guitar's Rig Rundown photo: E.Level at half past one, Feedback at minimum, Time just past noon, the mode on one of the two short ranges – one slap of about 135 ms if it is the 50–200 ms range.", 6, i6011_p_4 },
     { "Muse: Starlight", "Mix 30.0 % · Feedback 25.0 % · Delay Time 245 ms · Sync Note 1/8 · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Off", "\"Starlight\": the bright, delayed eighth-note figure of the verses, a Line 6 DL4 on Matt Bellamy's board of that time (ToneMirror, which gives no settings). Ours: an eighth note at the song's tempo.", 7, i6011_p_5 },
+    { "Warpaint: DD-7 sustain", "Mix 35.0 % · Feedback 45.0 % · Delay Time 130 ms · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Off", "Read off Theresa Wayman's board in Guitar Player's 2022 photo: a Boss DD-7 with E.Level at noon, F.Back just before noon and the time at about half past one on a short range; she and Emily Kokal keep the DD-7 \"really short\", only for sustain (Premier Guitar Rig Rundown, 2017). The time is our reading of that range.", 6, i6011_p_6 },
+    { "Geese: DD-5 loop", "Mix 40.0 % · Feedback 98.0 % · Delay Time 60 ms · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Off", "Emily Green sets her Boss DD-5 to repeat forever at very short times and moves the time while it rings – it glitches instead of bending (Guitar World, 2026). Ours: a 60 ms loop that holds – move Delay Time, and mind the volume.", 6, i6011_p_7 },
+    { "Klinghoffer: 2 repeats", "Mix 30.0 % · Feedback 15.0 % · Delay Time 350 ms · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Off", "Josh Klinghoffer's Boss DD-3, \"set for two clipped repeats\" as his tech put it in Premier Guitar's 2012 Rig Rundown. The time is ours.", 6, i6011_p_8 },
+    { "Frusciante: triplet echo", "Mix 45.0 % · Feedback 45.0 % · Sync On · Sync Note 1/8T · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Off", "\"Don't Forget Me\": John double-picks sixteenths on the top two strings while the echo comes back in triplets (his words, via note.com/ketunemikku); the analysis sets regeneration medium and the mix fairly high. Here an eighth-note triplet in the Nano's tempo – try 1/4T as well.", 7, i6011_p_9 },
 };
 static const char *const i6011_t[] = { "Dyn Mode Duck lowers the repeats while you play, Gate does the opposite.", "High Pass around 150 Hz keeps the repeats out of the bass." };
 static const nano_focus_value_t i6012_s_0[] = { { 0, 0.3000f }, { 1, 0.1890f }, { 2, 0.3000f }, { 3, 0.0000f }, { 4, 0.2261f }, { 5, 0.3000f } };
@@ -582,22 +632,32 @@ static const nano_info_sound_t i6014_s[] = {
     { "Subtle swells", "Mix 25.0 % · Delay Time L 500 ms · Delay Time R 700 ms · Feedback L 20.0 % · Feedback R 20.0 %", "", 5, i6014_s_1 },
     { "Ambient", "Mix 40.0 % · Delay Time L 1.20 s · Delay Time R 1.50 s · Feedback L 45.0 % · Feedback R 45.0 % · X-Feedback 20.0 %", "", 6, i6014_s_2 },
 };
+static const nano_focus_value_t i6014_p_0[] = { { 0, 0.6000f }, { 1, 0.2811f }, { 2, 0.0000f }, { 3, 0.0000f }, { 4, 0.0000f }, { 5, 0.2811f }, { 6, 0.0000f }, { 10, 0.0000f } };
+static const nano_info_sound_t i6014_p[] = {
+    { "Warpaint: reverse", "Mix 60.0 % · Delay Time L 500 ms · Delay Time R 500 ms · Feedback L 0.0 % · Feedback R 0.0 % · X-Feedback 0.0 % · Feedback Mode Reverse · Dyn Mode Off", "Theresa Wayman uses a Boss DD-6 for a reverse effect (Guitar Player, 2022); in the photo of her board its effect level is high (about four o'clock) and the feedback at the minimum. The time is ours.", 8, i6014_p_0 },
+};
 static const char *const i6014_t[] = { "Long delay times make the reverse effect obvious; short ones blur.", "Put a reverb after it for the classic dreamy pad." };
 static const nano_focus_value_t i6004_s_0[] = { { 0, 0.3000f }, { 1, 0.0500f }, { 5, 0.0873f }, { 6, 0.1000f }, { 7, 0.1000f } };
 static const nano_focus_value_t i6004_s_1[] = { { 0, 0.2500f }, { 1, 0.3500f }, { 5, 0.1875f }, { 6, 0.2000f }, { 7, 0.2000f } };
 static const nano_focus_value_t i6004_s_2[] = { { 0, 0.3500f }, { 1, 0.6500f }, { 3, 0.5113f }, { 5, 0.2546f }, { 6, 0.4000f } };
 static const nano_info_sound_t i6004_s[] = {
-    { "Slapback", "Mix 30.0 % · Feedback 5.0 % · Delay Time 110 ms · Wow 1.0 · Flutter 1.0", "Rockabilly and country: one short, quick repeat.", 5, i6004_s_0 },
-    { "Rhythmic echo", "Mix 25.0 % · Feedback 35.0 % · Delay Time 375 ms · Wow 2.0 · Flutter 2.0", "Dotted eighths at 120 BPM.", 5, i6004_s_1 },
-    { "Ambient wash", "Mix 35.0 % · Feedback 65.0 % · Delay Time 620 ms · Low Pass 2.50 kHz · Wow 4.0", "Long, dark repeats that melt into each other.", 5, i6004_s_2 },
+    { "Slapback", "Mix 30.0 % · Feedback 5.0 % · Delay Time 110 ms · Wow 10 % · Flutter 10 %", "Rockabilly and country: one short, quick repeat.", 5, i6004_s_0 },
+    { "Rhythmic echo", "Mix 25.0 % · Feedback 35.0 % · Delay Time 375 ms · Wow 20 % · Flutter 20 %", "Dotted eighths at 120 BPM.", 5, i6004_s_1 },
+    { "Ambient wash", "Mix 35.0 % · Feedback 65.0 % · Delay Time 620 ms · Low Pass 2.50 kHz · Wow 40 %", "Long, dark repeats that melt into each other.", 5, i6004_s_2 },
 };
 static const nano_focus_value_t i6004_p_0[] = { { 0, 0.3000f }, { 1, 0.0800f }, { 4, 0.4000f }, { 5, 0.0873f }, { 6, 0.2000f }, { 7, 0.2000f } };
+static const nano_focus_value_t i6004_p_1[] = { { 0, 0.1500f }, { 1, 0.4500f }, { 3, 0.5968f }, { 5, 0.1063f }, { 6, 0.0000f }, { 7, 0.0000f } };
+static const nano_focus_value_t i6004_p_2[] = { { 0, 0.2000f }, { 1, 0.0500f }, { 5, 0.0821f }, { 6, 0.1000f }, { 7, 0.1000f } };
+static const nano_focus_value_t i6004_p_3[] = { { 0, 0.3500f }, { 1, 0.9500f }, { 5, 0.2009f }, { 6, 0.2000f }, { 7, 0.2000f } };
 static const nano_info_sound_t i6004_p[] = {
-    { "Black Keys: tight slap", "Mix 30.0 % · Feedback 8.0 % · Delay Time 110 ms · Wow 2.0 · Flutter 2.0 · Drive 40 %", "A Fulltone Tape Echo gives Dan Auerbach \"a continuous, tight slapback\" (Premier Guitar). Settings are ours.", 6, i6004_p_0 },
+    { "Black Keys: tight slap", "Mix 30.0 % · Feedback 8.0 % · Delay Time 110 ms · Wow 20 % · Flutter 20 % · Drive 40 %", "A Fulltone Tape Echo gives Dan Auerbach \"a continuous, tight slapback\" (Premier Guitar). Settings are ours.", 6, i6004_p_0 },
+    { "Warpaint: AD9 slap", "Mix 15.0 % · Feedback 45.0 % · Delay Time 150 ms · Wow 0 % · Flutter 0 % · Low Pass 3.00 kHz", "Read off Theresa Wayman's board in Guitar Player's 2022 photo: an Ibanez AD9 analog delay (10–300 ms) with Delay Time at noon, Repeat just before noon and Delay Level at nine o'clock – a slap or a barely audible short delay to widen the tone, as she says (Guitar World, 2022). On this model because the Analog Delay starts at 200 ms.", 6, i6004_p_1 },
+    { "Frusciante: White Braids", "Mix 20.0 % · Feedback 5.0 % · Delay Time 100 ms · Wow 10 % · Flutter 10 %", "\"White Braids & Pillow Chair\", the outro: an MXR analog delay or a tape echo at 80–130 ms with one repeat, mixed in modestly (note.com/ketunemikku's analysis of Unlimited Love).", 5, i6004_p_2 },
+    { "Frusciante: Tangelo", "Mix 35.0 % · Feedback 95.0 % · Delay Time 420 ms · Wow 20 % · Flutter 20 %", "\"Tangelo\": acoustic guitar into a tape echo – John names a Fulltone Tube Tape Echo; at the very end the repeats are turned up until it runs away (note.com/ketunemikku). Ours: close to runaway – switch it on at the end, and mind the volume.", 5, i6004_p_3 },
 };
 static const char *const i6004_t[] = { "Low Pass around 2–3 kHz sounds most like worn tape.", "Drive pushes the repeats into tape saturation – more Feedback with more Drive builds up into self-oscillation.", "Sync locks Delay Time to the tempo." };
-static const nano_focus_value_t i8008_s_0[] = { { 0, 0.2000f }, { 1, 0.0000f }, { 2, 0.0000f }, { 3, 0.3413f }, { 4, 0.7671f } };
-static const nano_focus_value_t i8008_s_1[] = { { 0, 0.3000f }, { 1, 1.0000f }, { 2, 0.2512f }, { 3, 0.2916f }, { 4, 0.7013f } };
+static const nano_focus_value_t i8008_s_0[] = { { 0, 0.0000f }, { 1, 0.0000f }, { 2, 0.3413f }, { 3, 0.7671f }, { 4, 0.2000f } };
+static const nano_focus_value_t i8008_s_1[] = { { 0, 1.0000f }, { 1, 0.2512f }, { 2, 0.2916f }, { 3, 0.7013f }, { 4, 0.3000f } };
 static const nano_info_sound_t i8008_s[] = {
     { "Subtle air", "Mix 20.0 % · Size Small · Pre Delay 0.0 ms · High Pass 150 Hz · Low Pass 8.00 kHz", "", 5, i8008_s_0 },
     { "Big space", "Mix 30.0 % · Size Large · Pre Delay 10.0 ms · High Pass 120 Hz · Low Pass 7.00 kHz", "", 5, i8008_s_1 },
@@ -606,57 +666,67 @@ static const char *const i8008_t[] = { "Size sets how big the space feels.", "Go
 static const nano_focus_value_t i8030_s_0[] = { { 0, 0.3500f }, { 1, 0.6824f }, { 2, 0.3245f }, { 6, 0.8152f }, { 7, 0.8000f }, { 10, 0.0000f }, { 11, 0.3000f } };
 static const nano_focus_value_t i8030_s_1[] = { { 0, 0.3000f }, { 1, 0.5563f }, { 2, 0.3641f }, { 7, 0.7000f }, { 10, 0.5000f }, { 11, 0.2000f } };
 static const nano_focus_value_t i8030_s_2[] = { { 0, 0.5000f }, { 1, 0.9576f }, { 2, 0.4282f }, { 7, 0.9000f }, { 8, 0.1928f }, { 9, 0.2780f }, { 11, 0.5000f } };
+static const nano_focus_value_t i8030_s_3[] = { { 0, 0.3000f }, { 1, 0.4216f }, { 2, 0.3452f }, { 3, 0.4699f }, { 4, 0.4292f }, { 5, 0.0000f }, { 6, 0.0000f }, { 7, 0.1500f }, { 8, 0.1928f }, { 9, 0.5050f }, { 10, 0.0000f }, { 11, 0.2000f } };
 static const nano_info_sound_t i8030_s[] = {
     { "Slow bloom", "Mix 35.0 % · Decay 8.00 s · Pre Delay 30 ms · Diffusion 80 % · E.R. Length 60 % · Ducking 0 % · Modulation 30.0 %", "", 7, i8030_s_0 },
     { "Ducked lead", "Mix 30.0 % · Decay 5.00 s · Pre Delay 40 ms · Diffusion 70 % · Ducking 50 % · Modulation 20.0 %", "Big when you stop, clear while you play.", 6, i8030_s_1 },
     { "Endless pad", "Mix 50.0 % · Decay 18.00 s · Pre Delay 60 ms · Diffusion 90 % · Modulation 50.0 % · Bass -6.0 dB · Treble -4.0 dB", "", 7, i8030_s_2 },
+    { "Spring tank", "Mix 30.0 % · Decay 2.75 s · Pre Delay 35 ms · High Pass 200 Hz · Low Pass 4.50 kHz · Extra E.R. Off · E.R. Length 0 % · Diffusion 15 % · Bass -6.0 dB · Treble 0.0 dB · Ducking 0 % · Modulation 20.0 %", "The Nano has no spring – this comes nearest: an amp's long tank (Accutronics Type 4, as in Fender amps) rings 2.75–4 s, each spring delays 33–41 ms, and little below 150 Hz or above 4.5 kHz gets through. Low Diffusion and no E.R. Length keep the repeats separate and metallic instead of blooming.", 12, i8030_s_3 },
 };
 static const char *const i8030_t[] = { "Diffusion and E.R. Length set how slowly it blooms.", "Bass and Treble shape the tail; cutting Bass keeps it clear.", "Pre Delay keeps the note clear before the reverb starts." };
-static const nano_focus_value_t i8009_s_0[] = { { 0, 0.4000f }, { 1, 0.5173f }, { 2, 0.3761f }, { 3, 0.5000f }, { 4, 0.4806f }, { 5, 0.6147f } };
-static const nano_focus_value_t i8009_s_1[] = { { 0, 0.3000f }, { 1, 0.7360f }, { 2, 0.2443f }, { 3, 0.7000f }, { 4, 0.3413f }, { 5, 0.4910f } };
+static const nano_focus_value_t i8009_s_0[] = { { 0, 0.5173f }, { 1, 0.3761f }, { 2, 0.5000f }, { 3, 0.4806f }, { 4, 0.6147f }, { 5, 0.4000f } };
+static const nano_focus_value_t i8009_s_1[] = { { 0, 0.7360f }, { 1, 0.2443f }, { 2, 0.7000f }, { 3, 0.3413f }, { 4, 0.4910f }, { 5, 0.3000f } };
 static const nano_info_sound_t i8009_s[] = {
     { "Ambient pad", "Mix 40.0 % · Decay 10.00 s · Pre Delay 40.0 ms · Damping 50.0 % · High Pass 250 Hz · Low Pass 4.00 kHz", "", 6, i8009_s_0 },
     { "Doom", "Mix 30.0 % · Decay 14.00 s · Pre Delay 20.0 ms · Damping 70.0 % · High Pass 150 Hz · Low Pass 3.00 kHz", "", 6, i8009_s_1 },
 };
 static const char *const i8009_t[] = { "Damping darkens the tail further.", "Combine with a volume swell (Volume on an expression pedal) for pads." };
-static const nano_focus_value_t i8003_s_0[] = { { 0, 0.2000f }, { 1, 0.3413f }, { 2, 0.4787f }, { 3, 0.4149f }, { 4, 0.5552f } };
-static const nano_focus_value_t i8003_s_1[] = { { 0, 0.3000f }, { 1, 0.5173f }, { 2, 0.4273f }, { 3, 0.3413f }, { 4, 0.6311f } };
-static const nano_focus_value_t i8003_s_2[] = { { 0, 0.4000f }, { 1, 0.8600f }, { 2, 0.5718f }, { 3, 0.4806f }, { 4, 0.5145f } };
+static const nano_focus_value_t i8003_s_0[] = { { 0, 0.3413f }, { 1, 0.4787f }, { 2, 0.4149f }, { 3, 0.5552f }, { 4, 0.2000f } };
+static const nano_focus_value_t i8003_s_1[] = { { 0, 0.5173f }, { 1, 0.4273f }, { 2, 0.3413f }, { 3, 0.6311f }, { 4, 0.3000f } };
+static const nano_focus_value_t i8003_s_2[] = { { 0, 0.8600f }, { 1, 0.5718f }, { 2, 0.4806f }, { 3, 0.5145f }, { 4, 0.4000f } };
 static const nano_info_sound_t i8003_s[] = {
     { "Lead", "Mix 20.0 % · Decay 2.50 s · Pre Delay 30.0 ms · High Pass 200 Hz · Low Pass 5.00 kHz", "Pre Delay keeps the notes clear.", 5, i8003_s_0 },
     { "Ballad", "Mix 30.0 % · Decay 4.00 s · Pre Delay 25.0 ms · High Pass 150 Hz · Low Pass 6.00 kHz", "", 5, i8003_s_1 },
     { "Huge", "Mix 40.0 % · Decay 8.00 s · Pre Delay 40.0 ms · High Pass 250 Hz · Low Pass 4.50 kHz", "", 5, i8003_s_2 },
 };
-static const nano_focus_value_t i8003_p_0[] = { { 0, 0.3500f }, { 1, 0.4637f }, { 2, 0.3092f }, { 3, 0.3413f }, { 4, 0.6311f } };
-static const nano_focus_value_t i8003_p_1[] = { { 0, 0.3000f }, { 1, 0.3413f }, { 2, 0.2372f }, { 3, 0.3866f }, { 4, 0.5552f } };
+static const nano_focus_value_t i8003_p_0[] = { { 0, 0.4637f }, { 1, 0.3092f }, { 2, 0.3413f }, { 3, 0.6311f }, { 4, 0.3500f } };
+static const nano_focus_value_t i8003_p_1[] = { { 0, 0.3413f }, { 1, 0.2372f }, { 2, 0.3866f }, { 3, 0.5552f }, { 4, 0.3000f } };
+static const nano_focus_value_t i8003_p_2[] = { { 0, 0.6147f }, { 1, 0.2372f }, { 2, 0.3413f }, { 3, 0.6311f }, { 4, 0.4500f } };
 static const nano_info_sound_t i8003_p[] = {
     { "Frusciante: Holy Grail", "Mix 35.0 % · Decay 3.50 s · Pre Delay 15.0 ms · High Pass 150 Hz · Low Pass 6.00 kHz", "An EHX Holy Grail when he wants a heavier reverb: the \"Strip My Mind\" solo and \"Hey\" (Ground Guitar). Settings are ours.", 5, i8003_p_0 },
     { "Wednesday: Holy Grail", "Mix 30.0 % · Decay 2.50 s · Pre Delay 10.0 ms · High Pass 180 Hz · Low Pass 5.00 kHz", "Xandy Chelmis has a Holy Grail on the pedal steel (Mixdown). Settings are ours.", 5, i8003_p_1 },
+    { "Warpaint: Dispatch wash", "Mix 45.0 % · Decay 5.00 s · Pre Delay 10.0 ms · High Pass 150 Hz · Low Pass 6.00 kHz", "Read off Theresa Wayman's board in Guitar Player's 2022 photo: an EarthQuaker Dispatch Master with Reverb at about two o'clock, Mix at three, the repeats at the minimum and a short time – almost all reverb, for wash and atmosphere, as she says (Rig Rundown, 2017). Decay and filters carried over by us.", 5, i8003_p_2 },
 };
 static const char *const i8003_t[] = { "Pre Delay keeps the note clear before the reverb starts; High Pass and Low Pass keep the tail out of the mud and the fizz." };
-static const nano_focus_value_t i8011_s_0[] = { { 0, 0.2500f }, { 1, 0.2222f }, { 2, 0.2929f }, { 3, 0.4529f }, { 4, 0.6814f }, { 5, 0.4000f } };
-static const nano_focus_value_t i8011_s_1[] = { { 0, 0.3000f }, { 1, 0.4444f }, { 2, 0.1919f }, { 3, 0.4082f }, { 4, 0.5345f }, { 5, 0.6500f } };
+static const nano_focus_value_t i8011_s_0[] = { { 0, 0.2500f }, { 1, 0.2220f }, { 2, 0.3817f }, { 3, 0.4529f }, { 4, 0.6814f }, { 5, 0.4000f } };
+static const nano_focus_value_t i8011_s_1[] = { { 0, 0.3000f }, { 1, 0.4440f }, { 2, 0.3090f }, { 3, 0.4082f }, { 4, 0.5345f }, { 5, 0.6500f } };
+static const nano_focus_value_t i8011_s_2[] = { { 0, 0.2400f }, { 1, 0.6800f }, { 2, 0.5013f }, { 3, 0.4804f }, { 4, 0.6339f }, { 5, 0.4200f } };
 static const nano_info_sound_t i8011_s[] = {
-    { "80s lead", "Mix 25.0 % · Decay 3.00 s · Pre Delay 30.0 ms · High Pass 180 Hz · Low Pass 6.00 kHz · Damping 40.0 %", "", 6, i8011_s_0 },
-    { "Dark hall", "Mix 30.0 % · Decay 5.00 s · Pre Delay 20.0 ms · High Pass 150 Hz · Low Pass 4.00 kHz · Damping 65.0 %", "", 6, i8011_s_1 },
+    { "80s lead", "Mix 25.0 % · Decay 22.2 % · Pre Delay 30.0 ms · High Pass 180 Hz · Low Pass 6.00 kHz · Damping 40.0 %", "", 6, i8011_s_0 },
+    { "Dark hall", "Mix 30.0 % · Decay 44.4 % · Pre Delay 20.0 ms · High Pass 150 Hz · Low Pass 4.00 kHz · Damping 65.0 %", "", 6, i8011_s_1 },
+    { "70s plate", "Mix 24.0 % · Decay 68.0 % · Pre Delay 51.0 ms · High Pass 200 Hz · Low Pass 5.30 kHz · Damping 42.0 %", "Neural DSP's \"Long\" preset for the Plate reverb of the Quad Cortex: Mind Hall has the same controls and starts from the same values as that Plate, so it carries over – dense and bright, the lows cut.", 6, i8011_s_2 },
 };
-static const nano_focus_value_t i8011_p_0[] = { { 0, 0.2000f }, { 1, 0.1333f }, { 2, 0.1414f }, { 3, 0.4804f }, { 4, 0.7440f }, { 5, 0.4000f } };
+static const nano_focus_value_t i8011_p_0[] = { { 0, 0.2000f }, { 1, 0.1330f }, { 2, 0.2652f }, { 3, 0.4804f }, { 4, 0.7440f }, { 5, 0.4000f } };
 static const nano_info_sound_t i8011_p[] = {
-    { "Deftones: Digital Bath", "Mix 20.0 % · Decay 2.20 s · Pre Delay 15.0 ms · High Pass 200 Hz · Low Pass 7.00 kHz · Damping 40.0 %", "A plate reverb at about 20 % mix (Guitar Chalk's reading of the song). Decay and filters are ours.", 6, i8011_p_0 },
+    { "Deftones: Digital Bath", "Mix 20.0 % · Decay 13.3 % · Pre Delay 15.0 ms · High Pass 200 Hz · Low Pass 7.00 kHz · Damping 40.0 %", "A plate reverb at about 20 % mix (Guitar Chalk's reading of the song). Decay and filters are ours.", 6, i8011_p_0 },
 };
 static const char *const i8011_t[] = { "Damping darkens the tail.", "Pre Delay keeps the note clear before the reverb starts; High Pass and Low Pass keep the tail out of the mud and the fizz." };
-static const nano_focus_value_t i8007_s_0[] = { { 0, 0.3000f }, { 1, 0.4637f }, { 2, 0.2443f }, { 3, 0.2543f }, { 4, 0.4000f }, { 5, 0.3413f }, { 6, 0.6311f } };
-static const nano_focus_value_t i8007_s_1[] = { { 0, 0.4000f }, { 1, 0.7028f }, { 2, 0.1560f }, { 3, 0.4716f }, { 4, 0.8000f }, { 5, 0.4149f }, { 6, 0.5552f } };
+static const nano_focus_value_t i8007_s_0[] = { { 0, 0.4637f }, { 1, 0.2443f }, { 2, 0.2543f }, { 3, 0.4000f }, { 4, 0.3413f }, { 5, 0.6311f }, { 6, 0.3000f } };
+static const nano_focus_value_t i8007_s_1[] = { { 0, 0.7028f }, { 1, 0.1560f }, { 2, 0.4716f }, { 3, 0.8000f }, { 4, 0.4149f }, { 5, 0.5552f }, { 6, 0.4000f } };
 static const nano_info_sound_t i8007_s[] = {
     { "Dreamy clean", "Mix 30.0 % · Decay 3.50 s · Pre Delay 20.0 ms · Mod Speed 0.60 Hz · Mod Depth 40.0 % · High Pass 150 Hz · Low Pass 6.00 kHz", "", 7, i8007_s_0 },
     { "Seasick", "Mix 40.0 % · Decay 6.00 s · Pre Delay 10.0 ms · Mod Speed 1.50 Hz · Mod Depth 80.0 % · High Pass 200 Hz · Low Pass 5.00 kHz", "", 7, i8007_s_1 },
 };
 static const char *const i8007_t[] = { "Mod Speed and Mod Depth set the movement of the tail – keep Speed below 1 Hz for a natural shimmer.", "Pre Delay keeps the note clear before the reverb starts." };
-static const nano_focus_value_t i8000_s_0[] = { { 0, 0.1500f }, { 1, 0.4489f }, { 2, 0.0404f }, { 3, 0.3413f }, { 4, 0.6311f } };
-static const nano_focus_value_t i8000_s_1[] = { { 0, 0.2500f }, { 1, 0.7204f }, { 2, 0.0909f }, { 3, 0.2916f }, { 4, 0.7013f } };
+static const nano_focus_value_t i8000_s_0[] = { { 0, 0.4489f }, { 1, 0.1638f }, { 2, 0.3413f }, { 3, 0.6311f }, { 4, 0.1500f } };
+static const nano_focus_value_t i8000_s_1[] = { { 0, 0.7204f }, { 1, 0.2498f }, { 2, 0.2916f }, { 3, 0.7013f }, { 4, 0.2500f } };
 static const nano_info_sound_t i8000_s[] = {
     { "Always on", "Mix 15.0 % · Decay 0.60 s · Pre Delay 5.0 ms · High Pass 150 Hz · Low Pass 6.00 kHz", "You hear it when it is gone.", 5, i8000_s_0 },
     { "Live room", "Mix 25.0 % · Decay 1.20 s · Pre Delay 10.0 ms · High Pass 120 Hz · Low Pass 7.00 kHz", "", 5, i8000_s_1 },
+};
+static const nano_focus_value_t i8000_p_0[] = { { 0, 0.3304f }, { 1, 0.1638f }, { 2, 0.3413f }, { 3, 0.6311f }, { 4, 0.1200f } };
+static const nano_info_sound_t i8000_p[] = {
+    { "Frusciante: Let 'Em Cry", "Mix 12.0 % · Decay 0.40 s · Pre Delay 5.0 ms · High Pass 150 Hz · Low Pass 6.00 kHz", "\"Let 'Em Cry\": an MXR Reverb in its Room mode with an extremely short decay, always on; two of them sit on his 2022 board (note.com/ketunemikku, from photos). Mix and filters are ours.", 5, i8000_p_0 },
 };
 static const char *const i8000_t[] = { "Pre Delay keeps the note clear before the reverb starts; High Pass and Low Pass keep the tail out of the mud and the fizz." };
 static const nano_focus_value_t i8010_s_0[] = { { 0, 0.3500f }, { 1, 0.4353f }, { 2, 0.5000f }, { 3, 0.5000f }, { 4, 0.7500f }, { 5, 0.3149f } };
@@ -671,18 +741,18 @@ static const char *const i8010_t[] = { "Pitch sets the interval of the tail (+12
 
 static const nano_info_t INFO[] = {
     { 18, "Guitar overdrive", "BOSS BD-2 Blues Driver", true, true, "1995 · BOSS (Roland), Japan", "An open, amp-like overdrive that keeps your guitar's character. It reacts strongly to pick attack and the guitar volume – from a slightly hairy clean to a gritty, almost fuzzy crunch – and has more low end and bite than a Tube Screamer-style drive.", "", 3, 3, 2, i18_t, i18_s, i18_p },   // Chief BD2
-    { 13, "Guitar overdrive", "BOSS OD-1 OverDrive", true, true, "1977 · BOSS – one of the very first BOSS compact pedals", "The pedal that made \"overdrive\" a word: asymmetric clipping gives a smooth, mid-forward drive that is more open and less compressed than the Tube Screamer that followed it. No tone control – it lets the amp do the voicing.", "", 2, 3, 1, i13_t, i13_s, i13_p },   // Chief OD1
+    { 13, "Guitar overdrive", "BOSS OD-1 OverDrive", true, true, "1977 · BOSS – one of the very first BOSS compact pedals", "The pedal that made \"overdrive\" a word: asymmetric clipping gives a smooth, mid-forward drive that is more open and less compressed than the Tube Screamer that followed it. No tone control – it lets the amp do the voicing.", "", 2, 3, 2, i13_t, i13_s, i13_p },   // Chief OD1
     { 6, "Guitar overdrive", "Xotic BB Preamp", true, true, "about 2005 · Xotic Effects, California – \"BB\" stands for Bluesbreaker", "A wide-range overdrive with a ±15 dB active two-band EQ: from a big clean boost to a smooth, compressed, singing lead. It keeps more bass than a Tube Screamer and gets considerably wilder.", "Andy Timmons, Greg Howe.", 2, 3, 0, i6_t, i6_s, NULL },   // Exotic
     { 3007, "Bass overdrive", "Xotic RC Bass Booster", true, true, "Xotic Effects, California", "The bass version of the RC Booster: a transparent boost of up to about 20 dB with an active EQ voiced for bass. It thickens the tone and puts the bass a little forward in the mix without changing its character.", "", 1, 3, 0, i3007_t, i3007_s, NULL },   // Exotic Bass Z Boost
     { 23, "Guitar overdrive", "Xotic RC Booster", true, true, "Xotic Effects, California – \"RC\" for \"really clean\"", "A transparent clean boost with up to about 20 dB of gain and an active two-band EQ: it makes a Strat sound like a louder Strat. Turn up the gain and it adds a light, Klon-ish grit.", "Brad Paisley, Brent Mason.", 2, 3, 3, i23_t, i23_s, i23_p },   // Exotic Z Boost
-    { 22, "Guitar overdrive", "Dunlop Fuzz Face (Arbiter Fuzz Face)", true, true, "1966 · Arbiter, London – today made by Dunlop", "The classic two-transistor fuzz in the round case: thick, woolly and extremely touch-sensitive. Rolling back the guitar volume cleans it up to a glassy, slightly hairy tone – that interplay is the whole point.", "Jimi Hendrix, David Gilmour, Eric Johnson.", 3, 3, 6, i22_t, i22_s, i22_p },   // Facial Fuzz
-    { 27, "Guitar overdrive", "Ibanez TS808 Tube Screamer", true, true, "about 1979 · Ibanez (built by Maxon / Nisshin Onpa) – designed by Susumu Tamura", "The \"holy grail\" overdrive: a mid hump around 700 Hz, tightened bass and soft clipping. On its own a smooth blues drive; in front of a driven amp the most famous boost in rock and metal.", "Stevie Ray Vaughan – and the boost in front of countless metal rigs.", 2, 3, 2, i27_t, i27_s, i27_p },   // Green 808
+    { 22, "Guitar overdrive", "Dunlop Fuzz Face (Arbiter Fuzz Face)", true, true, "1966 · Arbiter, London – today made by Dunlop", "The classic two-transistor fuzz in the round case: thick, woolly and extremely touch-sensitive. Rolling back the guitar volume cleans it up to a glassy, slightly hairy tone – that interplay is the whole point.", "Jimi Hendrix, David Gilmour, Eric Johnson.", 3, 3, 7, i22_t, i22_s, i22_p },   // Facial Fuzz
+    { 27, "Guitar overdrive", "Ibanez TS808 Tube Screamer", true, true, "about 1979 · Ibanez (built by Maxon / Nisshin Onpa) – designed by Susumu Tamura", "The \"holy grail\" overdrive: a mid hump around 700 Hz, tightened bass and soft clipping. On its own a smooth blues drive; in front of a driven amp the most famous boost in rock and metal.", "Stevie Ray Vaughan – and the boost in front of countless metal rigs.", 2, 3, 3, i27_t, i27_s, i27_p },   // Green 808
     { 3000, "Bass overdrive", "Darkglass Microtubes B3K", true, true, "Darkglass Electronics, Helsinki, Finland", "The modern bass grind: a CMOS overdrive with a clean blend, voiced flat instead of mid-scooped so the growl cuts through. From warm saturation to all-out distortion while the low end stays solid.", "", 3, 3, 1, i3000_t, i3000_s, i3000_p },   // Microtubes B3K
     { 3, "Guitar overdrive", "DOD Overdrive Preamp 250", true, true, "late 1970s · DOD Electronics, Salt Lake City", "A two-knob legend: flat mids, slightly rolled-off lows and hard diode clipping. At low gain a bright boost with a little grit, at high gain raspy and almost fuzzy – more open than a Tube Screamer.", "Yngwie Malmsteen.", 1, 3, 0, i3_t, i3_s, NULL },   // OD250
     { 2, "Guitar overdrive", "Fulltone OCD", true, true, "2004 · Fulltone, Los Angeles – designed by Mike Fuller", "Obsessive Compulsive Drive: an overdriven op-amp followed by MOSFET clipping gives an amp-like drive from light crunch to thick distortion. Very dynamic and cleans up well with the guitar volume.", "", 3, 3, 0, i2_t, i2_s, NULL },   // Obsessive Drive
-    { 4, "Guitar overdrive", "Pro Co RAT", true, true, "1978 · Pro Co Sound, Kalamazoo, Michigan", "Half distortion, half fuzz: an op-amp drive with hard clipping diodes and a raspy, cutting voice. From gritty blues boost to thick, hairy grunge distortion – one of the most copied pedals ever.", "Jeff Beck, Dave Grohl (the first Foo Fighters album, into a Vox AC30).", 3, 3, 4, i4_t, i4_s, i4_p },   // Rodent Drive
+    { 4, "Guitar overdrive", "Pro Co RAT", true, true, "1978 · Pro Co Sound, Kalamazoo, Michigan", "Half distortion, half fuzz: an op-amp drive with hard clipping diodes and a raspy, cutting voice. From gritty blues boost to thick, hairy grunge distortion – one of the most copied pedals ever.", "Jeff Beck, Dave Grohl (the first Foo Fighters album, into a Vox AC30).", 3, 3, 6, i4_t, i4_s, i4_p },   // Rodent Drive
     { 16001, "Utility", "Fortin Zuul", false, true, "", "Neural DSP's one-knob gate: it adapts to the noise floor by itself, so you only set how strongly it reduces the noise. The input gate of the Nano is the same idea.", "", 2, 3, 0, i16001_t, i16001_s, NULL },   // Adaptive Gate
-    { 4005, "EQ", "MXR Ten Band EQ · BOSS GE-7", false, true, "", "A nine-band graphic EQ from 65 Hz to 16 kHz with a high-pass and a low-pass filter. Before the capture it changes what drives the amp (like a boost pedal); after it, it shapes the final sound.", "", 2, 3, 0, i4005_t, i4005_s, NULL },   // Graphic 9
+    { 4005, "EQ", "MXR Ten Band EQ · BOSS GE-7", false, true, "", "A nine-band graphic EQ from 65 Hz to 16 kHz with a high-pass and a low-pass filter. Before the capture it changes what drives the amp (like a boost pedal); after it, it shapes the final sound.", "", 2, 3, 1, i4005_t, i4005_s, i4005_p },   // Graphic 9
     { 4003, "EQ", "Broughton Low + High Pass Filter", false, true, "", "A high-pass and a low-pass filter with selectable slopes – the quickest way to remove rumble and fizz, or to make a guitar sit in a band mix.", "", 2, 3, 0, i4003_t, i4003_s, NULL },   // Low-High Cut
     { 4001, "EQ", "Empress ParaEq", false, true, "", "A three-band parametric EQ: each band can be a peak, a shelf or a pass filter with its own frequency and Q. The surgical tool for one problem frequency or a broad tone shape.", "", 2, 3, 0, i4001_t, i4001_s, NULL },   // Parametric 3
     { 16002, "Utility", "ISP Decimator · BOSS NS-2", false, true, "", "A full noise gate with threshold, attack, hold, release and range – for when the one-knob gate is not precise enough, e.g. tight djent stops or a gate that only lowers the noise a little.", "", 3, 3, 0, i16002_t, i16002_s, NULL },   // Utility Gate
@@ -690,43 +760,43 @@ static const nano_info_t INFO[] = {
     { 9012, "Wah", "Dunlop Cry Baby Bass Wah (105Q)", false, true, "", "A wah voiced for bass: the sweep sits lower and the fundamental stays, so the bass keeps its weight while it moves.", "", 2, 1, 0, i9012_t, i9012_s, NULL },   // Bass Wah
     { 9010, "Wah", "Dunlop Budda Bud-Wah", true, true, "Dunlop, designed with Budda Amplification", "A smooth, vocal wah with a wide sweep and a warm, throaty voice – less quacky and shrill at the toe than a standard Cry Baby.", "", 2, 2, 0, i9010_t, i9010_s, NULL },   // Bubba Wah
     { 9014, "Wah", "Dunlop Cry Baby Clyde McCoy (CM95)", true, true, "the 1967 Vox / Thomas Organ wah named after trumpeter Clyde McCoy – reissued by Dunlop", "The vintage wah sound: a throaty, voice-like midrange from the original inductor design – warmer and more vocal than the standard Cry Baby.", "Jimi Hendrix and Eric Clapton in the 60s.", 2, 2, 0, i9014_t, i9014_s, NULL },   // Crying Clyde Wah
-    { 9013, "Wah", "Dunlop Cry Baby GCB-95", true, true, "Dunlop – the standard Cry Baby since 1982 (the wah itself goes back to Thomas Organ / Vox, 1966)", "The best-selling wah of all time: the vocal, quacky \"wacka-wacka\" sweep heard on countless records, from funk rhythm to screaming metal leads.", "Jimi Hendrix (with the original Vox / Thomas Organ wah), Slash, Kirk Hammett, Zakk Wylde – all have their own Cry Baby models.", 2, 2, 1, i9013_t, i9013_s, i9013_p },   // Crying Wah
+    { 9013, "Wah", "Dunlop Cry Baby GCB-95", true, true, "Dunlop – the standard Cry Baby since 1982 (the wah itself goes back to Thomas Organ / Vox, 1966)", "The best-selling wah of all time: the vocal, quacky \"wacka-wacka\" sweep heard on countless records, from funk rhythm to screaming metal leads.", "Jimi Hendrix (with the original Vox / Thomas Organ wah), Slash, Kirk Hammett, Zakk Wylde – all have their own Cry Baby models.", 2, 2, 2, i9013_t, i9013_s, i9013_p },   // Crying Wah
     { 24006, "Filter", "Electro-Harmonix Q-Tron · Mu-Tron III", false, true, "", "An auto-wah: the filter follows your picking – the harder you play, the further it opens. The sound of 70s funk clavinet and guitar.", "The Mu-Tron III style: Stevie Wonder (\"Higher Ground\"), Jerry Garcia, Bootsy Collins.", 3, 3, 2, i24006_t, i24006_s, i24006_p },   // Envelope Filter
     { 24001, "Filter", "Lovetone Meatball", true, true, "mid-1990s · Lovetone, England – a rare, hand-built cult pedal", "A deep, very adjustable envelope filter: a trigger section that follows your playing and a filter section with low-, band- and high-pass. From funky quack to synth-like and flanger-like sweeps.", "Kirk Hammett.", 3, 3, 0, i24001_t, i24001_s, NULL },   // Love Meat
     { 5001, "Compressor", "Universal Audio 1176", true, true, "1967 · Universal Audio – designed by Bill Putnam; the first all-transistor (FET) limiter (the low-noise 1176LN followed in 1970)", "The famous FET studio compressor: very fast, punchy and present – it adds bite and sustain and pushes a guitar forward. Fixed threshold: Input sets how hard it compresses, Makeup the level after it.", "", 3, 3, 0, i5001_t, i5001_s, NULL },   // Legendary 87 (M)
     { 5007, "Compressor", "Teletronix LA-2A", false, true, "early 1960s · Teletronix – Jim Lawrence's tube compressor with an optical cell; later made by Universal Audio", "The smoothest classic compressor: a light-dependent cell reacts gently and program-dependent, so the compression is hard to hear but the sound gets even and warm. Great for cleans that should just sit there.", "", 3, 3, 0, i5007_t, i5007_s, NULL },   // Opto Comp (M)
     { 5004, "Compressor", "SSL Bus Compressor", true, true, "1980s · Solid State Logic, England – the centre-section compressor of the SL 4000 E / G consoles", "The mix-bus \"glue\" compressor: it makes a sound bigger and more coherent without audibly squashing it. On guitar a subtle density and punch rather than an effect.", "", 3, 3, 0, i5004_t, i5004_s, NULL },   // Solid State Comp (M)
-    { 5005, "Compressor", "dbx 160 · classic VCA bus compressors", false, false, "", "A clean, precise VCA compressor: predictable, fast and transparent. The workhorse for even levels, sustain and keeping a bass under control.", "", 2, 3, 2, i5005_t, i5005_s, i5005_p },   // VCA Comp (M)
+    { 5005, "Compressor", "dbx 160 · classic VCA bus compressors", false, false, "", "A clean, precise VCA compressor: predictable, fast and transparent. The workhorse for even levels, sustain and keeping a bass under control.", "", 2, 3, 4, i5005_t, i5005_s, i5005_p },   // VCA Comp (M)
     { 18001, "Pitch", "DigiTech Drop", false, true, "", "A polyphonic pitch shifter: play in another tuning without retuning, or add an octave or a harmony at a lower Mix.", "", 3, 3, 0, i18001_t, i18001_s, NULL },   // Transpose
-    { 18004, "Pitch", "Electro-Harmonix Micro POG", true, true, "Electro-Harmonix, New York – the compact version of the 2005 POG", "A polyphonic octave generator: one octave up and one down, tracking whole chords. From 12-string jangle to organ pads and fake bass lines.", "Joe Satriani, Nick Zinner (Yeah Yeah Yeahs).", 2, 3, 2, i18004_t, i18004_s, i18004_p },   // Poly Octaver
+    { 18004, "Pitch", "Electro-Harmonix Micro POG", true, true, "Electro-Harmonix, New York – the compact version of the 2005 POG", "A polyphonic octave generator: one octave up and one down, tracking whole chords. From 12-string jangle to organ pads and fake bass lines.", "Joe Satriani, Nick Zinner (Yeah Yeah Yeahs).", 2, 3, 3, i18004_t, i18004_s, i18004_p },   // Poly Octaver
     { 18006, "Pitch", "DigiTech Whammy", true, true, "1989 · DigiTech, Utah", "The red pitch pedal: bends the pitch between two intervals with an expression pedal – dive bombs, octave jumps and harmonies with its own metallic, otherworldly character.", "Tom Morello, Jack White, Jonny Greenwood and Ed O'Brien (Radiohead), Dimebag Darrell.", 2, 3, 3, i18006_t, i18006_s, i18006_p },   // Wham
     { 18014, "Pitch", "BOSS OC-2 Octave", true, true, "1982 · BOSS", "An analog-style octaver one and two octaves down: thick, synth-like and best on single notes in the lower register.", "", 2, 3, 1, i18014_t, i18014_s, i18014_p },   // Chief OC2
-    { 16011, "Utility", "TC Electronic Mimiq", false, true, "", "Fakes a second take: a slightly delayed and varied copy panned against the original gives the wide, double-tracked sound of studio rhythm guitars.", "", 3, 3, 0, i16011_t, i16011_s, NULL },   // Doubler
+    { 16011, "Utility", "TC Electronic Mimiq", false, true, "", "Fakes a second take: a slightly delayed and varied copy panned against the original gives the wide, double-tracked sound of studio rhythm guitars.", "", 3, 3, 1, i16011_t, i16011_s, i16011_p },   // Doubler
     { 5012, "Compressor", "Universal Audio 1176", true, true, "1967 · Universal Audio – designed by Bill Putnam; the first all-transistor (FET) limiter (the low-noise 1176LN followed in 1970)", "The famous FET studio compressor: very fast, punchy and present – it adds bite and sustain and pushes a guitar forward. Fixed threshold: Input sets how hard it compresses, Makeup the level after it.", "", 3, 3, 0, i5012_t, i5012_s, NULL },   // Legendary 87 (ST)
     { 5015, "Compressor", "Teletronix LA-2A", false, true, "early 1960s · Teletronix – Jim Lawrence's tube compressor with an optical cell; later made by Universal Audio", "The smoothest classic compressor: a light-dependent cell reacts gently and program-dependent, so the compression is hard to hear but the sound gets even and warm. Great for cleans that should just sit there.", "", 3, 3, 0, i5015_t, i5015_s, NULL },   // Opto Comp (ST)
     { 5013, "Compressor", "SSL Bus Compressor", true, true, "1980s · Solid State Logic, England – the centre-section compressor of the SL 4000 E / G consoles", "The mix-bus \"glue\" compressor: it makes a sound bigger and more coherent without audibly squashing it. On guitar a subtle density and punch rather than an effect.", "", 3, 3, 0, i5013_t, i5013_s, NULL },   // Solid State Comp (ST)
-    { 5014, "Compressor", "dbx 160 · classic VCA bus compressors", false, false, "", "A clean, precise VCA compressor: predictable, fast and transparent. The workhorse for even levels, sustain and keeping a bass under control.", "", 2, 3, 2, i5014_t, i5014_s, i5014_p },   // VCA Comp (ST)
-    { 7024, "Modulation", "BOSS CE-2W (Waza Craft)", true, true, "2016 · BOSS – the CE-2 (1979) and the CE-1 Chorus Ensemble (1976) in one pedal", "The analog bucket-brigade chorus that started it all: a liquid, watery shimmer that thickens rather than alters the guitar. Type switches between the CE-2, the deeper CE-1 chorus and the CE-1 vibrato.", "", 2, 3, 5, i7024_t, i7024_s, i7024_p },   // Chief CE2W (ST)
+    { 5014, "Compressor", "dbx 160 · classic VCA bus compressors", false, false, "", "A clean, precise VCA compressor: predictable, fast and transparent. The workhorse for even levels, sustain and keeping a bass under control.", "", 2, 3, 4, i5014_t, i5014_s, i5014_p },   // VCA Comp (ST)
+    { 7024, "Modulation", "BOSS CE-2W (Waza Craft)", true, true, "2016 · BOSS – the CE-2 (1979) and the CE-1 Chorus Ensemble (1976) in one pedal", "The analog bucket-brigade chorus that started it all: a liquid, watery shimmer that thickens rather than alters the guitar. Type switches between the CE-2, the deeper CE-1 chorus and the CE-1 vibrato.", "", 2, 3, 7, i7024_t, i7024_s, i7024_p },   // Chief CE2W (ST)
     { 7027, "Modulation", "BOSS DC-2W Dimension C (Waza Craft)", true, true, "2018 · BOSS – the DC-2 (1985) and the Roland SDD-320 Dimension D studio rack (1979)", "The Dimension effect: wide, three-dimensional shimmer without the obvious wobble of a chorus. Four buttons, combinable in pairs – button 4 was the famous \"grey button\" of 80s studios.", "", 2, 3, 0, i7027_t, i7027_s, NULL },   // Chief DC2W (ST)
     { 7023, "Modulation", "TC Electronic 2290 (modulation section)", true, true, "1985 · TC Electronic, Denmark – the rack delay of 80s studios and stadium rigs", "Clean, lush 80s studio chorus from the modulation of the famous rack delay – hi-fi and wide instead of warm and murky.", "", 2, 3, 0, i7023_t, i7023_s, NULL },   // Chorus 229T
     { 7022, "Modulation", "TC Electronic The Dreamscape (chorus section)", true, true, "TC Electronic – John Petrucci's signature modulation pedal", "Lush, wide stereo chorus voiced by John Petrucci, based on TC's TriChorus: CHO1 is a subtle, glassy shimmer, CHO2 (inspired by Alex Lifeson) thickens without turning to mush.", "John Petrucci (Dream Theater).", 1, 3, 0, i7022_t, i7022_s, NULL },   // Dream Chorus
-    { 7021, "Modulation", "MXR Flanger (M117R)", true, true, "MXR", "The classic analog flanger: from a subtle sweep to the jet-plane whoosh, with lots of regeneration on tap.", "Eddie Van Halen (\"Unchained\"), Jerry Cantrell.", 2, 3, 2, i7021_t, i7021_s, i7021_p },   // MX Flanger
+    { 7021, "Modulation", "MXR Flanger (M117R)", true, true, "MXR", "The classic analog flanger: from a subtle sweep to the jet-plane whoosh, with lots of regeneration on tap.", "Eddie Van Halen (\"Unchained\"), Jerry Cantrell.", 2, 3, 3, i7021_t, i7021_s, i7021_p },   // MX Flanger
     { 7028, "Modulation", "MXR Phase 95", true, true, "MXR – the Phase 90 (1974) and Phase 45 in one mini pedal, each in block and script voicing", "The compact classic phaser: the four-stage Phase 90 or the subtler two-stage Phase 45, each with the older script or the newer block logo voicing.", "The Phase 90: Eddie Van Halen (\"Eruption\").", 2, 3, 4, i7028_t, i7028_s, i7028_p },   // MX Phase 95
     { 7029, "Modulation", "MXR M68 Uni-Vibe", true, true, "MXR – after the 1968 Shin-ei Uni-Vibe (designed by Fumio Mieda, sold as Univox)", "The throbbing, watery 60s swirl: a four-stage phaser with uneven stages and a lamp-driven LFO that was meant to imitate a Leslie speaker. Chorus mode (Vibe off) swirls, Vibe mode is pure pitch vibrato.", "Jimi Hendrix (\"Machine Gun\"), Robin Trower, David Gilmour (\"Breathe\").", 2, 3, 1, i7029_t, i7029_s, i7029_p },   // MX Vibe
     { 7004, "Modulation", "BOSS TR-2 · Fender amp tremolo", false, true, "", "Volume tremolo with several waveforms: from the smooth pulse of a 60s amp to choppy, square-wave stutter. Duty Cycle and Smoothing shape the pulse.", "", 2, 3, 1, i7004_t, i7004_s, i7004_p },   // Tremolo
-    { 6010, "Delay", "BOSS DM-2 · MXR Carbon Copy · Electro-Harmonix Memory Man", false, true, "", "Bucket-brigade echo: every repeat gets darker and a little softer, so the delay sits behind the dry note instead of fighting it. Drive adds BBD grit, the modulation a gentle chorus on the repeats.", "", 3, 3, 4, i6010_t, i6010_s, i6010_p },   // Analog Delay
+    { 6010, "Delay", "BOSS DM-2 · MXR Carbon Copy · Electro-Harmonix Memory Man", false, true, "", "Bucket-brigade echo: every repeat gets darker and a little softer, so the delay sits behind the dry note instead of fighting it. Drive adds BBD grit, the modulation a gentle chorus on the repeats.", "", 3, 3, 7, i6010_t, i6010_s, i6010_p },   // Analog Delay
     { 6015, "Delay", "Strymon Volante (multi-head echo)", false, true, "", "Neural DSP's diffused multi-tap delay: tap patterns smeared by diffusion and modulation until the echo turns into an ambient cloud somewhere between delay and reverb.", "", 2, 3, 0, i6015_t, i6015_s, NULL },   // Circular Delay
-    { 6011, "Delay", "BOSS DD-3 · TC Electronic 2290", false, true, "", "Clean, precise repeats with optional modulation and a ducking / gating dynamics section – the hi-fi delay for leads and rhythmic patterns.", "", 2, 3, 6, i6011_t, i6011_s, i6011_p },   // Digital Delay (ST)
+    { 6011, "Delay", "BOSS DD-3 · TC Electronic 2290", false, true, "", "Clean, precise repeats with optional modulation and a ducking / gating dynamics section – the hi-fi delay for leads and rhythmic patterns.", "", 2, 3, 10, i6011_t, i6011_s, i6011_p },   // Digital Delay (ST)
     { 6012, "Delay", "Strymon TimeLine (dual delay)", false, true, "", "Two independent delays, left and right, with cross feedback: for rhythmic stereo patterns, wide leads and the classic \"two delay times\" trick of 80s rack rigs.", "", 2, 3, 0, i6012_t, i6012_s, NULL },   // Dual Delay
-    { 6014, "Delay", "TC Electronic Flashback (reverse mode)", false, true, "", "Reversed repeats in stereo: the backwards-tape sound of psychedelic records, from subtle swells to full \"backwards solo\" effects.", "", 2, 3, 0, i6014_t, i6014_s, NULL },   // Dual Reverse Delay
-    { 6004, "Delay", "BOSS RE-2 Space Echo · Maestro Echoplex EP-3 · Roland RE-201", false, true, "", "Tape echo: every repeat is a little darker and wobblier than the one before – warm, saturated and never in the way of the dry note.", "", 3, 3, 1, i6004_t, i6004_s, i6004_p },   // Tape Delay
+    { 6014, "Delay", "TC Electronic Flashback (reverse mode)", false, true, "", "Reversed repeats in stereo: the backwards-tape sound of psychedelic records, from subtle swells to full \"backwards solo\" effects.", "", 2, 3, 1, i6014_t, i6014_s, i6014_p },   // Dual Reverse Delay
+    { 6004, "Delay", "BOSS RE-2 Space Echo · Maestro Echoplex EP-3 · Roland RE-201", false, true, "", "Tape echo: every repeat is a little darker and wobblier than the one before – warm, saturated and never in the way of the dry note.", "", 3, 3, 4, i6004_t, i6004_s, i6004_p },   // Tape Delay
     { 8008, "Reverb", "Mr. Black Ambience", false, true, "", "Early reflections only: space and size without an audible tail. It makes a close-miked sound feel like it is in a room – and never washes out fast playing.", "", 2, 2, 0, i8008_t, i8008_s, NULL },   // Ambience
-    { 8030, "Reverb", "Strymon BigSky (Bloom mode)", true, true, "2013 · Strymon, California", "A reverb that swells and blooms behind the note: the tail starts soft and grows into a big, slow, diffuse wash. Ducking keeps it out of the way while you play.", "", 3, 3, 0, i8030_t, i8030_s, NULL },   // Blossom (ST)
+    { 8030, "Reverb", "Strymon BigSky (Bloom mode)", true, true, "2013 · Strymon, California", "A reverb that swells and blooms behind the note: the tail starts soft and grows into a big, slow, diffuse wash. Ducking keeps it out of the way while you play.", "", 3, 4, 0, i8030_t, i8030_s, NULL },   // Blossom (ST)
     { 8009, "Reverb", "EarthQuaker Devices Afterneath", false, true, "", "A huge, dark, cavernous space with a very long decay – for ambient pads, swells and doom.", "", 2, 2, 0, i8009_t, i8009_s, NULL },   // Cave
-    { 8003, "Reverb", "Electro-Harmonix Holy Grail (Hall)", false, true, "", "A concert hall with a smooth, longer decay – the big, classic reverb for leads and slow songs.", "", 1, 3, 2, i8003_t, i8003_s, i8003_p },   // Hall
-    { 8011, "Reverb", "Lexicon 224", false, true, "1978 · Lexicon – one of the first digital studio reverbs", "The lush, grainy hall of late-70s and 80s records: dense, smooth and slightly dark, it sounds \"expensive\" behind cleans and leads.", "", 2, 2, 1, i8011_t, i8011_s, i8011_p },   // Mind Hall
+    { 8003, "Reverb", "Electro-Harmonix Holy Grail (Hall)", false, true, "", "A concert hall with a smooth, longer decay – the big, classic reverb for leads and slow songs.", "", 1, 3, 3, i8003_t, i8003_s, i8003_p },   // Hall
+    { 8011, "Reverb", "Lexicon 224", false, true, "1978 · Lexicon – one of the first digital studio reverbs", "The lush, grainy hall of late-70s and 80s records: dense, smooth and slightly dark, it sounds \"expensive\" behind cleans and leads.", "", 2, 3, 1, i8011_t, i8011_s, i8011_p },   // Mind Hall
     { 8007, "Reverb", "Catalinbread Sinkhole", false, true, "", "A reverb with a slowly modulated, chorus-like tail – lush, wide and dreamy, great for clean arpeggios.", "", 2, 2, 0, i8007_t, i8007_s, NULL },   // Modulated
-    { 8000, "Reverb", "BOSS RV-6 (Room)", false, true, "", "A small to medium room: natural space without a long tail – the \"amp in a room\" sound that makes a dry capture feel real.", "", 1, 2, 0, i8000_t, i8000_s, NULL },   // Room
+    { 8000, "Reverb", "BOSS RV-6 (Room)", false, true, "", "A small to medium room: natural space without a long tail – the \"amp in a room\" sound that makes a dry capture feel real.", "", 1, 2, 1, i8000_t, i8000_s, i8000_p },   // Room
     { 8010, "Reverb", "Eventide H9 (ShimmerVerb) · Strymon BigSky (Shimmer)", false, true, "", "A reverb whose tail is pitch-shifted and fed back into itself: the octave-up halo of ambient guitar, made famous by Brian Eno and Daniel Lanois' productions.", "", 3, 3, 0, i8010_t, i8010_s, NULL },   // Shimmer
 };
 

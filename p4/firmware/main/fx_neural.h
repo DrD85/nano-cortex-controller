@@ -8,3 +8,7 @@
 
 // The presets of a model and how many there are; NULL and 0 if there are none.
 const nano_info_sound_t *nano_fx_neural(uint32_t type, int *count);
+
+// The focus pad's four corners from those presets (an own build, chosen by tools/gen_neural.py); NULL: the pad keeps
+// the editor's corners (nano_focus, fx_focus.c).
+const nano_focus_t *nano_fx_neural_focus(uint32_t type);

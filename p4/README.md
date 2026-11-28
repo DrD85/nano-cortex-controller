@@ -13,20 +13,28 @@ and also plays its own sound into the Nano: a looper with two parts, a drum mach
 
 **Everything the 4.3" board does** (as of 1.27.1): banks, scenes, FX mode, pedal view, the FX editor with the pad and
 the info page, capture and cab library, expression pedal, tuner, set list, gig view, the preset list with **New
-preset**, MIDI learn, auto-wah, the Neural Capture assistant. How they work: the [main README](../README.md#how-to-use-it)
+preset**, MIDI learn, auto-wah, the Neural Capture assistant. Also from the 4.3" board's next version: the effects'
+real control ranges (the reverb switch now moves the real Mix of Room, Hall, Ambience, Cave and Modulated) and **27 more players' sounds** on the info
+page (Warpaint, Deftones, Geese, Klinghoffer, Frusciante), with two new starting points, a spring tank (Blossom) and a
+70s plate (Mind Hall). How they work: the [main README](../README.md#how-to-use-it)
 and the [manual](../docs/manual.md). In addition:
 
 | | |
 |---|---|
 | **Nano over USB** | The Nano is plugged into the board's USB-A socket: no pairing and no Bluetooth window. The cable is also the way for the board's own audio into the Nano. Without a cable, the board looks for the Nano over Bluetooth instead |
-| **Looper** | On the board, recorded from the Nano's sound (USB channels 3/4) and played back into it. Two parts **A** and **B**, record, overdub, play / stop, undo / redo, hold to clear. Loops are rounded to bars of the Nano's tempo; the USB round trip is taken out. Up to 45 s. If the Nano's USB stream ever goes garbled (a robotic sound), the board starts it anew by itself |
-| **Drum machine** | A computed kit (no sample files) in the Nano's tempo: 88 grooves, a groove of its own per looper part, its own level, a count-in, and drums that start with the first take |
-| **Jam player** | WAV backing tracks from a microSD card in **albums** (one folder each), with their **covers**, each one measured and levelled to −21 LUFS, a correction by ear per track. **Player mode** (hold footswitch 1): cover, title, time, next and previous track, play / pause, back, next on the footswitches. Tracks come onto the card over Wi-Fi: from the [Jam Player](https://github.com/DrD85/jam-player) on a Mac (folders become albums, only new or changed tracks are sent, covers go along) or the board's page `http://nano-board.local` |
+| **Looper** | On the board, recorded from the Nano's sound (USB channels 3/4) and played back into it. Two parts **A** and **B**, record, overdub, play / stop, undo / redo, hold to clear. Loops are rounded to bars of the Nano's tempo; the USB round trip is taken out. Up to 45 s. The USB audio path runs from the chip's internal RAM, so a busy screen no longer makes it skip; if the Nano's USB stream still goes garbled (a robotic sound, even a mild one), the board starts it anew by itself |
+| **Saving loops** | **Save loops** in the drum menu writes parts A and B to the card as WAV files (`loops/`, named with number, tempo and bars) while the looper plays on. The [Jam Player](https://github.com/DrD85/jam-player) 1.5.0 lists them and fetches the new ones over Wi-Fi |
+| **Drum machine** | Two computed kits (no sample files) in the Nano's tempo: **electronic** and, new, **Lo-Fi** (muffled, tape-saturated, for atmospheric loops); the menu's Acoustic kit needs a sample file that is not part of the release and stays dimmed without it. 108 grooves in ten styles (new: a Lo-Fi style with lo-fi hip-hop, trip-hop, half-time and ambient grooves, and calm ones in 6/8 and 12/8, with brushes, slow shuffles), a groove of its own per looper part, its own level, a count-in, and drums that start with the first take |
+| **Jam player** | WAV backing tracks from a microSD card in **albums** (one folder each), with their **covers**, each one measured and levelled to −21 LUFS, a correction by ear per track. Tracks come onto the card over Wi-Fi: from the [Jam Player](https://github.com/DrD85/jam-player) on a Mac (folders become albums, only new or changed tracks are sent; covers reach the board from version 1.5.0 on) or the board's page `http://nano-board.local` |
+| **Player mode** | Hold footswitch 1: the playing track's cover, title and time, and the album's list beside it. Songs are chosen first and then played: 5 / 7 select the song before / after, 6 plays the selected one (or pauses / plays the one that plays), 3 = the next album, 2 = the list, 1 = jam tracks or phone, 4 = the looper, 8 = back to the presets |
+| **EQ with a live spectrum** | The FX editor of Parametric 3, Graphic 9 and Low-High Cut shows the Nano's sound as a spectrum below the controls, with the EQ's curve over it. **HOLD** keeps the sound of the moment as a line, to compare before and after |
 | **Level** | Measures each preset's loudness (LUFS) and sets the Nano's output level to match the others, with a count-down so you can start playing |
 | **Gain reduction** | The FX editor of a compressor shows how much it is compressing, worked out from its knobs and the Nano's dry input (the Nano does not report it) |
 | **Auto-wah from your playing** | Besides the auto-wah in tempo: a wah that opens with your picking (sensitivity, attack, release), with a live view in the FX editor |
 | **Second preset per switch** | Each bank switch can hold a second preset, loaded when the switch is released after a long press |
-| **Bluetooth** | Through the board's ESP32-C6: MIDI controllers (for example an M-VAVE Chocolate, with MIDI learn), a looper app on a phone, and the [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) through the board |
+| **Tiles say how** | A tile's second function is marked with a small **HOLD**, **TAP** or **PRESS** key, the function written large below it |
+| **FX mode's own order** | FX mode keeps its own footswitch order (Settings › Tile layout › FX mode): Pre FX 1 and 2 on the top row with the reverb on / off and the looper, Post FX 1 and 2 below with the reverb switch and the mode. The pedal view numbers its pedals the same way |
+| **Bluetooth** | Through the board's ESP32-C6: MIDI controllers (for example an M-VAVE Chocolate, with MIDI learn), a looper app on a phone, and the [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) through the board (it loads now: long Bluetooth packets are cut to a size the board's Bluetooth stack can pass on) |
 | **Updates over Wi-Fi** | A new firmware file on the board's page; if the new firmware does not run properly, the board goes back to the old one |
 | **Footswitches** | Eight switches straight on the board's header P3, no extra board needed, or the SX1509 board of the 4.3" version |
 | **Phone audio** (optional) | A classic ESP32 as a Bluetooth speaker for the phone (`a2dp-bridge/`), its sound into the Nano. **Experimental** |
@@ -46,8 +54,8 @@ presets. The bar above shows the part, the time and the bars.
 </td>
 <td>
 
-**Drums** – grooves by style, the level, and how a part's first take starts: with the drums, after a one-bar count-in,
-on the drums' bar lines or with the first note.
+**Drums** – grooves by style, the kit (Electronic or Lo-Fi), the level, how a part's first take starts (with
+the drums, after a one-bar count-in, on the drums' bar lines or with the first note), and **Save loops**.
 
 </td>
 </tr>
@@ -70,29 +78,65 @@ arrows at the top), levelled.
 </tr>
 <tr>
 <td width="50%"><img src="../docs/images/p4/39-pedal-view.png" alt="Pedal view"></td>
-<td width="50%"><img src="../docs/images/p4/58-fx-info.png" alt="Info page"></td>
+<td width="50%"><img src="../docs/images/p4/59-fx-info-sounds.png" alt="Info page"></td>
 </tr>
 <tr>
 <td>
 
-**Pedal view** in the gig view: the five FX slots as pedals on footswitches 3–7.
+**Pedal view** in the gig view: the five FX slots as pedals in one row, the amp between Pre and Post FX, each with
+its footswitch; a slot's waiting second effect above it.
 
 </td>
 <td>
 
-**Info page** in the FX editor: what the effect is based on, starting points and players' sounds.
+**Info page** in the FX editor: what the effect is based on, starting points and players' sounds, each with where
+its settings come from.
 
 </td>
 </tr>
 <tr>
 <td width="50%"><img src="../docs/images/p4/79-player-mode.png" alt="Player mode"></td>
+<td width="50%"><img src="../docs/images/p4/92-player-selected.png" alt="Player mode: a song selected"></td>
+</tr>
+<tr>
+<td>
+
+**Player mode** – **hold footswitch 1**: the playing track's cover, title and time, and the album's list. 1 = jam
+tracks / phone, 2 = the list, 3 = next album, 4 = looper, 8 = back to the presets.
+
+</td>
+<td>
+
+**Choose, then play** – 5 / 7 select the song before / after while the current one plays on; 6 plays the selected
+song.
+
+</td>
+</tr>
+<tr>
+<td width="50%"><img src="../docs/images/p4/eq-p3-3-c-hold.png" alt="EQ with a live spectrum"></td>
+<td width="50%"><img src="../docs/images/p4/02-fx-mode.png" alt="FX mode"></td>
+</tr>
+<tr>
+<td>
+
+**EQ with a live spectrum** – the Nano's sound and the EQ's curve below the controls; **HOLD** keeps the sound as a
+line (dashed) to compare with.
+
+</td>
+<td>
+
+**FX mode** with its own order: Pre FX on the top row, Post FX below; the reverb's on / off and its switch.
+
+</td>
+</tr>
+<tr>
+<td width="50%"><img src="../docs/images/p4/18k-drum-menu-saved-message.png" alt="Loops saved"></td>
 <td width="50%"><img src="../docs/images/p4/81-fx-editor-compressor.png" alt="Gain reduction"></td>
 </tr>
 <tr>
 <td>
 
-**Player mode** – **hold footswitch 1**: the track's cover, the album, next and previous; 6 = play / pause,
-5 / 7 = back / next, 8 = back to the presets.
+**Save loops** – parts A and B as WAV files on the card, for the Jam Player on the Mac to fetch.
 
 </td>
 <td>
@@ -125,7 +169,7 @@ arrows at the top), levelled.
 |---|---|
 | [Waveshare ESP32-P4-WIFI6-Touch-LCD-7B](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-7B) | 7", 1024 × 600, ESP32-P4 with an ESP32-C6 for Bluetooth and Wi-Fi |
 | Neural DSP Nano Cortex | with a USB-C cable to the board's **USB-A** socket |
-| Optional: microSD card | **FAT32**, for the jam player (folder `jam`, one sub-folder per album) |
+| Optional: microSD card | **FAT32**, for the jam player (folder `jam`, one sub-folder per album) and saved loops (folder `loops`) |
 | Optional: up to 8 momentary footswitches | each between a pin of header **P3** and GND (below) |
 | Optional: ESP32 (ESP-WROOM-32 dev board) | only for phone audio over Bluetooth, see `a2dp-bridge/main/main.c` for the wiring |
 
@@ -183,18 +227,29 @@ log also appears on the UART port. Host tests: `tools/test_main/run.sh` (after o
 Most of `main/` is the 4.3" board's code with a P4 part (`NANO_P4`); [UPSTREAM.md](firmware/UPSTREAM.md) lists
 what came over from it. The audio is in `components/nano_audio` (USB audio host for the Nano, mixer, looper,
 drums, track player, loudness). `components/esp_lvgl_port` is Espressif's esp_lvgl_port 2.9.0 (Apache-2.0) with a
-few lines changed for ESP-IDF 6.0 and the P4's display (marked "P4 board"). `main/tjpgd` is ChaN's TJpgDec R0.03 as
-LVGL ships it (its own licence in that folder), used for the covers.
+few lines changed for ESP-IDF 6.0 and the P4's display (marked "P4 board"). `components/espressif__usb` is Espressif's
+USB host library 1.6.0 (Apache-2.0) with its descriptor lists out of the cache and a cache sync moved out of a critical
+section (marked "Patched" in `src/hcd_dwc.c`). `main/tjpgd` is ChaN's TJpgDec R0.03 as LVGL ships it (its own licence
+in that folder), used for the covers.
+
+**Before changing code that runs on the board, read [REALTIME.md](firmware/REALTIME.md):** the looper, the drums and
+the jam player send audio to the Nano every 125 µs, and code in flash on the USB's core, cache syncs, waits or flash
+writes in the audio path make it lose packets.
 
 ## Not tested yet
 
 - The Nano over Bluetooth **without** the cable, and changing between cable and Bluetooth while playing
-- Phone audio through the ESP32 bridge
+- Phone audio through the ESP32 bridge into the Nano: the bridge alone was tried with a phone (every sound packet
+  arrives with the I2S pins of 1.2.0, see `a2dp-bridge/main/main.c`), not yet wired to the board
 - The published build itself on a board: the screenshots and host tests come from the same code, and the
-  author's own build differs only in private artwork and the log port
+  author's own build differs only in private artwork and data (pictures, an extra group of presets on the info
+  page, the acoustic drum samples) and the log port. The looper's long runs without a skipped packet were measured
+  with the author's build
+- The Nano Cortex Editor through the board was tried with the board's ESP32-C6 updated to esp_hosted 2.13.1
+  (`firmware/main/p4_c6_update.c` says how); with the C6's factory firmware it has not been tried yet
+- New in 1.2.0 and not yet played much: the Lo-Fi kit and its grooves, the live spectrum, saving loops and fetching
+  them with the Jam Player, the player mode's song selection
 - New in 1.1.0 and not yet played much: the gain reduction view and the auto-wah from the playing
-- The Nano Cortex Editor through the board over Bluetooth (the board's ESP32-C6 stops taking packets during long
-  messages; under investigation)
 
 ## License
 

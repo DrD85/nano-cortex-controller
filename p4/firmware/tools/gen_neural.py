@@ -7,18 +7,30 @@ the data (main/private/neural_presets.json) and the generated file stay in main/
 published firmware is built with main/fx_neural.c, which has none.
 
 main/private/neural_presets.json: { "models": { "<model type>": { "name", "default": [[control index, 0-1], ...] or
-null, "presets": [ { "name", "bass": bool, "values": [[control index, 0-1], ...] } ] } } } - every control of the
-model, as the Nano's own 0-1. The line under a preset's name lists only the controls that differ from the model's
-default (up to SHOWN of them), in the editor's units; Apply sets all of them.
+null, "base": the same or null, "presets": [ { "name", "bass": bool, "values": [[control index, 0-1], ...] } ] } } } -
+every control of the model, as the Nano's own 0-1. The line under a preset's name lists only the controls that differ
+from the model's default (up to SHOWN of them), in the editor's units; Apply sets all of them. "base" is the QC's
+"Neural DSP Default" (the model as it starts), used to choose the corners.
+
+The same presets also fill the focus pad's four corners (user, 2026-11-27: draft C - Neural presets, named by the
+preset): chosen by character as the QC board chooses its corners (quad-cortex-controller-p4 tools/gen_qc_info.py,
+after the QC Editor's focus.js) - drives by gain against bright / warm, delays by feedback against mix, reverbs by
+decay against mix, modulations by rate against depth, compressors by amount against attack; other models by how
+different the sounds are. Guitar presets first ("Bass ..." only for a bass model or when there are too few). A corner
+is the whole preset (every control, as Apply on the info page). A corner no preset fits keeps the editor's own sound
+of that place (tools/editor_focus.json), as the QC board fills with a template.
 
 Run from the project folder:  python3 tools/gen_neural.py   (does nothing when there is no private data)
 """
 import json
+import math
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MODELS = {m[0]: m for m in json.loads((ROOT / 'tools' / 'editor_models.json').read_text())['models']}
+OWN_CORNERS = {e['type']: e for e in json.loads((ROOT / 'tools' / 'editor_focus.json').read_text())}
 SOURCE = ROOT / 'main' / 'private' / 'neural_presets.json'
 OUT = ROOT / 'main' / 'private' / 'fx_neural_private.c'
 SHOWN = 5          # controls named under a preset
@@ -84,26 +96,243 @@ def main():
               '    }',
               '    *count = 0;',
               '    return NULL;', '}', '']
+    # the focus pad's corners
+    focus = all_corners(data)
+    parts += ['// The focus pad\'s corners: four of the presets above, chosen by character (a place no preset fits keeps the',
+              '// editor\'s own corner, tools/editor_focus.json).',
+              'const nano_focus_t *nano_fx_neural_focus(uint32_t type);', '']
+    rows, own_kept = [], 0
+    for mtype, picks in focus:
+        names = []
+        for k, (name, values, own) in enumerate(picks):
+            own_kept += own
+            parts.append('static const nano_focus_value_t c%d_%d[] = { %s };' % (mtype, k, ', '.join('{ %d, %.4ff }' % (i, v) for i, v in values)))
+            names.append('{ %s, %d, c%d_%d }' % (c_str(name), len(values), mtype, k))
+        rows.append('    { %d, { %s } },   // %s' % (mtype, ', '.join(names), MODELS[mtype][1]))
+    parts += ['static const nano_focus_t NEURAL_FOCUS[] = {'] + rows + ['};', '',
+              'const nano_focus_t *nano_fx_neural_focus(uint32_t type)', '{',
+              '    for (size_t i = 0; i < sizeof(NEURAL_FOCUS) / sizeof(NEURAL_FOCUS[0]); i++) {',
+              '        if (NEURAL_FOCUS[i].type == type) return &NEURAL_FOCUS[i];',
+              '    }',
+              '    return NULL;', '}', '']
     OUT.write_text('\n'.join(parts))
-    print('main/private/fx_neural_private.c: %d presets for %d models' % (total, len(entries)))
-    write_editor(data)
+    print('main/private/fx_neural_private.c: %d presets for %d models, the pad\'s corners for %d models (%d places keep the '
+          'editor\'s own corner)' % (total, len(entries), len(focus), own_kept))
+    write_editor(data, focus)
 
 
-def number(param, n):
-    """A control's value for the editor: the number in its unit, or a list's label."""
-    if param[1] == 'e':
-        return param[2][round(n * (len(param[2]) - 1))]
-    low, high, step = param[2], param[3], param[4]
-    skew = float(param[7]) if len(param) > 7 else 1.0
-    value = low + (high - low) * (n ** (1.0 / skew))
-    if step:
-        value = round(value / step) * step
-    return round(value, 4)
+# ---- The focus pad's corners (after quad-cortex-controller-p4 tools/gen_qc_info.py: character_corners /
+# similarity_corners, there on the QC's parameters - here on the Nano's controls and the Nano's 0-1) ----
+
+LEVELS = re.compile(r'^(OUTPUT|LEVEL|OUT|OUTPUT GAIN|OUTPUT LEVEL|OUTPUT VOLUME|MASTER)$')
+KIND = {'overdrive': 'drive', 'bass-overdrive': 'drive', 'fuzz': 'drive', 'compressor': 'comp', 'modulation': 'modulation',
+        'delay': 'delay', 'reverb': 'reverb'}
 
 
-def write_editor(data):
+def corner_params(model):
+    out = []
+    for i, c in enumerate(model[4]):
+        if c[1] == 'e':
+            out.append(dict(index=i, name=c[0], stepped=True, units='', min=0, max=1, skew=1.0))
+        else:
+            out.append(dict(index=i, name=c[0], stepped=False, units=c[5] or '', min=c[2], max=c[3], skew=float(c[7]) if len(c) > 7 else 1.0))
+    return out
+
+
+def real_value(p, n):
+    return p['min'] + (p['max'] - p['min']) * (n ** (1.0 / p['skew']) if n > 0 else 0)
+
+
+def role(p, cat):
+    """What a control does for the character: gain, bright / dark, time, mix ... (None: it does not count)."""
+    n = re.sub(r'^\d+ ', '', p['name'].upper())
+    if p['stepped'] or LEVELS.match(n) or n == 'VOLUME':
+        return None
+    for rx, r in [('PRESENCE', 'presence'), ('HIGH PASS|HPF|LOW CUT', 'lowcut'), ('LOW PASS|LPF|HIGH CUT', 'highcut'), ('PRE ?-?DELAY', 'predelay'),
+                  ('FEEDBACK|REPEAT|REGEN', 'feedback'), ('DELAY TIME|^TIME( [LR])?$', 'time'), ('DECAY|SIZE|REVERB TIME|LENGTH', 'decay'),
+                  ('^MIX$|BLEND|WET', 'mix'), ('RATE|SPEED', 'rate'), ('DEPTH|INTENSITY', 'depth'), ('ATTACK', 'attack')]:
+        if re.search(rx, n):
+            return r
+    if re.search('COMP|THRESHOLD|SQUEEZE|COMPRESSION|SUSTAIN', n) and cat == 'compressor':
+        return 'comp'
+    if 'FREQ' in n:
+        return None
+    if re.search('GAIN|DRIVE|DIST|FUZZ|SUSTAIN|OVERDRIVE|SATURATION', n) and not re.search('(BASS|LOW|LO|MID|TREBLE|HIGH|HI) GAIN', n):
+        return 'gain'
+    if re.search('BASS|^LOW|^LO ', n):
+        return 'bass'
+    if 'MID' in n:
+        return 'mid'
+    if re.search('TREBLE|^HIGH|^HI |TONE', n):
+        return 'treble'
+    return None
+
+
+def mean(xs):
+    xs = [x for x in xs if x is not None]
+    return sum(xs) / len(xs) if xs else None
+
+
+class Feat:
+    def __init__(self, params, roles, base, values):
+        self.p, self.r, self.base, self.v = params, roles, base, values
+
+    def val(self, p):
+        return self.v.get(p['index'], self.base.get(p['index'], 0))
+
+    def by(self, r):
+        return [p for p in self.p if self.r[p['index']] == r]
+
+    def role(self, r):
+        return mean([self.val(p) for p in self.by(r)])
+
+    def avg(self, rs):
+        return mean([self.val(p) for r in rs for p in self.by(r)])
+
+    def bright(self):
+        a, b = self.avg(['treble', 'presence', 'highcut']), self.role('bass')
+        return (a if a is not None else 0.5) - 0.5 * ((b if b is not None else 0.5) - 0.5)
+
+    def secs(self, r):
+        ps = self.by(r)
+        timed = [p for p in ps if re.match('^(s|ms|sec)', p['units'] or '', re.I)]
+        if timed:
+            return mean([real_value(p, self.val(p)) / (1000 if re.match('^ms', p['units'], re.I) else 1) for p in timed])
+        return mean([self.val(p) * 10 for p in ps])
+
+
+# x: what grows to the right; ys: what lies higher (the first that every sound has)
+CHARACTER = {
+    'drive': {'x': lambda f: f.role('gain'), 'ys': [lambda f: f.bright()]},
+    'delay': {'x': lambda f: f.role('feedback'), 'ys': [lambda f: f.role('mix')]},
+    'reverb': {'x': lambda f: f.secs('decay'), 'ys': [lambda f: f.role('mix')]},
+    'modulation': {'x': lambda f: f.role('rate'), 'ys': [lambda f: f.role('depth'), lambda f: f.role('mix')]},
+    'comp': {'x': lambda f: f.role('comp'), 'ys': [lambda f: f.role('attack'), lambda f: f.role('mix'), lambda f: f.bright()]},
+}
+
+
+def dist(a, b):
+    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
+
+
+def character_corners(params, cands, ch, roles, base):
+    """Four sounds, one per quarter around the middle sound (top left .. bottom right), or None when the sounds do
+    not spread both ways. A quarter nobody is in stays None."""
+    fs = [(x, Feat(params, roles, base, x['values'])) for x in cands]
+    yf = next((fn for fn in ch['ys'] if fs and all(fn(f) is not None for _, f in fs)), None)
+    if not yf or any(ch['x'](f) is None for _, f in fs) or len(fs) < 4:
+        return None
+    pts = [{'x': x, 'cx': ch['x'](f), 'cy': yf(f)} for x, f in fs]
+    med = lambda l: sorted(l)[(len(l) - 1) // 2]
+    span = lambda l: max(l) - min(l)
+    xs, ys = [q['cx'] for q in pts], [q['cy'] for q in pts]
+    if span(xs) < 1e-6 or span(ys) < 1e-6:
+        return None
+    mx, my, sx, sy = med(xs), med(ys), span(xs), span(ys)
+    quarter = lambda q: (0 if q['cy'] > my else 2) + (1 if q['cx'] > mx else 0)
+    keys = sorted({i for x in cands for i in x['values']})
+    vec = lambda x: [x['values'].get(i, base.get(i, 0)) for i in keys]
+    out = []
+    for i in range(4):
+        group = [q for q in pts if quarter(q) == i]
+        if not group:
+            out.append(None)
+            continue
+        outer = lambda q: ((q['cx'] - mx if i % 2 else mx - q['cx']) / sx) + ((q['cy'] - my if i < 2 else my - q['cy']) / sy)
+        half = sorted(group, key=outer, reverse=True)[:max(1, math.ceil(len(group) / 2))]
+        out.append(min(half, key=lambda q: sum(dist(vec(q['x']), vec(r['x'])) for r in half))['x'])
+    return out
+
+
+def similarity_corners(cands, base, roles):
+    """The four sounds most different from the start and from each other: weaker left, brighter up."""
+    keys = sorted({i for x in cands for i in x['values']})
+    vec = lambda x: [x['values'].get(i, base.get(i, 0)) for i in keys]
+    d = lambda a, b: dist(a, b) / math.sqrt(max(1, len(a)))
+    vb = [base.get(i, 0) for i in keys]
+    pool = cands
+    if len(cands) > 8:   # leave out the loners (a quarter of the sounds, farthest from their five nearest)
+        vs = [vec(x) for x in cands]
+        lone = [sum(sorted(d(a, b) for j, b in enumerate(vs) if j != i)[:5]) for i, a in enumerate(vs)]
+        cut = sorted(lone)[int(len(lone) * 0.75)]
+        pool = [x for x, l in zip(cands, lone) if l <= cut]
+    chosen = []
+    while len(chosen) < 4:
+        best, best_d = None, 0.04
+        for x in pool:
+            if x in chosen:
+                continue
+            dd = min([d(vec(x), vb)] + [d(vec(x), vec(y)) for y in chosen])
+            if dd > best_d:
+                best, best_d = x, dd
+        if not best:
+            break
+        chosen.append(best)
+
+    def avg(x, rs):
+        ks = [i for i in x['values'] if roles.get(i) in rs]
+        return sum(x['values'][i] for i in ks) / len(ks) if ks else None
+    strong = lambda x: next((v for v in (avg(x, ['gain', 'mix', 'feedback', 'decay', 'depth', 'comp', 'time', 'rate']),
+                                         avg(x, list(set(roles.values())))) if v is not None), 0.5)
+    bright = lambda x: (avg(x, ['treble', 'presence', 'highcut']) or 0.5) - 0.5 * ((avg(x, ['bass']) or 0.5) - 0.5)
+    by = sorted(chosen, key=strong)
+    half = math.ceil(len(by) / 2)
+    left, right = sorted(by[:half], key=bright, reverse=True), sorted(by[half:], key=bright, reverse=True)
+    pick = lambda l, i: l[i] if i < len(l) else None
+    return [pick(left, 0), pick(right, 0), pick(left, 1), pick(right, 1)]
+
+
+def corners_of(mtype, entry):
+    """The model's four presets for the pad (None where none fits), or None for a model with too few presets."""
+    model = MODELS[mtype]
+    params = corner_params(model)
+    roles = {p['index']: role(p, model[2]) for p in params}
+    # what the choice looks at: the controls that shape the sound (no level, switch, type / mode) - a corner itself is the whole preset
+    keep = {p['index'] for p in params if not p['stepped'] and not LEVELS.match(p['name'].upper())
+            and not re.search('(TYPE|MODE)$', p['name'].upper()) and p['name'].upper() != 'VOLUME'}
+    base = dict(map(tuple, entry.get('base') or []))
+    cands = [{'preset': p, 'values': {i: v for i, v in p['values'] if i in keep}} for p in entry['presets']]
+    if not keep:
+        return None
+    bass_model = 'bass' in model[1].lower() or model[2].startswith('bass')
+    pool = cands if bass_model else [x for x in cands if not re.search(r'\bbass\b', x['preset']['name'], re.I)]
+    if len(pool) < 4:
+        pool = cands
+    if len(pool) < 4:
+        return None
+    kind = KIND.get(model[2], '')
+    out = character_corners(params, pool, CHARACTER[kind], roles, base) if kind in CHARACTER else None
+    if not out:
+        out = similarity_corners(pool, base, roles)
+    return [x['preset'] if x else None for x in out]
+
+
+def all_corners(data):
+    """[(model type, [(name, [(control, 0-1)], kept the editor's own corner)] x 4)] for the models the presets fit."""
+    out = []
+    for key in sorted(data, key=int):
+        mtype = int(key)
+        picks = corners_of(mtype, data[key])
+        own = OWN_CORNERS.get(mtype)
+        if not picks or (not own and None in picks) or not any(picks):
+            continue
+        row = []
+        for k, p in enumerate(picks):
+            if p:
+                row.append((p['name'], [(i, v) for i, v in p['values']], False))
+            else:
+                row.append((own['corners'][k]['name'], [(i, v) for i, _, v in own['corners'][k]['values']], True))
+        out.append((mtype, row))
+    return out
+
+
+def write_editor(data, focus):
     """The same presets for the Nano Cortex Editor's effect info, into its private img/ (if the editor is next to
-    this project and has that folder): img/neural-presets.js sets window.NEURAL_FX_PRESETS by model name."""
+    this project and has that folder): img/neural-presets.js sets window.NEURAL_FX_PRESETS by model name (each
+    control as the Nano's own 0-1, "norm" - the editor's ranges of the older models are its own guesses, so a value
+    in units could land elsewhere; the editor turns the 0-1 into its units itself), and
+    window.NEURAL_FOCUS_CORNERS the focus view's corners by model name (four presets as in NEURAL_FX_PRESETS, null
+    where the editor keeps its own corner)."""
     editor = next((f / 'nano-cortex-editor' for f in ROOT.parents if (f / 'nano-cortex-editor' / 'img').is_dir()), None)
     if not editor:
         print('No nano-cortex-editor/img beside this project - the editor gets no file')
@@ -115,15 +344,22 @@ def write_editor(data):
         default = dict(map(tuple, entry['default'])) if entry.get('default') else {}
         rows = []
         for preset in entry['presets'][:MAX_PRESETS]:
-            values = {params[i][0]: number(params[i], v) for i, v in preset['values']}
+            norm = {params[i][0]: v for i, v in preset['values']}   # the Nano's 0-1: the editor turns it into its own units
             differing = [params[i][0] for i, v in preset['values'] if i not in default or shown(params[i], v) != shown(params[i], default[i])]
-            rows.append({'name': preset['name'], 'values': values, 'show': differing[:SHOWN]})
+            rows.append({'name': preset['name'], 'norm': norm, 'show': differing[:SHOWN]})
         out[MODELS[mtype][1]] = rows
+    corners = {}
+    for mtype, row in focus:
+        params = MODELS[mtype][4]
+        corners[MODELS[mtype][1]] = [None if own else {'name': name, 'norm': {params[i][0]: v for i, v in values}}
+                                     for name, values, own in row]
     text = ('// Generated by nano-cortex-controller/tools/gen_neural.py - do not edit. PRIVATE (img/ is not published):\n'
             '// Neural DSP\'s factory effect presets as read off a Quad Cortex, for the models whose controls are the same.\n'
-            'window.NEURAL_FX_PRESETS = ' + json.dumps(out, ensure_ascii=False) + ';\n')
+            'window.NEURAL_FX_PRESETS = ' + json.dumps(out, ensure_ascii=False) + ';\n'
+            '// The focus view\'s corners: four of those presets per model, chosen by character (null: the editor\'s own corner).\n'
+            'window.NEURAL_FOCUS_CORNERS = ' + json.dumps(corners, ensure_ascii=False) + ';\n')
     (editor / 'img' / 'neural-presets.js').write_text(text)
-    print('%s: %d models' % (editor / 'img' / 'neural-presets.js', len(out)))
+    print('%s: %d models, corners for %d' % (editor / 'img' / 'neural-presets.js', len(out), len(corners)))
 
 
 if __name__ == '__main__':

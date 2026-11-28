@@ -2,13 +2,81 @@
 # the PSRAM shares - when the screen draws a lot (or the drum kit is made) the audio code was pushed out of the cache
 # and every render of 1 ms of sound took up to 0.8-4.8 ms: the capture packets were not taken in time and the looper
 # recorded silence (clicks). About 100 KB of the 364 KB internal RAM that were free.
+# What never runs per packet stays in flash (2026-11-27, about 9 KB of internal RAM): measuring a jam track, reading
+# a WAV header, the descriptors at the Nano's start; making the Lo-Fi drum kit, a saved loop's header and name
+# (drum_lofi, loop_wav, 2026-11-28); the EQ editor's spectrum (spectrum: only a task on core 1 runs it, draft
+# 2026-11-28). (The USB interrupt is not IRAM-safe - intr_flags 0 - so code in flash cannot run while the cache is
+# off.)
 [mapping:nano_audio_iram]
 archive: libnano_audio.a
 entries:
     * (noflash)
+    loudness (default)
+    wav (default)
+    loop_wav (default)
+    uac2_desc (default)
+    drum_lofi (default)
+    spectrum (default)
 
-# The USB host library: every packet of the Nano's sound goes through it (transfer callbacks, resubmits).
+# The USB host library: every packet of the Nano's sound goes through it (transfer callbacks, resubmits). Enumeration
+# stays in flash. (hub.c does not: usb_host_transfer_submit asks hub_root_is_suspended on every resubmit.)
 [mapping:usb_host_iram]
 archive: libespressif__usb.a
 entries:
     * (noflash)
+    enum (default)
+
+# The USB HAL (ESP-IDF's esp_hal_usb): the interrupt decodes every channel event and starts the next transfer with it,
+# so from flash it waited on cache misses while the screen drew (2026-11-27, the skipped packets 'K1' / 'Q1'). ~2 KB.
+[mapping:usb_hal_iram]
+archive: libesp_hal_usb.a
+entries:
+    usb_dwc_hal (noflash)
+
+# Core 0 code that ran from flash while the USB interrupt had to wait (2026-11-28, call graph from the two ELFs in
+# ~/Coding/claude-werkzeuge/flashscan): with the screen's frame-buffer write-back holding the cache, every cache miss in
+# it delayed the USB interrupt behind it - capture packets were not taken in time ("Q1"), playback packets skipped
+# ("K1"), and how often depended on where things happened to land in flash. About 4.5 KB of internal RAM.
+# - the FPU's lazy save in the trap after every interrupt (interrupts off while it runs)
+# - the FreeRTOS calls the USB client tasks, the mixer's vTaskDelay(1) and the LVGL task make inside critical
+#   sections / under the kernel lock the USB interrupt's xQueueGiveFromISR needs
+[mapping:p4_freertos_iram]
+archive: libfreertos.a
+entries:
+    port:pxPortUpdateCoprocOwner (noflash)
+    port:pxPortGetCoprocArea (noflash)
+    port:vPortTaskPinToCore (noflash)
+    queue:xQueueSemaphoreTake (noflash)
+    queue:xQueueGenericSend (noflash)
+    queue:xQueueReceive (noflash)
+    queue:uxQueueMessagesWaiting (noflash)
+    queue:xQueueTakeMutexRecursive (noflash)
+    queue:xQueueGiveMutexRecursive (noflash)
+    timers:xTimerIsTimerActive (noflash)
+    list:vListInsert (noflash)
+    tasks:vTaskPlaceOnEventList (noflash)
+    tasks:prvAddCurrentTaskToDelayedList (noflash)
+    tasks:xTaskCheckForTimeOut (noflash)
+    tasks:vTaskInternalSetTimeOutState (noflash)
+    tasks:xTaskPriorityInherit (noflash)
+    tasks:xTaskPriorityDisinherit (noflash)
+    tasks:vTaskPriorityDisinheritAfterTimeout (noflash)
+    tasks:pvTaskIncrementMutexHeldCount (noflash)
+    tasks:vTaskDelay (noflash)
+    tasks:ulTaskGenericNotifyTake (noflash)
+    tasks:xTaskGetCurrentTaskHandle (noflash)
+
+# - the esp_timer task walks its timer list with core 0's interrupts masked (LVGL tick and ~20 app timers)
+[mapping:p4_esp_timer_iram]
+archive: libesp_timer.a
+entries:
+    esp_timer:timer_task (noflash)
+
+# - the SD host interrupt (SDIO to the C6 for Bluetooth / Wi-Fi, and the microSD card) at the USB interrupt's level
+[mapping:p4_sdmmc_iram]
+archive: libesp_driver_sdmmc.a
+entries:
+    sd_host_sdmmc:sd_host_isr (noflash)
+    sd_trans_sdmmc:sd_host_fill_dma_descriptors (noflash)
+    sd_trans_sdmmc:sd_host_get_free_descriptors_count (noflash)
+    sd_trans_sdmmc:sd_host_dma_resume (noflash)

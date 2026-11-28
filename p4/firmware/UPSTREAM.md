@@ -126,6 +126,16 @@ while held. In `main/ui.c`: `on_metro_bpm`, `metro_typed`, keyboard kind `'b'` i
 (`s_rename_keyboard`, number mode and back), the wait in `metro_hide`, the three event lines in `build_metro`. The
 same text in both projects except the dialog's coordinates. Shots 73 / 74.
 
+Brought over from the small board's `board-1.25` on 2026-11-27 / 28 (committed there as **0cc8ef16** and **d38a784b**):
+**the FX tables with the Nano's real control order and ranges** - Graphic 9 with the high pass first (display order as
+before), Mix as the last control of Room / Hall / Ambience / Cave / Modulated (the reverb switch moves the real Mix),
+the Quad Cortex's ranges / skews / units for the models from before NanOS 2.3.0; an own build's pad corners from
+Neural DSP presets (`nano_fx_neural_focus`, private data, the published build keeps the editor's corners); **the info
+page's 27 more players' sounds**, the spring tank (Blossom) and the 70s plate (Mind Hall). `main/fx_models.c`,
+`main/fx_focus.c`, `main/fx_info.c`, `main/fx_neural.c/.h`, `tools/editor_*.json` and `tools/gen_neural.py` are the
+small board's files at d38a784b; `tools/gen_info.py` differs only in its "(P4 board)" header lines; `main/ui.c` took
+both changes (the pad's corners in `ui_fx_editor_show`, the `INFO_MAX_SOUNDS` comment). In the P4's 7bff0dc / 4496902.
+
 ## Found on the P4 board - the small board needs it too
 
 - **`ui_set_link()` in `main/ui.c` (2026-11-18): the settings text was set before the screen lock was taken**
@@ -280,3 +290,18 @@ only); the acoustic kit read at the start; without the Nano the start screen kee
   with the grid, LOOPER tile orange with the loop.
 - **Level:** a countdown of 5 s, then 8 s of measuring (`LV_MEASURE` 80).
 - `s_raw` (console K) in PSRAM on first use. Host test 94 checks.
+
+## Drums, 2026-11-28: the Lo-Fi kit and 20 grooves for atmospheric loops (the QC board's component could take it)
+
+State: built, host tests pass, **not flashed, not heard on the board** (a WAV demo was made outside the repository).
+- **Lo-Fi kit** - `components/nano_audio/drum_lofi.c` (new, in flash via `linker.lf`): computed, no samples; a muffled
+  kick, a dusty snare, a rim click on the clap's pad, dark short hats, dark ride and crash, round toms; then tape
+  saturation, a short dark room baked in, 26 kHz / 12 bit and a 7 kHz low pass. About 1.1 MB PSRAM.
+  `drum_machine.c/.h`: `drum_sounds_t` (`computed`, `lofi`), `make_sounds` (shared with `drum_machine_init`),
+  `drum_machine_make_lofi`, `DRUM_KIT_LOFI` = 2 (NVS "dkit" keeps its numbers), `trigger` plays the computed kit until
+  `lofi_made`.
+- `main/p4_audio.c`: `make_lofi` once - in `drums_task` when Lo-Fi is the kept kit, else `lofi_task` on its first
+  choice; `kit_to_play`. `main/ui.c`: three kit buttons (`DRUM_KIT_OF`: Acoustic, Electronic, Lo-Fi).
+- **20 grooves** appended (`drum_grooves.c`, 108 in all): style "Lo-Fi" (14: lo-fi hip-hop, trip-hop, half-time,
+  ambient) and six in "Calm" (6/8, 12/8, brushes, slow shuffles). Ten styles, at most 15 in one (the menu's buttons).
+- Host test (`test_drums.c`): lanes, styles, the Lo-Fi kit (made once, plays only once made, levels, highs, memory).

@@ -3,3 +3,4 @@ dependencies:
   espressif/usb:
     version: "^1.6.0"
     public: true
+    override_path: "../espressif__usb"   # 1.6.0 with its descriptor lists out of the cache (src/hcd_dwc.c: DESC_LIST_NC)

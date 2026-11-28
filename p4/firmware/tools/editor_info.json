@@ -1,7 +1,7 @@
 {
- "foot_own": "\"Based on\" as named by Neural DSP or the Unofficial Quad Cortex Device List. Product names are trademarks of their owners – no affiliation with this editor. Starting points are places to begin, not recipes.",
- "foot_like": "\"In the style of\" names classic devices of the same kind for orientation – Neural DSP does not name an original for this model. Starting points are places to begin, not recipes.",
- "foot_players": "Players' sounds: the pedal is the one the player is documented with. Where a note says \"read off\", the settings come from a photo of the player's board; otherwise they are our own reading of the records – places to begin. Names of players and bands only say whose sound a setting is modelled on; no affiliation or endorsement.",
+ "foot_own": "\"Based on\" as named by Neural DSP or the Unofficial Quad Cortex Device List. Product names are trademarks of their owners \u2013 no affiliation with this editor. Starting points are places to begin, not recipes.",
+ "foot_like": "\"In the style of\" names classic devices of the same kind for orientation \u2013 Neural DSP does not name an original for this model. Starting points are places to begin, not recipes.",
+ "foot_players": "Players' sounds: the pedal is the one the player is documented with. Where a note says \"read off\", the settings come from a photo of the player's board; otherwise they are our own reading of the records \u2013 places to begin. Names of players and bands only say whose sound a setting is modelled on; no affiliation or endorsement.",
  "models": [
   {
    "type": 18,
@@ -9,13 +9,13 @@
    "cat": "Guitar overdrive",
    "basedOn": "BOSS BD-2 Blues Driver",
    "like": "",
-   "made": "1995 · BOSS (Roland), Japan",
-   "text": "An open, amp-like overdrive that keeps your guitar's character. It reacts strongly to pick attack and the guitar volume – from a slightly hairy clean to a gritty, almost fuzzy crunch – and has more low end and bite than a Tube Screamer-style drive.",
+   "made": "1995 \u00b7 BOSS (Roland), Japan",
+   "text": "An open, amp-like overdrive that keeps your guitar's character. It reacts strongly to pick attack and the guitar volume \u2013 from a slightly hairy clean to a gritty, almost fuzzy crunch \u2013 and has more low end and bite than a Tube Screamer-style drive.",
    "heard": "",
    "photo": false,
    "rich": true,
    "tips": [
-    "Tone gets bright quickly – most settings live between 3.5 and 5.5.",
+    "Tone gets bright quickly \u2013 most settings live between 3.5 and 5.5.",
     "Above 7 on Gain it turns fuzzy and compressed; for a cleaner push stay low and raise Volume.",
     "Great as an always-on \"amp\" in front of a clean capture."
    ],
@@ -24,7 +24,7 @@
      "name": "Edge of breakup",
      "why": "Clean when you play soft, gritty when you dig in.",
      "asked": 3,
-     "text": "Gain 2.5 · Tone 4.5 · Volume 6.5",
+     "text": "Gain 2.5 \u00b7 Tone 4.5 \u00b7 Volume 6.5",
      "values": [
       [
        0,
@@ -47,7 +47,7 @@
      "name": "Blues crunch",
      "why": "Into a clean capture; roll back the guitar volume for rhythm.",
      "asked": 3,
-     "text": "Gain 5.5 · Tone 5.0 · Volume 5.5",
+     "text": "Gain 5.5 \u00b7 Tone 5.0 \u00b7 Volume 5.5",
      "values": [
       [
        0,
@@ -68,9 +68,9 @@
     },
     {
      "name": "Hairy lead",
-     "why": "Thick and fuzzy – keep Tone below the middle.",
+     "why": "Thick and fuzzy \u2013 keep Tone below the middle.",
      "asked": 3,
-     "text": "Gain 8.0 · Tone 4.0 · Volume 5.5",
+     "text": "Gain 8.0 \u00b7 Tone 4.0 \u00b7 Volume 5.5",
      "values": [
       [
        0,
@@ -95,7 +95,7 @@
      "name": "John Mayer: Keeley BD-2",
      "why": "A Keeley-modded BD-2 sat on his 2005 board. Settings are ours: just breaking up, clean when you play soft.",
      "asked": 3,
-     "text": "Gain 3.0 · Tone 4.5 · Volume 6.5",
+     "text": "Gain 3.0 \u00b7 Tone 4.5 \u00b7 Volume 6.5",
      "values": [
       [
        0,
@@ -116,9 +116,9 @@
     },
     {
      "name": "Geese: Blues Driver",
-     "why": "Read off Emily Green's BD-2 in Premier Guitar's Rig Rundown photo: Gain almost off (half past seven), Tone near four o'clock (marked with tape), Level at noon – a bright, nearly clean push.",
+     "why": "Read off Emily Green's BD-2 in Premier Guitar's Rig Rundown photo: Gain almost off (half past seven), Tone near four o'clock (marked with tape), Level at noon \u2013 a bright, nearly clean push.",
      "asked": 3,
-     "text": "Gain 0.5 · Tone 8.5 · Volume 5.0",
+     "text": "Gain 0.5 \u00b7 Tone 8.5 \u00b7 Volume 5.0",
      "values": [
       [
        0,
@@ -145,21 +145,21 @@
    "cat": "Guitar overdrive",
    "basedOn": "BOSS OD-1 OverDrive",
    "like": "",
-   "made": "1977 · BOSS – one of the very first BOSS compact pedals",
-   "text": "The pedal that made \"overdrive\" a word: asymmetric clipping gives a smooth, mid-forward drive that is more open and less compressed than the Tube Screamer that followed it. No tone control – it lets the amp do the voicing.",
+   "made": "1977 \u00b7 BOSS \u2013 one of the very first BOSS compact pedals",
+   "text": "The pedal that made \"overdrive\" a word: asymmetric clipping gives a smooth, mid-forward drive that is more open and less compressed than the Tube Screamer that followed it. No tone control \u2013 it lets the amp do the voicing.",
    "heard": "",
    "photo": false,
    "rich": true,
    "tips": [
-    "The device list's tip: drive below 9 o'clock (about 2) and level above 2 o'clock (about 70 %) to make the amp work.",
-    "No tone control – shape it with the capture or an EQ after it."
+    "The device list's tip: drive below 9 o'clock (about 2) and level above 2 o'clock (about 7) to make the amp work.",
+    "No tone control \u2013 shape it with the capture or an EQ after it."
    ],
    "starts": [
     {
      "name": "Amp pusher",
      "why": "The classic use: low drive, high level, into a crunchy capture.",
      "asked": 2,
-     "text": "Gain 2.0 · Level 70.0 %",
+     "text": "Gain 2.0 \u00b7 Level 7.0",
      "values": [
       [
        0,
@@ -177,7 +177,7 @@
      "name": "Mild crunch",
      "why": "On a clean capture.",
      "asked": 2,
-     "text": "Gain 5.0 · Level 55.0 %",
+     "text": "Gain 5.0 \u00b7 Level 5.5",
      "values": [
       [
        0,
@@ -195,7 +195,7 @@
      "name": "Full drive",
      "why": "",
      "asked": 2,
-     "text": "Gain 8.0 · Level 45.0 %",
+     "text": "Gain 8.0 \u00b7 Level 4.5",
      "values": [
       [
        0,
@@ -215,7 +215,7 @@
      "name": "Frusciante: SD-1",
      "why": "A Boss SD-1 on a fan's chart of his Unlimited Love tour board (r/John_Frusciante): Level at about ten o'clock, Tone at nine, Drive at about two. The OD-1 modelled here is its forerunner, without a tone control.",
      "asked": 2,
-     "text": "Gain 7.0 · Level 30.0 %",
+     "text": "Gain 7.0 \u00b7 Level 3.0",
      "values": [
       [
        0,
@@ -228,6 +228,24 @@
        0.3
       ]
      ]
+    },
+    {
+     "name": "Frusciante: SD-1 push",
+     "why": "\"These Are The Ways\" and \"Here Ever After\": a Boss SD-1 with its drive at nine to ten o'clock, mostly pushing the Marshall; used as a booster its Level sits between three o'clock and full (note.com/ketunemikku's analysis). The OD-1 modelled here is the SD-1's forerunner, without a tone control.",
+     "asked": 2,
+     "text": "Gain 2.0 \u00b7 Level 8.0",
+     "values": [
+      [
+       0,
+       "Gain",
+       0.2
+      ],
+      [
+       1,
+       "Level",
+       0.8
+      ]
+     ]
     }
    ]
   },
@@ -237,13 +255,13 @@
    "cat": "Guitar overdrive",
    "basedOn": "Xotic BB Preamp",
    "like": "",
-   "made": "about 2005 · Xotic Effects, California – \"BB\" stands for Bluesbreaker",
-   "text": "A wide-range overdrive with a ±15 dB active two-band EQ: from a big clean boost to a smooth, compressed, singing lead. It keeps more bass than a Tube Screamer and gets considerably wilder.",
+   "made": "about 2005 \u00b7 Xotic Effects, California \u2013 \"BB\" stands for Bluesbreaker",
+   "text": "A wide-range overdrive with a \u00b115 dB active two-band EQ: from a big clean boost to a smooth, compressed, singing lead. It keeps more bass than a Tube Screamer and gets considerably wilder.",
    "heard": "Andy Timmons, Greg Howe.",
    "photo": false,
    "rich": true,
    "tips": [
-    "Bass and Treble are active: 5 is flat, every step is a few dB – small moves go a long way.",
+    "Bass and Treble are active: 5 is flat, every step is a few dB \u2013 small moves go a long way.",
     "Cut a little Bass in front of a high-gain capture to keep it tight."
    ],
    "starts": [
@@ -251,7 +269,7 @@
      "name": "Booster",
      "why": "Device list: gain at 8 o'clock, volume 2 o'clock, treble 11, bass 1.",
      "asked": 4,
-     "text": "Gain 1.0 · Bass 6.0 · Treble 4.0 · Volume 7.0",
+     "text": "Gain 1.0 \u00b7 Bass 6.0 \u00b7 Treble 4.0 \u00b7 Volume 7.0",
      "values": [
       [
        0,
@@ -279,7 +297,7 @@
      "name": "With a clean amp",
      "why": "Device list: gain 2 o'clock, volume 1, treble 11, bass 12.",
      "asked": 4,
-     "text": "Gain 7.0 · Bass 5.0 · Treble 4.0 · Volume 6.0",
+     "text": "Gain 7.0 \u00b7 Bass 5.0 \u00b7 Treble 4.0 \u00b7 Volume 6.0",
      "values": [
       [
        0,
@@ -307,7 +325,7 @@
      "name": "Singing lead",
      "why": "",
      "asked": 4,
-     "text": "Gain 8.5 · Bass 5.0 · Treble 5.0 · Volume 6.0",
+     "text": "Gain 8.5 \u00b7 Bass 5.0 \u00b7 Treble 5.0 \u00b7 Volume 6.0",
      "values": [
       [
        0,
@@ -353,7 +371,7 @@
      "name": "Always-on preamp",
      "why": "Device list: gain 9 o'clock, volume 11, treble 11, bass 12.",
      "asked": 4,
-     "text": "Gain 2.0 · Volume 4.0 · Treble 4.0 · Bass 5.0",
+     "text": "Gain 2.0 \u00b7 Volume 4.0 \u00b7 Treble 4.0 \u00b7 Bass 5.0",
      "values": [
       [
        0,
@@ -381,7 +399,7 @@
      "name": "Fat low end",
      "why": "After a distortion it puts the low end back.",
      "asked": 4,
-     "text": "Gain 2.0 · Volume 5.0 · Treble 5.0 · Bass 7.0",
+     "text": "Gain 2.0 \u00b7 Volume 5.0 \u00b7 Treble 5.0 \u00b7 Bass 7.0",
      "values": [
       [
        0,
@@ -409,7 +427,7 @@
      "name": "Grit",
      "why": "",
      "asked": 4,
-     "text": "Gain 6.5 · Volume 4.5 · Treble 5.0 · Bass 5.5",
+     "text": "Gain 6.5 \u00b7 Volume 4.5 \u00b7 Treble 5.0 \u00b7 Bass 5.5",
      "values": [
       [
        0,
@@ -442,7 +460,7 @@
    "cat": "Guitar overdrive",
    "basedOn": "Xotic RC Booster",
    "like": "",
-   "made": "Xotic Effects, California – \"RC\" for \"really clean\"",
+   "made": "Xotic Effects, California \u2013 \"RC\" for \"really clean\"",
    "text": "A transparent clean boost with up to about 20 dB of gain and an active two-band EQ: it makes a Strat sound like a louder Strat. Turn up the gain and it adds a light, Klon-ish grit.",
    "heard": "Brad Paisley, Brent Mason.",
    "photo": false,
@@ -456,7 +474,7 @@
      "name": "Clean boost",
      "why": "Device list: volume 12 o'clock, gain 9 o'clock.",
      "asked": 4,
-     "text": "Gain 2.0 · Volume 5.0 · Bass 5.0 · Treble 5.0",
+     "text": "Gain 2.0 \u00b7 Volume 5.0 \u00b7 Bass 5.0 \u00b7 Treble 5.0",
      "values": [
       [
        0,
@@ -484,7 +502,7 @@
      "name": "Light overdrive",
      "why": "Device list: volume 11 o'clock, gain 1 o'clock.",
      "asked": 4,
-     "text": "Gain 6.0 · Volume 4.0 · Bass 5.0 · Treble 5.0",
+     "text": "Gain 6.0 \u00b7 Volume 4.0 \u00b7 Bass 5.0 \u00b7 Treble 5.0",
      "values": [
       [
        0,
@@ -512,7 +530,7 @@
      "name": "Lead boost",
      "why": "Device list: volume 12:30, gain 2 o'clock.",
      "asked": 4,
-     "text": "Gain 7.0 · Volume 5.5 · Bass 5.0 · Treble 5.5",
+     "text": "Gain 7.0 \u00b7 Volume 5.5 \u00b7 Bass 5.0 \u00b7 Treble 5.5",
      "values": [
       [
        0,
@@ -542,7 +560,7 @@
      "name": "John Mayer: clean boost",
      "why": "A Keeley Katana clean boost is on his boards (Guitar Chalk). Settings are ours.",
      "asked": 4,
-     "text": "Gain 2.0 · Bass 5.0 · Treble 5.5 · Volume 7.0",
+     "text": "Gain 2.0 \u00b7 Bass 5.0 \u00b7 Treble 5.5 \u00b7 Volume 7.0",
      "values": [
       [
        0,
@@ -570,7 +588,7 @@
      "name": "Black Keys: warm boost",
      "why": "Dan Auerbach uses a Radial BigShot only for a warm boost (Premier Guitar). Settings are ours.",
      "asked": 4,
-     "text": "Gain 2.0 · Bass 6.0 · Treble 4.5 · Volume 7.0",
+     "text": "Gain 2.0 \u00b7 Bass 6.0 \u00b7 Treble 4.5 \u00b7 Volume 7.0",
      "values": [
       [
        0,
@@ -596,9 +614,9 @@
     },
     {
      "name": "Frusciante: Micro Amp",
-     "why": "An MXR Micro Amp for a little more volume; a fan's chart of his Unlimited Love tour board (r/John_Frusciante) shows its Gain at about eleven o'clock. This booster has other controls – ours: flat and louder.",
+     "why": "An MXR Micro Amp for a little more volume; a fan's chart of his Unlimited Love tour board (r/John_Frusciante) shows its Gain at about eleven o'clock. This booster has other controls \u2013 ours: flat and louder.",
      "asked": 4,
-     "text": "Gain 1.5 · Bass 5.0 · Treble 5.0 · Volume 7.5",
+     "text": "Gain 1.5 \u00b7 Bass 5.0 \u00b7 Treble 5.0 \u00b7 Volume 7.5",
      "values": [
       [
        0,
@@ -630,22 +648,22 @@
    "cat": "Guitar overdrive",
    "basedOn": "Dunlop Fuzz Face (Arbiter Fuzz Face)",
    "like": "",
-   "made": "1966 · Arbiter, London – today made by Dunlop",
-   "text": "The classic two-transistor fuzz in the round case: thick, woolly and extremely touch-sensitive. Rolling back the guitar volume cleans it up to a glassy, slightly hairy tone – that interplay is the whole point.",
+   "made": "1966 \u00b7 Arbiter, London \u2013 today made by Dunlop",
+   "text": "The classic two-transistor fuzz in the round case: thick, woolly and extremely touch-sensitive. Rolling back the guitar volume cleans it up to a glassy, slightly hairy tone \u2013 that interplay is the whole point.",
    "heard": "Jimi Hendrix, David Gilmour, Eric Johnson.",
    "photo": false,
    "rich": true,
    "tips": [
     "Pickup and Pickup Level stand for the guitar in front: the real fuzz sounds different with every pickup. Match them to your guitar.",
-    "Place it first in the chain – after a buffer or a wah it can turn harsh.",
+    "Place it first in the chain \u2013 after a buffer or a wah it can turn harsh.",
     "At full guitar volume it is dark and compressed; pull the volume back a little for solos so it cuts through."
    ],
    "starts": [
     {
      "name": "Classic",
-     "why": "Full fuzz at about unity – play the rest with the guitar volume.",
+     "why": "Full fuzz at about unity \u2013 play the rest with the guitar volume.",
      "asked": 4,
-     "text": "Fuzz 10.0 · Volume 5.0 · Pickup Single · Pickup Level 5.0",
+     "text": "Fuzz 10.0 \u00b7 Volume 5.0 \u00b7 Pickup Single \u00b7 Pickup Level 5.0",
      "values": [
       [
        0,
@@ -673,7 +691,7 @@
      "name": "Cleaned up",
      "why": "Edge-of-fuzz rhythm, very dynamic.",
      "asked": 4,
-     "text": "Fuzz 6.0 · Volume 6.0 · Pickup Single · Pickup Level 4.0",
+     "text": "Fuzz 6.0 \u00b7 Volume 6.0 \u00b7 Pickup Single \u00b7 Pickup Level 4.0",
      "values": [
       [
        0,
@@ -701,7 +719,7 @@
      "name": "Humbucker lead",
      "why": "",
      "asked": 4,
-     "text": "Fuzz 9.0 · Volume 5.0 · Pickup HB · Pickup Level 6.0",
+     "text": "Fuzz 9.0 \u00b7 Volume 5.0 \u00b7 Pickup HB \u00b7 Pickup Level 6.0",
      "values": [
       [
        0,
@@ -729,9 +747,9 @@
    "players": [
     {
      "name": "Black Keys: thick fuzz",
-     "why": "Dan Auerbach's fuzzes are a Big Muff and a Shin-ei Companion; he solos on the neck pickup with the treble rolled off (Premier Guitar). The Nano has neither pedal – this is the nearest: dark and woolly.",
+     "why": "Dan Auerbach's fuzzes are a Big Muff and a Shin-ei Companion; he solos on the neck pickup with the treble rolled off (Premier Guitar). The Nano has neither pedal \u2013 this is the nearest: dark and woolly.",
      "asked": 4,
-     "text": "Fuzz 10.0 · Volume 5.0 · Pickup HB · Pickup Level 7.0",
+     "text": "Fuzz 10.0 \u00b7 Volume 5.0 \u00b7 Pickup HB \u00b7 Pickup Level 7.0",
      "values": [
       [
        0,
@@ -757,9 +775,9 @@
     },
     {
      "name": "Jack White: fuzz wall",
-     "why": "His fuzz is a Big Muff next to the Whammy (Guitar.com). The Nano has no Muff – this is the nearest: full up and bright.",
+     "why": "His fuzz is a Big Muff next to the Whammy (Guitar.com). The Nano has no Muff \u2013 this is the nearest: full up and bright.",
      "asked": 4,
-     "text": "Fuzz 10.0 · Volume 6.5 · Pickup Single · Pickup Level 9.0",
+     "text": "Fuzz 10.0 \u00b7 Volume 6.5 \u00b7 Pickup Single \u00b7 Pickup Level 9.0",
      "values": [
       [
        0,
@@ -787,7 +805,7 @@
      "name": "Frusciante: fuzz solo",
      "why": "A Big Muff on the \"Strip My Mind\" solo, a Boss FZ-3 on the second \"Scar Tissue\" solo (Ground Guitar); on the Unlimited Love tour also an MXR Variac Fuzz. The nearest fuzz on the Nano; settings are ours.",
      "asked": 4,
-     "text": "Fuzz 8.5 · Volume 6.0 · Pickup Single · Pickup Level 8.0",
+     "text": "Fuzz 8.5 \u00b7 Volume 6.0 \u00b7 Pickup Single \u00b7 Pickup Level 8.0",
      "values": [
       [
        0,
@@ -813,9 +831,9 @@
     },
     {
      "name": "Muse: gated fuzz",
-     "why": "\"Stockholm Syndrome\" and \"Plug In Baby\": a Z.Vex Fuzz Factory built into Matt Bellamy's Manson (ToneMirror, which names no source). It grew out of the Fuzz Face, but the Nano cannot gate or sputter like it – the nearest: everything up, humbucker.",
+     "why": "\"Stockholm Syndrome\" and \"Plug In Baby\": a Z.Vex Fuzz Factory built into Matt Bellamy's Manson (ToneMirror, which names no source). It grew out of the Fuzz Face, but the Nano cannot gate or sputter like it \u2013 the nearest: everything up, humbucker.",
      "asked": 4,
-     "text": "Fuzz 10.0 · Volume 6.0 · Pickup HB · Pickup Level 10.0",
+     "text": "Fuzz 10.0 \u00b7 Volume 6.0 \u00b7 Pickup HB \u00b7 Pickup Level 10.0",
      "values": [
       [
        0,
@@ -841,9 +859,9 @@
     },
     {
      "name": "Hendrix: Fuzz Face",
-     "why": "His Fuzz Face sat between a Vox wah and the Uni-Vibe (Roger Mayer in MusicRadar; Ground Guitar on Woodstock). No knob positions are documented – ours: fuzz full up, single coils, guitar wide open.",
+     "why": "His Fuzz Face sat between a Vox wah and the Uni-Vibe (Roger Mayer in MusicRadar; Ground Guitar on Woodstock). No knob positions are documented \u2013 ours: fuzz full up, single coils, guitar wide open.",
      "asked": 4,
-     "text": "Fuzz 10.0 · Volume 7.0 · Pickup Single · Pickup Level 10.0",
+     "text": "Fuzz 10.0 \u00b7 Volume 7.0 \u00b7 Pickup Single \u00b7 Pickup Level 10.0",
      "values": [
       [
        0,
@@ -869,9 +887,9 @@
     },
     {
      "name": "Hendrix: cleaned up",
-     "why": "The same Fuzz Face with the guitar's volume rolled back for rhythm parts – here Pickup Level does that. Ours.",
+     "why": "The same Fuzz Face with the guitar's volume rolled back for rhythm parts \u2013 here Pickup Level does that. Ours.",
      "asked": 4,
-     "text": "Fuzz 10.0 · Volume 7.5 · Pickup Single · Pickup Level 3.5",
+     "text": "Fuzz 10.0 \u00b7 Volume 7.5 \u00b7 Pickup Single \u00b7 Pickup Level 3.5",
      "values": [
       [
        0,
@@ -894,6 +912,34 @@
        0.35
       ]
      ]
+    },
+    {
+     "name": "Geese: Fuzz Factory",
+     "why": "Read off Emily Green's board in Premier Guitar's 2026 Rig Rundown photo: her Z.Vex Fuzz Factory with Drive at three o'clock and Vol almost full (Gate at ten, Comp at four, Stab at half past three). It grew out of the Fuzz Face, but Gate, Comp and Stab have no counterpart here \u2013 it cannot sputter like hers.",
+     "asked": 4,
+     "text": "Fuzz 8.0 \u00b7 Volume 9.0 \u00b7 Pickup HB \u00b7 Pickup Level 10.0",
+     "values": [
+      [
+       0,
+       "Fuzz",
+       0.8
+      ],
+      [
+       1,
+       "Volume",
+       0.9
+      ],
+      [
+       2,
+       "Pickup",
+       0
+      ],
+      [
+       3,
+       "Pickup Level",
+       1
+      ]
+     ]
     }
    ]
   },
@@ -903,21 +949,21 @@
    "cat": "Guitar overdrive",
    "basedOn": "Ibanez TS808 Tube Screamer",
    "like": "",
-   "made": "about 1979 · Ibanez (built by Maxon / Nisshin Onpa) – designed by Susumu Tamura",
+   "made": "about 1979 \u00b7 Ibanez (built by Maxon / Nisshin Onpa) \u2013 designed by Susumu Tamura",
    "text": "The \"holy grail\" overdrive: a mid hump around 700 Hz, tightened bass and soft clipping. On its own a smooth blues drive; in front of a driven amp the most famous boost in rock and metal.",
-   "heard": "Stevie Ray Vaughan – and the boost in front of countless metal rigs.",
+   "heard": "Stevie Ray Vaughan \u2013 and the boost in front of countless metal rigs.",
    "photo": false,
    "rich": true,
    "tips": [
-    "Level is in per cent here (50 % = the middle).",
-    "Cut low end is part of the sound – if a capture gets thin, lower Overdrive rather than adding bass."
+    "All three controls run from 0 to 10, as on the pedal.",
+    "Cut low end is part of the sound \u2013 if a capture gets thin, lower Overdrive rather than adding bass."
    ],
    "starts": [
     {
      "name": "Metal tightener",
      "why": "In front of a high-gain capture: tighter low end, more focus.",
      "asked": 3,
-     "text": "Overdrive 0.5 · Tone 6.0 · Level 85.0 %",
+     "text": "Overdrive 0.5 \u00b7 Tone 6.0 \u00b7 Level 8.5",
      "values": [
       [
        0,
@@ -940,7 +986,7 @@
      "name": "Texas blues",
      "why": "Into a capture at the edge of breakup.",
      "asked": 3,
-     "text": "Overdrive 5.0 · Tone 5.5 · Level 60.0 %",
+     "text": "Overdrive 5.0 \u00b7 Tone 5.5 \u00b7 Level 6.0",
      "values": [
       [
        0,
@@ -963,7 +1009,7 @@
      "name": "Smooth lead",
      "why": "",
      "asked": 3,
-     "text": "Overdrive 7.5 · Tone 5.0 · Level 55.0 %",
+     "text": "Overdrive 7.5 \u00b7 Tone 5.0 \u00b7 Level 5.5",
      "values": [
       [
        0,
@@ -986,9 +1032,9 @@
    "players": [
     {
      "name": "John Mayer: high gain",
-     "why": "The first of his two TS10 Tube Screamers as read off a live board: Drive about 9, Tone 6, Level 5 (Guitar Chalk – its author is not sure of it).",
+     "why": "The first of his two TS10 Tube Screamers as read off a live board: Drive about 9, Tone 6, Level 5 (Guitar Chalk \u2013 its author is not sure of it).",
      "asked": 3,
-     "text": "Overdrive 9.0 · Tone 6.0 · Level 50.0 %",
+     "text": "Overdrive 9.0 \u00b7 Tone 6.0 \u00b7 Level 5.0",
      "values": [
       [
        0,
@@ -1009,9 +1055,9 @@
     },
     {
      "name": "John Mayer: low gain",
-     "why": "His second TS10, the subtler one: Drive about 6, Tone 4–6, Level 4–5 (Guitar Chalk).",
+     "why": "His second TS10, the subtler one: Drive about 6, Tone 4\u20136, Level 4\u20135 (Guitar Chalk).",
      "asked": 3,
-     "text": "Overdrive 6.0 · Tone 5.0 · Level 45.0 %",
+     "text": "Overdrive 6.0 \u00b7 Tone 5.0 \u00b7 Level 4.5",
      "values": [
       [
        0,
@@ -1029,6 +1075,29 @@
        0.45
       ]
      ]
+    },
+    {
+     "name": "Warpaint: 808 at 5",
+     "why": "Emily Kokal keeps her Ibanez TS808DX on all the time \"at 5\", just for a little grit in front of a very clean Roland JC-120 (Premier Guitar, 2017). Which knob \"5\" means is not said \u2013 here all three.",
+     "asked": 3,
+     "text": "Overdrive 5.0 \u00b7 Tone 5.0 \u00b7 Level 5.0",
+     "values": [
+      [
+       0,
+       "Overdrive",
+       0.5
+      ],
+      [
+       1,
+       "Tone",
+       0.5
+      ],
+      [
+       2,
+       "Level",
+       0.5
+      ]
+     ]
     }
    ]
   },
@@ -1044,16 +1113,16 @@
    "photo": false,
    "rich": true,
    "tips": [
-    "Blend mixes the clean bass back in – it keeps the low end and the attack. Above 7 the distortion dominates.",
+    "Blend mixes the clean bass back in \u2013 it keeps the low end and the attack. Above 7 the distortion dominates.",
     "Growl adds low-end weight, Midboost helps the bass cut through a dense mix.",
-    "Level is in per cent; set it so the pedal is not louder than bypassed."
+    "Set Level so the pedal is not louder than bypassed."
    ],
    "starts": [
     {
      "name": "Warm-up",
      "why": "A little saturation, mostly clean bass.",
      "asked": 6,
-     "text": "Drive 3.0 · Growl Off · Midboost Off · Tone 5.0 · Level 50.0 % · Blend 4.0",
+     "text": "Drive 3.0 \u00b7 Growl Off \u00b7 Midboost Off \u00b7 Tone 5.0 \u00b7 Level 5.0 \u00b7 Blend 4.0",
      "values": [
       [
        0,
@@ -1091,7 +1160,7 @@
      "name": "Modern grind",
      "why": "The classic metal / prog bass tone.",
      "asked": 6,
-     "text": "Drive 6.5 · Growl On · Midboost On · Tone 6.0 · Level 50.0 % · Blend 6.0",
+     "text": "Drive 6.5 \u00b7 Growl On \u00b7 Midboost On \u00b7 Tone 6.0 \u00b7 Level 5.0 \u00b7 Blend 6.0",
      "values": [
       [
        0,
@@ -1129,7 +1198,7 @@
      "name": "Full fuzz",
      "why": "",
      "asked": 6,
-     "text": "Drive 9.0 · Growl On · Midboost Off · Tone 4.0 · Level 45.0 % · Blend 8.0",
+     "text": "Drive 9.0 \u00b7 Growl On \u00b7 Midboost Off \u00b7 Tone 4.0 \u00b7 Level 4.5 \u00b7 Blend 8.0",
      "values": [
       [
        0,
@@ -1167,9 +1236,9 @@
    "players": [
     {
      "name": "Muse: Hysteria bass",
-     "why": "\"Hysteria\": Chris Wolstenholme's bass through three amps – one clean, one through a Big Muff, one through an Animato distortion; much of the record's sound is a synth doubling it (producer Rich Costey, via ToneMirror). Ours: heavy drive with the clean bass blended in.",
+     "why": "\"Hysteria\": Chris Wolstenholme's bass through three amps \u2013 one clean, one through a Big Muff, one through an Animato distortion; much of the record's sound is a synth doubling it (producer Rich Costey, via ToneMirror). Ours: heavy drive with the clean bass blended in.",
      "asked": 6,
-     "text": "Drive 9.0 · Growl On · Midboost On · Tone 6.0 · Level 50.0 % · Blend 7.0",
+     "text": "Drive 9.0 \u00b7 Growl On \u00b7 Midboost On \u00b7 Tone 6.0 \u00b7 Level 5.0 \u00b7 Blend 7.0",
      "values": [
       [
        0,
@@ -1211,20 +1280,20 @@
    "cat": "Guitar overdrive",
    "basedOn": "DOD Overdrive Preamp 250",
    "like": "",
-   "made": "late 1970s · DOD Electronics, Salt Lake City",
-   "text": "A two-knob legend: flat mids, slightly rolled-off lows and hard diode clipping. At low gain a bright boost with a little grit, at high gain raspy and almost fuzzy – more open than a Tube Screamer.",
+   "made": "late 1970s \u00b7 DOD Electronics, Salt Lake City",
+   "text": "A two-knob legend: flat mids, slightly rolled-off lows and hard diode clipping. At low gain a bright boost with a little grit, at high gain raspy and almost fuzzy \u2013 more open than a Tube Screamer.",
    "heard": "Yngwie Malmsteen.",
    "photo": false,
    "rich": true,
    "tips": [
-    "The more Gain, the brighter and more aggressive it gets – tame it with a Low-High Cut or the capture's Treble."
+    "The more Gain, the brighter and more aggressive it gets \u2013 tame it with a Low-High Cut or the capture's Treble."
    ],
    "starts": [
     {
      "name": "Gritty boost",
      "why": "With gain at zero the original is a clean boost.",
      "asked": 2,
-     "text": "Gain 1.0 · Volume 7.5",
+     "text": "Gain 1.0 \u00b7 Volume 7.5",
      "values": [
       [
        0,
@@ -1242,7 +1311,7 @@
      "name": "Crunch",
      "why": "Device list: gain and level at 2 o'clock.",
      "asked": 2,
-     "text": "Gain 7.0 · Volume 7.0",
+     "text": "Gain 7.0 \u00b7 Volume 7.0",
      "values": [
       [
        0,
@@ -1260,7 +1329,7 @@
      "name": "Neo-classical lead",
      "why": "Push a driven capture hard, as in the 80s.",
      "asked": 2,
-     "text": "Gain 3.0 · Volume 8.0",
+     "text": "Gain 3.0 \u00b7 Volume 8.0",
      "values": [
       [
        0,
@@ -1283,22 +1352,22 @@
    "cat": "Guitar overdrive",
    "basedOn": "Fulltone OCD",
    "like": "",
-   "made": "2004 · Fulltone, Los Angeles – designed by Mike Fuller",
+   "made": "2004 \u00b7 Fulltone, Los Angeles \u2013 designed by Mike Fuller",
    "text": "Obsessive Compulsive Drive: an overdriven op-amp followed by MOSFET clipping gives an amp-like drive from light crunch to thick distortion. Very dynamic and cleans up well with the guitar volume.",
    "heard": "",
    "photo": false,
    "rich": true,
    "tips": [
     "Peak HP gives more gain, highs and output; LP is flatter and smoother.",
-    "It has a lot of output – Volume usually stays below 5.",
+    "It has a lot of output \u2013 Volume usually stays below 5.",
     "For a smoother tone: more Drive, less Volume."
    ],
    "starts": [
     {
      "name": "Blues / rock rhythm",
-     "why": "Device list: neck pickup into a clean amp – volume 11, drive 10 o'clock, LP.",
+     "why": "Device list: neck pickup into a clean amp \u2013 volume 11, drive 10 o'clock, LP.",
      "asked": 4,
-     "text": "Drive 3.0 · Peak LP · Tone 5.0 · Volume 4.0",
+     "text": "Drive 3.0 \u00b7 Peak LP \u00b7 Tone 5.0 \u00b7 Volume 4.0",
      "values": [
       [
        0,
@@ -1324,9 +1393,9 @@
     },
     {
      "name": "British rock",
-     "why": "Device list: bridge pickup into a clean amp – volume 10, drive 1 o'clock, HP.",
+     "why": "Device list: bridge pickup into a clean amp \u2013 volume 10, drive 1 o'clock, HP.",
      "asked": 4,
-     "text": "Drive 6.0 · Peak HP · Tone 5.0 · Volume 3.0",
+     "text": "Drive 6.0 \u00b7 Peak HP \u00b7 Tone 5.0 \u00b7 Volume 3.0",
      "values": [
       [
        0,
@@ -1354,7 +1423,7 @@
      "name": "Thick lead",
      "why": "",
      "asked": 4,
-     "text": "Drive 8.0 · Peak HP · Tone 4.0 · Volume 4.0",
+     "text": "Drive 8.0 \u00b7 Peak HP \u00b7 Tone 4.0 \u00b7 Volume 4.0",
      "values": [
       [
        0,
@@ -1387,14 +1456,14 @@
    "cat": "Guitar overdrive",
    "basedOn": "Pro Co RAT",
    "like": "",
-   "made": "1978 · Pro Co Sound, Kalamazoo, Michigan",
-   "text": "Half distortion, half fuzz: an op-amp drive with hard clipping diodes and a raspy, cutting voice. From gritty blues boost to thick, hairy grunge distortion – one of the most copied pedals ever.",
+   "made": "1978 \u00b7 Pro Co Sound, Kalamazoo, Michigan",
+   "text": "Half distortion, half fuzz: an op-amp drive with hard clipping diodes and a raspy, cutting voice. From gritty blues boost to thick, hairy grunge distortion \u2013 one of the most copied pedals ever.",
    "heard": "Jeff Beck, Dave Grohl (the first Foo Fighters album, into a Vox AC30).",
    "photo": false,
    "rich": true,
    "tips": [
     "Filter is a low-pass that works backwards: turning it up makes the sound darker. Most players live between 3 and 5.",
-    "It pairs well with British-voiced captures – the classic RAT + Marshall / AC30 combination.",
+    "It pairs well with British-voiced captures \u2013 the classic RAT + Marshall / AC30 combination.",
     "Set Volume so that on and off are equally loud, then add a little for solos."
    ],
    "starts": [
@@ -1402,7 +1471,7 @@
      "name": "Gritty boost",
      "why": "In front of a capture that already crunches.",
      "asked": 3,
-     "text": "Distortion 2.0 · Filter 4.0 · Volume 7.0",
+     "text": "Distortion 2.0 \u00b7 Filter 4.0 \u00b7 Volume 7.0",
      "values": [
       [
        0,
@@ -1425,7 +1494,7 @@
      "name": "Classic crunch",
      "why": "Into a clean or edge-of-breakup capture.",
      "asked": 3,
-     "text": "Distortion 4.5 · Filter 4.0 · Volume 5.5",
+     "text": "Distortion 4.5 \u00b7 Filter 4.0 \u00b7 Volume 5.5",
      "values": [
       [
        0,
@@ -1448,7 +1517,7 @@
      "name": "Grunge",
      "why": "Thick, fuzzy rhythm sound.",
      "asked": 3,
-     "text": "Distortion 8.0 · Filter 3.0 · Volume 5.0",
+     "text": "Distortion 8.0 \u00b7 Filter 3.0 \u00b7 Volume 5.0",
      "values": [
       [
        0,
@@ -1471,9 +1540,9 @@
    "players": [
     {
      "name": "Wednesday: wall of dirt",
-     "why": "Karly Hartzman's only pedal is a ProCo RAT – a \"heavy midrange wall of dirt\" (Mixdown). Settings are ours.",
+     "why": "Karly Hartzman's only pedal is a ProCo RAT \u2013 a \"heavy midrange wall of dirt\" (Mixdown). Settings are ours.",
      "asked": 3,
-     "text": "Distortion 7.5 · Filter 4.5 · Volume 5.5",
+     "text": "Distortion 7.5 \u00b7 Filter 4.5 \u00b7 Volume 5.5",
      "values": [
       [
        0,
@@ -1496,7 +1565,7 @@
      "name": "Wednesday: steel grit",
      "why": "Xandy Chelmis runs a RAT 2 on the pedal steel (Mixdown). Settings are ours: low gain, soft top end.",
      "asked": 3,
-     "text": "Distortion 3.5 · Filter 5.5 · Volume 6.0",
+     "text": "Distortion 3.5 \u00b7 Filter 5.5 \u00b7 Volume 6.0",
      "values": [
       [
        0,
@@ -1517,9 +1586,9 @@
     },
     {
      "name": "Frusciante: DS-2 rhythm",
-     "why": "His main distortion is a Boss DS-2 on Turbo II; a fan's chart of his Unlimited Love tour board (r/John_Frusciante) shows Level and Tone at nine o'clock and Dist at noon. The Nano has no DS-2 – carried over to the nearest distortion: Dist as on the chart, a dark Filter for the low Tone.",
+     "why": "His main distortion is a Boss DS-2 on Turbo II; a fan's chart of his Unlimited Love tour board (r/John_Frusciante) shows Level and Tone at nine o'clock and Dist at noon. The Nano has no DS-2 \u2013 carried over to the nearest distortion: Dist as on the chart, a dark Filter for the low Tone.",
      "asked": 3,
-     "text": "Distortion 5.0 · Filter 6.5 · Volume 5.0",
+     "text": "Distortion 5.0 \u00b7 Filter 6.5 \u00b7 Volume 5.0",
      "values": [
       [
        0,
@@ -1540,9 +1609,9 @@
     },
     {
      "name": "Frusciante: DS-2 lead",
-     "why": "The second DS-2 on a fan's chart of his Unlimited Love tour board (r/John_Frusciante): as the rhythm one, with Dist at about two o'clock. The Nano has no DS-2 – the nearest distortion.",
+     "why": "The second DS-2 on a fan's chart of his Unlimited Love tour board (r/John_Frusciante): as the rhythm one, with Dist at about two o'clock. The Nano has no DS-2 \u2013 the nearest distortion.",
      "asked": 3,
-     "text": "Distortion 7.0 · Filter 6.5 · Volume 5.0",
+     "text": "Distortion 7.0 \u00b7 Filter 6.5 \u00b7 Volume 5.0",
      "values": [
       [
        0,
@@ -1560,6 +1629,52 @@
        0.5
       ]
      ]
+    },
+    {
+     "name": "Warpaint: DS-1 wiry",
+     "why": "Read off Theresa Wayman's board in Guitar Player's 2022 photo: a Boss DS-1 with Dist at three o'clock, Tone and Level at nine; she plays it with the bridge pickup for a \"wiry\" sound. The Nano has no DS-1 \u2013 the nearest distortion, carried over as the DS-2s above.",
+     "asked": 3,
+     "text": "Distortion 8.0 \u00b7 Filter 6.5 \u00b7 Volume 5.0",
+     "values": [
+      [
+       0,
+       "Distortion",
+       0.8
+      ],
+      [
+       1,
+       "Filter",
+       0.65
+      ],
+      [
+       2,
+       "Volume",
+       0.5
+      ]
+     ]
+    },
+    {
+     "name": "Frusciante: Slane DS-2",
+     "why": "Slane Castle 2003: two fan readings agree on his DS-2 with Tone and Dist full up, Turbo II, Level between one and three o'clock (a 2021 Reddit reply and D-D-Distortion.com, 2016, collected by note.com/ketunemikku) \u2013 not his confirmed setting. The nearest distortion, Filter almost open for the full Tone.",
+     "asked": 3,
+     "text": "Distortion 10.0 \u00b7 Filter 1.0 \u00b7 Volume 6.5",
+     "values": [
+      [
+       0,
+       "Distortion",
+       1
+      ],
+      [
+       1,
+       "Filter",
+       0.1
+      ],
+      [
+       2,
+       "Volume",
+       0.65
+      ]
+     ]
     }
    ]
   },
@@ -1575,13 +1690,13 @@
    "photo": true,
    "rich": true,
    "tips": [
-    "Raise it until hiss and hum disappear in the pauses – stop before sustained notes get cut.",
+    "Raise it until hiss and hum disappear in the pauses \u2013 stop before sustained notes get cut.",
     "In Pre FX in front of a drive it removes noise before it gets amplified."
    ],
    "starts": [
     {
      "name": "Light",
-     "why": "Clean and low-gain sounds – keeps note tails.",
+     "why": "Clean and low-gain sounds \u2013 keeps note tails.",
      "asked": 1,
      "text": "Noise Reduction 25.0 %",
      "values": [
@@ -1626,82 +1741,82 @@
    "name": "Graphic 9",
    "cat": "EQ",
    "basedOn": "",
-   "like": "MXR Ten Band EQ · BOSS GE-7",
+   "like": "MXR Ten Band EQ \u00b7 BOSS GE-7",
    "made": "",
    "text": "A nine-band graphic EQ from 65 Hz to 16 kHz with a high-pass and a low-pass filter. Before the capture it changes what drives the amp (like a boost pedal); after it, it shapes the final sound.",
    "heard": "",
    "photo": true,
    "rich": true,
    "tips": [
-    "Cut before you boost: removing 250 Hz mud or 4–8 kHz fizz usually helps more than adding.",
-    "The EQ view shows the curve – click the small curve on the card."
+    "Cut before you boost: removing 250 Hz mud or 4\u20138 kHz fizz usually helps more than adding.",
+    "The EQ view shows the curve \u2013 click the small curve on the card."
    ],
    "starts": [
     {
      "name": "Mid boost (pre)",
      "why": "Before a driven capture: tighter and more focused, like a Tube Screamer.",
      "asked": 12,
-     "text": "65Hz -3.0 dB · 125Hz -2.0 dB · 250Hz 0.0 dB · 500hz 3.0 dB · 1kHz 4.0 dB · 2kHz 2.0 dB · 4kHz 0.0 dB · 8kHz -2.0 dB · 16kHz -3.0 dB · HPF 100 Hz · LPF 8.00 kHz · Output 3.0 dB",
+     "text": "65Hz -3.0 dB \u00b7 125Hz -2.0 dB \u00b7 250Hz 0.0 dB \u00b7 500hz 3.0 dB \u00b7 1kHz 4.0 dB \u00b7 2kHz 2.0 dB \u00b7 4kHz 0.0 dB \u00b7 8kHz -2.0 dB \u00b7 16kHz -3.0 dB \u00b7 HPF 100 Hz \u00b7 LPF 8.00 kHz \u00b7 Output 3.0 dB",
      "values": [
       [
-       0,
+       1,
        "65Hz",
        0.375
       ],
       [
-       1,
+       2,
        "125Hz",
        0.4167
       ],
       [
-       2,
+       3,
        "250Hz",
        0.5
       ],
       [
-       3,
+       4,
        "500hz",
        0.625
       ],
       [
-       4,
+       5,
        "1kHz",
        0.6667
       ],
       [
-       5,
+       6,
        "2kHz",
        0.5833
       ],
       [
-       6,
+       7,
        "4kHz",
        0.5
       ],
       [
-       7,
+       8,
        "8kHz",
        0.4167
       ],
       [
-       8,
+       9,
        "16kHz",
        0.375
       ],
       [
-       9,
+       0,
        "HPF",
-       0.1026
+       0.3434
       ],
       [
        10,
        "LPF",
-       0.4667
+       0.5493
       ],
       [
        11,
        "Output",
-       0.625
+       0.575
       ]
      ]
     },
@@ -1709,62 +1824,62 @@
      "name": "Scooped",
      "why": "80s / thrash rhythm after the capture.",
      "asked": 12,
-     "text": "65Hz 2.0 dB · 125Hz 3.0 dB · 250Hz 0.0 dB · 500hz -3.0 dB · 1kHz -4.0 dB · 2kHz -2.0 dB · 4kHz 2.0 dB · 8kHz 3.0 dB · 16kHz 0.0 dB · HPF 60 Hz · LPF 12.0 kHz · Output 0.0 dB",
+     "text": "65Hz 2.0 dB \u00b7 125Hz 3.0 dB \u00b7 250Hz 0.0 dB \u00b7 500hz -3.0 dB \u00b7 1kHz -4.0 dB \u00b7 2kHz -2.0 dB \u00b7 4kHz 2.0 dB \u00b7 8kHz 3.0 dB \u00b7 16kHz 0.0 dB \u00b7 HPF 60 Hz \u00b7 LPF 12.0 kHz \u00b7 Output 0.0 dB",
      "values": [
       [
-       0,
+       1,
        "65Hz",
        0.5833
       ],
       [
-       1,
+       2,
        "125Hz",
        0.625
       ],
       [
-       2,
+       3,
        "250Hz",
        0.5
       ],
       [
-       3,
+       4,
        "500hz",
        0.375
       ],
       [
-       4,
+       5,
        "1kHz",
        0.3333
       ],
       [
-       5,
+       6,
        "2kHz",
        0.4167
       ],
       [
-       6,
+       7,
        "4kHz",
        0.5833
       ],
       [
-       7,
+       8,
        "8kHz",
        0.625
       ],
       [
-       8,
+       9,
        "16kHz",
        0.5
       ],
       [
-       9,
+       0,
        "HPF",
-       0.0513
+       0.2282
       ],
       [
        10,
        "LPF",
-       0.7333
+       0.7204
       ],
       [
        11,
@@ -1777,62 +1892,62 @@
      "name": "Clean-up (post)",
      "why": "Less mud and fizz on a high-gain sound.",
      "asked": 12,
-     "text": "65Hz 0.0 dB · 125Hz 0.0 dB · 250Hz -2.0 dB · 500hz 0.0 dB · 1kHz 0.0 dB · 2kHz 0.0 dB · 4kHz -2.0 dB · 8kHz -3.0 dB · 16kHz -4.0 dB · HPF 80 Hz · LPF 9.00 kHz · Output 0.0 dB",
+     "text": "65Hz 0.0 dB \u00b7 125Hz 0.0 dB \u00b7 250Hz -2.0 dB \u00b7 500hz 0.0 dB \u00b7 1kHz 0.0 dB \u00b7 2kHz 0.0 dB \u00b7 4kHz -2.0 dB \u00b7 8kHz -3.0 dB \u00b7 16kHz -4.0 dB \u00b7 HPF 80 Hz \u00b7 LPF 9.00 kHz \u00b7 Output 0.0 dB",
      "values": [
       [
-       0,
+       1,
        "65Hz",
        0.5
       ],
       [
-       1,
+       2,
        "125Hz",
        0.5
       ],
       [
-       2,
+       3,
        "250Hz",
        0.4167
       ],
       [
-       3,
+       4,
        "500hz",
        0.5
       ],
       [
-       4,
+       5,
        "1kHz",
        0.5
       ],
       [
-       5,
+       6,
        "2kHz",
        0.5
       ],
       [
-       6,
+       7,
        "4kHz",
        0.4167
       ],
       [
-       7,
+       8,
        "8kHz",
        0.375
       ],
       [
-       8,
+       9,
        "16kHz",
        0.3333
       ],
       [
-       9,
+       0,
        "HPF",
-       0.0769
+       0.2897
       ],
       [
        10,
        "LPF",
-       0.5333
+       0.5951
       ],
       [
        11,
@@ -1842,7 +1957,61 @@
      ]
     }
    ],
-   "players": []
+   "players": [
+    {
+     "name": "Geese: Pearl EQ",
+     "why": "Emily Green's Pearl PE-10 parametric EQ sits after her fuzz: she uses it to bring out the highs and the lows and leaves the mids alone (Guitar World, 2026). The amounts are ours.",
+     "asked": 9,
+     "text": "65Hz 4.0 dB \u00b7 125Hz 3.0 dB \u00b7 250Hz 0.0 dB \u00b7 500hz 0.0 dB \u00b7 1kHz 0.0 dB \u00b7 2kHz 0.0 dB \u00b7 4kHz 3.0 dB \u00b7 8kHz 4.0 dB \u00b7 16kHz 2.0 dB",
+     "values": [
+      [
+       1,
+       "65Hz",
+       0.6667
+      ],
+      [
+       2,
+       "125Hz",
+       0.625
+      ],
+      [
+       3,
+       "250Hz",
+       0.5
+      ],
+      [
+       4,
+       "500hz",
+       0.5
+      ],
+      [
+       5,
+       "1kHz",
+       0.5
+      ],
+      [
+       6,
+       "2kHz",
+       0.5
+      ],
+      [
+       7,
+       "4kHz",
+       0.625
+      ],
+      [
+       8,
+       "8kHz",
+       0.6667
+      ],
+      [
+       9,
+       "16kHz",
+       0.5833
+      ]
+     ]
+    }
+   ]
   },
   {
    "type": 4003,
@@ -1851,20 +2020,20 @@
    "basedOn": "",
    "like": "Broughton Low + High Pass Filter",
    "made": "",
-   "text": "A high-pass and a low-pass filter with selectable slopes – the quickest way to remove rumble and fizz, or to make a guitar sit in a band mix.",
+   "text": "A high-pass and a low-pass filter with selectable slopes \u2013 the quickest way to remove rumble and fizz, or to make a guitar sit in a band mix.",
    "heard": "",
    "photo": true,
    "rich": true,
    "tips": [
-    "High-pass around 80–100 Hz tightens a guitar; low-pass around 6–8 kHz tames fizz.",
-    "Steeper slopes (−24 and more) cut harder but can sound unnatural on clean sounds."
+    "High-pass around 80\u2013100 Hz tightens a guitar; low-pass around 6\u20138 kHz tames fizz.",
+    "Steeper slopes (\u221224 and more) cut harder but can sound unnatural on clean sounds."
    ],
    "starts": [
     {
      "name": "Band mix",
      "why": "Room for bass and vocals.",
      "asked": 5,
-     "text": "HPF Slope -12 · HPF Freq 100 Hz · LPF Slope -12 · LPF Freq 7.00 kHz · Output 0.0 dB",
+     "text": "HPF Slope -12 \u00b7 HPF Freq 100 Hz \u00b7 LPF Slope -12 \u00b7 LPF Freq 7.00 kHz \u00b7 Output 0.0 dB",
      "values": [
       [
        0,
@@ -1897,7 +2066,7 @@
      "name": "Tight high gain",
      "why": "",
      "asked": 5,
-     "text": "HPF Slope -24 · HPF Freq 120 Hz · LPF Slope -12 · LPF Freq 6.00 kHz · Output 0.0 dB",
+     "text": "HPF Slope -24 \u00b7 HPF Freq 120 Hz \u00b7 LPF Slope -12 \u00b7 LPF Freq 6.00 kHz \u00b7 Output 0.0 dB",
      "values": [
       [
        0,
@@ -1930,7 +2099,7 @@
      "name": "Lo-fi / radio",
      "why": "Telephone sound for an intro.",
      "asked": 5,
-     "text": "HPF Slope -24 · HPF Freq 600 Hz · LPF Slope -24 · LPF Freq 3.00 kHz · Output 3.0 dB",
+     "text": "HPF Slope -24 \u00b7 HPF Freq 600 Hz \u00b7 LPF Slope -24 \u00b7 LPF Freq 3.00 kHz \u00b7 Output 3.0 dB",
      "values": [
       [
        0,
@@ -1955,7 +2124,7 @@
       [
        4,
        "Output",
-       0.625
+       0.575
       ]
      ]
     }
@@ -1982,7 +2151,7 @@
      "name": "Tame fizz",
      "why": "Tighter bass, less mud and fizz after a high-gain capture.",
      "asked": 12,
-     "text": "1 Active On · 1 Type Hi Pass · 1 Freq 90 Hz · 2 Active On · 2 Type Peak · 2 Freq 300 Hz · 2 Gain -3.0 dB · 2 Q 1.2 · 3 Active On · 3 Type Hi Shelf · 3 Freq 6.00 kHz · 3 Gain -4.0 dB",
+     "text": "1 Active On \u00b7 1 Type Hi Pass \u00b7 1 Freq 90 Hz \u00b7 2 Active On \u00b7 2 Type Peak \u00b7 2 Freq 300 Hz \u00b7 2 Gain -3.0 dB \u00b7 2 Q 1.2 \u00b7 3 Active On \u00b7 3 Type Hi Shelf \u00b7 3 Freq 6.00 kHz \u00b7 3 Gain -4.0 dB",
      "values": [
       [
        4,
@@ -1997,7 +2166,7 @@
       [
        1,
        "1 Freq",
-       0.0035
+       0.1834
       ],
       [
        9,
@@ -2012,7 +2181,7 @@
       [
        6,
        "2 Freq",
-       0.014
+       0.278
       ],
       [
        5,
@@ -2037,7 +2206,7 @@
       [
        11,
        "3 Freq",
-       0.2993
+       0.6964
       ],
       [
        10,
@@ -2050,7 +2219,7 @@
      "name": "Presence lift",
      "why": "Helps a guitar cut through the band.",
      "asked": 7,
-     "text": "1 Active Off · 2 Active On · 2 Type Peak · 2 Freq 1.60 kHz · 2 Gain 3.0 dB · 2 Q 0.8 · 3 Active Off",
+     "text": "1 Active Off \u00b7 2 Active On \u00b7 2 Type Peak \u00b7 2 Freq 1.60 kHz \u00b7 2 Gain 3.0 dB \u00b7 2 Q 0.8 \u00b7 3 Active Off",
      "values": [
       [
        4,
@@ -2070,7 +2239,7 @@
       [
        6,
        "2 Freq",
-       0.0791
+       0.4671
       ],
       [
        5,
@@ -2093,7 +2262,7 @@
      "name": "Notch a peak",
      "why": "Sweep 2 Freq until the harsh note disappears.",
      "asked": 7,
-     "text": "1 Active Off · 2 Active On · 2 Type Peak · 2 Freq 2.50 kHz · 2 Gain -6.0 dB · 2 Q 4.0 · 3 Active Off",
+     "text": "1 Active Off \u00b7 2 Active On \u00b7 2 Type Peak \u00b7 2 Freq 2.50 kHz \u00b7 2 Gain -6.0 dB \u00b7 2 Q 4.0 \u00b7 3 Active Off",
      "values": [
       [
        4,
@@ -2113,7 +2282,7 @@
       [
        6,
        "2 Freq",
-       0.1241
+       0.5348
       ],
       [
        5,
@@ -2140,15 +2309,15 @@
    "name": "Utility Gate",
    "cat": "Utility",
    "basedOn": "",
-   "like": "ISP Decimator · BOSS NS-2",
+   "like": "ISP Decimator \u00b7 BOSS NS-2",
    "made": "",
-   "text": "A full noise gate with threshold, attack, hold, release and range – for when the one-knob gate is not precise enough, e.g. tight djent stops or a gate that only lowers the noise a little.",
+   "text": "A full noise gate with threshold, attack, hold, release and range \u2013 for when the one-knob gate is not precise enough, e.g. tight djent stops or a gate that only lowers the noise a little.",
    "heard": "",
    "photo": true,
    "rich": true,
    "tips": [
     "Set Threshold just above the noise floor (play nothing, raise it until the hiss stops).",
-    "Range sets how far the gate closes: −20 dB sounds natural, −90 dB is a hard mute.",
+    "Range sets how far the gate closes: \u221220 dB sounds natural, \u221290 dB is a hard mute.",
     "A longer Release keeps note tails; a short one is tighter."
    ],
    "starts": [
@@ -2156,7 +2325,7 @@
      "name": "Natural",
      "why": "Lowers the noise without hard cut-offs.",
      "asked": 5,
-     "text": "Threshold -60.0 dB · Attack 2 ms · Hold 50 ms · Release 200 ms · Range -20.0 dB",
+     "text": "Threshold -60.0 dB \u00b7 Attack 2.0 ms \u00b7 Hold 50 ms \u00b7 Release 200 ms \u00b7 Range -20.0 dB",
      "values": [
       [
        0,
@@ -2166,7 +2335,7 @@
       [
        1,
        "Attack",
-       0.001
+       0.0202
       ],
       [
        2,
@@ -2189,7 +2358,7 @@
      "name": "High gain",
      "why": "Closes quickly between chugs.",
      "asked": 5,
-     "text": "Threshold -50.0 dB · Attack 1 ms · Hold 20 ms · Release 80 ms · Range -60.0 dB",
+     "text": "Threshold -50.0 dB \u00b7 Attack 1.0 ms \u00b7 Hold 20 ms \u00b7 Release 80 ms \u00b7 Range -60.0 dB",
      "values": [
       [
        0,
@@ -2199,7 +2368,7 @@
       [
        1,
        "Attack",
-       0
+       0.0105
       ],
       [
        2,
@@ -2220,9 +2389,9 @@
     },
     {
      "name": "Staccato",
-     "why": "Machine-gun stops – very tight.",
+     "why": "Machine-gun stops \u2013 very tight.",
      "asked": 5,
-     "text": "Threshold -45.0 dB · Attack 1 ms · Hold 5 ms · Release 30 ms · Range -90.0 dB",
+     "text": "Threshold -45.0 dB \u00b7 Attack 1.0 ms \u00b7 Hold 5 ms \u00b7 Release 30 ms \u00b7 Range -90.0 dB",
      "values": [
       [
        0,
@@ -2232,7 +2401,7 @@
       [
        1,
        "Attack",
-       0
+       0.0105
       ],
       [
        2,
@@ -2261,7 +2430,7 @@
    "basedOn": "",
    "like": "Ernie Ball VP Jr",
    "made": "",
-   "text": "A volume control – on an expression pedal a volume pedal for swells, fades and a quieter rhythm level. Before the capture it also acts like the guitar volume (less gain); after it only the loudness changes.",
+   "text": "A volume control \u2013 on an expression pedal a volume pedal for swells, fades and a quieter rhythm level. Before the capture it also acts like the guitar volume (less gain); after it only the loudness changes.",
    "heard": "",
    "photo": true,
    "rich": true,
@@ -2275,7 +2444,7 @@
      "name": "Full",
      "why": "",
      "asked": 2,
-     "text": "Level 100.0 % · Curve Log",
+     "text": "Level 100.0 % \u00b7 Curve Log",
      "values": [
       [
        0,
@@ -2293,7 +2462,7 @@
      "name": "Rhythm level",
      "why": "Switch it on for a quieter part.",
      "asked": 2,
-     "text": "Level 70.0 % · Curve Log",
+     "text": "Level 70.0 % \u00b7 Curve Log",
      "values": [
       [
        0,
@@ -2349,7 +2518,7 @@
    "basedOn": "Dunlop Budda Bud-Wah",
    "like": "",
    "made": "Dunlop, designed with Budda Amplification",
-   "text": "A smooth, vocal wah with a wide sweep and a warm, throaty voice – less quacky and shrill at the toe than a standard Cry Baby.",
+   "text": "A smooth, vocal wah with a wide sweep and a warm, throaty voice \u2013 less quacky and shrill at the toe than a standard Cry Baby.",
    "heard": "",
    "photo": false,
    "rich": true,
@@ -2360,7 +2529,7 @@
    "starts": [
     {
      "name": "Cocked (half)",
-     "why": "A fixed \"cocked wah\" – a nasal, mid-heavy lead tone.",
+     "why": "A fixed \"cocked wah\" \u2013 a nasal, mid-heavy lead tone.",
      "asked": 1,
      "text": "Wah 0.50",
      "values": [
@@ -2393,8 +2562,8 @@
    "cat": "Wah",
    "basedOn": "Dunlop Cry Baby Clyde McCoy (CM95)",
    "like": "",
-   "made": "the 1967 Vox / Thomas Organ wah named after trumpeter Clyde McCoy – reissued by Dunlop",
-   "text": "The vintage wah sound: a throaty, voice-like midrange from the original inductor design – warmer and more vocal than the standard Cry Baby.",
+   "made": "the 1967 Vox / Thomas Organ wah named after trumpeter Clyde McCoy \u2013 reissued by Dunlop",
+   "text": "The vintage wah sound: a throaty, voice-like midrange from the original inductor design \u2013 warmer and more vocal than the standard Cry Baby.",
    "heard": "Jimi Hendrix and Eric Clapton in the 60s.",
    "photo": false,
    "rich": true,
@@ -2438,9 +2607,9 @@
    "cat": "Wah",
    "basedOn": "Dunlop Cry Baby GCB-95",
    "like": "",
-   "made": "Dunlop – the standard Cry Baby since 1982 (the wah itself goes back to Thomas Organ / Vox, 1966)",
+   "made": "Dunlop \u2013 the standard Cry Baby since 1982 (the wah itself goes back to Thomas Organ / Vox, 1966)",
    "text": "The best-selling wah of all time: the vocal, quacky \"wacka-wacka\" sweep heard on countless records, from funk rhythm to screaming metal leads.",
-   "heard": "Jimi Hendrix (with the original Vox / Thomas Organ wah), Slash, Kirk Hammett, Zakk Wylde – all have their own Cry Baby models.",
+   "heard": "Jimi Hendrix (with the original Vox / Thomas Organ wah), Slash, Kirk Hammett, Zakk Wylde \u2013 all have their own Cry Baby models.",
    "photo": false,
    "rich": true,
    "tips": [
@@ -2488,6 +2657,19 @@
        0.45
       ]
      ]
+    },
+    {
+     "name": "Frusciante: parked wah",
+     "why": "\"Don't Forget Me\": the WH-10 left on with the treadle parked toward the treble end (John in Total Guitar, 2002, via note.com/ketunemikku). Move Wah until it sings.",
+     "asked": 1,
+     "text": "Wah 0.85",
+     "values": [
+      [
+       0,
+       "Wah",
+       0.85
+      ]
+     ]
     }
    ]
   },
@@ -2496,15 +2678,15 @@
    "name": "Envelope Filter",
    "cat": "Filter",
    "basedOn": "",
-   "like": "Electro-Harmonix Q-Tron · Mu-Tron III",
+   "like": "Electro-Harmonix Q-Tron \u00b7 Mu-Tron III",
    "made": "",
-   "text": "An auto-wah: the filter follows your picking – the harder you play, the further it opens. The sound of 70s funk clavinet and guitar.",
+   "text": "An auto-wah: the filter follows your picking \u2013 the harder you play, the further it opens. The sound of 70s funk clavinet and guitar.",
    "heard": "The Mu-Tron III style: Stevie Wonder (\"Higher Ground\"), Jerry Garcia, Bootsy Collins.",
    "photo": true,
    "rich": true,
    "tips": [
     "Sens: how strongly it reacts. Set it with your normal picking strength, then play harder for the full sweep.",
-    "LP/BP/HP morphs the filter type from low-pass (−1) over band-pass (0) to high-pass (+1); Reso sets the peak.",
+    "LP/BP/HP morphs the filter type from low-pass (\u22121) over band-pass (0) to high-pass (+1); Reso sets the peak.",
     "Put it before the drive and compressor for the most dynamic response."
    ],
    "starts": [
@@ -2512,7 +2694,7 @@
      "name": "Funk",
      "why": "Band-pass quack for clean rhythm parts.",
      "asked": 9,
-     "text": "Sens 6.0 · Attack 5 ms · Decay 4.0 · LP/BP/HP 0.00 · Freq 400 Hz · Freq Depth 70.0 % · Reso 6.00 · Mix 100.0 % · Level 50.0 %",
+     "text": "Sens 32.4 dB \u00b7 Attack 10 ms \u00b7 Decay 406 ms \u00b7 LP/BP/HP 0.00 \u00b7 Freq 400 Hz \u00b7 Freq Depth 7.00 kHz \u00b7 Reso 6.00 \u00b7 Mix 100.0 % \u00b7 Level 0.0 dB",
      "values": [
       [
        0,
@@ -2522,7 +2704,7 @@
       [
        1,
        "Attack",
-       0.004
+       0
       ],
       [
        2,
@@ -2537,17 +2719,17 @@
       [
        5,
        "Freq",
-       0.019
+       0.3751
       ],
       [
        6,
        "Freq Depth",
-       0.7
+       0.85
       ],
       [
        7,
        "Reso",
-       0.5556
+       0.8383
       ],
       [
        8,
@@ -2565,7 +2747,7 @@
      "name": "Bass synth",
      "why": "",
      "asked": 9,
-     "text": "Sens 5.0 · Attack 15 ms · Decay 6.0 · LP/BP/HP -1.00 · Freq 200 Hz · Freq Depth 60.0 % · Reso 5.00 · Mix 100.0 % · Level 55.0 %",
+     "text": "Sens 27.0 dB \u00b7 Attack 15 ms \u00b7 Decay 604 ms \u00b7 LP/BP/HP -1.00 \u00b7 Freq 200 Hz \u00b7 Freq Depth 6.00 kHz \u00b7 Reso 5.00 \u00b7 Mix 100.0 % \u00b7 Level 1.5 dB",
      "values": [
       [
        0,
@@ -2575,7 +2757,7 @@
       [
        1,
        "Attack",
-       0.014
+       0.0051
       ],
       [
        2,
@@ -2590,17 +2772,17 @@
       [
        5,
        "Freq",
-       0.009
+       0.2998
       ],
       [
        6,
        "Freq Depth",
-       0.6
+       0.8
       ],
       [
        7,
        "Reso",
-       0.4444
+       0.7841
       ],
       [
        8,
@@ -2610,7 +2792,7 @@
       [
        4,
        "Level",
-       0.55
+       0.5492
       ]
      ]
     },
@@ -2618,7 +2800,7 @@
      "name": "Gentle",
      "why": "",
      "asked": 9,
-     "text": "Sens 4.0 · Attack 20 ms · Decay 5.0 · LP/BP/HP -1.00 · Freq 600 Hz · Freq Depth 40.0 % · Reso 3.00 · Mix 60.0 % · Level 50.0 %",
+     "text": "Sens 21.6 dB \u00b7 Attack 20 ms \u00b7 Decay 505 ms \u00b7 LP/BP/HP -1.00 \u00b7 Freq 600 Hz \u00b7 Freq Depth 4.00 kHz \u00b7 Reso 3.00 \u00b7 Mix 60.0 % \u00b7 Level 0.0 dB",
      "values": [
       [
        0,
@@ -2628,7 +2810,7 @@
       [
        1,
        "Attack",
-       0.019
+       0.0101
       ],
       [
        2,
@@ -2643,17 +2825,17 @@
       [
        5,
        "Freq",
-       0.029
+       0.4259
       ],
       [
        6,
        "Freq Depth",
-       0.4
+       0.7
       ],
       [
        7,
        "Reso",
-       0.2222
+       0.6368
       ],
       [
        8,
@@ -2673,7 +2855,7 @@
      "name": "John Mayer: Q-Tron funk",
      "why": "A Q-Tron Plus for funky parts, also on his 2019 board with Dead & Company (Guitar Chalk, MusicRadar). That photo is too small to read; settings are ours.",
      "asked": 9,
-     "text": "Sens 6.0 · Attack 5 ms · Decay 4.0 · LP/BP/HP 0.00 · Freq 400 Hz · Freq Depth 70.0 % · Reso 6.00 · Mix 100.0 % · Level 50.0 %",
+     "text": "Sens 32.4 dB \u00b7 Attack 10 ms \u00b7 Decay 406 ms \u00b7 LP/BP/HP 0.00 \u00b7 Freq 400 Hz \u00b7 Freq Depth 7.00 kHz \u00b7 Reso 6.00 \u00b7 Mix 100.0 % \u00b7 Level 0.0 dB",
      "values": [
       [
        0,
@@ -2683,7 +2865,7 @@
       [
        1,
        "Attack",
-       0.004
+       0
       ],
       [
        2,
@@ -2698,17 +2880,17 @@
       [
        5,
        "Freq",
-       0.019
+       0.3751
       ],
       [
        6,
        "Freq Depth",
-       0.7
+       0.85
       ],
       [
        7,
        "Reso",
-       0.5556
+       0.8383
       ],
       [
        8,
@@ -2726,7 +2908,7 @@
      "name": "Frusciante: fast filter",
      "why": "Moog low-pass filters with a fast, wah-like sweep on \"Dani California\" and \"Storm in a Teacup\" (Ground Guitar). Settings are ours.",
      "asked": 9,
-     "text": "Sens 7.0 · Attack 3 ms · Decay 2.5 · LP/BP/HP -1.00 · Freq 300 Hz · Freq Depth 85.0 % · Reso 7.50 · Mix 100.0 % · Level 50.0 %",
+     "text": "Sens 37.8 dB \u00b7 Attack 10 ms \u00b7 Decay 258 ms \u00b7 LP/BP/HP -1.00 \u00b7 Freq 300 Hz \u00b7 Freq Depth 8.50 kHz \u00b7 Reso 7.50 \u00b7 Mix 100.0 % \u00b7 Level 0.0 dB",
      "values": [
       [
        0,
@@ -2736,12 +2918,12 @@
       [
        1,
        "Attack",
-       0.002
+       0
       ],
       [
        2,
        "Decay",
-       0.25
+       0.2505
       ],
       [
        3,
@@ -2751,17 +2933,17 @@
       [
        5,
        "Freq",
-       0.014
+       0.3423
       ],
       [
        6,
        "Freq Depth",
-       0.85
+       0.925
       ],
       [
        7,
        "Reso",
-       0.7222
+       0.907
       ],
       [
        8,
@@ -2783,22 +2965,22 @@
    "cat": "Filter",
    "basedOn": "Lovetone Meatball",
    "like": "",
-   "made": "mid-1990s · Lovetone, England – a rare, hand-built cult pedal",
+   "made": "mid-1990s \u00b7 Lovetone, England \u2013 a rare, hand-built cult pedal",
    "text": "A deep, very adjustable envelope filter: a trigger section that follows your playing and a filter section with low-, band- and high-pass. From funky quack to synth-like and flanger-like sweeps.",
    "heard": "Kirk Hammett.",
    "photo": false,
    "rich": true,
    "tips": [
-    "Sensitivity sets how hard you have to play to open the filter – too high and it stays open all the time.",
+    "Sensitivity sets how hard you have to play to open the filter \u2013 too high and it stays open all the time.",
     "Trig Detection Down sweeps the other way (closing on the attack).",
-    "Blend mixes the dry signal back in – essential on bass."
+    "Blend mixes the dry signal back in \u2013 essential on bass."
    ],
    "starts": [
     {
      "name": "Funk quack",
      "why": "Clean guitar or bass, played with dynamics.",
      "asked": 10,
-     "text": "Sensitivity 6.0 · Attack 10 ms · Decay 4.0 · Color 6.0 · Intensity 6.0 · Blend 10.0 · Trig Detection Up · Filter Type Bandpass · Filter Cutoff A · Level 50.0 %",
+     "text": "Sensitivity 6.0 \u00b7 Attack 0.1 \u00b7 Decay 4.0 \u00b7 Color 6.0 \u00b7 Intensity 6.0 \u00b7 Blend 10.0 \u00b7 Trig Detection Up \u00b7 Filter Type Bandpass \u00b7 Filter Cutoff A \u00b7 Level 0.0 dB",
      "values": [
       [
        0,
@@ -2808,7 +2990,7 @@
       [
        1,
        "Attack",
-       0.009
+       0.01
       ],
       [
        2,
@@ -2856,7 +3038,7 @@
      "name": "Synth bass",
      "why": "",
      "asked": 10,
-     "text": "Sensitivity 5.0 · Attack 30 ms · Decay 6.0 · Color 7.0 · Intensity 7.0 · Blend 8.0 · Trig Detection Up · Filter Type Lowpass · Filter Cutoff Low · Level 55.0 %",
+     "text": "Sensitivity 5.0 \u00b7 Attack 0.3 \u00b7 Decay 6.0 \u00b7 Color 7.0 \u00b7 Intensity 7.0 \u00b7 Blend 8.0 \u00b7 Trig Detection Up \u00b7 Filter Type Lowpass \u00b7 Filter Cutoff Low \u00b7 Level 1.5 dB",
      "values": [
       [
        0,
@@ -2866,7 +3048,7 @@
       [
        1,
        "Attack",
-       0.029
+       0.03
       ],
       [
        2,
@@ -2906,7 +3088,7 @@
       [
        10,
        "Level",
-       0.55
+       0.5492
       ]
      ]
     },
@@ -2914,7 +3096,7 @@
      "name": "Subtle movement",
      "why": "",
      "asked": 10,
-     "text": "Sensitivity 4.0 · Attack 50 ms · Decay 5.0 · Color 4.0 · Intensity 4.0 · Blend 5.0 · Trig Detection Up · Filter Type Lowpass · Filter Cutoff B · Level 50.0 %",
+     "text": "Sensitivity 4.0 \u00b7 Attack 0.5 \u00b7 Decay 5.0 \u00b7 Color 4.0 \u00b7 Intensity 4.0 \u00b7 Blend 5.0 \u00b7 Trig Detection Up \u00b7 Filter Type Lowpass \u00b7 Filter Cutoff B \u00b7 Level 0.0 dB",
      "values": [
       [
        0,
@@ -2924,7 +3106,7 @@
       [
        1,
        "Attack",
-       0.049
+       0.05
       ],
       [
        2,
@@ -2977,14 +3159,14 @@
    "cat": "Compressor",
    "basedOn": "Universal Audio 1176",
    "like": "",
-   "made": "1967 · Universal Audio – designed by Bill Putnam; the first all-transistor (FET) limiter (the low-noise 1176LN followed in 1970)",
-   "text": "The famous FET studio compressor: very fast, punchy and present – it adds bite and sustain and pushes a guitar forward. Fixed threshold: Input sets how hard it compresses, Makeup the level after it.",
+   "made": "1967 \u00b7 Universal Audio \u2013 designed by Bill Putnam; the first all-transistor (FET) limiter (the low-noise 1176LN followed in 1970)",
+   "text": "The famous FET studio compressor: very fast, punchy and present \u2013 it adds bite and sustain and pushes a guitar forward. Fixed threshold: Input sets how hard it compresses, Makeup the level after it.",
    "heard": "",
    "photo": false,
    "rich": true,
    "tips": [
-    "Attack here is in milliseconds below 1 – 0.02 ms is the fastest. A slower Attack lets the pick attack through.",
-    "Ratio All is the famous \"all buttons in\" mode: aggressive, distorted pumping – best with Mix below 60 %.",
+    "Attack here is in milliseconds below 1 \u2013 0.016 ms is the fastest. A slower Attack lets the pick attack through.",
+    "Ratio All is the famous \"all buttons in\" mode: aggressive, distorted pumping \u2013 best with Mix below 60 %.",
     "Mix blends the uncompressed signal back in (parallel compression). (M) runs in the Pre slots, (ST) in stereo in the Post slots."
    ],
    "starts": [
@@ -2992,7 +3174,7 @@
      "name": "Clean sparkle",
      "why": "Even, present clean and funk rhythm.",
      "asked": 6,
-     "text": "Input -24.0 dB · Ratio 4 · Attack 0.50 ms · Release 0.50 s · Makeup 6.00 dB · Mix 100.0 %",
+     "text": "Input -24.0 dB \u00b7 Ratio 4 \u00b7 Attack 0.500 ms \u00b7 Release 0.500 s \u00b7 Makeup 6.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -3007,12 +3189,12 @@
       [
        2,
        "Attack",
-       0.7473
+       0.7487
       ],
       [
        3,
        "Release",
-       0.5968
+       0.5987
       ],
       [
        4,
@@ -3030,7 +3212,7 @@
      "name": "Country squash",
      "why": "Chicken picking and snappy leads.",
      "asked": 6,
-     "text": "Input -14.0 dB · Ratio 8 · Attack 0.60 ms · Release 0.30 s · Makeup 10.00 dB · Mix 100.0 %",
+     "text": "Input -14.0 dB \u00b7 Ratio 8 \u00b7 Attack 0.600 ms \u00b7 Release 0.300 s \u00b7 Makeup 10.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -3045,12 +3227,12 @@
       [
        2,
        "Attack",
-       0.8371
+       0.838
       ],
       [
        3,
        "Release",
-       0.4149
+       0.418
       ],
       [
        4,
@@ -3068,7 +3250,7 @@
      "name": "All buttons in",
      "why": "The aggressive \"British mode\", blended in parallel.",
      "asked": 6,
-     "text": "Input -18.0 dB · Ratio All · Attack 0.30 ms · Release 0.20 s · Makeup 6.00 dB · Mix 50.0 %",
+     "text": "Input -18.0 dB \u00b7 Ratio All \u00b7 Attack 0.300 ms \u00b7 Release 0.200 s \u00b7 Makeup 6.00 dB \u00b7 Mix 50.0 %",
      "values": [
       [
        0,
@@ -3083,12 +3265,12 @@
       [
        2,
        "Attack",
-       0.5408
+       0.5438
       ],
       [
        3,
        "Release",
-       0.3002
+       0.3046
       ],
       [
        4,
@@ -3111,14 +3293,14 @@
    "cat": "Compressor",
    "basedOn": "",
    "like": "Teletronix LA-2A",
-   "made": "early 1960s · Teletronix – Jim Lawrence's tube compressor with an optical cell; later made by Universal Audio",
+   "made": "early 1960s \u00b7 Teletronix \u2013 Jim Lawrence's tube compressor with an optical cell; later made by Universal Audio",
    "text": "The smoothest classic compressor: a light-dependent cell reacts gently and program-dependent, so the compression is hard to hear but the sound gets even and warm. Great for cleans that should just sit there.",
    "heard": "",
    "photo": true,
    "rich": true,
    "tips": [
     "The original has only two knobs (Peak Reduction and Gain); here Threshold does the first job, Makeup the second.",
-    "Opto compression is slow by nature – for snappy country compression use Legendary 87.",
+    "Opto compression is slow by nature \u2013 for snappy country compression use Legendary 87.",
     "Mix blends the uncompressed signal back in (parallel compression). (M) runs in the Pre slots, (ST) in stereo in the Post slots."
    ],
    "starts": [
@@ -3126,7 +3308,7 @@
      "name": "Gentle leveller",
      "why": "Evens out clean chords without killing dynamics.",
      "asked": 6,
-     "text": "Threshold -24.0 dB · Ratio 3.00 · Attack 10.00 ms · Release 500 ms · Makeup 4.00 dB · Mix 100.0 %",
+     "text": "Threshold -24.0 dB \u00b7 Ratio 3.00 \u00b7 Attack 10.00 ms \u00b7 Release 500 ms \u00b7 Makeup 4.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -3164,7 +3346,7 @@
      "name": "Sustain",
      "why": "Long-ringing clean leads and arpeggios.",
      "asked": 6,
-     "text": "Threshold -34.0 dB · Ratio 6.00 · Attack 15.00 ms · Release 800 ms · Makeup 8.00 dB · Mix 100.0 %",
+     "text": "Threshold -34.0 dB \u00b7 Ratio 6.00 \u00b7 Attack 15.00 ms \u00b7 Release 800 ms \u00b7 Makeup 8.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -3202,7 +3384,7 @@
      "name": "Bass",
      "why": "",
      "asked": 6,
-     "text": "Threshold -28.0 dB · Ratio 4.00 · Attack 20.00 ms · Release 400 ms · Makeup 5.00 dB · Mix 100.0 %",
+     "text": "Threshold -28.0 dB \u00b7 Ratio 4.00 \u00b7 Attack 20.00 ms \u00b7 Release 400 ms \u00b7 Makeup 5.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -3245,13 +3427,13 @@
    "cat": "Compressor",
    "basedOn": "SSL Bus Compressor",
    "like": "",
-   "made": "1980s · Solid State Logic, England – the centre-section compressor of the SL 4000 E / G consoles",
+   "made": "1980s \u00b7 Solid State Logic, England \u2013 the centre-section compressor of the SL 4000 E / G consoles",
    "text": "The mix-bus \"glue\" compressor: it makes a sound bigger and more coherent without audibly squashing it. On guitar a subtle density and punch rather than an effect.",
    "heard": "",
    "photo": false,
    "rich": true,
    "tips": [
-    "Aim for 2–4 dB of gain reduction – the editor's gain reduction meter shows it.",
+    "Aim for 2\u20134 dB of gain reduction \u2013 the editor's gain reduction meter shows it.",
     "After the capture (ST in Post FX 1) it is the \"finishing\" compressor of the whole sound.",
     "Mix blends the uncompressed signal back in (parallel compression)."
    ],
@@ -3260,12 +3442,12 @@
      "name": "Glue",
      "why": "Classic bus setting: 2:1, 10 ms attack, auto-like release.",
      "asked": 6,
-     "text": "Threshold -18.0 dB · Ratio 2 · Attack 10.00 ms · Release 0.30 s · Makeup 2.00 dB · Mix 100.0 %",
+     "text": "Threshold -18.0 dB \u00b7 Ratio 2 \u00b7 Attack 10.00 ms \u00b7 Release 0.30 s \u00b7 Makeup 2.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
        "Threshold",
-       0.5833
+       0.625
       ],
       [
        1,
@@ -3298,12 +3480,12 @@
      "name": "Punch",
      "why": "Slow attack lets the pick through, fast release breathes.",
      "asked": 6,
-     "text": "Threshold -22.0 dB · Ratio 4 · Attack 30.00 ms · Release 0.10 s · Makeup 4.00 dB · Mix 100.0 %",
+     "text": "Threshold -22.0 dB \u00b7 Ratio 4 \u00b7 Attack 30.00 ms \u00b7 Release 0.10 s \u00b7 Makeup 4.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
        "Threshold",
-       0.5278
+       0.5417
       ],
       [
        1,
@@ -3336,12 +3518,12 @@
      "name": "Parallel smash",
      "why": "",
      "asked": 6,
-     "text": "Threshold -30.0 dB · Ratio 10 · Attack 1.00 ms · Release 0.10 s · Makeup 10.00 dB · Mix 35.0 %",
+     "text": "Threshold -30.0 dB \u00b7 Ratio 10 \u00b7 Attack 1.00 ms \u00b7 Release 0.10 s \u00b7 Makeup 10.00 dB \u00b7 Mix 35.0 %",
      "values": [
       [
        0,
        "Threshold",
-       0.4167
+       0.375
       ],
       [
        1,
@@ -3378,7 +3560,7 @@
    "name": "VCA Comp (M)",
    "cat": "Compressor",
    "basedOn": "",
-   "like": "dbx 160 · classic VCA bus compressors",
+   "like": "dbx 160 \u00b7 classic VCA bus compressors",
    "made": "",
    "text": "A clean, precise VCA compressor: predictable, fast and transparent. The workhorse for even levels, sustain and keeping a bass under control.",
    "heard": "",
@@ -3393,7 +3575,7 @@
      "name": "Even rhythm",
      "why": "",
      "asked": 6,
-     "text": "Threshold -24.0 dB · Ratio 3.00 · Attack 10.00 ms · Release 200 ms · Makeup 4.00 dB · Mix 100.0 %",
+     "text": "Threshold -24.0 dB \u00b7 Ratio 3.00 \u00b7 Attack 10.00 ms \u00b7 Release 200 ms \u00b7 Makeup 4.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -3408,7 +3590,7 @@
       [
        2,
        "Attack",
-       0.0361
+       0.0968
       ],
       [
        3,
@@ -3431,7 +3613,7 @@
      "name": "Bass control",
      "why": "Every note equally loud.",
      "asked": 6,
-     "text": "Threshold -26.0 dB · Ratio 4.00 · Attack 20.00 ms · Release 150 ms · Makeup 5.00 dB · Mix 100.0 %",
+     "text": "Threshold -26.0 dB \u00b7 Ratio 4.00 \u00b7 Attack 20.00 ms \u00b7 Release 150 ms \u00b7 Makeup 5.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -3446,7 +3628,7 @@
       [
        2,
        "Attack",
-       0.0763
+       0.1871
       ],
       [
        3,
@@ -3469,7 +3651,7 @@
      "name": "Sustainer",
      "why": "Long clean leads.",
      "asked": 6,
-     "text": "Threshold -36.0 dB · Ratio 8.00 · Attack 5.00 ms · Release 500 ms · Makeup 10.00 dB · Mix 70.0 %",
+     "text": "Threshold -36.0 dB \u00b7 Ratio 8.00 \u00b7 Attack 5.00 ms \u00b7 Release 500 ms \u00b7 Makeup 10.00 dB \u00b7 Mix 70.0 %",
      "values": [
       [
        0,
@@ -3484,7 +3666,7 @@
       [
        2,
        "Attack",
-       0.0161
+       0
       ],
       [
        3,
@@ -3509,7 +3691,7 @@
      "name": "Geese: Compressor Plus",
      "why": "A Keeley Compressor Plus was seen on Cameron Winter's board (Equipboard). Settings are ours: some dry signal left in, as its blend allows.",
      "asked": 6,
-     "text": "Threshold -28.0 dB · Ratio 4.00 · Attack 20.00 ms · Release 250 ms · Makeup 5.00 dB · Mix 70.0 %",
+     "text": "Threshold -28.0 dB \u00b7 Ratio 4.00 \u00b7 Attack 20.00 ms \u00b7 Release 250 ms \u00b7 Makeup 5.00 dB \u00b7 Mix 70.0 %",
      "values": [
       [
        0,
@@ -3524,7 +3706,7 @@
       [
        2,
        "Attack",
-       0.0763
+       0.1871
       ],
       [
        3,
@@ -3547,7 +3729,7 @@
      "name": "Frusciante: Dyna Comp",
      "why": "Two MXR Dyna Comps sit on his board (Guitar World); a fan's chart of his Unlimited Love tour board (r/John_Frusciante) shows Output and Sensitivity both at about two o'clock. Carried over to this compressor's controls by us: squeezed hard, slow to let go.",
      "asked": 6,
-     "text": "Threshold -36.0 dB · Ratio 8.00 · Attack 5.00 ms · Release 800 ms · Makeup 8.00 dB · Mix 100.0 %",
+     "text": "Threshold -36.0 dB \u00b7 Ratio 8.00 \u00b7 Attack 5.00 ms \u00b7 Release 800 ms \u00b7 Makeup 8.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -3562,7 +3744,7 @@
       [
        2,
        "Attack",
-       0.0161
+       0
       ],
       [
        3,
@@ -3573,6 +3755,82 @@
        4,
        "Makeup",
        0.5833
+      ],
+      [
+       5,
+       "Mix",
+       1
+      ]
+     ]
+    },
+    {
+     "name": "Warpaint: CP10 sustain",
+     "why": "Read off Theresa Wayman's board in Guitar Player's 2022 photo: an Ibanez CP10 Compressor/Sustainer with Attack at the minimum, Sustain at about two o'clock and Level at half past eight \u2013 for sustain, as she says, together with the reverb. Carried over to this compressor's controls by us.",
+     "asked": 6,
+     "text": "Threshold -34.0 dB \u00b7 Ratio 6.00 \u00b7 Attack 5.00 ms \u00b7 Release 400 ms \u00b7 Makeup 3.00 dB \u00b7 Mix 100.0 %",
+     "values": [
+      [
+       0,
+       "Threshold",
+       0.3611
+      ],
+      [
+       1,
+       "Ratio",
+       0.6598
+      ],
+      [
+       2,
+       "Attack",
+       0
+      ],
+      [
+       3,
+       "Release",
+       0.4898
+      ],
+      [
+       4,
+       "Makeup",
+       0.5313
+      ],
+      [
+       5,
+       "Mix",
+       1
+      ]
+     ]
+    },
+    {
+     "name": "Frusciante: light comp",
+     "why": "\"One Way Traffic\" and \"Whatchu Thinkin'\": a Dyna Comp applied very lightly \u2013 sensitivity at nine to ten o'clock, the output as loud as bypassed, just below where you hear it work (note.com/ketunemikku's analysis). Carried over to this compressor by us.",
+     "asked": 6,
+     "text": "Threshold -20.0 dB \u00b7 Ratio 2.50 \u00b7 Attack 20.00 ms \u00b7 Release 300 ms \u00b7 Makeup 2.00 dB \u00b7 Mix 100.0 %",
+     "values": [
+      [
+       0,
+       "Threshold",
+       0.5556
+      ],
+      [
+       1,
+       "Ratio",
+       0.1895
+      ],
+      [
+       2,
+       "Attack",
+       0.1871
+      ],
+      [
+       3,
+       "Release",
+       0.4003
+      ],
+      [
+       4,
+       "Makeup",
+       0.5208
       ],
       [
        5,
@@ -3595,16 +3853,39 @@
    "photo": true,
    "rich": true,
    "tips": [
-    "Put it first in the chain, before drive and modulation – pitch shifting tracks a clean signal best.",
-    "Pitch Fine detunes in cents; −8 to −12 at a lower Mix gives a chorus-like double.",
+    "Put it first in the chain, before drive and modulation \u2013 pitch shifting tracks a clean signal best.",
+    "Pitch Fine detunes in cents; \u22128 to \u221212 at a lower Mix gives a chorus-like double.",
     "Only in Pre FX 1."
    ],
    "starts": [
     {
      "name": "Eb tuning",
-     "why": "Half a step down – Hendrix, SRV, Guns N' Roses.",
+     "why": "Half a step down \u2013 Hendrix, SRV, Guns N' Roses.",
      "asked": 3,
-     "text": "Mix 100.0 % · Semitones -1 Sem · Pitch Fine 0 Cent",
+     "text": "Mix 100.0 % \u00b7 Semitones -1 Sem \u00b7 Pitch Fine 0 Cent",
+     "values": [
+      [
+       0,
+       "Mix",
+       1
+      ],
+      [
+       1,
+       "Semitones",
+       0.4792
+      ],
+      [
+       2,
+       "Pitch Fine",
+       0.5
+      ]
+     ]
+    },
+    {
+     "name": "Drop to D standard",
+     "why": "",
+     "asked": 3,
+     "text": "Mix 100.0 % \u00b7 Semitones -2 Sem \u00b7 Pitch Fine 0 Cent",
      "values": [
       [
        0,
@@ -3624,33 +3905,10 @@
      ]
     },
     {
-     "name": "Drop to D standard",
-     "why": "",
-     "asked": 3,
-     "text": "Mix 100.0 % · Semitones -2 Sem · Pitch Fine 0 Cent",
-     "values": [
-      [
-       0,
-       "Mix",
-       1
-      ],
-      [
-       1,
-       "Semitones",
-       0.4167
-      ],
-      [
-       2,
-       "Pitch Fine",
-       0.5
-      ]
-     ]
-    },
-    {
      "name": "Octave down blend",
      "why": "A big, bass-heavy riff sound.",
      "asked": 3,
-     "text": "Mix 40.0 % · Semitones -12 Sem · Pitch Fine 0 Cent",
+     "text": "Mix 40.0 % \u00b7 Semitones -12 Sem \u00b7 Pitch Fine 0 Cent",
      "values": [
       [
        0,
@@ -3660,7 +3918,7 @@
       [
        1,
        "Semitones",
-       0
+       0.25
       ],
       [
        2,
@@ -3678,7 +3936,7 @@
    "cat": "Pitch",
    "basedOn": "Electro-Harmonix Micro POG",
    "like": "",
-   "made": "Electro-Harmonix, New York – the compact version of the 2005 POG",
+   "made": "Electro-Harmonix, New York \u2013 the compact version of the 2005 POG",
    "text": "A polyphonic octave generator: one octave up and one down, tracking whole chords. From 12-string jangle to organ pads and fake bass lines.",
    "heard": "Joe Satriani, Nick Zinner (Yeah Yeah Yeahs).",
    "photo": false,
@@ -3692,7 +3950,7 @@
      "name": "12-string",
      "why": "Device list: dry at 60 %, octave up at 70 %, a touch of sub.",
      "asked": 3,
-     "text": "Dry 60.0 % · Oct 70.0 % · Sub 10.0 %",
+     "text": "Dry 60.0 % \u00b7 Oct 70.0 % \u00b7 Sub 10.0 %",
      "values": [
       [
        0,
@@ -3713,9 +3971,9 @@
     },
     {
      "name": "Organ",
-     "why": "All three – add a vibe or rotary and a volume pedal.",
+     "why": "All three \u2013 add a vibe or rotary and a volume pedal.",
      "asked": 3,
-     "text": "Dry 50.0 % · Oct 50.0 % · Sub 50.0 %",
+     "text": "Dry 50.0 % \u00b7 Oct 50.0 % \u00b7 Sub 50.0 %",
      "values": [
       [
        0,
@@ -3736,9 +3994,9 @@
     },
     {
      "name": "Bass",
-     "why": "Only the sub octave – a guitar becomes a bass.",
+     "why": "Only the sub octave \u2013 a guitar becomes a bass.",
      "asked": 3,
-     "text": "Dry 0.0 % · Oct 0.0 % · Sub 100.0 %",
+     "text": "Dry 0.0 % \u00b7 Oct 0.0 % \u00b7 Sub 100.0 %",
      "values": [
       [
        0,
@@ -3763,7 +4021,7 @@
      "name": "Jack White: Blue Orchid",
      "why": "A POG with the octaves below and one above (Guitar World); players hear dry and sub loud and the octave up a little lower. The Nano has one sub octave only.",
      "asked": 3,
-     "text": "Dry 70.0 % · Oct 55.0 % · Sub 80.0 %",
+     "text": "Dry 70.0 % \u00b7 Oct 55.0 % \u00b7 Sub 80.0 %",
      "values": [
       [
        0,
@@ -3786,7 +4044,7 @@
      "name": "Frusciante: organ",
      "why": "POG octaves for an organ-like sound in the outro of \"Snow (Hey Oh)\" (Ground Guitar). Settings are ours.",
      "asked": 3,
-     "text": "Dry 60.0 % · Oct 65.0 % · Sub 40.0 %",
+     "text": "Dry 60.0 % \u00b7 Oct 65.0 % \u00b7 Sub 40.0 %",
      "values": [
       [
        0,
@@ -3804,6 +4062,29 @@
        0.4
       ]
      ]
+    },
+    {
+     "name": "Warpaint: octave up",
+     "why": "Read off Theresa Wayman's board in Guitar Player's 2022 photo: a TC Electronic Sub'n'Up with Dry at about half past one, Up at half past two and both sub octaves at the minimum \u2013 the octave above, a little louder than the guitar.",
+     "asked": 3,
+     "text": "Dry 65.0 % \u00b7 Oct 75.0 % \u00b7 Sub 0.0 %",
+     "values": [
+      [
+       0,
+       "Dry",
+       0.65
+      ],
+      [
+       1,
+       "Oct",
+       0.75
+      ],
+      [
+       2,
+       "Sub",
+       0
+      ]
+     ]
     }
    ]
   },
@@ -3813,13 +4094,13 @@
    "cat": "Pitch",
    "basedOn": "DigiTech Whammy",
    "like": "",
-   "made": "1989 · DigiTech, Utah",
-   "text": "The red pitch pedal: bends the pitch between two intervals with an expression pedal – dive bombs, octave jumps and harmonies with its own metallic, otherworldly character.",
+   "made": "1989 \u00b7 DigiTech, Utah",
+   "text": "The red pitch pedal: bends the pitch between two intervals with an expression pedal \u2013 dive bombs, octave jumps and harmonies with its own metallic, otherworldly character.",
    "heard": "Tom Morello, Jack White, Jonny Greenwood and Ed O'Brien (Radiohead), Dimebag Darrell.",
    "photo": false,
    "rich": true,
    "tips": [
-    "Pedal moves from the heel pitch to the toe pitch – assign it to an expression pedal in the Expression panel.",
+    "Pedal moves from the heel pitch to the toe pitch \u2013 assign it to an expression pedal in the Expression panel.",
     "Blend moves towards the second pair of pitches; with Mix below 100 % you get harmonies instead of a full shift."
    ],
    "starts": [
@@ -3827,7 +4108,7 @@
      "name": "Octave up",
      "why": "The classic Morello / White sound.",
      "asked": 4,
-     "text": "Mix 100.0 % · Heel Pitch 1 0 Sem · Toe Pitch 1 12 Sem · Blend 0 %",
+     "text": "Mix 100.0 % \u00b7 Heel Pitch 1 0 Sem \u00b7 Toe Pitch 1 12 Sem \u00b7 Blend 0 %",
      "values": [
       [
        0,
@@ -3855,7 +4136,7 @@
      "name": "Dive bomb",
      "why": "",
      "asked": 4,
-     "text": "Mix 100.0 % · Heel Pitch 1 0 Sem · Toe Pitch 1 -24 Sem · Blend 0 %",
+     "text": "Mix 100.0 % \u00b7 Heel Pitch 1 0 Sem \u00b7 Toe Pitch 1 -24 Sem \u00b7 Blend 0 %",
      "values": [
       [
        0,
@@ -3883,7 +4164,7 @@
      "name": "Harmony 5th",
      "why": "",
      "asked": 5,
-     "text": "Mix 50.0 % · Heel Pitch 1 0 Sem · Toe Pitch 1 7 Sem · Blend 0 % · Pedal 100.0 %",
+     "text": "Mix 50.0 % \u00b7 Heel Pitch 1 0 Sem \u00b7 Toe Pitch 1 7 Sem \u00b7 Blend 0 % \u00b7 Pedal 100.0 %",
      "values": [
       [
        0,
@@ -3918,7 +4199,7 @@
      "name": "Jack White: octave down",
      "why": "The \"Seven Nation Army\" riff: a Whammy on its octave-down setting (Guitar.com). On his 2024 board the drop-tune side of the Whammy sits at the bottom of its scale (Premier Guitar's photo).",
      "asked": 5,
-     "text": "Mix 100.0 % · Pedal 100.0 % · Heel Pitch 1 0 Sem · Toe Pitch 1 -12 Sem · Blend 0 %",
+     "text": "Mix 100.0 % \u00b7 Pedal 100.0 % \u00b7 Heel Pitch 1 0 Sem \u00b7 Toe Pitch 1 -12 Sem \u00b7 Blend 0 %",
      "values": [
       [
        0,
@@ -3949,9 +4230,9 @@
     },
     {
      "name": "Jack White: octave solo",
-     "why": "Read off his 2024 board in Premier Guitar's Rig Rundown photo: the Whammy's light sits at one octave up, the knob taped over. Earlier accounts also name two octaves – try Toe Pitch 24.",
+     "why": "Read off his 2024 board in Premier Guitar's Rig Rundown photo: the Whammy's light sits at one octave up, the knob taped over. Earlier accounts also name two octaves \u2013 try Toe Pitch 24.",
      "asked": 5,
-     "text": "Mix 100.0 % · Pedal 100.0 % · Heel Pitch 1 0 Sem · Toe Pitch 1 12 Sem · Blend 0 %",
+     "text": "Mix 100.0 % \u00b7 Pedal 100.0 % \u00b7 Heel Pitch 1 0 Sem \u00b7 Toe Pitch 1 12 Sem \u00b7 Blend 0 %",
      "values": [
       [
        0,
@@ -3982,9 +4263,9 @@
     },
     {
      "name": "Muse: octave squeal",
-     "why": "\"Supermassive Black Hole\": a Whammy set one octave up, rocked for the squealing bend after the chorus (ToneMirror, which names no source). Rock Pedal from heel to toe – it is at the toe here.",
+     "why": "\"Supermassive Black Hole\": a Whammy set one octave up, rocked for the squealing bend after the chorus (ToneMirror, which names no source). Rock Pedal from heel to toe \u2013 it is at the toe here.",
      "asked": 5,
-     "text": "Mix 100.0 % · Pedal 100.0 % · Heel Pitch 1 0 Sem · Toe Pitch 1 12 Sem · Blend 0 %",
+     "text": "Mix 100.0 % \u00b7 Pedal 100.0 % \u00b7 Heel Pitch 1 0 Sem \u00b7 Toe Pitch 1 12 Sem \u00b7 Blend 0 %",
      "values": [
       [
        0,
@@ -4021,21 +4302,21 @@
    "cat": "Pitch",
    "basedOn": "BOSS OC-2 Octave",
    "like": "",
-   "made": "1982 · BOSS",
+   "made": "1982 \u00b7 BOSS",
    "text": "An analog-style octaver one and two octaves down: thick, synth-like and best on single notes in the lower register.",
    "heard": "",
    "photo": false,
    "rich": true,
    "tips": [
     "Oct 1 and Oct 2 are the two lower octaves, Dry the guitar itself.",
-    "Play single notes with the neck pickup and the tone rolled back a little – chords confuse the tracking."
+    "Play single notes with the neck pickup and the tone rolled back a little \u2013 chords confuse the tracking."
    ],
    "starts": [
     {
      "name": "Fat riff",
      "why": "Doubles a riff an octave lower.",
      "asked": 4,
-     "text": "Output 0.0 dB · Dry 70.0 % · Oct 1 60.0 % · Oct 2 0.0 %",
+     "text": "Output 0.0 dB \u00b7 Dry 70.0 % \u00b7 Oct 1 60.0 % \u00b7 Oct 2 0.0 %",
      "values": [
       [
        0,
@@ -4063,7 +4344,7 @@
      "name": "Synth bass",
      "why": "",
      "asked": 4,
-     "text": "Output 0.0 dB · Dry 30.0 % · Oct 1 80.0 % · Oct 2 50.0 %",
+     "text": "Output 0.0 dB \u00b7 Dry 30.0 % \u00b7 Oct 1 80.0 % \u00b7 Oct 2 50.0 %",
      "values": [
       [
        0,
@@ -4089,9 +4370,9 @@
     },
     {
      "name": "Into a fuzz",
-     "why": "Octave before a fuzz – the classic stoner sound.",
+     "why": "Octave before a fuzz \u2013 the classic stoner sound.",
      "asked": 4,
-     "text": "Output 2.0 dB · Dry 80.0 % · Oct 1 50.0 % · Oct 2 20.0 %",
+     "text": "Output 2.0 dB \u00b7 Dry 80.0 % \u00b7 Oct 1 50.0 % \u00b7 Oct 2 20.0 %",
      "values": [
       [
        0,
@@ -4119,9 +4400,9 @@
    "players": [
     {
      "name": "Black Keys: OC-2",
-     "why": "A Boss Super Octave sits in Dan Auerbach's rack – the rundown names an OC-2, its photo shows an OC-3 (Premier Guitar). The photo is too small to read; settings are ours: one octave under the riff.",
+     "why": "A Boss Super Octave sits in Dan Auerbach's rack \u2013 the rundown names an OC-2, its photo shows an OC-3 (Premier Guitar). The photo is too small to read; settings are ours: one octave under the riff.",
      "asked": 4,
-     "text": "Output 0.0 dB · Dry 80.0 % · Oct 1 50.0 % · Oct 2 0.0 %",
+     "text": "Output 0.0 dB \u00b7 Dry 80.0 % \u00b7 Oct 1 50.0 % \u00b7 Oct 2 0.0 %",
      "values": [
       [
        0,
@@ -4159,8 +4440,8 @@
    "photo": true,
    "rich": true,
    "tips": [
-    "Spread sets how far apart the two takes are; around 10–30 ms is a convincing double.",
-    "Only works in stereo – check it in mono, too, if you play through one speaker.",
+    "Spread sets how far apart the two takes are; around 10\u201330 ms is a convincing double.",
+    "Only works in stereo \u2013 check it in mono, too, if you play through one speaker.",
     "Only in Post FX 1."
    ],
    "starts": [
@@ -4168,7 +4449,7 @@
      "name": "Tight double",
      "why": "Subtle width for rhythm parts.",
      "asked": 3,
-     "text": "Spread 12.00 ms · Dry Level 0.0 dB · FX Level -3.0 dB",
+     "text": "Spread 12.00 ms \u00b7 Dry Level 0.0 dB \u00b7 FX Level -3.0 dB",
      "values": [
       [
        0,
@@ -4191,7 +4472,7 @@
      "name": "Wide wall",
      "why": "Big stereo rhythm guitars.",
      "asked": 3,
-     "text": "Spread 30.00 ms · Dry Level 0.0 dB · FX Level 0.0 dB",
+     "text": "Spread 30.00 ms \u00b7 Dry Level 0.0 dB \u00b7 FX Level 0.0 dB",
      "values": [
       [
        0,
@@ -4214,7 +4495,7 @@
      "name": "Slapback double",
      "why": "",
      "asked": 3,
-     "text": "Spread 55.00 ms · Dry Level 0.0 dB · FX Level -4.0 dB",
+     "text": "Spread 55.00 ms \u00b7 Dry Level 0.0 dB \u00b7 FX Level -4.0 dB",
      "values": [
       [
        0,
@@ -4234,7 +4515,31 @@
      ]
     }
    ],
-   "players": []
+   "players": [
+    {
+     "name": "Warpaint: Elephants",
+     "why": "Theresa Wayman keeps an EHX Pitch Fork in its detune mode on a low setting, nearly always on, and plays \"Elephants\" with it in Premier Guitar's 2017 Rig Rundown. The Doubler is the nearest: a second, slightly shifted voice. Settings are ours.",
+     "asked": 3,
+     "text": "Spread 15.00 ms \u00b7 Dry Level 0.0 dB \u00b7 FX Level -6.0 dB",
+     "values": [
+      [
+       0,
+       "Spread",
+       0.2105
+      ],
+      [
+       1,
+       "Dry Level",
+       0.7692
+      ],
+      [
+       2,
+       "FX Level",
+       0.6538
+      ]
+     ]
+    }
+   ]
   },
   {
    "type": 5012,
@@ -4242,14 +4547,14 @@
    "cat": "Compressor",
    "basedOn": "Universal Audio 1176",
    "like": "",
-   "made": "1967 · Universal Audio – designed by Bill Putnam; the first all-transistor (FET) limiter (the low-noise 1176LN followed in 1970)",
-   "text": "The famous FET studio compressor: very fast, punchy and present – it adds bite and sustain and pushes a guitar forward. Fixed threshold: Input sets how hard it compresses, Makeup the level after it.",
+   "made": "1967 \u00b7 Universal Audio \u2013 designed by Bill Putnam; the first all-transistor (FET) limiter (the low-noise 1176LN followed in 1970)",
+   "text": "The famous FET studio compressor: very fast, punchy and present \u2013 it adds bite and sustain and pushes a guitar forward. Fixed threshold: Input sets how hard it compresses, Makeup the level after it.",
    "heard": "",
    "photo": false,
    "rich": true,
    "tips": [
-    "Attack here is in milliseconds below 1 – 0.02 ms is the fastest. A slower Attack lets the pick attack through.",
-    "Ratio All is the famous \"all buttons in\" mode: aggressive, distorted pumping – best with Mix below 60 %.",
+    "Attack here is in milliseconds below 1 \u2013 0.016 ms is the fastest. A slower Attack lets the pick attack through.",
+    "Ratio All is the famous \"all buttons in\" mode: aggressive, distorted pumping \u2013 best with Mix below 60 %.",
     "Mix blends the uncompressed signal back in (parallel compression). (M) runs in the Pre slots, (ST) in stereo in the Post slots."
    ],
    "starts": [
@@ -4257,7 +4562,7 @@
      "name": "Clean sparkle",
      "why": "Even, present clean and funk rhythm.",
      "asked": 6,
-     "text": "Input -24.0 dB · Ratio 4 · Attack 0.50 ms · Release 0.50 s · Makeup 6.00 dB · Mix 100.0 %",
+     "text": "Input -24.0 dB \u00b7 Ratio 4 \u00b7 Attack 0.500 ms \u00b7 Release 0.500 s \u00b7 Makeup 6.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -4272,12 +4577,12 @@
       [
        2,
        "Attack",
-       0.7473
+       0.7487
       ],
       [
        3,
        "Release",
-       0.5968
+       0.5987
       ],
       [
        4,
@@ -4295,7 +4600,7 @@
      "name": "Country squash",
      "why": "Chicken picking and snappy leads.",
      "asked": 6,
-     "text": "Input -14.0 dB · Ratio 8 · Attack 0.60 ms · Release 0.30 s · Makeup 10.00 dB · Mix 100.0 %",
+     "text": "Input -14.0 dB \u00b7 Ratio 8 \u00b7 Attack 0.600 ms \u00b7 Release 0.300 s \u00b7 Makeup 10.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -4310,12 +4615,12 @@
       [
        2,
        "Attack",
-       0.8371
+       0.838
       ],
       [
        3,
        "Release",
-       0.4149
+       0.418
       ],
       [
        4,
@@ -4333,7 +4638,7 @@
      "name": "All buttons in",
      "why": "The aggressive \"British mode\", blended in parallel.",
      "asked": 6,
-     "text": "Input -18.0 dB · Ratio All · Attack 0.30 ms · Release 0.20 s · Makeup 6.00 dB · Mix 50.0 %",
+     "text": "Input -18.0 dB \u00b7 Ratio All \u00b7 Attack 0.300 ms \u00b7 Release 0.200 s \u00b7 Makeup 6.00 dB \u00b7 Mix 50.0 %",
      "values": [
       [
        0,
@@ -4348,12 +4653,12 @@
       [
        2,
        "Attack",
-       0.5408
+       0.5438
       ],
       [
        3,
        "Release",
-       0.3002
+       0.3046
       ],
       [
        4,
@@ -4376,14 +4681,14 @@
    "cat": "Compressor",
    "basedOn": "",
    "like": "Teletronix LA-2A",
-   "made": "early 1960s · Teletronix – Jim Lawrence's tube compressor with an optical cell; later made by Universal Audio",
+   "made": "early 1960s \u00b7 Teletronix \u2013 Jim Lawrence's tube compressor with an optical cell; later made by Universal Audio",
    "text": "The smoothest classic compressor: a light-dependent cell reacts gently and program-dependent, so the compression is hard to hear but the sound gets even and warm. Great for cleans that should just sit there.",
    "heard": "",
    "photo": true,
    "rich": true,
    "tips": [
     "The original has only two knobs (Peak Reduction and Gain); here Threshold does the first job, Makeup the second.",
-    "Opto compression is slow by nature – for snappy country compression use Legendary 87.",
+    "Opto compression is slow by nature \u2013 for snappy country compression use Legendary 87.",
     "Mix blends the uncompressed signal back in (parallel compression). (M) runs in the Pre slots, (ST) in stereo in the Post slots."
    ],
    "starts": [
@@ -4391,7 +4696,7 @@
      "name": "Gentle leveller",
      "why": "Evens out clean chords without killing dynamics.",
      "asked": 6,
-     "text": "Threshold -24.0 dB · Ratio 3.00 · Attack 10.00 ms · Release 500 ms · Makeup 4.00 dB · Mix 100.0 %",
+     "text": "Threshold -24.0 dB \u00b7 Ratio 3.00 \u00b7 Attack 10.00 ms \u00b7 Release 500 ms \u00b7 Makeup 4.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -4429,7 +4734,7 @@
      "name": "Sustain",
      "why": "Long-ringing clean leads and arpeggios.",
      "asked": 6,
-     "text": "Threshold -34.0 dB · Ratio 6.00 · Attack 15.00 ms · Release 800 ms · Makeup 8.00 dB · Mix 100.0 %",
+     "text": "Threshold -34.0 dB \u00b7 Ratio 6.00 \u00b7 Attack 15.00 ms \u00b7 Release 800 ms \u00b7 Makeup 8.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -4467,7 +4772,7 @@
      "name": "Bass",
      "why": "",
      "asked": 6,
-     "text": "Threshold -28.0 dB · Ratio 4.00 · Attack 20.00 ms · Release 400 ms · Makeup 5.00 dB · Mix 100.0 %",
+     "text": "Threshold -28.0 dB \u00b7 Ratio 4.00 \u00b7 Attack 20.00 ms \u00b7 Release 400 ms \u00b7 Makeup 5.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -4510,13 +4815,13 @@
    "cat": "Compressor",
    "basedOn": "SSL Bus Compressor",
    "like": "",
-   "made": "1980s · Solid State Logic, England – the centre-section compressor of the SL 4000 E / G consoles",
+   "made": "1980s \u00b7 Solid State Logic, England \u2013 the centre-section compressor of the SL 4000 E / G consoles",
    "text": "The mix-bus \"glue\" compressor: it makes a sound bigger and more coherent without audibly squashing it. On guitar a subtle density and punch rather than an effect.",
    "heard": "",
    "photo": false,
    "rich": true,
    "tips": [
-    "Aim for 2–4 dB of gain reduction – the editor's gain reduction meter shows it.",
+    "Aim for 2\u20134 dB of gain reduction \u2013 the editor's gain reduction meter shows it.",
     "After the capture (ST in Post FX 1) it is the \"finishing\" compressor of the whole sound.",
     "Mix blends the uncompressed signal back in (parallel compression)."
    ],
@@ -4525,12 +4830,12 @@
      "name": "Glue",
      "why": "Classic bus setting: 2:1, 10 ms attack, auto-like release.",
      "asked": 6,
-     "text": "Threshold -18.0 dB · Ratio 2 · Attack 10.00 ms · Release 0.30 s · Makeup 2.00 dB · Mix 100.0 %",
+     "text": "Threshold -18.0 dB \u00b7 Ratio 2 \u00b7 Attack 10.00 ms \u00b7 Release 0.30 s \u00b7 Makeup 2.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
        "Threshold",
-       0.5833
+       0.625
       ],
       [
        1,
@@ -4563,12 +4868,12 @@
      "name": "Punch",
      "why": "Slow attack lets the pick through, fast release breathes.",
      "asked": 6,
-     "text": "Threshold -22.0 dB · Ratio 4 · Attack 30.00 ms · Release 0.10 s · Makeup 4.00 dB · Mix 100.0 %",
+     "text": "Threshold -22.0 dB \u00b7 Ratio 4 \u00b7 Attack 30.00 ms \u00b7 Release 0.10 s \u00b7 Makeup 4.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
        "Threshold",
-       0.5278
+       0.5417
       ],
       [
        1,
@@ -4601,12 +4906,12 @@
      "name": "Parallel smash",
      "why": "",
      "asked": 6,
-     "text": "Threshold -30.0 dB · Ratio 10 · Attack 1.00 ms · Release 0.10 s · Makeup 10.00 dB · Mix 35.0 %",
+     "text": "Threshold -30.0 dB \u00b7 Ratio 10 \u00b7 Attack 1.00 ms \u00b7 Release 0.10 s \u00b7 Makeup 10.00 dB \u00b7 Mix 35.0 %",
      "values": [
       [
        0,
        "Threshold",
-       0.4167
+       0.375
       ],
       [
        1,
@@ -4643,7 +4948,7 @@
    "name": "VCA Comp (ST)",
    "cat": "Compressor",
    "basedOn": "",
-   "like": "dbx 160 · classic VCA bus compressors",
+   "like": "dbx 160 \u00b7 classic VCA bus compressors",
    "made": "",
    "text": "A clean, precise VCA compressor: predictable, fast and transparent. The workhorse for even levels, sustain and keeping a bass under control.",
    "heard": "",
@@ -4658,7 +4963,7 @@
      "name": "Even rhythm",
      "why": "",
      "asked": 6,
-     "text": "Threshold -24.0 dB · Ratio 3.00 · Attack 10.00 ms · Release 200 ms · Makeup 4.00 dB · Mix 100.0 %",
+     "text": "Threshold -24.0 dB \u00b7 Ratio 3.00 \u00b7 Attack 10.00 ms \u00b7 Release 200 ms \u00b7 Makeup 4.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -4673,7 +4978,7 @@
       [
        2,
        "Attack",
-       0.0361
+       0.0968
       ],
       [
        3,
@@ -4696,7 +5001,7 @@
      "name": "Bass control",
      "why": "Every note equally loud.",
      "asked": 6,
-     "text": "Threshold -26.0 dB · Ratio 4.00 · Attack 20.00 ms · Release 150 ms · Makeup 5.00 dB · Mix 100.0 %",
+     "text": "Threshold -26.0 dB \u00b7 Ratio 4.00 \u00b7 Attack 20.00 ms \u00b7 Release 150 ms \u00b7 Makeup 5.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -4711,7 +5016,7 @@
       [
        2,
        "Attack",
-       0.0763
+       0.1871
       ],
       [
        3,
@@ -4734,7 +5039,7 @@
      "name": "Sustainer",
      "why": "Long clean leads.",
      "asked": 6,
-     "text": "Threshold -36.0 dB · Ratio 8.00 · Attack 5.00 ms · Release 500 ms · Makeup 10.00 dB · Mix 70.0 %",
+     "text": "Threshold -36.0 dB \u00b7 Ratio 8.00 \u00b7 Attack 5.00 ms \u00b7 Release 500 ms \u00b7 Makeup 10.00 dB \u00b7 Mix 70.0 %",
      "values": [
       [
        0,
@@ -4749,7 +5054,7 @@
       [
        2,
        "Attack",
-       0.0161
+       0
       ],
       [
        3,
@@ -4774,7 +5079,7 @@
      "name": "Geese: Compressor Plus",
      "why": "A Keeley Compressor Plus was seen on Cameron Winter's board (Equipboard). Settings are ours: some dry signal left in, as its blend allows.",
      "asked": 6,
-     "text": "Threshold -28.0 dB · Ratio 4.00 · Attack 20.00 ms · Release 250 ms · Makeup 5.00 dB · Mix 70.0 %",
+     "text": "Threshold -28.0 dB \u00b7 Ratio 4.00 \u00b7 Attack 20.00 ms \u00b7 Release 250 ms \u00b7 Makeup 5.00 dB \u00b7 Mix 70.0 %",
      "values": [
       [
        0,
@@ -4789,7 +5094,7 @@
       [
        2,
        "Attack",
-       0.0763
+       0.1871
       ],
       [
        3,
@@ -4812,7 +5117,7 @@
      "name": "Frusciante: Dyna Comp",
      "why": "Two MXR Dyna Comps sit on his board (Guitar World); a fan's chart of his Unlimited Love tour board (r/John_Frusciante) shows Output and Sensitivity both at about two o'clock. Carried over to this compressor's controls by us: squeezed hard, slow to let go.",
      "asked": 6,
-     "text": "Threshold -36.0 dB · Ratio 8.00 · Attack 5.00 ms · Release 800 ms · Makeup 8.00 dB · Mix 100.0 %",
+     "text": "Threshold -36.0 dB \u00b7 Ratio 8.00 \u00b7 Attack 5.00 ms \u00b7 Release 800 ms \u00b7 Makeup 8.00 dB \u00b7 Mix 100.0 %",
      "values": [
       [
        0,
@@ -4827,7 +5132,7 @@
       [
        2,
        "Attack",
-       0.0161
+       0
       ],
       [
        3,
@@ -4845,6 +5150,82 @@
        1
       ]
      ]
+    },
+    {
+     "name": "Warpaint: CP10 sustain",
+     "why": "Read off Theresa Wayman's board in Guitar Player's 2022 photo: an Ibanez CP10 Compressor/Sustainer with Attack at the minimum, Sustain at about two o'clock and Level at half past eight \u2013 for sustain, as she says, together with the reverb. Carried over to this compressor's controls by us.",
+     "asked": 6,
+     "text": "Threshold -34.0 dB \u00b7 Ratio 6.00 \u00b7 Attack 5.00 ms \u00b7 Release 400 ms \u00b7 Makeup 3.00 dB \u00b7 Mix 100.0 %",
+     "values": [
+      [
+       0,
+       "Threshold",
+       0.3611
+      ],
+      [
+       1,
+       "Ratio",
+       0.6598
+      ],
+      [
+       2,
+       "Attack",
+       0
+      ],
+      [
+       3,
+       "Release",
+       0.4898
+      ],
+      [
+       4,
+       "Makeup",
+       0.5313
+      ],
+      [
+       5,
+       "Mix",
+       1
+      ]
+     ]
+    },
+    {
+     "name": "Frusciante: light comp",
+     "why": "\"One Way Traffic\" and \"Whatchu Thinkin'\": a Dyna Comp applied very lightly \u2013 sensitivity at nine to ten o'clock, the output as loud as bypassed, just below where you hear it work (note.com/ketunemikku's analysis). Carried over to this compressor by us.",
+     "asked": 6,
+     "text": "Threshold -20.0 dB \u00b7 Ratio 2.50 \u00b7 Attack 20.00 ms \u00b7 Release 300 ms \u00b7 Makeup 2.00 dB \u00b7 Mix 100.0 %",
+     "values": [
+      [
+       0,
+       "Threshold",
+       0.5556
+      ],
+      [
+       1,
+       "Ratio",
+       0.1895
+      ],
+      [
+       2,
+       "Attack",
+       0.1871
+      ],
+      [
+       3,
+       "Release",
+       0.4003
+      ],
+      [
+       4,
+       "Makeup",
+       0.5208
+      ],
+      [
+       5,
+       "Mix",
+       1
+      ]
+     ]
     }
    ]
   },
@@ -4854,21 +5235,21 @@
    "cat": "Modulation",
    "basedOn": "BOSS CE-2W (Waza Craft)",
    "like": "",
-   "made": "2016 · BOSS – the CE-2 (1979) and the CE-1 Chorus Ensemble (1976) in one pedal",
+   "made": "2016 \u00b7 BOSS \u2013 the CE-2 (1979) and the CE-1 Chorus Ensemble (1976) in one pedal",
    "text": "The analog bucket-brigade chorus that started it all: a liquid, watery shimmer that thickens rather than alters the guitar. Type switches between the CE-2, the deeper CE-1 chorus and the CE-1 vibrato.",
    "heard": "",
    "photo": false,
    "rich": true,
    "tips": [
-    "Type CE1-V is a true vibrato (pitch only) – Mix at 100 % for the full effect.",
+    "Type CE1-V is a true vibrato (pitch only) \u2013 Mix at 100 % for the full effect.",
     "Width spreads it in stereo; Sync locks the rate to the tempo."
    ],
    "starts": [
     {
      "name": "Classic CE-2",
-     "why": "The \"10 to 2\" knob setting – 80s clean.",
+     "why": "The \"10 to 2\" knob setting \u2013 80s clean.",
      "asked": 5,
-     "text": "Mix 50.0 % · Rate 30 % · Depth 50.0 % · Type CE2-C · Width 60.0 %",
+     "text": "Mix 50.0 % \u00b7 Rate 30 % \u00b7 Depth 50.0 % \u00b7 Type CE2-C \u00b7 Width 60.0 %",
      "values": [
       [
        0,
@@ -4901,7 +5282,7 @@
      "name": "CE-1 lush",
      "why": "",
      "asked": 5,
-     "text": "Mix 50.0 % · Rate 25 % · Depth 70.0 % · Type CE1-C · Width 80.0 %",
+     "text": "Mix 50.0 % \u00b7 Rate 25 % \u00b7 Depth 70.0 % \u00b7 Type CE1-C \u00b7 Width 80.0 %",
      "values": [
       [
        0,
@@ -4934,7 +5315,7 @@
      "name": "Vibrato",
      "why": "Warbly Leslie-ish leads.",
      "asked": 4,
-     "text": "Mix 100.0 % · Rate 45 % · Depth 55.0 % · Type CE1-V",
+     "text": "Mix 100.0 % \u00b7 Rate 45 % \u00b7 Depth 55.0 % \u00b7 Type CE1-V",
      "values": [
       [
        0,
@@ -4962,9 +5343,9 @@
    "players": [
     {
      "name": "Frusciante: CE-1 chorus",
-     "why": "His Boss CE-1: the chorus in the outro of \"Under the Bridge\" and at the start of \"Soul to Squeeze\" (Ground Guitar, Boss). On a fan's chart of his Unlimited Love tour board (r/John_Frusciante) its Chorus Intensity sits at about one o'clock – Depth here; Rate and Width are ours.",
+     "why": "His Boss CE-1: the chorus in the outro of \"Under the Bridge\" and at the start of \"Soul to Squeeze\" (Ground Guitar, Boss). On a fan's chart of his Unlimited Love tour board (r/John_Frusciante) its Chorus Intensity sits at about one o'clock \u2013 Depth here; Rate and Width are ours.",
      "asked": 5,
-     "text": "Mix 50.0 % · Rate 35 % · Depth 60.0 % · Type CE1-C · Width 80.0 %",
+     "text": "Mix 50.0 % \u00b7 Rate 35 % \u00b7 Depth 60.0 % \u00b7 Type CE1-C \u00b7 Width 80.0 %",
      "values": [
       [
        0,
@@ -4997,7 +5378,7 @@
      "name": "Frusciante: CE-1 vibrato",
      "why": "The CE-1's vibrato side on a fan's chart of his Unlimited Love tour board (r/John_Frusciante): Depth at about one o'clock, Rate at about eleven.",
      "asked": 5,
-     "text": "Mix 100.0 % · Rate 40 % · Depth 60.0 % · Type CE1-V · Width 50.0 %",
+     "text": "Mix 100.0 % \u00b7 Rate 40 % \u00b7 Depth 60.0 % \u00b7 Type CE1-V \u00b7 Width 50.0 %",
      "values": [
       [
        0,
@@ -5030,7 +5411,7 @@
      "name": "Frusciante: full chorus",
      "why": "\"Animal Bar\" has a chorus set to maximum (Ground Guitar). Settings are ours.",
      "asked": 5,
-     "text": "Mix 50.0 % · Rate 60 % · Depth 100.0 % · Type CE1-C · Width 100.0 %",
+     "text": "Mix 50.0 % \u00b7 Rate 60 % \u00b7 Depth 100.0 % \u00b7 Type CE1-C \u00b7 Width 100.0 %",
      "values": [
       [
        0,
@@ -5063,7 +5444,7 @@
      "name": "Wednesday: CE-2",
      "why": "Xandy Chelmis has a Boss CE-2 on the pedal steel (Mixdown). Settings are ours.",
      "asked": 5,
-     "text": "Mix 50.0 % · Rate 30 % · Depth 55.0 % · Type CE2-C · Width 60.0 %",
+     "text": "Mix 50.0 % \u00b7 Rate 30 % \u00b7 Depth 55.0 % \u00b7 Type CE2-C \u00b7 Width 60.0 %",
      "values": [
       [
        0,
@@ -5096,7 +5477,7 @@
      "name": "Deftones: clean chorus",
      "why": "Chino Moreno appears to use a Boss CH-1 Super Chorus in the \"Digital Bath\" video (Equipboard). Settings are ours: slow and wide under a clean part.",
      "asked": 5,
-     "text": "Mix 45.0 % · Rate 25 % · Depth 45.0 % · Type CE2-C · Width 100.0 %",
+     "text": "Mix 45.0 % \u00b7 Rate 25 % \u00b7 Depth 45.0 % \u00b7 Type CE2-C \u00b7 Width 100.0 %",
      "values": [
       [
        0,
@@ -5124,6 +5505,72 @@
        1
       ]
      ]
+    },
+    {
+     "name": "Warpaint: warble",
+     "why": "Emily Kokal's warble: an EHX Neo Clone with its depth switch on high and the rate turned up until it gets grindy, almost a vibrato (Premier Guitar Rig Rundown, 2017). The Nano has no Small Clone \u2013 the nearest analog chorus; Rate is ours.",
+     "asked": 5,
+     "text": "Mix 50.0 % \u00b7 Rate 75 % \u00b7 Depth 100.0 % \u00b7 Type CE2-C \u00b7 Width 50.0 %",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.5
+      ],
+      [
+       1,
+       "Rate",
+       0.75
+      ],
+      [
+       2,
+       "Depth",
+       1
+      ],
+      [
+       3,
+       "Type",
+       0
+      ],
+      [
+       4,
+       "Width",
+       0.5
+      ]
+     ]
+    },
+    {
+     "name": "Klinghoffer: thick vibe",
+     "why": "Josh Klinghoffer's Boss VB-2, a \"fairly noticeable thick vibrato\" with distortion on \"Suck My Kiss\" (his tech in Premier Guitar's 2012 Rig Rundown). The CE-1's vibrato side is the nearest; settings are ours.",
+     "asked": 5,
+     "text": "Mix 100.0 % \u00b7 Rate 50 % \u00b7 Depth 75.0 % \u00b7 Type CE1-V \u00b7 Width 50.0 %",
+     "values": [
+      [
+       0,
+       "Mix",
+       1
+      ],
+      [
+       1,
+       "Rate",
+       0.5
+      ],
+      [
+       2,
+       "Depth",
+       0.75
+      ],
+      [
+       3,
+       "Type",
+       1
+      ],
+      [
+       4,
+       "Width",
+       0.5
+      ]
+     ]
     }
    ]
   },
@@ -5133,8 +5580,8 @@
    "cat": "Modulation",
    "basedOn": "BOSS DC-2W Dimension C (Waza Craft)",
    "like": "",
-   "made": "2018 · BOSS – the DC-2 (1985) and the Roland SDD-320 Dimension D studio rack (1979)",
-   "text": "The Dimension effect: wide, three-dimensional shimmer without the obvious wobble of a chorus. Four buttons, combinable in pairs – button 4 was the famous \"grey button\" of 80s studios.",
+   "made": "2018 \u00b7 BOSS \u2013 the DC-2 (1985) and the Roland SDD-320 Dimension D studio rack (1979)",
+   "text": "The Dimension effect: wide, three-dimensional shimmer without the obvious wobble of a chorus. Four buttons, combinable in pairs \u2013 button 4 was the famous \"grey button\" of 80s studios.",
    "heard": "",
    "photo": false,
    "rich": true,
@@ -5147,7 +5594,7 @@
      "name": "Subtle width",
      "why": "About like a CE-2 at \"10 to 2\".",
      "asked": 3,
-     "text": "Mix 100.0 % · Mode 1 · Mode Type S",
+     "text": "Mix 100.0 % \u00b7 Mode 1 \u00b7 Mode Type S",
      "values": [
       [
        0,
@@ -5170,7 +5617,7 @@
      "name": "Rich",
      "why": "",
      "asked": 3,
-     "text": "Mix 100.0 % · Mode 2+3 · Mode Type S",
+     "text": "Mix 100.0 % \u00b7 Mode 2+3 \u00b7 Mode Type S",
      "values": [
       [
        0,
@@ -5193,7 +5640,7 @@
      "name": "Studio grey button",
      "why": "The strongest Dimension D setting.",
      "asked": 3,
-     "text": "Mix 100.0 % · Mode 4 · Mode Type SDD-320",
+     "text": "Mix 100.0 % \u00b7 Mode 4 \u00b7 Mode Type SDD-320",
      "values": [
       [
        0,
@@ -5221,13 +5668,13 @@
    "cat": "Modulation",
    "basedOn": "TC Electronic 2290 (modulation section)",
    "like": "",
-   "made": "1985 · TC Electronic, Denmark – the rack delay of 80s studios and stadium rigs",
-   "text": "Clean, lush 80s studio chorus from the modulation of the famous rack delay – hi-fi and wide instead of warm and murky.",
+   "made": "1985 \u00b7 TC Electronic, Denmark \u2013 the rack delay of 80s studios and stadium rigs",
+   "text": "Clean, lush 80s studio chorus from the modulation of the famous rack delay \u2013 hi-fi and wide instead of warm and murky.",
    "heard": "",
    "photo": false,
    "rich": true,
    "tips": [
-    "Rate is in Hz here (0.2–3 Hz) – below 1 Hz sounds most natural.",
+    "Rate is in Hz here (0.2\u20133 Hz) \u2013 below 1 Hz sounds most natural.",
     "Width spreads it in stereo; Sync locks the rate to the tempo."
    ],
    "starts": [
@@ -5235,7 +5682,7 @@
      "name": "80s clean",
      "why": "",
      "asked": 4,
-     "text": "Mix 50.0 % · Rate 0.80 Hz · Depth 45.0 % · Width 80.0 %",
+     "text": "Mix 50.0 % \u00b7 Rate 0.80 Hz \u00b7 Depth 45.0 % \u00b7 Width 80.0 %",
      "values": [
       [
        0,
@@ -5263,7 +5710,7 @@
      "name": "Slow shimmer",
      "why": "Wide and calm under clean arpeggios.",
      "asked": 4,
-     "text": "Mix 35.0 % · Rate 0.30 Hz · Depth 60.0 % · Width 100.0 %",
+     "text": "Mix 35.0 % \u00b7 Rate 0.30 Hz \u00b7 Depth 60.0 % \u00b7 Width 100.0 %",
      "values": [
       [
        0,
@@ -5291,7 +5738,7 @@
      "name": "Detune lead",
      "why": "",
      "asked": 4,
-     "text": "Mix 25.0 % · Rate 1.20 Hz · Depth 20.0 % · Width 100.0 %",
+     "text": "Mix 25.0 % \u00b7 Rate 1.20 Hz \u00b7 Depth 20.0 % \u00b7 Width 100.0 %",
      "values": [
       [
        0,
@@ -5324,7 +5771,7 @@
    "cat": "Modulation",
    "basedOn": "TC Electronic The Dreamscape (chorus section)",
    "like": "",
-   "made": "TC Electronic – John Petrucci's signature modulation pedal",
+   "made": "TC Electronic \u2013 John Petrucci's signature modulation pedal",
    "text": "Lush, wide stereo chorus voiced by John Petrucci, based on TC's TriChorus: CHO1 is a subtle, glassy shimmer, CHO2 (inspired by Alex Lifeson) thickens without turning to mush.",
    "heard": "John Petrucci (Dream Theater).",
    "photo": false,
@@ -5337,7 +5784,7 @@
      "name": "Glassy clean",
      "why": "Clean arpeggios, Petrucci-style.",
      "asked": 4,
-     "text": "Mix 50.0 % · Speed 30 % · Depth 45.0 % · Mode CHO1",
+     "text": "Mix 50.0 % \u00b7 Speed 30 % \u00b7 Depth 45.0 % \u00b7 Mode CHO1",
      "values": [
       [
        0,
@@ -5365,7 +5812,7 @@
      "name": "Thick",
      "why": "",
      "asked": 4,
-     "text": "Mix 50.0 % · Speed 25 % · Depth 60.0 % · Mode CHO2",
+     "text": "Mix 50.0 % \u00b7 Speed 25 % \u00b7 Depth 60.0 % \u00b7 Mode CHO2",
      "values": [
       [
        0,
@@ -5393,7 +5840,7 @@
      "name": "Lead shimmer",
      "why": "",
      "asked": 4,
-     "text": "Mix 30.0 % · Speed 35 % · Depth 35.0 % · Mode CHO1",
+     "text": "Mix 30.0 % \u00b7 Speed 35 % \u00b7 Depth 35.0 % \u00b7 Mode CHO1",
      "values": [
       [
        0,
@@ -5433,14 +5880,14 @@
    "rich": true,
    "tips": [
     "Regen (feedback) makes it more metallic; Manual sets the centre of the sweep.",
-    "At Speed 0 it becomes a fixed comb filter – a \"frozen\" flange."
+    "At Speed 0 it becomes a fixed comb filter \u2013 a \"frozen\" flange."
    ],
    "starts": [
     {
      "name": "Van Halen",
      "why": "Device list: manual 11, width 10, speed 12, regen 1:30 o'clock.",
      "asked": 5,
-     "text": "Mix 50.0 % · Manual 4.0 · Width 35.0 % · Speed 50 % · Regen 6.5",
+     "text": "Mix 50.0 % \u00b7 Manual 40.0 % \u00b7 Width 35.0 % \u00b7 Speed 50 % \u00b7 Regen 65.0 %",
      "values": [
       [
        0,
@@ -5473,7 +5920,7 @@
      "name": "Cantrell",
      "why": "Device list: manual min, width 8, speed 10, regen min.",
      "asked": 5,
-     "text": "Mix 50.0 % · Manual 0.0 · Width 15.0 % · Speed 35 % · Regen 0.0",
+     "text": "Mix 50.0 % \u00b7 Manual 0.0 % \u00b7 Width 15.0 % \u00b7 Speed 35 % \u00b7 Regen 0.0 %",
      "values": [
       [
        0,
@@ -5506,7 +5953,7 @@
      "name": "Jet",
      "why": "",
      "asked": 5,
-     "text": "Mix 50.0 % · Manual 6.0 · Width 80.0 % · Speed 15 % · Regen 8.0",
+     "text": "Mix 50.0 % \u00b7 Manual 60.0 % \u00b7 Width 80.0 % \u00b7 Speed 15 % \u00b7 Regen 80.0 %",
      "values": [
       [
        0,
@@ -5541,7 +5988,7 @@
      "name": "Frusciante: Mistress",
      "why": "An Electric Mistress in the bridge of \"Hard to Concentrate\"; on his 2022 board the flanger is an MXR (Ground Guitar, Guitar World). Its photo is too small to read; settings are ours: slow and soft.",
      "asked": 5,
-     "text": "Mix 50.0 % · Manual 4.0 · Width 55.0 % · Speed 20 % · Regen 4.0",
+     "text": "Mix 50.0 % \u00b7 Manual 40.0 % \u00b7 Width 55.0 % \u00b7 Speed 20 % \u00b7 Regen 40.0 %",
      "values": [
       [
        0,
@@ -5574,7 +6021,7 @@
      "name": "Deftones: slow flange",
      "why": "The band has used a Boss BF-3 flanger (Killer Rig). Settings are ours.",
      "asked": 5,
-     "text": "Mix 50.0 % · Manual 5.0 · Width 70.0 % · Speed 12 % · Regen 6.0",
+     "text": "Mix 50.0 % \u00b7 Manual 50.0 % \u00b7 Width 70.0 % \u00b7 Speed 12 % \u00b7 Regen 60.0 %",
      "values": [
       [
        0,
@@ -5602,6 +6049,39 @@
        0.6
       ]
      ]
+    },
+    {
+     "name": "Frusciante: Place flange",
+     "why": "\"This Is the Place\": an Electric Mistress with Rate at nine to ten o'clock, Range at one to two and Color at ten to eleven (note.com/ketunemikku's recipe; the pedal is seen in live videos and board photos) \u2013 Rate to Speed, Range to Width, Color to Regen.",
+     "asked": 5,
+     "text": "Mix 50.0 % \u00b7 Manual 50.0 % \u00b7 Width 65.0 % \u00b7 Speed 25 % \u00b7 Regen 35.0 %",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.5
+      ],
+      [
+       1,
+       "Manual",
+       0.5
+      ],
+      [
+       2,
+       "Width",
+       0.65
+      ],
+      [
+       3,
+       "Speed",
+       0.25
+      ],
+      [
+       4,
+       "Regen",
+       0.35
+      ]
+     ]
     }
    ]
   },
@@ -5611,7 +6091,7 @@
    "cat": "Modulation",
    "basedOn": "MXR Phase 95",
    "like": "",
-   "made": "MXR – the Phase 90 (1974) and Phase 45 in one mini pedal, each in block and script voicing",
+   "made": "MXR \u2013 the Phase 90 (1974) and Phase 45 in one mini pedal, each in block and script voicing",
    "text": "The compact classic phaser: the four-stage Phase 90 or the subtler two-stage Phase 45, each with the older script or the newer block logo voicing.",
    "heard": "The Phase 90: Eddie Van Halen (\"Eruption\").",
    "photo": false,
@@ -5623,9 +6103,9 @@
    "starts": [
     {
      "name": "Eruption",
-     "why": "Script Phase 90 – rich, builds with the highs.",
+     "why": "Script Phase 90 \u2013 rich, builds with the highs.",
      "asked": 4,
-     "text": "Mix 50.0 % · Speed 25 % · Type 90 · Mode Script",
+     "text": "Mix 50.0 % \u00b7 Speed 25 % \u00b7 Type 90 \u00b7 Mode Script",
      "values": [
       [
        0,
@@ -5651,9 +6131,9 @@
     },
     {
      "name": "Subtle swirl",
-     "why": "Phase 45 script – a uni-vibe-like warmth.",
+     "why": "Phase 45 script \u2013 a uni-vibe-like warmth.",
      "asked": 4,
-     "text": "Mix 50.0 % · Speed 20 % · Type 45 · Mode Script",
+     "text": "Mix 50.0 % \u00b7 Speed 20 % \u00b7 Type 45 \u00b7 Mode Script",
      "values": [
       [
        0,
@@ -5681,7 +6161,7 @@
      "name": "Funk",
      "why": "Faster and more pronounced.",
      "asked": 4,
-     "text": "Mix 50.0 % · Speed 55 % · Type 90 · Mode Block",
+     "text": "Mix 50.0 % \u00b7 Speed 55 % \u00b7 Type 90 \u00b7 Mode Block",
      "values": [
       [
        0,
@@ -5711,7 +6191,7 @@
      "name": "Black Keys: Tighten Up",
      "why": "Dan Auerbach uses a Boss PH-3 phaser for \"Tighten Up\" (Premier Guitar). Settings are ours.",
      "asked": 4,
-     "text": "Mix 50.0 % · Speed 45 % · Type 90 · Mode Block",
+     "text": "Mix 50.0 % \u00b7 Speed 45 % \u00b7 Type 90 \u00b7 Mode Block",
      "values": [
       [
        0,
@@ -5739,7 +6219,7 @@
      "name": "Frusciante: Phase 90",
      "why": "The MXR Phase 90 on a fan's chart of his Unlimited Love tour board (r/John_Frusciante): Speed at about eleven o'clock.",
      "asked": 4,
-     "text": "Mix 50.0 % · Speed 40 % · Type 90 · Mode Block",
+     "text": "Mix 50.0 % \u00b7 Speed 40 % \u00b7 Type 90 \u00b7 Mode Block",
      "values": [
       [
        0,
@@ -5767,7 +6247,7 @@
      "name": "Frusciante: slow phase",
      "why": "Slow phasing on \"Strip My Mind\" and \"She Looks to Me\"; an MXR Phase 90 sits on his 2022 board (Ground Guitar, Guitar World). Settings are ours.",
      "asked": 4,
-     "text": "Mix 50.0 % · Speed 10 % · Type 90 · Mode Script",
+     "text": "Mix 50.0 % \u00b7 Speed 10 % \u00b7 Type 90 \u00b7 Mode Script",
      "values": [
       [
        0,
@@ -5795,7 +6275,7 @@
      "name": "Muse: Phase 90",
      "why": "\"Map of the Problematique\" and \"Knights of Cydonia\": an MXR Phase 90, a sweep on top of the riff (ToneMirror, which gives no settings and names no source). Speed is ours.",
      "asked": 4,
-     "text": "Mix 50.0 % · Speed 30 % · Type 90 · Mode Block",
+     "text": "Mix 50.0 % \u00b7 Speed 30 % \u00b7 Type 90 \u00b7 Mode Block",
      "values": [
       [
        0,
@@ -5827,21 +6307,21 @@
    "cat": "Modulation",
    "basedOn": "MXR M68 Uni-Vibe",
    "like": "",
-   "made": "MXR – after the 1968 Shin-ei Uni-Vibe (designed by Fumio Mieda, sold as Univox)",
+   "made": "MXR \u2013 after the 1968 Shin-ei Uni-Vibe (designed by Fumio Mieda, sold as Univox)",
    "text": "The throbbing, watery 60s swirl: a four-stage phaser with uneven stages and a lamp-driven LFO that was meant to imitate a Leslie speaker. Chorus mode (Vibe off) swirls, Vibe mode is pure pitch vibrato.",
    "heard": "Jimi Hendrix (\"Machine Gun\"), Robin Trower, David Gilmour (\"Breathe\").",
    "photo": false,
    "rich": true,
    "tips": [
     "In Vibe mode the effect only becomes obvious from about Speed 40 on.",
-    "The classic chain: Uni-Vibe before a fuzz – here that means a Post FX Vibe with the fuzz drawn into the capture."
+    "The classic chain: Uni-Vibe before a fuzz \u2013 here that means a Post FX Vibe with the fuzz drawn into the capture."
    ],
    "starts": [
     {
      "name": "Breathe",
-     "why": "Device list: speed 10 o'clock, depth 10–2 o'clock, strum Em.",
+     "why": "Device list: speed 10 o'clock, depth 10\u20132 o'clock, strum Em.",
      "asked": 4,
-     "text": "Mix 100.0 % · Vibe Off · Speed 30 % · Depth 55.0 %",
+     "text": "Mix 100.0 % \u00b7 Vibe Off \u00b7 Speed 30 % \u00b7 Depth 55.0 %",
      "values": [
       [
        0,
@@ -5869,7 +6349,7 @@
      "name": "Machine Gun",
      "why": "Before a fuzz.",
      "asked": 4,
-     "text": "Mix 100.0 % · Vibe Off · Speed 55 % · Depth 70.0 %",
+     "text": "Mix 100.0 % \u00b7 Vibe Off \u00b7 Speed 55 % \u00b7 Depth 70.0 %",
      "values": [
       [
        0,
@@ -5897,7 +6377,7 @@
      "name": "Vibrato",
      "why": "",
      "asked": 4,
-     "text": "Mix 100.0 % · Vibe On · Speed 50 % · Depth 60.0 %",
+     "text": "Mix 100.0 % \u00b7 Vibe On \u00b7 Speed 50 % \u00b7 Depth 60.0 %",
      "values": [
       [
        0,
@@ -5925,9 +6405,9 @@
    "players": [
     {
      "name": "Hendrix: Woodstock",
-     "why": "Fuzz into the Uni-Vibe: \"Machine Gun\" and the Woodstock \"Star-Spangled Banner\" (Dunlop, Guitar Player). No settings are documented – ours: chorus mode, a medium throb; put a fuzz in front.",
+     "why": "Fuzz into the Uni-Vibe: \"Machine Gun\" and the Woodstock \"Star-Spangled Banner\" (Dunlop, Guitar Player). No settings are documented \u2013 ours: chorus mode, a medium throb; put a fuzz in front.",
      "asked": 4,
-     "text": "Mix 100.0 % · Vibe Off · Speed 45 % · Depth 75.0 %",
+     "text": "Mix 100.0 % \u00b7 Vibe Off \u00b7 Speed 45 % \u00b7 Depth 75.0 %",
      "values": [
       [
        0,
@@ -5958,14 +6438,14 @@
    "name": "Tremolo",
    "cat": "Modulation",
    "basedOn": "",
-   "like": "BOSS TR-2 · Fender amp tremolo",
+   "like": "BOSS TR-2 \u00b7 Fender amp tremolo",
    "made": "",
    "text": "Volume tremolo with several waveforms: from the smooth pulse of a 60s amp to choppy, square-wave stutter. Duty Cycle and Smoothing shape the pulse.",
    "heard": "",
    "photo": true,
    "rich": true,
    "tips": [
-    "Sync locks it to the tempo – 1/8 or 1/16 notes are common.",
+    "Sync locks it to the tempo \u2013 1/8 or 1/16 notes are common.",
     "Fade In / Fade Out let the tremolo grow in after you switch it on."
    ],
    "starts": [
@@ -5973,7 +6453,7 @@
      "name": "Surf amp",
      "why": "Fender-style amp tremolo.",
      "asked": 5,
-     "text": "Rate 5.5 Hz · Depth 60.0 % · Waveform Sine · Smoothing 60.0 % · LFO Active On",
+     "text": "Rate 5.5 Hz \u00b7 Depth 60.0 % \u00b7 Waveform Sine \u00b7 Smoothing 60.0 % \u00b7 LFO Active On",
      "values": [
       [
        0,
@@ -6006,7 +6486,7 @@
      "name": "Slow pulse",
      "why": "Under ambient chords.",
      "asked": 4,
-     "text": "Rate 2.5 Hz · Depth 50.0 % · Waveform Triangle · LFO Active On",
+     "text": "Rate 2.5 Hz \u00b7 Depth 50.0 % \u00b7 Waveform Triangle \u00b7 LFO Active On",
      "values": [
       [
        0,
@@ -6034,7 +6514,7 @@
      "name": "Stutter",
      "why": "Choppy, with Sync on for tempo-locked chops.",
      "asked": 6,
-     "text": "Rate 8.0 Hz · Depth 100.0 % · Waveform Square · Duty Cycle 50.0 % · Smoothing 10.0 % · LFO Active On",
+     "text": "Rate 8.0 Hz \u00b7 Depth 100.0 % \u00b7 Waveform Square \u00b7 Duty Cycle 0.0 % \u00b7 Smoothing 10.0 % \u00b7 LFO Active On",
      "values": [
       [
        0,
@@ -6074,7 +6554,7 @@
      "name": "Black Keys: gentle trem",
      "why": "A Boss TR-2 across all of his amps; his tech says he never goes overboard with it (Premier Guitar). Settings are ours.",
      "asked": 5,
-     "text": "Rate 5.0 Hz · Depth 40.0 % · Waveform Triangle · Smoothing 60.0 % · LFO Active On",
+     "text": "Rate 5.0 Hz \u00b7 Depth 40.0 % \u00b7 Waveform Triangle \u00b7 Smoothing 60.0 % \u00b7 LFO Active On",
      "values": [
       [
        0,
@@ -6110,14 +6590,14 @@
    "name": "Analog Delay",
    "cat": "Delay",
    "basedOn": "",
-   "like": "BOSS DM-2 · MXR Carbon Copy · Electro-Harmonix Memory Man",
+   "like": "BOSS DM-2 \u00b7 MXR Carbon Copy \u00b7 Electro-Harmonix Memory Man",
    "made": "",
    "text": "Bucket-brigade echo: every repeat gets darker and a little softer, so the delay sits behind the dry note instead of fighting it. Drive adds BBD grit, the modulation a gentle chorus on the repeats.",
    "heard": "",
    "photo": true,
    "rich": true,
    "tips": [
-    "Delay Time runs from 200 to 1100 ms – shorter slapbacks need the Digital or Tape Delay.",
+    "Delay Time runs from 200 to 1100 ms \u2013 shorter slapbacks need the Digital or Tape Delay.",
     "Keep Low Pass between 2.5 and 4 kHz for the classic dark repeats.",
     "Sync locks the time to the tempo."
    ],
@@ -6126,7 +6606,7 @@
      "name": "Slapback",
      "why": "Rockabilly, country, blues.",
      "asked": 5,
-     "text": "Mix 30.0 % · Feedback 5.0 % · Delay Time 200.0 ms · Mod Depth 0.0 % · Drive 3.0",
+     "text": "Mix 30.0 % \u00b7 Feedback 5.0 % \u00b7 Delay Time 200.0 ms \u00b7 Mod Depth 0.0 % \u00b7 Drive 30 %",
      "values": [
       [
        0,
@@ -6159,7 +6639,7 @@
      "name": "Warm lead",
      "why": "",
      "asked": 7,
-     "text": "Mix 25.0 % · Feedback 35.0 % · Delay Time 420.0 ms · Mod Rate 0.5 Hz · Mod Depth 20.0 % · Drive 4.0 · Low Pass 3.50 kHz",
+     "text": "Mix 25.0 % \u00b7 Feedback 35.0 % \u00b7 Delay Time 420.0 ms \u00b7 Mod Rate 0.5 Hz \u00b7 Mod Depth 20.0 % \u00b7 Drive 40 % \u00b7 Low Pass 3.50 kHz",
      "values": [
       [
        0,
@@ -6200,9 +6680,9 @@
     },
     {
      "name": "Self-oscillation",
-     "why": "Careful – it builds up. Lower Feedback to stop it.",
+     "why": "Careful \u2013 it builds up. Lower Feedback to stop it.",
      "asked": 5,
-     "text": "Mix 40.0 % · Feedback 90.0 % · Delay Time 350.0 ms · Mod Depth 30.0 % · Drive 7.0",
+     "text": "Mix 40.0 % \u00b7 Feedback 90.0 % \u00b7 Delay Time 350.0 ms \u00b7 Mod Depth 30.0 % \u00b7 Drive 70 %",
      "values": [
       [
        0,
@@ -6235,9 +6715,9 @@
    "players": [
     {
      "name": "John Mayer: Aqua-Puss",
-     "why": "A Way Huge Aqua-Puss (20–300 ms) is his main delay; none of his settings are published (Ground Guitar). Ours: a short slap – 200 ms is the shortest this model goes.",
+     "why": "A Way Huge Aqua-Puss (20\u2013300 ms) is his main delay; none of his settings are published (Ground Guitar). Ours: a short slap \u2013 200 ms is the shortest this model goes.",
      "asked": 5,
-     "text": "Mix 30.0 % · Feedback 10.0 % · Delay Time 200.0 ms · Mod Depth 0.0 % · Drive 3.0",
+     "text": "Mix 30.0 % \u00b7 Feedback 10.0 % \u00b7 Delay Time 200.0 ms \u00b7 Mod Depth 0.0 % \u00b7 Drive 30 %",
      "values": [
       [
        0,
@@ -6268,9 +6748,9 @@
     },
     {
      "name": "Frusciante: by hand",
-     "why": "A DOD analog delay whose feedback he turns by hand on the closing solo of \"We Believe\" (Ground Guitar). Ours: close to runaway – ride Feedback.",
+     "why": "A DOD analog delay whose feedback he turns by hand on the closing solo of \"We Believe\" (Ground Guitar). Ours: close to runaway \u2013 ride Feedback.",
      "asked": 5,
-     "text": "Mix 40.0 % · Feedback 85.0 % · Delay Time 350.0 ms · Mod Depth 10.0 % · Drive 5.0",
+     "text": "Mix 40.0 % \u00b7 Feedback 85.0 % \u00b7 Delay Time 350.0 ms \u00b7 Mod Depth 10.0 % \u00b7 Drive 50 %",
      "values": [
       [
        0,
@@ -6303,7 +6783,7 @@
      "name": "Wednesday: Carbon Copy",
      "why": "Xandy Chelmis has an MXR Carbon Copy on the pedal steel (Mixdown). Settings are ours.",
      "asked": 6,
-     "text": "Mix 28.0 % · Feedback 35.0 % · Delay Time 380.0 ms · Mod Rate 0.5 Hz · Mod Depth 20.0 % · Low Pass 3.00 kHz",
+     "text": "Mix 28.0 % \u00b7 Feedback 35.0 % \u00b7 Delay Time 380.0 ms \u00b7 Mod Rate 0.5 Hz \u00b7 Mod Depth 20.0 % \u00b7 Low Pass 3.00 kHz",
      "values": [
       [
        0,
@@ -6341,7 +6821,7 @@
      "name": "Deftones: Change",
      "why": "For \"Change\" the delay sits low in the mix with few repeats; the band has used a Carbon Copy (Killer Rig). Settings are ours.",
      "asked": 5,
-     "text": "Mix 15.0 % · Feedback 15.0 % · Delay Time 400.0 ms · Mod Depth 10.0 % · Low Pass 4.00 kHz",
+     "text": "Mix 15.0 % \u00b7 Feedback 15.0 % \u00b7 Delay Time 400.0 ms \u00b7 Mod Depth 10.0 % \u00b7 Low Pass 4.00 kHz",
      "values": [
       [
        0,
@@ -6369,6 +6849,90 @@
        0.3807
       ]
      ]
+    },
+    {
+     "name": "Deftones: Carbon Copy",
+     "why": "Read off Chino Moreno's 2016 board in MusicRadar's rig tour photo: an MXR Carbon Copy with Mix at three o'clock, Regen at noon, Delay at three o'clock and the modulation off \u2013 the delay he uses for most of the set. The Carbon Copy runs 20\u2013600 ms; Mix is carried over to this model's scale by us.",
+     "asked": 4,
+     "text": "Mix 40.0 % \u00b7 Feedback 50.0 % \u00b7 Delay Time 480.0 ms \u00b7 Mod Depth 0.0 %",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.4
+      ],
+      [
+       1,
+       "Feedback",
+       0.5
+      ],
+      [
+       5,
+       "Delay Time",
+       0.4963
+      ],
+      [
+       7,
+       "Mod Depth",
+       0
+      ]
+     ]
+    },
+    {
+     "name": "Deftones: faster echo",
+     "why": "The second Carbon Copy on the same board (MusicRadar), set \"a little faster\" for some of the Gore songs, as he says: Delay at about two o'clock, Regen at noon, Mix at three o'clock.",
+     "asked": 4,
+     "text": "Mix 40.0 % \u00b7 Feedback 50.0 % \u00b7 Delay Time 410.0 ms \u00b7 Mod Depth 0.0 %",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.4
+      ],
+      [
+       1,
+       "Feedback",
+       0.5
+      ],
+      [
+       5,
+       "Delay Time",
+       0.4176
+      ],
+      [
+       7,
+       "Mod Depth",
+       0
+      ]
+     ]
+    },
+    {
+     "name": "Deftones: Sextape",
+     "why": "Chino's own signature delay, the KHDK Digital Bath, goes up to 400 ms; Guitar World's review used Delay Time at three-quarters (about 300 ms) for his chiming parts on \"Sextape\" and \"Rosemary\". Mix and Feedback are ours.",
+     "asked": 4,
+     "text": "Mix 25.0 % \u00b7 Feedback 30.0 % \u00b7 Delay Time 300.0 ms \u00b7 Mod Depth 0.0 %",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.25
+      ],
+      [
+       1,
+       "Feedback",
+       0.3
+      ],
+      [
+       5,
+       "Delay Time",
+       0.2676
+      ],
+      [
+       7,
+       "Mod Depth",
+       0
+      ]
+     ]
     }
    ]
   },
@@ -6392,7 +6956,7 @@
      "name": "Ambient cloud",
      "why": "",
      "asked": 6,
-     "text": "Mix 35.0 % · Tap Preset 4 · Delay Time 600.00 ms · Feedback 50.0 % · Diffusion 70.0 % · Mod Depth 30.0 %",
+     "text": "Mix 35.0 % \u00b7 Tap Preset 4 \u00b7 Delay Time 600.00 ms \u00b7 Feedback 50.0 % \u00b7 Diffusion 70.0 % \u00b7 Mod Depth 30.0 %",
      "values": [
       [
        0,
@@ -6412,7 +6976,7 @@
       [
        3,
        "Feedback",
-       0.5
+       0.5263
       ],
       [
        4,
@@ -6430,7 +6994,7 @@
      "name": "Rhythmic taps",
      "why": "",
      "asked": 5,
-     "text": "Mix 30.0 % · Tap Preset 2 · Delay Time 450.00 ms · Feedback 30.0 % · Diffusion 15.0 %",
+     "text": "Mix 30.0 % \u00b7 Tap Preset 2 \u00b7 Delay Time 450.00 ms \u00b7 Feedback 30.0 % \u00b7 Diffusion 15.0 %",
      "values": [
       [
        0,
@@ -6450,7 +7014,7 @@
       [
        3,
        "Feedback",
-       0.3
+       0.3158
       ],
       [
        4,
@@ -6463,7 +7027,7 @@
      "name": "Lo-fi wash",
      "why": "",
      "asked": 7,
-     "text": "Mix 40.0 % · Tap Preset 6 · Delay Time 800.00 ms · Feedback 60.0 % · Diffusion 60.0 % · Vintage Mode On · Low Pass 3.00 kHz",
+     "text": "Mix 40.0 % \u00b7 Tap Preset 6 \u00b7 Delay Time 800.00 ms \u00b7 Feedback 60.0 % \u00b7 Diffusion 60.0 % \u00b7 Vintage Mode On \u00b7 Low Pass 3.00 kHz",
      "values": [
       [
        0,
@@ -6483,7 +7047,7 @@
       [
        3,
        "Feedback",
-       0.6
+       0.6316
       ],
       [
        4,
@@ -6498,7 +7062,7 @@
       [
        6,
        "Low Pass",
-       0.1333
+       0.3109
       ]
      ]
     }
@@ -6510,9 +7074,9 @@
    "name": "Digital Delay (ST)",
    "cat": "Delay",
    "basedOn": "",
-   "like": "BOSS DD-3 · TC Electronic 2290",
+   "like": "BOSS DD-3 \u00b7 TC Electronic 2290",
    "made": "",
-   "text": "Clean, precise repeats with optional modulation and a ducking / gating dynamics section – the hi-fi delay for leads and rhythmic patterns.",
+   "text": "Clean, precise repeats with optional modulation and a ducking / gating dynamics section \u2013 the hi-fi delay for leads and rhythmic patterns.",
    "heard": "",
    "photo": true,
    "rich": true,
@@ -6525,7 +7089,7 @@
      "name": "Lead (ducked)",
      "why": "The repeats get quieter while you play and swell up in the gaps.",
      "asked": 7,
-     "text": "Mix 30.0 % · Feedback 35.0 % · Delay Time 450 ms · Dyn Mode Duck · Dyn Depth 60.0 % · Threshold -40.0 dB · Mod Depth 10.0 %",
+     "text": "Mix 30.0 % \u00b7 Feedback 35.0 % \u00b7 Delay Time 450 ms \u00b7 Dyn Mode Duck \u00b7 Dyn Depth 25.6 dB \u00b7 Threshold -40.0 dB \u00b7 Mod Depth 10.0 %",
      "values": [
       [
        0,
@@ -6550,7 +7114,7 @@
       [
        9,
        "Dyn Depth",
-       0.6
+       0.5999
       ],
       [
        11,
@@ -6566,9 +7130,9 @@
     },
     {
      "name": "Dotted eighths",
-     "why": "The U2 / Edge rhythm – needs the preset tempo.",
+     "why": "The U2 / Edge rhythm \u2013 needs the preset tempo.",
      "asked": 5,
-     "text": "Mix 30.0 % · Feedback 30.0 % · Sync On · Sync Note 1/8D · Ping Pong Off",
+     "text": "Mix 30.0 % \u00b7 Feedback 30.0 % \u00b7 Sync On \u00b7 Sync Note 1/8D \u00b7 Ping Pong Off",
      "values": [
       [
        0,
@@ -6601,7 +7165,7 @@
      "name": "Wide ping pong",
      "why": "",
      "asked": 5,
-     "text": "Mix 25.0 % · Feedback 40.0 % · Delay Time 380 ms · Ping Pong On · Width 100.0 %",
+     "text": "Mix 25.0 % \u00b7 Feedback 40.0 % \u00b7 Delay Time 380 ms \u00b7 Ping Pong On \u00b7 Width 100.0 %",
      "values": [
       [
        0,
@@ -6636,7 +7200,7 @@
      "name": "Deftones: Digital Bath",
      "why": "A slight delay of about 400 ms at 15 % mix (Guitar Chalk's reading of the song). Feedback is ours.",
      "asked": 7,
-     "text": "Mix 15.0 % · Feedback 25.0 % · Delay Time 400 ms · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Off · Low Pass 8.00 kHz",
+     "text": "Mix 15.0 % \u00b7 Feedback 25.0 % \u00b7 Delay Time 400 ms \u00b7 Ping Pong Off \u00b7 Mod Depth 0.0 % \u00b7 Dyn Mode Off \u00b7 Low Pass 8.00 kHz",
      "values": [
       [
        0,
@@ -6679,7 +7243,7 @@
      "name": "Frusciante: quick delay",
      "why": "A DeltaLab Effectron II set to a quick delay with slight modulation on \"She's Only 18\" (Ground Guitar). Settings are ours.",
      "asked": 7,
-     "text": "Mix 30.0 % · Feedback 15.0 % · Delay Time 130 ms · Ping Pong Off · Mod Rate 1.0 Hz · Mod Depth 20.0 % · Dyn Mode Off",
+     "text": "Mix 30.0 % \u00b7 Feedback 15.0 % \u00b7 Delay Time 130 ms \u00b7 Ping Pong Off \u00b7 Mod Rate 1.0 Hz \u00b7 Mod Depth 20.0 % \u00b7 Dyn Mode Off",
      "values": [
       [
        0,
@@ -6720,9 +7284,9 @@
     },
     {
      "name": "MJ Lenderman: Flashback",
-     "why": "Read off his TC Flashback 2 in Premier Guitar's Rig Rundown photo (his board with The Wind): Delay and Level at noon, Feedback at eleven, the type on DYN – repeats that duck while he plays. The time behind \"noon\" is our estimate.",
+     "why": "Read off his TC Flashback 2 in Premier Guitar's Rig Rundown photo (his board with The Wind): Delay and Level at noon, Feedback at eleven, the type on DYN \u2013 repeats that duck while he plays. The time behind \"noon\" is our estimate.",
      "asked": 7,
-     "text": "Mix 33.0 % · Feedback 40.0 % · Delay Time 500 ms · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Duck · Dyn Depth 50.0 %",
+     "text": "Mix 33.0 % \u00b7 Feedback 40.0 % \u00b7 Delay Time 500 ms \u00b7 Ping Pong Off \u00b7 Mod Depth 0.0 % \u00b7 Dyn Mode Duck \u00b7 Dyn Depth 18.9 dB",
      "values": [
       [
        0,
@@ -6763,9 +7327,9 @@
     },
     {
      "name": "Wednesday: noise delay",
-     "why": "MJ Lenderman uses a TC Flashback as a noise generator: repeats cranked, the time moved by hand (Mixdown). Ours – turn Delay Time while it rings, and mind the volume.",
+     "why": "MJ Lenderman uses a TC Flashback as a noise generator: repeats cranked, the time moved by hand (Mixdown). Ours \u2013 turn Delay Time while it rings, and mind the volume.",
      "asked": 6,
-     "text": "Mix 50.0 % · Feedback 95.0 % · Delay Time 300 ms · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Off",
+     "text": "Mix 50.0 % \u00b7 Feedback 95.0 % \u00b7 Delay Time 300 ms \u00b7 Ping Pong Off \u00b7 Mod Depth 0.0 % \u00b7 Dyn Mode Off",
      "values": [
       [
        0,
@@ -6801,9 +7365,9 @@
     },
     {
      "name": "Geese: DD-5",
-     "why": "Read off Emily Green's Boss DD-5 in Premier Guitar's Rig Rundown photo: E.Level at half past one, Feedback at minimum, Time just past noon, the mode on one of the two short ranges – one slap of about 135 ms if it is the 50–200 ms range.",
+     "why": "Read off Emily Green's Boss DD-5 in Premier Guitar's Rig Rundown photo: E.Level at half past one, Feedback at minimum, Time just past noon, the mode on one of the two short ranges \u2013 one slap of about 135 ms if it is the 50\u2013200 ms range.",
      "asked": 6,
-     "text": "Mix 33.0 % · Feedback 0.0 % · Delay Time 135 ms · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Off",
+     "text": "Mix 33.0 % \u00b7 Feedback 0.0 % \u00b7 Delay Time 135 ms \u00b7 Ping Pong Off \u00b7 Mod Depth 0.0 % \u00b7 Dyn Mode Off",
      "values": [
       [
        0,
@@ -6841,7 +7405,7 @@
      "name": "Muse: Starlight",
      "why": "\"Starlight\": the bright, delayed eighth-note figure of the verses, a Line 6 DL4 on Matt Bellamy's board of that time (ToneMirror, which gives no settings). Ours: an eighth note at the song's tempo.",
      "asked": 7,
-     "text": "Mix 30.0 % · Feedback 25.0 % · Delay Time 245 ms · Sync Note 1/8 · Ping Pong Off · Mod Depth 0.0 % · Dyn Mode Off",
+     "text": "Mix 30.0 % \u00b7 Feedback 25.0 % \u00b7 Delay Time 245 ms \u00b7 Sync Note 1/8 \u00b7 Ping Pong Off \u00b7 Mod Depth 0.0 % \u00b7 Dyn Mode Off",
      "values": [
       [
        0,
@@ -6862,6 +7426,163 @@
        17,
        "Sync Note",
        0.5
+      ],
+      [
+       4,
+       "Ping Pong",
+       0
+      ],
+      [
+       7,
+       "Mod Depth",
+       0
+      ],
+      [
+       10,
+       "Dyn Mode",
+       0
+      ]
+     ]
+    },
+    {
+     "name": "Warpaint: DD-7 sustain",
+     "why": "Read off Theresa Wayman's board in Guitar Player's 2022 photo: a Boss DD-7 with E.Level at noon, F.Back just before noon and the time at about half past one on a short range; she and Emily Kokal keep the DD-7 \"really short\", only for sustain (Premier Guitar Rig Rundown, 2017). The time is our reading of that range.",
+     "asked": 6,
+     "text": "Mix 35.0 % \u00b7 Feedback 45.0 % \u00b7 Delay Time 130 ms \u00b7 Ping Pong Off \u00b7 Mod Depth 0.0 % \u00b7 Dyn Mode Off",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.35
+      ],
+      [
+       1,
+       "Feedback",
+       0.45
+      ],
+      [
+       5,
+       "Delay Time",
+       0.0971
+      ],
+      [
+       4,
+       "Ping Pong",
+       0
+      ],
+      [
+       7,
+       "Mod Depth",
+       0
+      ],
+      [
+       10,
+       "Dyn Mode",
+       0
+      ]
+     ]
+    },
+    {
+     "name": "Geese: DD-5 loop",
+     "why": "Emily Green sets her Boss DD-5 to repeat forever at very short times and moves the time while it rings \u2013 it glitches instead of bending (Guitar World, 2026). Ours: a 60 ms loop that holds \u2013 move Delay Time, and mind the volume.",
+     "asked": 6,
+     "text": "Mix 40.0 % \u00b7 Feedback 98.0 % \u00b7 Delay Time 60 ms \u00b7 Ping Pong Off \u00b7 Mod Depth 0.0 % \u00b7 Dyn Mode Off",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.4
+      ],
+      [
+       1,
+       "Feedback",
+       0.98
+      ],
+      [
+       5,
+       "Delay Time",
+       0.0586
+      ],
+      [
+       4,
+       "Ping Pong",
+       0
+      ],
+      [
+       7,
+       "Mod Depth",
+       0
+      ],
+      [
+       10,
+       "Dyn Mode",
+       0
+      ]
+     ]
+    },
+    {
+     "name": "Klinghoffer: 2 repeats",
+     "why": "Josh Klinghoffer's Boss DD-3, \"set for two clipped repeats\" as his tech put it in Premier Guitar's 2012 Rig Rundown. The time is ours.",
+     "asked": 6,
+     "text": "Mix 30.0 % \u00b7 Feedback 15.0 % \u00b7 Delay Time 350 ms \u00b7 Ping Pong Off \u00b7 Mod Depth 0.0 % \u00b7 Dyn Mode Off",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.3
+      ],
+      [
+       1,
+       "Feedback",
+       0.15
+      ],
+      [
+       5,
+       "Delay Time",
+       0.1797
+      ],
+      [
+       4,
+       "Ping Pong",
+       0
+      ],
+      [
+       7,
+       "Mod Depth",
+       0
+      ],
+      [
+       10,
+       "Dyn Mode",
+       0
+      ]
+     ]
+    },
+    {
+     "name": "Frusciante: triplet echo",
+     "why": "\"Don't Forget Me\": John double-picks sixteenths on the top two strings while the echo comes back in triplets (his words, via note.com/ketunemikku); the analysis sets regeneration medium and the mix fairly high. Here an eighth-note triplet in the Nano's tempo \u2013 try 1/4T as well.",
+     "asked": 7,
+     "text": "Mix 45.0 % \u00b7 Feedback 45.0 % \u00b7 Sync On \u00b7 Sync Note 1/8T \u00b7 Ping Pong Off \u00b7 Mod Depth 0.0 % \u00b7 Dyn Mode Off",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.45
+      ],
+      [
+       1,
+       "Feedback",
+       0.45
+      ],
+      [
+       16,
+       "Sync",
+       1
+      ],
+      [
+       17,
+       "Sync Note",
+       0.4
       ],
       [
        4,
@@ -6902,7 +7623,7 @@
      "name": "Wide lead",
      "why": "Two unrelated times give a big, diffuse stereo image.",
      "asked": 6,
-     "text": "Mix 30.0 % · Delay Time L 380 ms · Feedback L 30.0 % · Delay Time R 510 ms · Feedback R 30.0 % · X-Feedback 0.0 %",
+     "text": "Mix 30.0 % \u00b7 Delay Time L 380 ms \u00b7 Feedback L 30.0 % \u00b7 Delay Time R 510 ms \u00b7 Feedback R 30.0 % \u00b7 X-Feedback 0.0 %",
      "values": [
       [
        0,
@@ -6940,7 +7661,7 @@
      "name": "Ping-pong",
      "why": "",
      "asked": 6,
-     "text": "Mix 30.0 % · Delay Time L 250 ms · Feedback L 0.0 % · Delay Time R 500 ms · Feedback R 0.0 % · X-Feedback 45.0 %",
+     "text": "Mix 30.0 % \u00b7 Delay Time L 250 ms \u00b7 Feedback L 0.0 % \u00b7 Delay Time R 500 ms \u00b7 Feedback R 0.0 % \u00b7 X-Feedback 45.0 %",
      "values": [
       [
        0,
@@ -6976,9 +7697,9 @@
     },
     {
      "name": "Quarter + dotted eighth",
-     "why": "The rhythmic cascade – needs the preset tempo.",
+     "why": "The rhythmic cascade \u2013 needs the preset tempo.",
      "asked": 7,
-     "text": "Mix 30.0 % · Sync L On · Sync Note L 1/4 · Sync R On · Sync Note R 1/8D · Feedback L 25.0 % · Feedback R 25.0 %",
+     "text": "Mix 30.0 % \u00b7 Sync L On \u00b7 Sync Note L 1/4 \u00b7 Sync R On \u00b7 Sync Note R 1/8D \u00b7 Feedback L 25.0 % \u00b7 Feedback R 25.0 %",
      "values": [
       [
        0,
@@ -7038,9 +7759,9 @@
    "starts": [
     {
      "name": "Backwards solo",
-     "why": "Only the reversed signal – play slow, legato lines.",
+     "why": "Only the reversed signal \u2013 play slow, legato lines.",
      "asked": 5,
-     "text": "Mix 100.0 % · Delay Time L 600 ms · Delay Time R 600 ms · Feedback L 0.0 % · Feedback R 0.0 %",
+     "text": "Mix 100.0 % \u00b7 Delay Time L 600 ms \u00b7 Delay Time R 600 ms \u00b7 Feedback L 0.0 % \u00b7 Feedback R 0.0 %",
      "values": [
       [
        0,
@@ -7073,7 +7794,7 @@
      "name": "Subtle swells",
      "why": "",
      "asked": 5,
-     "text": "Mix 25.0 % · Delay Time L 500 ms · Delay Time R 700 ms · Feedback L 20.0 % · Feedback R 20.0 %",
+     "text": "Mix 25.0 % \u00b7 Delay Time L 500 ms \u00b7 Delay Time R 700 ms \u00b7 Feedback L 20.0 % \u00b7 Feedback R 20.0 %",
      "values": [
       [
        0,
@@ -7106,7 +7827,7 @@
      "name": "Ambient",
      "why": "",
      "asked": 6,
-     "text": "Mix 40.0 % · Delay Time L 1.20 s · Delay Time R 1.50 s · Feedback L 45.0 % · Feedback R 45.0 % · X-Feedback 20.0 %",
+     "text": "Mix 40.0 % \u00b7 Delay Time L 1.20 s \u00b7 Delay Time R 1.50 s \u00b7 Feedback L 45.0 % \u00b7 Feedback R 45.0 % \u00b7 X-Feedback 20.0 %",
      "values": [
       [
        0,
@@ -7141,22 +7862,71 @@
      ]
     }
    ],
-   "players": []
+   "players": [
+    {
+     "name": "Warpaint: reverse",
+     "why": "Theresa Wayman uses a Boss DD-6 for a reverse effect (Guitar Player, 2022); in the photo of her board its effect level is high (about four o'clock) and the feedback at the minimum. The time is ours.",
+     "asked": 8,
+     "text": "Mix 60.0 % \u00b7 Delay Time L 500 ms \u00b7 Delay Time R 500 ms \u00b7 Feedback L 0.0 % \u00b7 Feedback R 0.0 % \u00b7 X-Feedback 0.0 % \u00b7 Feedback Mode Reverse \u00b7 Dyn Mode Off",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.6
+      ],
+      [
+       1,
+       "Delay Time L",
+       0.2811
+      ],
+      [
+       5,
+       "Delay Time R",
+       0.2811
+      ],
+      [
+       2,
+       "Feedback L",
+       0
+      ],
+      [
+       6,
+       "Feedback R",
+       0
+      ],
+      [
+       3,
+       "X-Feedback",
+       0
+      ],
+      [
+       4,
+       "Feedback Mode",
+       0
+      ],
+      [
+       10,
+       "Dyn Mode",
+       0
+      ]
+     ]
+    }
+   ]
   },
   {
    "type": 6004,
    "name": "Tape Delay",
    "cat": "Delay",
    "basedOn": "",
-   "like": "BOSS RE-2 Space Echo · Maestro Echoplex EP-3 · Roland RE-201",
+   "like": "BOSS RE-2 Space Echo \u00b7 Maestro Echoplex EP-3 \u00b7 Roland RE-201",
    "made": "",
-   "text": "Tape echo: every repeat is a little darker and wobblier than the one before – warm, saturated and never in the way of the dry note.",
+   "text": "Tape echo: every repeat is a little darker and wobblier than the one before \u2013 warm, saturated and never in the way of the dry note.",
    "heard": "",
    "photo": true,
    "rich": true,
    "tips": [
-    "Low Pass around 2–3 kHz sounds most like worn tape.",
-    "Drive pushes the repeats into tape saturation – more Feedback with more Drive builds up into self-oscillation.",
+    "Low Pass around 2\u20133 kHz sounds most like worn tape.",
+    "Drive pushes the repeats into tape saturation \u2013 more Feedback with more Drive builds up into self-oscillation.",
     "Sync locks Delay Time to the tempo."
    ],
    "starts": [
@@ -7164,7 +7934,7 @@
      "name": "Slapback",
      "why": "Rockabilly and country: one short, quick repeat.",
      "asked": 5,
-     "text": "Mix 30.0 % · Feedback 5.0 % · Delay Time 110 ms · Wow 1.0 · Flutter 1.0",
+     "text": "Mix 30.0 % \u00b7 Feedback 5.0 % \u00b7 Delay Time 110 ms \u00b7 Wow 10 % \u00b7 Flutter 10 %",
      "values": [
       [
        0,
@@ -7197,7 +7967,7 @@
      "name": "Rhythmic echo",
      "why": "Dotted eighths at 120 BPM.",
      "asked": 5,
-     "text": "Mix 25.0 % · Feedback 35.0 % · Delay Time 375 ms · Wow 2.0 · Flutter 2.0",
+     "text": "Mix 25.0 % \u00b7 Feedback 35.0 % \u00b7 Delay Time 375 ms \u00b7 Wow 20 % \u00b7 Flutter 20 %",
      "values": [
       [
        0,
@@ -7230,7 +8000,7 @@
      "name": "Ambient wash",
      "why": "Long, dark repeats that melt into each other.",
      "asked": 5,
-     "text": "Mix 35.0 % · Feedback 65.0 % · Delay Time 620 ms · Low Pass 2.50 kHz · Wow 4.0",
+     "text": "Mix 35.0 % \u00b7 Feedback 65.0 % \u00b7 Delay Time 620 ms \u00b7 Low Pass 2.50 kHz \u00b7 Wow 40 %",
      "values": [
       [
        0,
@@ -7265,7 +8035,7 @@
      "name": "Black Keys: tight slap",
      "why": "A Fulltone Tape Echo gives Dan Auerbach \"a continuous, tight slapback\" (Premier Guitar). Settings are ours.",
      "asked": 6,
-     "text": "Mix 30.0 % · Feedback 8.0 % · Delay Time 110 ms · Wow 2.0 · Flutter 2.0 · Drive 40 %",
+     "text": "Mix 30.0 % \u00b7 Feedback 8.0 % \u00b7 Delay Time 110 ms \u00b7 Wow 20 % \u00b7 Flutter 20 % \u00b7 Drive 40 %",
      "values": [
       [
        0,
@@ -7298,6 +8068,110 @@
        0.4
       ]
      ]
+    },
+    {
+     "name": "Warpaint: AD9 slap",
+     "why": "Read off Theresa Wayman's board in Guitar Player's 2022 photo: an Ibanez AD9 analog delay (10\u2013300 ms) with Delay Time at noon, Repeat just before noon and Delay Level at nine o'clock \u2013 a slap or a barely audible short delay to widen the tone, as she says (Guitar World, 2022). On this model because the Analog Delay starts at 200 ms.",
+     "asked": 6,
+     "text": "Mix 15.0 % \u00b7 Feedback 45.0 % \u00b7 Delay Time 150 ms \u00b7 Wow 0 % \u00b7 Flutter 0 % \u00b7 Low Pass 3.00 kHz",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.15
+      ],
+      [
+       1,
+       "Feedback",
+       0.45
+      ],
+      [
+       5,
+       "Delay Time",
+       0.1063
+      ],
+      [
+       6,
+       "Wow",
+       0
+      ],
+      [
+       7,
+       "Flutter",
+       0
+      ],
+      [
+       3,
+       "Low Pass",
+       0.5968
+      ]
+     ]
+    },
+    {
+     "name": "Frusciante: White Braids",
+     "why": "\"White Braids & Pillow Chair\", the outro: an MXR analog delay or a tape echo at 80\u2013130 ms with one repeat, mixed in modestly (note.com/ketunemikku's analysis of Unlimited Love).",
+     "asked": 5,
+     "text": "Mix 20.0 % \u00b7 Feedback 5.0 % \u00b7 Delay Time 100 ms \u00b7 Wow 10 % \u00b7 Flutter 10 %",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.2
+      ],
+      [
+       1,
+       "Feedback",
+       0.05
+      ],
+      [
+       5,
+       "Delay Time",
+       0.0821
+      ],
+      [
+       6,
+       "Wow",
+       0.1
+      ],
+      [
+       7,
+       "Flutter",
+       0.1
+      ]
+     ]
+    },
+    {
+     "name": "Frusciante: Tangelo",
+     "why": "\"Tangelo\": acoustic guitar into a tape echo \u2013 John names a Fulltone Tube Tape Echo; at the very end the repeats are turned up until it runs away (note.com/ketunemikku). Ours: close to runaway \u2013 switch it on at the end, and mind the volume.",
+     "asked": 5,
+     "text": "Mix 35.0 % \u00b7 Feedback 95.0 % \u00b7 Delay Time 420 ms \u00b7 Wow 20 % \u00b7 Flutter 20 %",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.35
+      ],
+      [
+       1,
+       "Feedback",
+       0.95
+      ],
+      [
+       5,
+       "Delay Time",
+       0.2009
+      ],
+      [
+       6,
+       "Wow",
+       0.2
+      ],
+      [
+       7,
+       "Flutter",
+       0.2
+      ]
+     ]
     }
    ]
   },
@@ -7308,7 +8182,7 @@
    "basedOn": "",
    "like": "Mr. Black Ambience",
    "made": "",
-   "text": "Early reflections only: space and size without an audible tail. It makes a close-miked sound feel like it is in a room – and never washes out fast playing.",
+   "text": "Early reflections only: space and size without an audible tail. It makes a close-miked sound feel like it is in a room \u2013 and never washes out fast playing.",
    "heard": "",
    "photo": true,
    "rich": true,
@@ -7321,30 +8195,30 @@
      "name": "Subtle air",
      "why": "",
      "asked": 5,
-     "text": "Mix 20.0 % · Size Small · Pre Delay 0.0 ms · High Pass 150 Hz · Low Pass 8.00 kHz",
+     "text": "Mix 20.0 % \u00b7 Size Small \u00b7 Pre Delay 0.0 ms \u00b7 High Pass 150 Hz \u00b7 Low Pass 8.00 kHz",
      "values": [
       [
-       0,
+       4,
        "Mix",
        0.2
       ],
       [
-       1,
+       0,
        "Size",
        0
       ],
       [
-       2,
+       1,
        "Pre Delay",
        0
       ],
       [
-       3,
+       2,
        "High Pass",
        0.3413
       ],
       [
-       4,
+       3,
        "Low Pass",
        0.7671
       ]
@@ -7354,30 +8228,30 @@
      "name": "Big space",
      "why": "",
      "asked": 5,
-     "text": "Mix 30.0 % · Size Large · Pre Delay 10.0 ms · High Pass 120 Hz · Low Pass 7.00 kHz",
+     "text": "Mix 30.0 % \u00b7 Size Large \u00b7 Pre Delay 10.0 ms \u00b7 High Pass 120 Hz \u00b7 Low Pass 7.00 kHz",
      "values": [
       [
-       0,
+       4,
        "Mix",
        0.3
       ],
       [
-       1,
+       0,
        "Size",
        1
       ],
       [
-       2,
+       1,
        "Pre Delay",
        0.2512
       ],
       [
-       3,
+       2,
        "High Pass",
        0.2916
       ],
       [
-       4,
+       3,
        "Low Pass",
        0.7013
       ]
@@ -7392,7 +8266,7 @@
    "cat": "Reverb",
    "basedOn": "Strymon BigSky (Bloom mode)",
    "like": "",
-   "made": "2013 · Strymon, California",
+   "made": "2013 \u00b7 Strymon, California",
    "text": "A reverb that swells and blooms behind the note: the tail starts soft and grows into a big, slow, diffuse wash. Ducking keeps it out of the way while you play.",
    "heard": "",
    "photo": false,
@@ -7407,7 +8281,7 @@
      "name": "Slow bloom",
      "why": "",
      "asked": 7,
-     "text": "Mix 35.0 % · Decay 8.00 s · Pre Delay 30 ms · Diffusion 80 % · E.R. Length 60 % · Ducking 0 % · Modulation 30.0 %",
+     "text": "Mix 35.0 % \u00b7 Decay 8.00 s \u00b7 Pre Delay 30 ms \u00b7 Diffusion 80 % \u00b7 E.R. Length 60 % \u00b7 Ducking 0 % \u00b7 Modulation 30.0 %",
      "values": [
       [
        0,
@@ -7450,7 +8324,7 @@
      "name": "Ducked lead",
      "why": "Big when you stop, clear while you play.",
      "asked": 6,
-     "text": "Mix 30.0 % · Decay 5.00 s · Pre Delay 40 ms · Diffusion 70 % · Ducking 50 % · Modulation 20.0 %",
+     "text": "Mix 30.0 % \u00b7 Decay 5.00 s \u00b7 Pre Delay 40 ms \u00b7 Diffusion 70 % \u00b7 Ducking 50 % \u00b7 Modulation 20.0 %",
      "values": [
       [
        0,
@@ -7488,7 +8362,7 @@
      "name": "Endless pad",
      "why": "",
      "asked": 7,
-     "text": "Mix 50.0 % · Decay 18.00 s · Pre Delay 60 ms · Diffusion 90 % · Modulation 50.0 % · Bass -6.0 dB · Treble -4.0 dB",
+     "text": "Mix 50.0 % \u00b7 Decay 18.00 s \u00b7 Pre Delay 60 ms \u00b7 Diffusion 90 % \u00b7 Modulation 50.0 % \u00b7 Bass -6.0 dB \u00b7 Treble -4.0 dB",
      "values": [
       [
        0,
@@ -7526,6 +8400,74 @@
        0.278
       ]
      ]
+    },
+    {
+     "name": "Spring tank",
+     "why": "The Nano has no spring \u2013 this comes nearest: an amp's long tank (Accutronics Type 4, as in Fender amps) rings 2.75\u20134 s, each spring delays 33\u201341 ms, and little below 150 Hz or above 4.5 kHz gets through. Low Diffusion and no E.R. Length keep the repeats separate and metallic instead of blooming.",
+     "asked": 12,
+     "text": "Mix 30.0 % \u00b7 Decay 2.75 s \u00b7 Pre Delay 35 ms \u00b7 High Pass 200 Hz \u00b7 Low Pass 4.50 kHz \u00b7 Extra E.R. Off \u00b7 E.R. Length 0 % \u00b7 Diffusion 15 % \u00b7 Bass -6.0 dB \u00b7 Treble 0.0 dB \u00b7 Ducking 0 % \u00b7 Modulation 20.0 %",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.3
+      ],
+      [
+       1,
+       "Decay",
+       0.4216
+      ],
+      [
+       2,
+       "Pre Delay",
+       0.3452
+      ],
+      [
+       3,
+       "High Pass",
+       0.4699
+      ],
+      [
+       4,
+       "Low Pass",
+       0.4292
+      ],
+      [
+       5,
+       "Extra E.R.",
+       0
+      ],
+      [
+       6,
+       "E.R. Length",
+       0
+      ],
+      [
+       7,
+       "Diffusion",
+       0.15
+      ],
+      [
+       8,
+       "Bass",
+       0.1928
+      ],
+      [
+       9,
+       "Treble",
+       0.505
+      ],
+      [
+       10,
+       "Ducking",
+       0
+      ],
+      [
+       11,
+       "Modulation",
+       0.2
+      ]
+     ]
     }
    ],
    "players": []
@@ -7537,7 +8479,7 @@
    "basedOn": "",
    "like": "EarthQuaker Devices Afterneath",
    "made": "",
-   "text": "A huge, dark, cavernous space with a very long decay – for ambient pads, swells and doom.",
+   "text": "A huge, dark, cavernous space with a very long decay \u2013 for ambient pads, swells and doom.",
    "heard": "",
    "photo": true,
    "rich": true,
@@ -7550,35 +8492,35 @@
      "name": "Ambient pad",
      "why": "",
      "asked": 6,
-     "text": "Mix 40.0 % · Decay 10.00 s · Pre Delay 40.0 ms · Damping 50.0 % · High Pass 250 Hz · Low Pass 4.00 kHz",
+     "text": "Mix 40.0 % \u00b7 Decay 10.00 s \u00b7 Pre Delay 40.0 ms \u00b7 Damping 50.0 % \u00b7 High Pass 250 Hz \u00b7 Low Pass 4.00 kHz",
      "values": [
       [
-       0,
+       5,
        "Mix",
        0.4
       ],
       [
-       1,
+       0,
        "Decay",
        0.5173
       ],
       [
-       2,
+       1,
        "Pre Delay",
        0.3761
       ],
       [
-       3,
+       2,
        "Damping",
        0.5
       ],
       [
-       4,
+       3,
        "High Pass",
        0.4806
       ],
       [
-       5,
+       4,
        "Low Pass",
        0.6147
       ]
@@ -7588,35 +8530,35 @@
      "name": "Doom",
      "why": "",
      "asked": 6,
-     "text": "Mix 30.0 % · Decay 14.00 s · Pre Delay 20.0 ms · Damping 70.0 % · High Pass 150 Hz · Low Pass 3.00 kHz",
+     "text": "Mix 30.0 % \u00b7 Decay 14.00 s \u00b7 Pre Delay 20.0 ms \u00b7 Damping 70.0 % \u00b7 High Pass 150 Hz \u00b7 Low Pass 3.00 kHz",
      "values": [
       [
-       0,
+       5,
        "Mix",
        0.3
       ],
       [
-       1,
+       0,
        "Decay",
        0.736
       ],
       [
-       2,
+       1,
        "Pre Delay",
        0.2443
       ],
       [
-       3,
+       2,
        "Damping",
        0.7
       ],
       [
-       4,
+       3,
        "High Pass",
        0.3413
       ],
       [
-       5,
+       4,
        "Low Pass",
        0.491
       ]
@@ -7632,7 +8574,7 @@
    "basedOn": "",
    "like": "Electro-Harmonix Holy Grail (Hall)",
    "made": "",
-   "text": "A concert hall with a smooth, longer decay – the big, classic reverb for leads and slow songs.",
+   "text": "A concert hall with a smooth, longer decay \u2013 the big, classic reverb for leads and slow songs.",
    "heard": "",
    "photo": true,
    "rich": true,
@@ -7644,30 +8586,30 @@
      "name": "Lead",
      "why": "Pre Delay keeps the notes clear.",
      "asked": 5,
-     "text": "Mix 20.0 % · Decay 2.50 s · Pre Delay 30.0 ms · High Pass 200 Hz · Low Pass 5.00 kHz",
+     "text": "Mix 20.0 % \u00b7 Decay 2.50 s \u00b7 Pre Delay 30.0 ms \u00b7 High Pass 200 Hz \u00b7 Low Pass 5.00 kHz",
      "values": [
       [
-       0,
+       4,
        "Mix",
        0.2
       ],
       [
-       1,
+       0,
        "Decay",
        0.3413
       ],
       [
-       2,
+       1,
        "Pre Delay",
        0.4787
       ],
       [
-       3,
+       2,
        "High Pass",
        0.4149
       ],
       [
-       4,
+       3,
        "Low Pass",
        0.5552
       ]
@@ -7677,30 +8619,30 @@
      "name": "Ballad",
      "why": "",
      "asked": 5,
-     "text": "Mix 30.0 % · Decay 4.00 s · Pre Delay 25.0 ms · High Pass 150 Hz · Low Pass 6.00 kHz",
+     "text": "Mix 30.0 % \u00b7 Decay 4.00 s \u00b7 Pre Delay 25.0 ms \u00b7 High Pass 150 Hz \u00b7 Low Pass 6.00 kHz",
      "values": [
       [
-       0,
+       4,
        "Mix",
        0.3
       ],
       [
-       1,
+       0,
        "Decay",
        0.5173
       ],
       [
-       2,
+       1,
        "Pre Delay",
        0.4273
       ],
       [
-       3,
+       2,
        "High Pass",
        0.3413
       ],
       [
-       4,
+       3,
        "Low Pass",
        0.6311
       ]
@@ -7710,30 +8652,30 @@
      "name": "Huge",
      "why": "",
      "asked": 5,
-     "text": "Mix 40.0 % · Decay 8.00 s · Pre Delay 40.0 ms · High Pass 250 Hz · Low Pass 4.50 kHz",
+     "text": "Mix 40.0 % \u00b7 Decay 8.00 s \u00b7 Pre Delay 40.0 ms \u00b7 High Pass 250 Hz \u00b7 Low Pass 4.50 kHz",
      "values": [
       [
-       0,
+       4,
        "Mix",
        0.4
       ],
       [
-       1,
+       0,
        "Decay",
        0.86
       ],
       [
-       2,
+       1,
        "Pre Delay",
        0.5718
       ],
       [
-       3,
+       2,
        "High Pass",
        0.4806
       ],
       [
-       4,
+       3,
        "Low Pass",
        0.5145
       ]
@@ -7745,30 +8687,30 @@
      "name": "Frusciante: Holy Grail",
      "why": "An EHX Holy Grail when he wants a heavier reverb: the \"Strip My Mind\" solo and \"Hey\" (Ground Guitar). Settings are ours.",
      "asked": 5,
-     "text": "Mix 35.0 % · Decay 3.50 s · Pre Delay 15.0 ms · High Pass 150 Hz · Low Pass 6.00 kHz",
+     "text": "Mix 35.0 % \u00b7 Decay 3.50 s \u00b7 Pre Delay 15.0 ms \u00b7 High Pass 150 Hz \u00b7 Low Pass 6.00 kHz",
      "values": [
       [
-       0,
+       4,
        "Mix",
        0.35
       ],
       [
-       1,
+       0,
        "Decay",
        0.4637
       ],
       [
-       2,
+       1,
        "Pre Delay",
        0.3092
       ],
       [
-       3,
+       2,
        "High Pass",
        0.3413
       ],
       [
-       4,
+       3,
        "Low Pass",
        0.6311
       ]
@@ -7778,32 +8720,65 @@
      "name": "Wednesday: Holy Grail",
      "why": "Xandy Chelmis has a Holy Grail on the pedal steel (Mixdown). Settings are ours.",
      "asked": 5,
-     "text": "Mix 30.0 % · Decay 2.50 s · Pre Delay 10.0 ms · High Pass 180 Hz · Low Pass 5.00 kHz",
+     "text": "Mix 30.0 % \u00b7 Decay 2.50 s \u00b7 Pre Delay 10.0 ms \u00b7 High Pass 180 Hz \u00b7 Low Pass 5.00 kHz",
      "values": [
       [
-       0,
+       4,
        "Mix",
        0.3
       ],
       [
-       1,
+       0,
        "Decay",
        0.3413
       ],
       [
-       2,
+       1,
        "Pre Delay",
        0.2372
       ],
       [
-       3,
+       2,
        "High Pass",
        0.3866
       ],
       [
-       4,
+       3,
        "Low Pass",
        0.5552
+      ]
+     ]
+    },
+    {
+     "name": "Warpaint: Dispatch wash",
+     "why": "Read off Theresa Wayman's board in Guitar Player's 2022 photo: an EarthQuaker Dispatch Master with Reverb at about two o'clock, Mix at three, the repeats at the minimum and a short time \u2013 almost all reverb, for wash and atmosphere, as she says (Rig Rundown, 2017). Decay and filters carried over by us.",
+     "asked": 5,
+     "text": "Mix 45.0 % \u00b7 Decay 5.00 s \u00b7 Pre Delay 10.0 ms \u00b7 High Pass 150 Hz \u00b7 Low Pass 6.00 kHz",
+     "values": [
+      [
+       4,
+       "Mix",
+       0.45
+      ],
+      [
+       0,
+       "Decay",
+       0.6147
+      ],
+      [
+       1,
+       "Pre Delay",
+       0.2372
+      ],
+      [
+       2,
+       "High Pass",
+       0.3413
+      ],
+      [
+       3,
+       "Low Pass",
+       0.6311
       ]
      ]
     }
@@ -7815,7 +8790,7 @@
    "cat": "Reverb",
    "basedOn": "",
    "like": "Lexicon 224",
-   "made": "1978 · Lexicon – one of the first digital studio reverbs",
+   "made": "1978 \u00b7 Lexicon \u2013 one of the first digital studio reverbs",
    "text": "The lush, grainy hall of late-70s and 80s records: dense, smooth and slightly dark, it sounds \"expensive\" behind cleans and leads.",
    "heard": "",
    "photo": true,
@@ -7829,7 +8804,7 @@
      "name": "80s lead",
      "why": "",
      "asked": 6,
-     "text": "Mix 25.0 % · Decay 3.00 s · Pre Delay 30.0 ms · High Pass 180 Hz · Low Pass 6.00 kHz · Damping 40.0 %",
+     "text": "Mix 25.0 % \u00b7 Decay 22.2 % \u00b7 Pre Delay 30.0 ms \u00b7 High Pass 180 Hz \u00b7 Low Pass 6.00 kHz \u00b7 Damping 40.0 %",
      "values": [
       [
        0,
@@ -7839,12 +8814,12 @@
       [
        1,
        "Decay",
-       0.2222
+       0.222
       ],
       [
        2,
        "Pre Delay",
-       0.2929
+       0.3817
       ],
       [
        3,
@@ -7867,7 +8842,7 @@
      "name": "Dark hall",
      "why": "",
      "asked": 6,
-     "text": "Mix 30.0 % · Decay 5.00 s · Pre Delay 20.0 ms · High Pass 150 Hz · Low Pass 4.00 kHz · Damping 65.0 %",
+     "text": "Mix 30.0 % \u00b7 Decay 44.4 % \u00b7 Pre Delay 20.0 ms \u00b7 High Pass 150 Hz \u00b7 Low Pass 4.00 kHz \u00b7 Damping 65.0 %",
      "values": [
       [
        0,
@@ -7877,12 +8852,12 @@
       [
        1,
        "Decay",
-       0.4444
+       0.444
       ],
       [
        2,
        "Pre Delay",
-       0.1919
+       0.309
       ],
       [
        3,
@@ -7900,6 +8875,44 @@
        0.65
       ]
      ]
+    },
+    {
+     "name": "70s plate",
+     "why": "Neural DSP's \"Long\" preset for the Plate reverb of the Quad Cortex: Mind Hall has the same controls and starts from the same values as that Plate, so it carries over \u2013 dense and bright, the lows cut.",
+     "asked": 6,
+     "text": "Mix 24.0 % \u00b7 Decay 68.0 % \u00b7 Pre Delay 51.0 ms \u00b7 High Pass 200 Hz \u00b7 Low Pass 5.30 kHz \u00b7 Damping 42.0 %",
+     "values": [
+      [
+       0,
+       "Mix",
+       0.24
+      ],
+      [
+       1,
+       "Decay",
+       0.68
+      ],
+      [
+       2,
+       "Pre Delay",
+       0.5013
+      ],
+      [
+       3,
+       "High Pass",
+       0.4804
+      ],
+      [
+       4,
+       "Low Pass",
+       0.6339
+      ],
+      [
+       5,
+       "Damping",
+       0.42
+      ]
+     ]
     }
    ],
    "players": [
@@ -7907,7 +8920,7 @@
      "name": "Deftones: Digital Bath",
      "why": "A plate reverb at about 20 % mix (Guitar Chalk's reading of the song). Decay and filters are ours.",
      "asked": 6,
-     "text": "Mix 20.0 % · Decay 2.20 s · Pre Delay 15.0 ms · High Pass 200 Hz · Low Pass 7.00 kHz · Damping 40.0 %",
+     "text": "Mix 20.0 % \u00b7 Decay 13.3 % \u00b7 Pre Delay 15.0 ms \u00b7 High Pass 200 Hz \u00b7 Low Pass 7.00 kHz \u00b7 Damping 40.0 %",
      "values": [
       [
        0,
@@ -7917,12 +8930,12 @@
       [
        1,
        "Decay",
-       0.1333
+       0.133
       ],
       [
        2,
        "Pre Delay",
-       0.1414
+       0.2652
       ],
       [
        3,
@@ -7950,12 +8963,12 @@
    "basedOn": "",
    "like": "Catalinbread Sinkhole",
    "made": "",
-   "text": "A reverb with a slowly modulated, chorus-like tail – lush, wide and dreamy, great for clean arpeggios.",
+   "text": "A reverb with a slowly modulated, chorus-like tail \u2013 lush, wide and dreamy, great for clean arpeggios.",
    "heard": "",
    "photo": true,
    "rich": true,
    "tips": [
-    "Mod Speed and Mod Depth set the movement of the tail – keep Speed below 1 Hz for a natural shimmer.",
+    "Mod Speed and Mod Depth set the movement of the tail \u2013 keep Speed below 1 Hz for a natural shimmer.",
     "Pre Delay keeps the note clear before the reverb starts."
    ],
    "starts": [
@@ -7963,40 +8976,40 @@
      "name": "Dreamy clean",
      "why": "",
      "asked": 7,
-     "text": "Mix 30.0 % · Decay 3.50 s · Pre Delay 20.0 ms · Mod Speed 0.60 Hz · Mod Depth 40.0 % · High Pass 150 Hz · Low Pass 6.00 kHz",
+     "text": "Mix 30.0 % \u00b7 Decay 3.50 s \u00b7 Pre Delay 20.0 ms \u00b7 Mod Speed 0.60 Hz \u00b7 Mod Depth 40.0 % \u00b7 High Pass 150 Hz \u00b7 Low Pass 6.00 kHz",
      "values": [
       [
-       0,
+       6,
        "Mix",
        0.3
       ],
       [
-       1,
+       0,
        "Decay",
        0.4637
       ],
       [
-       2,
+       1,
        "Pre Delay",
        0.2443
       ],
       [
-       3,
+       2,
        "Mod Speed",
        0.2543
       ],
       [
-       4,
+       3,
        "Mod Depth",
        0.4
       ],
       [
-       5,
+       4,
        "High Pass",
        0.3413
       ],
       [
-       6,
+       5,
        "Low Pass",
        0.6311
       ]
@@ -8006,40 +9019,40 @@
      "name": "Seasick",
      "why": "",
      "asked": 7,
-     "text": "Mix 40.0 % · Decay 6.00 s · Pre Delay 10.0 ms · Mod Speed 1.50 Hz · Mod Depth 80.0 % · High Pass 200 Hz · Low Pass 5.00 kHz",
+     "text": "Mix 40.0 % \u00b7 Decay 6.00 s \u00b7 Pre Delay 10.0 ms \u00b7 Mod Speed 1.50 Hz \u00b7 Mod Depth 80.0 % \u00b7 High Pass 200 Hz \u00b7 Low Pass 5.00 kHz",
      "values": [
       [
-       0,
+       6,
        "Mix",
        0.4
       ],
       [
-       1,
+       0,
        "Decay",
        0.7028
       ],
       [
-       2,
+       1,
        "Pre Delay",
        0.156
       ],
       [
-       3,
+       2,
        "Mod Speed",
        0.4716
       ],
       [
-       4,
+       3,
        "Mod Depth",
        0.8
       ],
       [
-       5,
+       4,
        "High Pass",
        0.4149
       ],
       [
-       6,
+       5,
        "Low Pass",
        0.5552
       ]
@@ -8055,7 +9068,7 @@
    "basedOn": "",
    "like": "BOSS RV-6 (Room)",
    "made": "",
-   "text": "A small to medium room: natural space without a long tail – the \"amp in a room\" sound that makes a dry capture feel real.",
+   "text": "A small to medium room: natural space without a long tail \u2013 the \"amp in a room\" sound that makes a dry capture feel real.",
    "heard": "",
    "photo": true,
    "rich": true,
@@ -8067,30 +9080,30 @@
      "name": "Always on",
      "why": "You hear it when it is gone.",
      "asked": 5,
-     "text": "Mix 15.0 % · Decay 0.60 s · Pre Delay 5.0 ms · High Pass 150 Hz · Low Pass 6.00 kHz",
+     "text": "Mix 15.0 % \u00b7 Decay 0.60 s \u00b7 Pre Delay 5.0 ms \u00b7 High Pass 150 Hz \u00b7 Low Pass 6.00 kHz",
      "values": [
       [
-       0,
+       4,
        "Mix",
        0.15
       ],
       [
-       1,
+       0,
        "Decay",
        0.4489
       ],
       [
-       2,
+       1,
        "Pre Delay",
-       0.0404
+       0.1638
       ],
       [
-       3,
+       2,
        "High Pass",
        0.3413
       ],
       [
-       4,
+       3,
        "Low Pass",
        0.6311
       ]
@@ -8100,44 +9113,78 @@
      "name": "Live room",
      "why": "",
      "asked": 5,
-     "text": "Mix 25.0 % · Decay 1.20 s · Pre Delay 10.0 ms · High Pass 120 Hz · Low Pass 7.00 kHz",
+     "text": "Mix 25.0 % \u00b7 Decay 1.20 s \u00b7 Pre Delay 10.0 ms \u00b7 High Pass 120 Hz \u00b7 Low Pass 7.00 kHz",
      "values": [
       [
-       0,
+       4,
        "Mix",
        0.25
       ],
       [
-       1,
+       0,
        "Decay",
        0.7204
       ],
       [
-       2,
+       1,
        "Pre Delay",
-       0.0909
+       0.2498
       ],
       [
-       3,
+       2,
        "High Pass",
        0.2916
       ],
       [
-       4,
+       3,
        "Low Pass",
        0.7013
       ]
      ]
     }
    ],
-   "players": []
+   "players": [
+    {
+     "name": "Frusciante: Let 'Em Cry",
+     "why": "\"Let 'Em Cry\": an MXR Reverb in its Room mode with an extremely short decay, always on; two of them sit on his 2022 board (note.com/ketunemikku, from photos). Mix and filters are ours.",
+     "asked": 5,
+     "text": "Mix 12.0 % \u00b7 Decay 0.40 s \u00b7 Pre Delay 5.0 ms \u00b7 High Pass 150 Hz \u00b7 Low Pass 6.00 kHz",
+     "values": [
+      [
+       4,
+       "Mix",
+       0.12
+      ],
+      [
+       0,
+       "Decay",
+       0.3304
+      ],
+      [
+       1,
+       "Pre Delay",
+       0.1638
+      ],
+      [
+       2,
+       "High Pass",
+       0.3413
+      ],
+      [
+       3,
+       "Low Pass",
+       0.6311
+      ]
+     ]
+    }
+   ]
   },
   {
    "type": 8010,
    "name": "Shimmer",
    "cat": "Reverb",
    "basedOn": "",
-   "like": "Eventide H9 (ShimmerVerb) · Strymon BigSky (Shimmer)",
+   "like": "Eventide H9 (ShimmerVerb) \u00b7 Strymon BigSky (Shimmer)",
    "made": "",
    "text": "A reverb whose tail is pitch-shifted and fed back into itself: the octave-up halo of ambient guitar, made famous by Brian Eno and Daniel Lanois' productions.",
    "heard": "",
@@ -8145,7 +9192,7 @@
    "rich": true,
    "tips": [
     "Pitch sets the interval of the tail (+12 is the classic octave), Feedback how much of it builds up.",
-    "Keep Mix low on chords – the shimmer adds up fast.",
+    "Keep Mix low on chords \u2013 the shimmer adds up fast.",
     "Pre Delay keeps the note clear before the reverb starts."
    ],
    "starts": [
@@ -8153,7 +9200,7 @@
      "name": "Octave halo",
      "why": "",
      "asked": 6,
-     "text": "Mix 35.0 % · Decay 8.0 s · Pitch 12 Sem · Feedback 50.0 % · Brightness 50.0 % · Pre Delay 30 ms",
+     "text": "Mix 35.0 % \u00b7 Decay 8.0 s \u00b7 Pitch 12 Sem \u00b7 Feedback 50.0 % \u00b7 Brightness 50.0 % \u00b7 Pre Delay 30 ms",
      "values": [
       [
        0,
@@ -8191,7 +9238,7 @@
      "name": "Fifth + octave",
      "why": "",
      "asked": 5,
-     "text": "Mix 30.0 % · Decay 10.0 s · Pitch 7 Sem · Feedback 40.0 % · Brightness 45.0 %",
+     "text": "Mix 30.0 % \u00b7 Decay 10.0 s \u00b7 Pitch 7 Sem \u00b7 Feedback 40.0 % \u00b7 Brightness 45.0 %",
      "values": [
       [
        0,
@@ -8224,7 +9271,7 @@
      "name": "Dark sub",
      "why": "",
      "asked": 6,
-     "text": "Mix 30.0 % · Decay 12.0 s · Pitch -12 Sem · Feedback 40.0 % · Brightness 30.0 % · Damping 60.0 %",
+     "text": "Mix 30.0 % \u00b7 Decay 12.0 s \u00b7 Pitch -12 Sem \u00b7 Feedback 40.0 % \u00b7 Brightness 30.0 % \u00b7 Damping 60.0 %",
      "values": [
       [
        0,

@@ -248,12 +248,12 @@ Beschriebene, nur steckt der Nano per Kabel in der USB-A-Buchse des Boards statt
 Über dasselbe Kabel spielt das Board eigenen Ton in den Nano:
 
 - **Nano über USB** – kein Koppeln, kein Bluetooth-Fenster. Ohne Kabel nimmt es Bluetooth
-- **Looper auf dem Board** – zwei Parts A / B, Overdub, Undo / Redo, Loops auf Takte im Tempo des Nano gerundet
-- **Drumcomputer** – 88 Grooves im Tempo des Nano, ein Groove pro Looper-Part, Einzähler, Drums, die mit der Aufnahme starten
-- **Jam-Player** – Backing-Tracks in Alben mit Cover von der microSD-Karte, auf gleiche Lautheit gebracht, vom Jam Player auf dem Mac per WLAN geschickt; ein Player-Modus auf den Fußschaltern
-- **Level, Gain Reduction, Auto-Wah nach Anschlag** – Lautheit pro Preset, die Gain Reduction eines Kompressors in seinem Editor, ein Wah, das dem Anschlag folgt
+- **Looper auf dem Board** – zwei Parts A / B, Overdub, Undo / Redo, Loops auf Takte im Tempo des Nano gerundet; Loops als WAV-Dateien auf die Karte gespeichert, der Jam Player auf dem Mac holt sie ab
+- **Drumcomputer** – zwei berechnete Kits (Elektronisch und Lo-Fi), 108 Grooves im Tempo des Nano, ein Groove pro Looper-Part, Einzähler, Drums, die mit der Aufnahme starten
+- **Jam-Player** – Backing-Tracks in Alben mit Cover von der microSD-Karte, auf gleiche Lautheit gebracht, vom Jam Player auf dem Mac per WLAN geschickt; ein Player-Modus auf den Fußschaltern: Song auswählen, dann abspielen
+- **Level, Gain Reduction, Auto-Wah nach Anschlag, EQ-Spektrum** – Lautheit pro Preset, die Gain Reduction eines Kompressors in seinem Editor, ein Wah, das dem Anschlag folgt, der Klang des Nano als Live-Spektrum unter der Kurve des EQ
 - **Bluetooth** über seinen ESP32-C6 – MIDI-Controller mit MIDI-Learn, eine Looper-App, der Editor durchs Board
-- **Firmware-Updates über WLAN**, acht Fußschalter direkt am Board (keine Zusatzplatine nötig)
+- **Firmware-Updates über WLAN**, acht Fußschalter direkt am Board (keine Zusatzplatine nötig), der FX-Modus mit eigener Reihenfolge der Fußschalter
 
 <table>
 <tr>

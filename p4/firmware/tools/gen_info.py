@@ -30,7 +30,7 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MODELS = json.loads((ROOT / 'tools' / 'editor_models.json').read_text())
 INFO_JSON = ROOT / 'tools' / 'editor_info.json'
-MAX_SOUNDS = 12   # starting points + players' sounds of one model (INFO_MAX_SOUNDS in main/ui.c)
+MAX_SOUNDS = 16   # starting points + players' sounds of one model (INFO_MAX_SOUNDS in main/ui.c)
 
 EXPORT_SCRIPT = """<script>
 setTimeout(() => {

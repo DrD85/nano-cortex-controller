@@ -2,6 +2,7 @@
 #include "p4_net.h"
 
 #include <ctype.h>
+#include <dirent.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +23,7 @@
 #include "mdns.h"
 #include "nvs.h"
 #include "esp_app_desc.h"
+#include "loop_wav.h"
 #include "p4_audio.h"
 #include "p4_cover.h"
 #include "p4_ota.h"
@@ -582,6 +584,139 @@ static esp_err_t firmware(httpd_req_t *req)
     return ESP_OK;
 }
 
+// ---- the looper's loops on the card (p4_loops.c, 2026-11-28): listed, fetched and deleted by the Jam Player ----
+
+#define LOOP_SEND (16 * 1024)      // bytes read from the card and sent at a time
+#define LOOP_PATH (sizeof(P4_LOOPS_DIR) + LOOP_WAV_NAME_MAX + 2)
+
+static esp_err_t loop_refuse(httpd_req_t *req, const char *status, const char *why)
+{
+    httpd_resp_set_status(req, status);
+    char body[96];
+    snprintf(body, sizeof(body), "{\"ok\":false,\"error\":\"%s\"}", why);
+    return httpd_resp_sendstr(req, body);
+}
+
+// "/api/loops/Loop%200007%20A%2C%20120%20BPM%2C%204%20bars.wav" -> the path of "Loop 0007 A, 120 BPM, 4 bars.wav";
+// false: not a loop's name (loop_wav_name_ok: no path, nothing hidden - nothing outside the loops folder).
+static bool loop_path(const char *uri, char *path)
+{
+    char name[LOOP_WAV_NAME_MAX];
+    const char *p = uri + strlen("/api/loops/");
+    size_t k = 0;
+    for (; *p && *p != '?' && k < sizeof(name) - 1; p++) {
+        char c = *p;
+        if (c == '%' && hex(p[1]) >= 0 && hex(p[2]) >= 0) {
+            c = (char)(hex(p[1]) << 4 | hex(p[2]));
+            p += 2;
+        }
+        name[k++] = c;
+    }
+    if (*p && *p != '?') return false;
+    name[k] = 0;
+    if (!loop_wav_name_ok(name)) return false;
+    snprintf(path, LOOP_PATH, P4_LOOPS_DIR "/%s", name);
+    return true;
+}
+
+// GET /api/loops: {"card":true,"loops":[{"name":"Loop 0007 A, 120 BPM, 4 bars.wav","size":1536512}, ...]} - the WAVs
+// in /sdcard/loops (a file being written is save.tmp until it is whole: not in the list), in the card's order (the
+// names sort by their number).
+static esp_err_t loops(httpd_req_t *req)
+{
+    touch();
+    httpd_resp_set_type(req, "application/json");
+    bool card = p4_jam_card();
+    httpd_resp_sendstr_chunk(req, card ? "{\"card\":true,\"loops\":[" : "{\"card\":false,\"loops\":[");
+    DIR *d = card ? opendir(P4_LOOPS_DIR) : NULL;
+    struct dirent *e;
+    int n = 0;
+    while (d && (e = readdir(d))) {
+        char path[LOOP_PATH], line[40];
+        struct stat st;
+        if (!loop_wav_name_ok(e->d_name)) continue;
+        snprintf(path, sizeof(path), P4_LOOPS_DIR "/%.*s", LOOP_WAV_NAME_MAX - 1, e->d_name);   // (checked: shorter)
+        if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) continue;
+        httpd_resp_sendstr_chunk(req, n++ ? ",{\"name\":" : "{\"name\":");
+        json_string(req, e->d_name);
+        snprintf(line, sizeof(line), ",\"size\":%lu}", (unsigned long)st.st_size);
+        httpd_resp_sendstr_chunk(req, line);
+    }
+    if (d) closedir(d);
+    httpd_resp_sendstr_chunk(req, "]}");
+    return httpd_resp_sendstr_chunk(req, NULL);
+}
+
+// GET /api/loops/<name>: the WAV, in pieces (its bytes in X-Size: a piecewise answer has no length). Playing goes on.
+static esp_err_t loop_get(httpd_req_t *req)
+{
+    touch();
+    char path[LOOP_PATH];
+    if (!p4_jam_card()) return loop_refuse(req, "503 Service Unavailable", "no microSD card in the board");
+    if (!loop_path(req->uri, path)) return loop_refuse(req, "400 Bad Request", "not a loop's name");
+    struct stat st;
+    FILE *f = stat(path, &st) == 0 ? fopen(path, "rb") : NULL;
+    if (!f) return loop_refuse(req, "404 Not Found", "no such loop");
+    char *buf = heap_caps_malloc(LOOP_SEND, MALLOC_CAP_SPIRAM);
+    if (!buf) {
+        fclose(f);
+        return loop_refuse(req, "500 Internal Server Error", "no memory");
+    }
+    char size[16];   // (kept until the headers have gone out with the first piece)
+    snprintf(size, sizeof(size), "%lu", (unsigned long)st.st_size);
+    httpd_resp_set_type(req, "audio/wav");
+    httpd_resp_set_hdr(req, "X-Size", size);
+    esp_err_t err = ESP_OK;
+    size_t got, sent = 0;
+    while ((got = fread(buf, 1, LOOP_SEND, f)) > 0) {
+        if ((err = httpd_resp_send_chunk(req, buf, got)) != ESP_OK) break;
+        sent += got;
+        touch();
+    }
+    fclose(f);
+    free(buf);
+    if (err != ESP_OK) {   // (the Mac went away: the server closes the connection)
+        ESP_LOGW(TAG, "%s: sending broke off after %u KB", path, (unsigned)(sent / 1024));
+        return err;
+    }
+    ESP_LOGI(TAG, "sent %s (%u KB)", path, (unsigned)(sent / 1024));
+    return httpd_resp_send_chunk(req, NULL, 0);
+}
+
+// DELETE /api/loops/<name>
+static esp_err_t loop_delete(httpd_req_t *req)
+{
+    touch();
+    char path[LOOP_PATH];
+    if (!p4_jam_card()) return loop_refuse(req, "503 Service Unavailable", "no microSD card in the board");
+    if (!loop_path(req->uri, path)) return loop_refuse(req, "400 Bad Request", "not a loop's name");
+    if (remove(path) != 0) return loop_refuse(req, "404 Not Found", "no such loop");
+    ESP_LOGI(TAG, "deleted %s", path);
+    return httpd_resp_sendstr(req, "{\"ok\":true}");
+}
+
+// POST /api/time: "<unix seconds> <minutes east of UTC>" - the Mac's clock; loops saved after it carry the date in
+// their names (the board has no clock of its own; nothing is stored).
+static esp_err_t set_time(httpd_req_t *req)
+{
+    touch();
+    char body[48];
+    size_t total = req->content_len, got = 0;
+    if (total >= sizeof(body)) return loop_refuse(req, "400 Bad Request", "too long");
+    while (got < total) {
+        int n = httpd_req_recv(req, body + got, total - got);
+        if (n == HTTPD_SOCK_ERR_TIMEOUT) continue;
+        if (n <= 0) break;
+        got += n;
+    }
+    body[got] = 0;
+    long long t;
+    int minutes;
+    if (got < total || sscanf(body, "%lld %d", &t, &minutes) != 2) return loop_refuse(req, "400 Bad Request", "not a time");
+    p4_loops_set_time(t, minutes);
+    return httpd_resp_sendstr(req, "{\"ok\":true}");
+}
+
 static void http_start(void)
 {
     static const httpd_uri_t uris[] = {
@@ -594,6 +729,10 @@ static void http_start(void)
         { .uri = "/api/sources", .method = HTTP_POST, .handler = sources },
         { .uri = "/api/done", .method = HTTP_POST, .handler = done },
         { .uri = "/api/firmware", .method = HTTP_PUT, .handler = firmware },
+        { .uri = "/api/loops", .method = HTTP_GET, .handler = loops },
+        { .uri = "/api/loops/*", .method = HTTP_GET, .handler = loop_get },
+        { .uri = "/api/loops/*", .method = HTTP_DELETE, .handler = loop_delete },
+        { .uri = "/api/time", .method = HTTP_POST, .handler = set_time },
     };
     const size_t count = sizeof(uris) / sizeof(uris[0]);
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();

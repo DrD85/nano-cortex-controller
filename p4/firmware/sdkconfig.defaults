@@ -10,6 +10,9 @@ CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 CONFIG_SPIRAM=y
 CONFIG_SPIRAM_SPEED_200M=y
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
+# No test of the whole PSRAM at every start (2026-11-27): it only delays the start - and the way back after a power
+# cut on stage. A faulty chip would show later as a crash instead.
+CONFIG_SPIRAM_MEMTEST=n
 CONFIG_FREERTOS_HZ=1000
 # The start-up (app_main) left 1 KB of the default 3.5 KB; the memory is given back when it has finished
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
@@ -64,8 +67,13 @@ CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=517
 CONFIG_BT_NIMBLE_SM_SC=y
 CONFIG_BT_NIMBLE_NVS_PERSIST=y
 CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
-CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=24
-CONFIG_BT_NIMBLE_MSYS_2_BLOCK_COUNT=40
+# Bluetooth buffers: more than the 4.3" board's 24 + 40 (2026-11-27), raised while the editor's long replies hung.
+# The real cause of that was the piece size (nano_link_ble.c, limit_piece_size), but a sent packet's buffers still
+# come back only when the C6 behind esp_hosted reports it sent. msys_1 is the pool the host's packets are made of
+# (app_link.c waits for it); msys_2 serves only long ATT reads / writes. The "Long message to the app" line logs the
+# fewest free blocks of each - size them from that. The blocks lie in PSRAM (CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL).
+CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=64
+CONFIG_BT_NIMBLE_MSYS_2_BLOCK_COUNT=96
 CONFIG_BT_NIMBLE_MAX_CONNECTIONS=4
 # NimBLE's host on core 1: core 0 belongs to the USB audio
 CONFIG_BT_NIMBLE_PINNED_TO_CORE_1=y
@@ -85,3 +93,8 @@ CONFIG_BT_NIMBLE_SVC_GAP_DEVICE_NAME="Nano Cortex Controller"
 # pool, so internal RAM is not what fills).
 CONFIG_LWIP_TCP_WND_DEFAULT=32768
 CONFIG_LWIP_TCP_RECVMBOX_SIZE=32
+
+# The UART interrupt in internal RAM (2026-11-28): every log line goes out through it (the console's driver is
+# installed), and from flash it waited on the cache while the screen wrote back its frame buffer
+# (firmware/REALTIME.md rule 2). About 2.9 KB.
+CONFIG_UART_ISR_IN_IRAM=y

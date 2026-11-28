@@ -179,6 +179,7 @@ void ui_set_expression(const nano_exp_range_t *ranges, const nano_exp_switch_t *
 void ui_set_pedal(int value, int min, int max) { (void)value; (void)min; (void)max; }
 void ui_set_jack(int mode) { (void)mode; }
 void ui_set_layout(int count, const uint8_t order[8], int switch1) { (void)count; (void)order; (void)switch1; }
+void ui_set_layout_fx(const uint8_t order[8]) { (void)order; }
 void ui_set_app(bool connected) { (void)connected; }
 // (P4: the learn's answers are kept - learning all switches one after the other is checked below)
 static int t_learn_next = -1;
@@ -697,9 +698,12 @@ int main(int argc, char **argv)
     // A layout without the reverb switch: the reverb's own switch has to swap
     command('A', (int)modulated);
     advance(300);
-    s_layout_count = 6;
+    s_layout_count = 6;   // (FX mode's order for six fields, as the dialog sets it: no reverb switch either)
+    uint8_t fx_eight[FOOTSWITCH_COUNT];
+    for (int p = 0; p < FOOTSWITCH_COUNT; p++) fx_eight[p] = s_layout_fx[p], s_layout_fx[p] = LAYOUT_FX_DEFAULT[0][p];
     check(ab_mode(rslot) == UI_AB_HOLD, "six fields, no reverb switch: the reverb's own switch swaps");
     s_layout_count = 8;
+    for (int p = 0; p < FOOTSWITCH_COUNT; p++) s_layout_fx[p] = fx_eight[p];
     check(ab_mode(rslot) == UI_AB_OFF, "eight fields again: on / off only");
     advance(2000);
 
@@ -893,7 +897,8 @@ int main(int argc, char **argv)
     command('w', UI_SWITCH_HOLD | 1);
     advance(50);
     check(s_player && s_player_live && s_hold_switches == 0, "player mode: on, and no switch waits for a hold (%u)", (unsigned)s_hold_switches);
-    static const int WANT[3] = { UI_PLAYER_BACK, UI_PLAYER_TOGGLE, UI_PLAYER_NEXT };
+    // (player draft B, 2026-11-28: 5 / 7 select the song before / after, 6 plays the selected one)
+    static const int WANT[3] = { UI_PLAYER_SONG_PREV, UI_PLAYER_START, UI_PLAYER_SONG_NEXT };
     bool row_ok = true;
     for (int k = 0; k < 3; k++) {
         t_player_action = -1;
@@ -901,14 +906,19 @@ int main(int argc, char **argv)
         advance(50);
         if (t_player_action != WANT[k]) row_ok = false;
     }
-    check(row_ok && s_state.current_preset == preset_before, "player mode: 5-7 are back, play / pause, next - no preset changed");
+    check(row_ok && s_state.current_preset == preset_before, "player mode: 5-7 select the song before, play the selected one, select the one after - no preset changed");
     t_player_action = -1;
     command('w', 1);
     advance(50);
     check(t_player_action == UI_PLAYER_SOURCE && s_player && s_state.current_preset == preset_before, "player mode: 1 switches jam tracks / phone");
+    t_player_action = -1;
     command('w', 3);
     advance(50);
-    check(t_player_toggles == toggles + 1, "player mode: 3 opens the player's page");
+    check(t_player_action == UI_PLAYER_ALBUM_NEXT && s_player && t_player_toggles == toggles, "player mode: 3 is the next album (no page)");
+    command('w', 2);
+    advance(50);
+    check(t_player_toggles == toggles + 1 && s_player && !s_tuner_on && s_state.current_preset == preset_before,
+          "player mode: 2 opens / closes the list (not the tuner, 2026-11-28)");
     check(layout_switch(6) == 6, "player mode: the switches in fixed places, whatever the layout");
     command('w', 8);
     advance(50);
@@ -970,6 +980,30 @@ int main(int argc, char **argv)
     command('B', s_bank << 14 | slot << 11 | 0 << 7 | first);   // (no second preset again)
     advance(200);
     check(!s_bank2[s_bank][slot] && !((s_release_hold_switches >> (slot + 3)) & 1), "second preset removed: the switch acts on its press again");
+
+    // ---- (P4, 2026-11-27) FX mode has its own order; a footswitch's release goes where its press went ----
+    s_fx_mode = true;
+    show();
+    check(layout_switch(1) == 3 && layout_switch(3) == 7 && layout_switch(4) == 2 && layout_switch(5) == 5 && layout_switch(7) == 8
+          && layout_switch(8) == 1, "FX mode: its own order (1 Pre FX 1, 3 reverb on / off, 4 tuner, 5 Post FX 1, 7 reverb switch, 8 mode)");
+    s_fx_mode = false;
+    show();
+    check(layout_switch(1) == 1 && layout_switch(4) == 4 && layout_switch(8) == 8, "preset mode: the presets' order");
+    {
+        switch_track_t tr = { 0 };
+        s_fx_mode = true;
+        show();
+        switch_event(&tr, 4, FOOTSWITCH_PRESS);   // FX mode: footswitch 4 is the tuner's switch (2) - it waits for a hold
+        bool waited = tr.waiting[2] && tr.pressed[4] == 2;
+        s_fx_mode = false;   // the mode changes while the footswitch is down (position 4 is preset 2 there)
+        show();
+        switch_event(&tr, 4, FOOTSWITCH_RELEASE);
+        check(waited && !tr.waiting[2] && !tr.waiting[4] && tr.pressed[4] == 0,
+              "mode changed while a footswitch was down: its release went to the switch of its press (2), not to 4");
+        advance(50);
+        if (s_looper) command('w', 8);   // (switch 2 pressed = looper mode: back out)
+        advance(50);
+    }
 
     printf("%d checks, %d failed\n", t_checks, t_failed);
     printf(t_failed ? "main: FAILED\n" : "main: all checks passed\n");

@@ -1,7 +1,7 @@
 // Two parts for the looper (part A and part B, as verse and chorus) and the drums beside them, as the user asked for
 // on 2026-11-19: two loops of their own, each recorded and overdubbed on its own; a tap on the other part switches at
-// the end of the loop that plays (an empty part starts recording there); pause holds loop and drums together, a
-// second tap lets both go on where they were.
+// the end of the loop that plays (an empty part starts recording there); pause holds loop and drums together (the
+// loop faded out and in over 5 ms), a second tap lets both go on where they were.
 //
 // The drums follow the loop: when a part's first take starts they start from the top with it (if wanted), and
 // every time a loop of whole bars comes round they are set back to its bar line - so they never drift apart.
@@ -44,7 +44,9 @@ typedef struct {
 
     // audio side only
     int active, next;                // next = -1: no switch waiting
-    bool paused;
+    bool paused;                     // loop and drums held (after the fade out)
+    bool pausing;                    // fading out for a pause
+    uint32_t pause_g;                // the pause fade's gain in frames: 0 silent .. xfade full level
     uint32_t counting;               // frames of the count-in (or to the bar line) still to go (0 = none)
     bool armed;                      // waiting for the first note
     uint32_t count_beat;             // frames per beat of the count-in

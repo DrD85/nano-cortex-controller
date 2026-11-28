@@ -20,9 +20,13 @@
 #include "host/util/util.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
+#include "nimble/ble.h"
+#include "nimble/hci_common.h"
+#include "os/endian.h"
 #include "esp_timer.h"
 #include "esp_hosted.h"
 #include "app_link.h"
+#include "p4_c6_update.h"
 
 static const char *TAG = "nano_ble";
 
@@ -954,8 +958,42 @@ static int gap_event(struct ble_gap_event *event, void *arg)
 
 // ---- host ----
 
+// The size of the pieces NimBLE cuts a long packet into for the controller. The C6's controller takes pieces of up to
+// 517 bytes (LE Read Buffer Size) and NimBLE cuts to that size - but its one buffer for a piece holds 255 bytes
+// (BLE_ACL_MAX_PKT_SIZE; ble_hs_hci.c: "one-element mbuf pool", and mem_split_frag fails when the piece does not fit
+// into it). A packet of 518 bytes or more - a full packet to the editor at MTU 517 is 519 - was then never cut and
+// never sent, and everything behind it waited until the other side gave up (the editor through the 7" board loaded
+// for ever, 2026-11-27; shorter packets go out whole and never showed it). On the 4.3" board NimBLE cuts to 255 for
+// its own controller; here the host is told the same size. The two functions are NimBLE's own
+// (host/src/ble_hs_hci_priv.h), not in its public headers. At the sync nothing is connected, so setting the count
+// of free controller buffers anew is right. on_sync runs after every host reset too, after the start-up has set the
+// controller's size again. Checked against ESP-IDF 6.0.2 (2026-11-27): look again after an ESP-IDF update
+// (ble_hs_hci.c's fragment pool and split, ble_hs_startup.c setting the size).
+int ble_hs_hci_cmd_tx(uint16_t opcode, const void *cmd, uint8_t cmd_len, void *rsp, uint8_t rsp_len);
+int ble_hs_hci_set_buf_sz(uint16_t pktlen, uint16_t max_pkts);
+
+static void limit_piece_size(void)
+{
+    struct ble_hci_le_rd_buf_size_rp rp = { 0 };
+    int rc = ble_hs_hci_cmd_tx(BLE_HCI_OP(BLE_HCI_OGF_LE, BLE_HCI_OCF_LE_RD_BUF_SIZE), NULL, 0, &rp, sizeof(rp));
+    unsigned len = le16toh(rp.data_len), count = rp.data_packets;
+    if (rc != 0 || !count || !len) {
+        ESP_LOGE(TAG, "Bluetooth: the controller's packet size not read (%d) - long Bluetooth packets will hang", rc);
+        return;
+    }
+    if (len <= BLE_ACL_MAX_PKT_SIZE) {
+        ESP_LOGI(TAG, "Bluetooth: the controller takes %u packets of up to %u bytes", count, len);
+        return;
+    }
+    rc = ble_hs_hci_set_buf_sz(BLE_ACL_MAX_PKT_SIZE, (uint16_t)count);
+    if (rc != 0) ESP_LOGE(TAG, "Bluetooth: packet size not set (%d) - long Bluetooth packets will hang", rc);
+    else ESP_LOGI(TAG, "Bluetooth: the controller takes %u packets of up to %u bytes - long packets are cut to %d bytes",
+                  count, len, BLE_ACL_MAX_PKT_SIZE);
+}
+
 static void on_sync(void)
 {
+    limit_piece_size();
     ble_hs_util_ensure_addr(0);
     ble_hs_id_infer_auto(0, &s_own_addr_type);
     s_synced = true;
@@ -1015,6 +1053,11 @@ static void ble_start_task(void *arg)
     bool versioned = esp_hosted_get_coprocessor_fwversion(&fw) == ESP_OK && (fw.major1 || fw.minor1 || fw.patch1);
     if (versioned) ESP_LOGI(TAG, "ESP32-C6 firmware (esp_hosted) %u.%u.%u", (unsigned)fw.major1, (unsigned)fw.minor1, (unsigned)fw.patch1);
     else ESP_LOGI(TAG, "ESP32-C6 firmware without a version (as it came on the board) - its controller runs from its start");
+    {   // a new C6 firmware placed into ota_1: sent once, then the board starts again (p4_c6_update.c)
+        char running[24] = "";
+        if (versioned) snprintf(running, sizeof(running), "%u.%u.%u", (unsigned)fw.major1, (unsigned)fw.minor1, (unsigned)fw.patch1);
+        p4_c6_update_if_staged(running);
+    }
     // (The C6's firmware as it came on the board, 2026-11-19: esp_hosted without a version (0.0.0), "HCI over SDIO,
     // BLE only" - it does not know these two requests, its controller runs from its start. So a failure here only
     // says so; NimBLE is tried anyway.)

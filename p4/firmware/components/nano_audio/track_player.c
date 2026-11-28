@@ -154,6 +154,7 @@ void track_player_render_stereo(track_player_t *tp, float *lr, uint32_t frames)
     }
     bool want = atomic_load_explicit(&tp->want_play, memory_order_relaxed);
     const float fade_step = 1000.0f / (FADE_MS * tp->out_rate);
+    float step = (float)tp->step;   // (1 exactly at 48 kHz; at 44.1 kHz under a frame in 5 minutes off the double's)
 
     if (tp->state == TP_PREFILL && want && !tp->flushing) {
         bool eof = atomic_load_explicit(&tp->eof, memory_order_acquire);
@@ -191,8 +192,8 @@ void track_player_render_stereo(track_player_t *tp, float *lr, uint32_t frames)
             break;
         }
 
-        while (tp->frac >= 1.0 && tp->state == TP_RUN) {
-            tp->frac -= 1.0;
+        while (tp->frac >= 1.0f && tp->state == TP_RUN) {
+            tp->frac -= 1.0f;
             if (!pull(tp)) {
                 if (atomic_load_explicit(&tp->eof, memory_order_acquire)) {
                     if (tp->win[2][0] == 0 && tp->win[2][1] == 0 && tp->win[1][0] == 0 && tp->win[1][1] == 0) {
@@ -206,7 +207,7 @@ void track_player_render_stereo(track_player_t *tp, float *lr, uint32_t frames)
             }
         }
         if (tp->state == TP_ENDED) break;
-        float t = (float)tp->frac;
+        float t = tp->frac;
         float l = cubic(tp->win[0][0], tp->win[1][0], tp->win[2][0], tp->win[3][0], t);
         float r = cubic(tp->win[0][1], tp->win[1][1], tp->win[2][1], tp->win[3][1], t);
         if (tp->state == TP_FADEOUT) { l = tp->win[2][0]; r = tp->win[2][1]; }
@@ -218,7 +219,7 @@ void track_player_render_stereo(track_player_t *tp, float *lr, uint32_t frames)
         float g = tp->gain * tp->env;
         lr[2 * i] = l * g;
         lr[2 * i + 1] = r * g;
-        if (tp->state == TP_RUN) tp->frac += tp->step;
+        if (tp->state == TP_RUN) tp->frac += step;
     }
 
     bool playing = want && (tp->state == TP_PREFILL || tp->state == TP_RUN || tp->state == TP_FADEOUT);

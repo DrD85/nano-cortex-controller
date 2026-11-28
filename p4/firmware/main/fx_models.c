@@ -9,7 +9,7 @@ static const nano_param_t m18_params[] = {
 };
 static const nano_param_t m13_params[] = {
     { "Gain", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
-    { "Level", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+    { "Level", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
 };
 static const nano_param_t m6_params[] = {
     { "Gain", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
@@ -38,14 +38,14 @@ static const nano_param_t m22_params[] = {
 static const nano_param_t m27_params[] = {
     { "Overdrive", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
     { "Tone", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
-    { "Level", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+    { "Level", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
 };
 static const nano_param_t m3000_params[] = {
     { "Drive", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
     { "Growl", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
     { "Midboost", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
     { "Tone", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
-    { "Level", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+    { "Level", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
     { "Blend", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
 };
 static const nano_param_t m3_params[] = {
@@ -67,6 +67,7 @@ static const nano_param_t m16001_params[] = {
     { "Noise Reduction", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
 };
 static const nano_param_t m4005_params[] = {
+    { "HPF", NANO_PARAM_RANGE, 19.0f, 500.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
     { "65Hz", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "125Hz", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "250Hz", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
@@ -76,38 +77,38 @@ static const nano_param_t m4005_params[] = {
     { "4kHz", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "8kHz", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "16kHz", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
-    { "HPF", NANO_PARAM_RANGE, 20.0f, 800.0f, 1.0f, 1.0f, "Hz", 0, 0, NULL },
-    { "LPF", NANO_PARAM_RANGE, 1000.0f, 16000.0f, 1.0f, 1.0f, "Hz", 0, 0, NULL },
-    { "Output", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
+    { "LPF", NANO_PARAM_RANGE, 1000.0f, 20001.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
+    { "Output", NANO_PARAM_RANGE, -20.0f, 20.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
 };
+static const uint8_t m4005_order[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 10, 11 };
 static const nano_param_t m4003_params[] = {
     { "HPF Slope", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 9, "Flat\n-6\n-12\n-18\n-24\n-30\n-36\n-42\n-48" },
     { "HPF Freq", NANO_PARAM_RANGE, 20.0f, 20000.0f, 1.0f, 0.3f, "Hz", 0, 0, NULL },
     { "LPF Slope", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 9, "Flat\n-6\n-12\n-18\n-24\n-30\n-36\n-42\n-48" },
     { "LPF Freq", NANO_PARAM_RANGE, 20.0f, 20000.0f, 1.0f, 0.3f, "Hz", 0, 0, NULL },
-    { "Output", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
+    { "Output", NANO_PARAM_RANGE, -20.0f, 20.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
 };
 static const nano_param_t m4001_params[] = {
     { "1 Gain", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
-    { "1 Freq", NANO_PARAM_RANGE, 0.1f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
+    { "1 Freq", NANO_PARAM_RANGE, 20.0f, 20000.0f, 1.0f, 0.3f, "Hz", 0, 0, NULL },
     { "1 Q", NANO_PARAM_RANGE, 0.1f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
     { "1 Type", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 5, "Peak\nHi Pass\nLo Pass\nHi Shelf\nLo Shelf" },
     { "1 Active", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
     { "2 Gain", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
-    { "2 Freq", NANO_PARAM_RANGE, 0.1f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
+    { "2 Freq", NANO_PARAM_RANGE, 20.0f, 20000.0f, 1.0f, 0.3f, "Hz", 0, 0, NULL },
     { "2 Q", NANO_PARAM_RANGE, 0.1f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
     { "2 Type", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 5, "Peak\nHi Pass\nLo Pass\nHi Shelf\nLo Shelf" },
     { "2 Active", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
     { "3 Gain", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
-    { "3 Freq", NANO_PARAM_RANGE, 0.1f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
+    { "3 Freq", NANO_PARAM_RANGE, 20.0f, 20000.0f, 1.0f, 0.3f, "Hz", 0, 0, NULL },
     { "3 Q", NANO_PARAM_RANGE, 0.1f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
     { "3 Type", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 5, "Peak\nHi Pass\nLo Pass\nHi Shelf\nLo Shelf" },
     { "3 Active", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
-    { "Output", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
+    { "Output", NANO_PARAM_RANGE, -20.0f, 20.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
 };
 static const nano_param_t m16002_params[] = {
     { "Threshold", NANO_PARAM_RANGE, -90.0f, 0.0f, 0.1f, 0.6f, "dB", 1, 0, NULL },
-    { "Attack", NANO_PARAM_RANGE, 1.0f, 1000.0f, 1.0f, 1.0f, "ms", 0, 0, NULL },
+    { "Attack", NANO_PARAM_RANGE, 0.5f, 1000.0f, 0.1f, 0.6f, "ms", 1, 0, NULL },
     { "Hold", NANO_PARAM_RANGE, 1.0f, 2000.0f, 1.0f, 0.6f, "ms", 0, 0, NULL },
     { "Release", NANO_PARAM_RANGE, 2.0f, 5000.0f, 1.0f, 0.6f, "ms", 0, 0, NULL },
     { "Range", NANO_PARAM_RANGE, -90.0f, -6.0f, 0.1f, 0.6f, "dB", 1, 0, NULL },
@@ -129,19 +130,19 @@ static const nano_param_t m9013_params[] = {
     { "Wah", NANO_PARAM_RANGE, 0.0f, 1.0f, 0.01f, 1.0f, "", 2, 0, NULL },
 };
 static const nano_param_t m24006_params[] = {
-    { "Sens", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
-    { "Attack", NANO_PARAM_RANGE, 1.0f, 1000.0f, 1.0f, 1.0f, "ms", 0, 0, NULL },
-    { "Decay", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
+    { "Sens", NANO_PARAM_RANGE, 0.0f, 54.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
+    { "Attack", NANO_PARAM_RANGE, 10.0f, 1000.0f, 1.0f, 1.0f, "ms", 0, 0, NULL },
+    { "Decay", NANO_PARAM_RANGE, 10.0f, 1000.0f, 1.0f, 1.0f, "ms", 0, 0, NULL },
     { "LP/BP/HP", NANO_PARAM_RANGE, -1.0f, 1.0f, 0.01f, 1.0f, "", 2, 0, NULL },
-    { "Level", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
-    { "Freq", NANO_PARAM_RANGE, 20.0f, 20000.0f, 1.0f, 1.0f, "Hz", 0, 0, NULL },
-    { "Freq Depth", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
-    { "Reso", NANO_PARAM_RANGE, 1.0f, 10.0f, 0.01f, 1.0f, "", 2, 0, NULL },
+    { "Level", NANO_PARAM_RANGE, -60.0f, 12.0f, 0.1f, 3.8018f, "dB", 1, 0, NULL },
+    { "Freq", NANO_PARAM_RANGE, 20.0f, 10000.0f, 1.0f, 0.3f, "Hz", 0, 0, NULL },
+    { "Freq Depth", NANO_PARAM_RANGE, -10000.0f, 10000.0f, 1.0f, 1.0f, "Hz", 0, 0, NULL },
+    { "Reso", NANO_PARAM_RANGE, 1.0f, 10.0f, 0.01f, 0.3f, "", 2, 0, NULL },
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
 };
 static const nano_param_t m24001_params[] = {
     { "Sensitivity", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
-    { "Attack", NANO_PARAM_RANGE, 1.0f, 1000.0f, 1.0f, 1.0f, "ms", 0, 0, NULL },
+    { "Attack", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
     { "Decay", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
     { "Color", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
     { "Intensity", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
@@ -150,13 +151,13 @@ static const nano_param_t m24001_params[] = {
     { "Trigger Mode", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 3, "Off\nFull\n1/2" },
     { "Filter Cutoff", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 4, "Low\nA\nB\nHigh" },
     { "Filter Type", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 3, "Lowpass\nBandpass\nHighpass" },
-    { "Level", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+    { "Level", NANO_PARAM_RANGE, -60.0f, 12.0f, 0.1f, 3.8018f, "dB", 1, 0, NULL },
 };
 static const nano_param_t m5001_params[] = {
     { "Input", NANO_PARAM_RANGE, -48.0f, 0.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "Ratio", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 5, "4\n8\n12\n20\nAll" },
-    { "Attack", NANO_PARAM_RANGE, 0.02f, 0.8f, 0.01f, 0.6f, "ms", 2, 0, NULL },
-    { "Release", NANO_PARAM_RANGE, 0.06f, 1.1f, 0.01f, 0.6f, "s", 2, 0, NULL },
+    { "Attack", NANO_PARAM_RANGE, 0.016f, 0.8f, 0.001f, 0.6f, "ms", 3, 0, NULL },
+    { "Release", NANO_PARAM_RANGE, 0.056f, 1.1f, 0.001f, 0.6f, "s", 3, 0, NULL },
     { "Makeup", NANO_PARAM_RANGE, -48.0f, 48.0f, 0.01f, 1.0f, "dB", 2, 0, NULL },
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
 };
@@ -169,7 +170,7 @@ static const nano_param_t m5007_params[] = {
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
 };
 static const nano_param_t m5004_params[] = {
-    { "Threshold", NANO_PARAM_RANGE, -60.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
+    { "Threshold", NANO_PARAM_RANGE, -48.0f, 0.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "Ratio", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 3, "2\n4\n10" },
     { "Attack", NANO_PARAM_RANGE, 0.1f, 30.0f, 0.01f, 0.6f, "ms", 2, 0, NULL },
     { "Release", NANO_PARAM_RANGE, 0.01f, 1.2f, 0.01f, 0.6f, "s", 2, 0, NULL },
@@ -179,14 +180,14 @@ static const nano_param_t m5004_params[] = {
 static const nano_param_t m5005_params[] = {
     { "Threshold", NANO_PARAM_RANGE, -60.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "Ratio", NANO_PARAM_RANGE, 2.0f, 10.0f, 0.01f, 0.6f, "", 2, 0, NULL },
-    { "Attack", NANO_PARAM_RANGE, 1.0f, 250.0f, 0.01f, 1.0f, "ms", 2, 0, NULL },
+    { "Attack", NANO_PARAM_RANGE, 5.0f, 250.0f, 0.01f, 0.6f, "ms", 2, 0, NULL },
     { "Release", NANO_PARAM_RANGE, 50.0f, 1200.0f, 1.0f, 0.6f, "ms", 0, 0, NULL },
     { "Makeup", NANO_PARAM_RANGE, -48.0f, 48.0f, 0.01f, 1.0f, "dB", 2, 0, NULL },
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
 };
 static const nano_param_t m18001_params[] = {
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
-    { "Semitones", NANO_PARAM_RANGE, -12.0f, 12.0f, 1.0f, 1.0f, "Sem", 0, 0, NULL },
+    { "Semitones", NANO_PARAM_RANGE, -24.0f, 24.0f, 1.0f, 1.0f, "Sem", 0, 0, NULL },
     { "Pitch Fine", NANO_PARAM_RANGE, -100.0f, 100.0f, 1.0f, 1.0f, "Cent", 0, 0, NULL },
     { "High Pass", NANO_PARAM_RANGE, 20.0f, 2000.0f, 1.0f, 1.0f, "Hz", 0, 0, NULL },
     { "Low Pass", NANO_PARAM_RANGE, 200.0f, 19900.0f, 1.0f, 1.0f, "Hz", 0, 0, NULL },
@@ -219,8 +220,8 @@ static const nano_param_t m16011_params[] = {
 static const nano_param_t m5012_params[] = {
     { "Input", NANO_PARAM_RANGE, -48.0f, 0.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "Ratio", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 5, "4\n8\n12\n20\nAll" },
-    { "Attack", NANO_PARAM_RANGE, 0.02f, 0.8f, 0.01f, 0.6f, "ms", 2, 0, NULL },
-    { "Release", NANO_PARAM_RANGE, 0.06f, 1.1f, 0.01f, 0.6f, "s", 2, 0, NULL },
+    { "Attack", NANO_PARAM_RANGE, 0.016f, 0.8f, 0.001f, 0.6f, "ms", 3, 0, NULL },
+    { "Release", NANO_PARAM_RANGE, 0.056f, 1.1f, 0.001f, 0.6f, "s", 3, 0, NULL },
     { "Makeup", NANO_PARAM_RANGE, -48.0f, 48.0f, 0.01f, 1.0f, "dB", 2, 0, NULL },
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
 };
@@ -233,7 +234,7 @@ static const nano_param_t m5015_params[] = {
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
 };
 static const nano_param_t m5013_params[] = {
-    { "Threshold", NANO_PARAM_RANGE, -60.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
+    { "Threshold", NANO_PARAM_RANGE, -48.0f, 0.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "Ratio", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 3, "2\n4\n10" },
     { "Attack", NANO_PARAM_RANGE, 0.1f, 30.0f, 0.01f, 0.6f, "ms", 2, 0, NULL },
     { "Release", NANO_PARAM_RANGE, 0.01f, 1.2f, 0.01f, 0.6f, "s", 2, 0, NULL },
@@ -243,7 +244,7 @@ static const nano_param_t m5013_params[] = {
 static const nano_param_t m5014_params[] = {
     { "Threshold", NANO_PARAM_RANGE, -60.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "Ratio", NANO_PARAM_RANGE, 2.0f, 10.0f, 0.01f, 0.6f, "", 2, 0, NULL },
-    { "Attack", NANO_PARAM_RANGE, 1.0f, 250.0f, 0.01f, 1.0f, "ms", 2, 0, NULL },
+    { "Attack", NANO_PARAM_RANGE, 5.0f, 250.0f, 0.01f, 0.6f, "ms", 2, 0, NULL },
     { "Release", NANO_PARAM_RANGE, 50.0f, 1200.0f, 1.0f, 0.6f, "ms", 0, 0, NULL },
     { "Makeup", NANO_PARAM_RANGE, -48.0f, 48.0f, 0.01f, 1.0f, "dB", 2, 0, NULL },
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
@@ -288,10 +289,10 @@ static const nano_param_t m7022_params[] = {
 static const uint8_t m7022_order[] = { 0, 1, 5, 6, 2, 3, 4 };
 static const nano_param_t m7021_params[] = {
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
-    { "Manual", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
+    { "Manual", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Width", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Speed", NANO_PARAM_RANGE, 0.0f, 100.0f, 1.0f, 1.0f, "%", 0, 0, NULL },
-    { "Regen", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
+    { "Regen", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Output", NANO_PARAM_RANGE, -12.0f, 12.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "Sync", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
     { "Sync Note", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 14, "1/16\n1/8T\n1/16D\n1/8\n1/4T\n1/8D\n1/4\n1/2T\n1/4D\n1/2\n1/1T\n1/2D\n1/1\n1/1D" },
@@ -322,7 +323,7 @@ static const nano_param_t m7004_params[] = {
     { "Rate", NANO_PARAM_RANGE, 0.1f, 20.0f, 0.1f, 0.6f, "Hz", 1, 0, NULL },
     { "Depth", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Waveform", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 5, "Sine\nTriangle\nSquare\nSaw Up\nSaw Dn" },
-    { "Duty Cycle", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+    { "Duty Cycle", NANO_PARAM_RANGE, -100.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Width", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Smoothing", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "LFO Active", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
@@ -343,20 +344,20 @@ static const nano_param_t m6010_params[] = {
     { "Mod Rate", NANO_PARAM_RANGE, 0.1f, 10.0f, 0.1f, 0.6f, "Hz", 1, 0, NULL },
     { "Mod Depth", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Width", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
-    { "Drive", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
+    { "Drive", NANO_PARAM_RANGE, 0.0f, 100.0f, 1.0f, 1.0f, "%", 0, 0, NULL },
     { "Sync", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
-    { "Sync Note", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 14, "1/16\n1/8T\n1/16D\n1/8\n1/4T\n1/8D\n1/4\n1/2T\n1/4D\n1/2\n1/1T\n1/2D\n1/1\n1/1D" },
+    { "Sync Note", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 13, "1/16\n1/8T\n1/16D\n1/8\n1/4T\n1/8D\n1/4\n1/2T\n1/4D\n1/2\n1/1T\n1/2D\n1/1" },
 };
 static const uint8_t m6010_order[] = { 0, 1, 2, 3, 4, 10, 11, 5, 6, 7, 8, 9 };
 static const nano_param_t m6015_params[] = {
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Tap Preset", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 9, "1\n2\n3\n4\n4 Alt\n5\n5 Alt\n6\n6 Alt" },
     { "Delay Time", NANO_PARAM_RANGE, 27.0f, 2000.0f, 0.01f, 1.0f, "ms", 2, 0, NULL },
-    { "Feedback", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+    { "Feedback", NANO_PARAM_RANGE, 0.0f, 95.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Diffusion", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
-    { "High Pass", NANO_PARAM_RANGE, 20.0f, 800.0f, 1.0f, 1.0f, "Hz", 0, 0, NULL },
-    { "Low Pass", NANO_PARAM_RANGE, 1000.0f, 16000.0f, 1.0f, 1.0f, "Hz", 0, 0, NULL },
-    { "Mod Rate", NANO_PARAM_RANGE, 0.1f, 10.0f, 0.1f, 1.0f, "Hz", 1, 0, NULL },
+    { "High Pass", NANO_PARAM_RANGE, 20.0f, 13000.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
+    { "Low Pass", NANO_PARAM_RANGE, 170.0f, 20000.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
+    { "Mod Rate", NANO_PARAM_RANGE, 0.01f, 10.0f, 0.01f, 0.3f, "Hz", 2, 0, NULL },
     { "Mod Depth", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Vintage Mode", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
     { "Sync", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
@@ -373,7 +374,7 @@ static const nano_param_t m6011_params[] = {
     { "Mod Rate", NANO_PARAM_RANGE, 0.1f, 10.0f, 0.1f, 0.6f, "Hz", 1, 0, NULL },
     { "Mod Depth", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Width", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
-    { "Dyn Depth", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+    { "Dyn Depth", NANO_PARAM_RANGE, 0.0f, 60.0f, 0.1f, 0.6f, "dB", 1, 0, NULL },
     { "Dyn Mode", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 3, "Off\nDuck\nGate" },
     { "Threshold", NANO_PARAM_RANGE, -65.0f, -10.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "Attack", NANO_PARAM_RANGE, 1.0f, 2000.0f, 1.0f, 0.6f, "ms", 0, 0, NULL },
@@ -396,7 +397,7 @@ static const nano_param_t m6012_params[] = {
     { "Mod Rate", NANO_PARAM_RANGE, 0.1f, 10.0f, 0.1f, 0.6f, "Hz", 1, 0, NULL },
     { "Mod Depth", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Link FBack", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
-    { "Dyn Depth", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+    { "Dyn Depth", NANO_PARAM_RANGE, 0.0f, 60.0f, 0.1f, 0.6f, "dB", 1, 0, NULL },
     { "Dyn Mode", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 3, "Off\nDuck\nGate" },
     { "Threshold", NANO_PARAM_RANGE, -65.0f, -10.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "Attack", NANO_PARAM_RANGE, 1.0f, 2000.0f, 1.0f, 0.6f, "ms", 0, 0, NULL },
@@ -418,8 +419,8 @@ static const nano_param_t m6014_params[] = {
     { "Delay Time R", NANO_PARAM_RANGE, 20.0f, 4000.0f, 1.0f, 0.6f, "ms", 0, 0, NULL },
     { "Feedback R", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Overlap", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
-    { "Trig Threshold", NANO_PARAM_RANGE, -65.0f, -10.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
-    { "Dyn Depth", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+    { "Trig Threshold", NANO_PARAM_RANGE, -40.0f, 0.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
+    { "Dyn Depth", NANO_PARAM_RANGE, 0.0f, 60.0f, 0.1f, 0.6f, "dB", 1, 0, NULL },
     { "Dyn Mode", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 3, "Off\nDuck\nGate" },
     { "Threshold", NANO_PARAM_RANGE, -65.0f, -10.0f, 0.1f, 1.0f, "dB", 1, 0, NULL },
     { "Attack", NANO_PARAM_RANGE, 1.0f, 2000.0f, 1.0f, 0.6f, "ms", 0, 0, NULL },
@@ -427,7 +428,7 @@ static const nano_param_t m6014_params[] = {
     { "Knee", NANO_PARAM_RANGE, 1.0f, 20.0f, 0.01f, 1.0f, "dB", 2, 0, NULL },
     { "Feedback Depth", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "High Pass", NANO_PARAM_RANGE, 20.0f, 800.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
-    { "Low Pass", NANO_PARAM_RANGE, 1000.0f, 16000.0f, 1.0f, 1.0f, "Hz", 0, 0, NULL },
+    { "Low Pass", NANO_PARAM_RANGE, 1000.0f, 20000.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
     { "Link FBack", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
     { "Sync", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
     { "Sync Note L", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 21, "1/64T\n1/64\n1/32T\n1/64D\n1/32\n1/16T\n1/32D\n1/16\n1/8T\n1/16D\n1/8\n1/4T\n1/8D\n1/4\n1/2T\n1/4D\n1/2\n1/1T\n1/2D\n1/1\n1/1D" },
@@ -441,59 +442,64 @@ static const nano_param_t m6004_params[] = {
     { "Low Pass", NANO_PARAM_RANGE, 800.0f, 6000.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
     { "Drive", NANO_PARAM_RANGE, 0.0f, 100.0f, 1.0f, 1.0f, "%", 0, 0, NULL },
     { "Delay Time", NANO_PARAM_RANGE, 7.0f, 6000.0f, 1.0f, 0.6f, "ms", 0, 0, NULL },
-    { "Wow", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
-    { "Flutter", NANO_PARAM_RANGE, 0.0f, 10.0f, 0.1f, 1.0f, "", 1, 0, NULL },
+    { "Wow", NANO_PARAM_RANGE, 0.0f, 100.0f, 1.0f, 1.0f, "%", 0, 0, NULL },
+    { "Flutter", NANO_PARAM_RANGE, 0.0f, 100.0f, 1.0f, 1.0f, "%", 0, 0, NULL },
     { "Ping Pong", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
     { "Sync", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 2, "Off\nOn" },
     { "Sync Note", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 21, "1/64T\n1/64\n1/32T\n1/64D\n1/32\n1/16T\n1/32D\n1/16\n1/8T\n1/16D\n1/8\n1/4T\n1/8D\n1/4\n1/2T\n1/4D\n1/2\n1/1T\n1/2D\n1/1\n1/1D" },
 };
 static const uint8_t m6004_order[] = { 0, 1, 2, 3, 4, 9, 10, 5, 6, 7, 8 };
 static const nano_param_t m8008_params[] = {
-    { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Size", NANO_PARAM_ENUM, 0, 0, 0, 1, "", 0, 3, "Small\nMedium\nLarge" },
     { "Pre Delay", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 0.6f, "ms", 1, 0, NULL },
     { "High Pass", NANO_PARAM_RANGE, 20.0f, 800.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
     { "Low Pass", NANO_PARAM_RANGE, 800.0f, 12000.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
-};
-static const nano_param_t m8009_params[] = {
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+};
+static const uint8_t m8008_order[] = { 4, 0, 1, 2, 3 };
+static const nano_param_t m8009_params[] = {
     { "Decay", NANO_PARAM_RANGE, 5.0f, 20.0f, 0.01f, 0.6f, "s", 2, 0, NULL },
     { "Pre Delay", NANO_PARAM_RANGE, 1.0f, 200.0f, 0.1f, 0.6f, "ms", 1, 0, NULL },
     { "Damping", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "High Pass", NANO_PARAM_RANGE, 20.0f, 800.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
     { "Low Pass", NANO_PARAM_RANGE, 800.0f, 8000.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
-};
-static const nano_param_t m8003_params[] = {
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+};
+static const uint8_t m8009_order[] = { 5, 0, 1, 2, 3, 4 };
+static const nano_param_t m8003_params[] = {
     { "Decay", NANO_PARAM_RANGE, 1.0f, 10.0f, 0.01f, 0.6f, "s", 2, 0, NULL },
     { "Pre Delay", NANO_PARAM_RANGE, 1.0f, 100.0f, 0.1f, 0.6f, "ms", 1, 0, NULL },
     { "High Pass", NANO_PARAM_RANGE, 20.0f, 800.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
     { "Low Pass", NANO_PARAM_RANGE, 800.0f, 12000.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
+    { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
 };
+static const uint8_t m8003_order[] = { 4, 0, 1, 2, 3 };
 static const nano_param_t m8011_params[] = {
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
-    { "Decay", NANO_PARAM_RANGE, 1.0f, 10.0f, 0.01f, 1.0f, "s", 2, 0, NULL },
-    { "Pre Delay", NANO_PARAM_RANGE, 1.0f, 100.0f, 0.1f, 1.0f, "ms", 1, 0, NULL },
+    { "Decay", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+    { "Pre Delay", NANO_PARAM_RANGE, 1.0f, 200.0f, 0.1f, 0.5f, "ms", 1, 0, NULL },
     { "High Pass", NANO_PARAM_RANGE, 20.0f, 800.0f, 1.0f, 0.5f, "Hz", 0, 0, NULL },
     { "Low Pass", NANO_PARAM_RANGE, 800.0f, 12000.0f, 1.0f, 0.5f, "Hz", 0, 0, NULL },
     { "Damping", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
 };
 static const nano_param_t m8007_params[] = {
-    { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Decay", NANO_PARAM_RANGE, 1.0f, 10.0f, 0.01f, 0.6f, "s", 2, 0, NULL },
     { "Pre Delay", NANO_PARAM_RANGE, 1.0f, 200.0f, 0.1f, 0.6f, "ms", 1, 0, NULL },
     { "Mod Speed", NANO_PARAM_RANGE, 0.1f, 5.0f, 0.01f, 0.6f, "Hz", 2, 0, NULL },
     { "Mod Depth", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "High Pass", NANO_PARAM_RANGE, 20.0f, 800.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
     { "Low Pass", NANO_PARAM_RANGE, 800.0f, 12000.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
-};
-static const nano_param_t m8000_params[] = {
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
+};
+static const uint8_t m8007_order[] = { 6, 0, 1, 2, 3, 4, 5 };
+static const nano_param_t m8000_params[] = {
     { "Decay", NANO_PARAM_RANGE, 0.1f, 2.0f, 0.01f, 0.6f, "s", 2, 0, NULL },
-    { "Pre Delay", NANO_PARAM_RANGE, 1.0f, 100.0f, 0.1f, 1.0f, "ms", 1, 0, NULL },
+    { "Pre Delay", NANO_PARAM_RANGE, 0.1f, 100.0f, 0.1f, 0.6f, "ms", 1, 0, NULL },
     { "High Pass", NANO_PARAM_RANGE, 20.0f, 800.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
     { "Low Pass", NANO_PARAM_RANGE, 800.0f, 12000.0f, 1.0f, 0.6f, "Hz", 0, 0, NULL },
+    { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
 };
+static const uint8_t m8000_order[] = { 4, 0, 1, 2, 3 };
 static const nano_param_t m8030_params[] = {
     { "Mix", NANO_PARAM_RANGE, 0.0f, 100.0f, 0.1f, 1.0f, "%", 1, 0, NULL },
     { "Decay", NANO_PARAM_RANGE, 0.5f, 20.0f, 0.01f, 0.4f, "s", 2, 0, NULL },
@@ -535,7 +541,7 @@ const nano_fx_model_t NANO_FX_MODELS[] = {
     { 2, "Obsessive Drive", NANO_ICON_OVERDRIVE, 0xFF7000, -1, 4, m2_params, NULL },
     { 4, "Rodent Drive", NANO_ICON_OVERDRIVE, 0xFF7000, -1, 3, m4_params, NULL },
     { 16001, "Adaptive Gate", NANO_ICON_GATE, 0xE6E6E6, -1, 1, m16001_params, NULL },
-    { 4005, "Graphic 9", NANO_ICON_EQUALIZER, 0x0A74E0, -1, 12, m4005_params, NULL },
+    { 4005, "Graphic 9", NANO_ICON_EQUALIZER, 0x0A74E0, -1, 12, m4005_params, m4005_order },
     { 4003, "Low-High Cut", NANO_ICON_EQUALIZER, 0x0A74E0, -1, 5, m4003_params, NULL },
     { 4001, "Parametric 3", NANO_ICON_EQUALIZER, 0x0A74E0, -1, 16, m4001_params, NULL },
     { 16002, "Utility Gate", NANO_ICON_GATE, 0xE6E6E6, -1, 5, m16002_params, NULL },
@@ -573,12 +579,12 @@ const nano_fx_model_t NANO_FX_MODELS[] = {
     { 6012, "Dual Delay", NANO_ICON_DELAY, 0x00FFDD, 0, 22, m6012_params, m6012_order },
     { 6014, "Dual Reverse Delay", NANO_ICON_DELAY, 0x00FFDD, 0, 22, m6014_params, m6014_order },
     { 6004, "Tape Delay", NANO_ICON_DELAY, 0x00FFDD, 0, 11, m6004_params, m6004_order },
-    { 8008, "Ambience", NANO_ICON_REVERB, 0x00FFDD, 0, 5, m8008_params, NULL },
-    { 8009, "Cave", NANO_ICON_REVERB, 0x00FFDD, 0, 6, m8009_params, NULL },
-    { 8003, "Hall", NANO_ICON_REVERB, 0x00FFDD, 0, 5, m8003_params, NULL },
+    { 8008, "Ambience", NANO_ICON_REVERB, 0x00FFDD, 4, 5, m8008_params, m8008_order },
+    { 8009, "Cave", NANO_ICON_REVERB, 0x00FFDD, 5, 6, m8009_params, m8009_order },
+    { 8003, "Hall", NANO_ICON_REVERB, 0x00FFDD, 4, 5, m8003_params, m8003_order },
     { 8011, "Mind Hall", NANO_ICON_REVERB, 0x00FFDD, 0, 6, m8011_params, NULL },
-    { 8007, "Modulated", NANO_ICON_REVERB, 0x00FFDD, 0, 7, m8007_params, NULL },
-    { 8000, "Room", NANO_ICON_REVERB, 0x00FFDD, 0, 5, m8000_params, NULL },
+    { 8007, "Modulated", NANO_ICON_REVERB, 0x00FFDD, 6, 7, m8007_params, m8007_order },
+    { 8000, "Room", NANO_ICON_REVERB, 0x00FFDD, 4, 5, m8000_params, m8000_order },
     { 8030, "Blossom (ST)", NANO_ICON_REVERB, 0x00FFDD, 0, 12, m8030_params, NULL },
     { 8010, "Shimmer", NANO_ICON_REVERB, 0x00FFDD, 0, 11, m8010_params, NULL },
 };

@@ -272,6 +272,8 @@ void ui_set_jack(int mode);
 // switch1: what footswitch 1 changes between (UI_SWITCH1_*), set in the same dialog.
 enum { UI_SWITCH1_FX_PRESETS, UI_SWITCH1_FX_SCENES, UI_SWITCH1_PRESETS_SCENES, UI_SWITCH1_ALL, UI_SWITCH1_COUNT };
 void ui_set_layout(int count, const uint8_t order[8], int switch1);
+// FX mode's own order (position p -> switch 1-8; the count is the one of ui_set_layout).
+void ui_set_layout_fx(const uint8_t order[8]);
 
 // The Nano Cortex Editor is connected through the controller (shown in the status line).
 void ui_set_app(bool connected);
@@ -366,10 +368,11 @@ typedef enum {
     UI_DRUM_GROOVE, UI_DRUM_LEVEL, UI_DRUM_LEVEL_KEEP, UI_DRUM_SYNC, UI_DRUM_COUNT,   // groove index; level dB x 10; 0 / 1
     UI_LOOP_QUANTIZE, UI_LOOP_ARM,   // 0 / 1: takes on the drums' bar lines; Rec arms (the first note starts the take)
     UI_BRIGHTNESS, UI_BRIGHTNESS_KEEP,   // the screen's brightness in percent: while the bar moves / let go (kept)
-    UI_DRUM_KIT,                         // DRUM_KIT_* (computed / acoustic)
+    UI_DRUM_KIT,                         // DRUM_KIT_* (computed / acoustic / Lo-Fi)
     UI_PART_GROOVE,                      // part << 8 | (groove + 1): a looper part's own groove (0 = none); part 2 = both none
     UI_LEVEL_SET,                        // the Level sheet's choice: kind | profile << 4 | (Clean base x 10 + 1000) << 8 (kept)
     UI_LEVEL_MEASURE,                    // 1: measure the next 4 s of played sound, 0: stop
+    UI_LOOP_SAVE,                        // the looper's parts to the card as WAV files ("Save loops" in the drum menu)
 } ui_phone_action_t;
 // value: UI_PHONE_VOLUME / UI_JAM_VOLUME / UI_JAM_LEVEL dB x 10 (the level: correction of the current jam track),
 // UI_PHONE_MUTE_TUNER / UI_LOOP_BARS / UI_NET_ON 0 / 1, UI_JAM_PLAY the track (0-based). Called from the LVGL task.
@@ -382,7 +385,12 @@ void ui_set_phone(const ui_phone_t *p);
 // footswitch 1 held.
 void ui_player_toggle(void);
 // P4, player mode: what a footswitch does to the player (jam tracks or phone, the one chosen): UI_PLAYER_*.
-enum { UI_PLAYER_BACK, UI_PLAYER_PLAY, UI_PLAYER_PAUSE, UI_PLAYER_NEXT, UI_PLAYER_TOGGLE, UI_PLAYER_SOURCE };
+// (2026-11-28, player draft B) The jam tracks are chosen before they play: SONG_PREV / SONG_NEXT move a selection
+// inside its album, ALBUM_NEXT to the next album, round (its first song - or the song that plays, back in its album;
+// ALBUM_PREV the one before, on the jam page's arrow); START plays the selected song, or pauses / plays on when the
+// selection is the song that plays. The phone has no list: there SONG_* skip at once and the albums are not there.
+enum { UI_PLAYER_BACK, UI_PLAYER_PLAY, UI_PLAYER_PAUSE, UI_PLAYER_NEXT, UI_PLAYER_TOGGLE, UI_PLAYER_SOURCE,
+       UI_PLAYER_SONG_PREV, UI_PLAYER_SONG_NEXT, UI_PLAYER_START, UI_PLAYER_ALBUM_PREV, UI_PLAYER_ALBUM_NEXT };
 void ui_player_action(int action);
 void ui_player_hide(void);   // the player's page away (out of player mode)
 // The drum menu (looper mode: footswitch 1 held, or the drums' tile held) on the screen, or away again.
@@ -395,6 +403,8 @@ void ui_set_output_level(bool known, float lufs, float level);
 // the signal chain and the tiles in looper mode (the tuner's footswitch held), the jam player (from the top bar's
 // player field when the jam tracks are its source, or with footswitch 1 held). Taps go out as 'w' (looper tiles) and through the phone handler (jam).
 enum { UI_LOOP_EMPTY, UI_LOOP_REC, UI_LOOP_PLAY, UI_LOOP_DUB, UI_LOOP_STOP };
+// Saving the loops to the card: nothing to save / to save / saving (save_pct) / saved as they are / no card.
+enum { UI_SAVE_NONE, UI_SAVE_READY, UI_SAVE_BUSY, UI_SAVE_DONE, UI_SAVE_NO_CARD };
 typedef struct {
     bool ready;                 // the looper has its memory
     int state;                  // UI_LOOP_*
@@ -415,6 +425,7 @@ typedef struct {
     int drum_kit;               // DRUM_KIT_*
     bool acoustic_kit;          // the acoustic kit's samples are there
     int part_groove[2];         // the parts' own grooves (-1 = the common one)
+    int save_state, save_pct;   // saving the loops to the card: UI_SAVE_*, percent while it saves
     // the Level sheet (the Nano's sound on USB 3/4, BS.1770): -100 = nothing played
     float lv_short, lv_mom, lv_peak_db;   // the last 3 s, the last 0.4 s, the highest sample peak of the last 3 s
     int lv_kind, lv_profile, lv_base_x10; // what the preset is (UI_LEVEL_SET), the listening profile, Clean's level
@@ -460,3 +471,18 @@ void ui_set_loop_source(ui_loop_source_cb source, ui_jam_name_cb names, ui_jam_n
 #define UI_COVER_PX 128
 typedef bool (*ui_cover_cb)(uint16_t *dst, uint32_t *seq);
 void ui_set_cover_source(ui_cover_cb get);
+// P4 (draft 2026-11-28): the live spectrum of the Nano's sound in the EQ editor - USB 3/4, after the whole chain (and
+// the DI, USB 1/2, as an option of the build). The screen asks while an EQ editor shows it, ~15 times a second; get
+// copies the newest into out and returns false while there is none. want = false: the screen no longer shows it (the
+// analysis also stops by itself 0.4 s after the last question).
+#define UI_SPEC_BANDS 120               // 1/12 octave each, band i at UI_SPEC_F0 * 2^(i/12) (as the desktop editor)
+#define UI_SPEC_F0 20.0f
+typedef struct {
+    uint32_t seq;                       // goes up with every new spectrum
+    bool live;                          // the Nano's sound comes (USB audio runs)
+    bool has_di;
+    float out_db[UI_SPEC_BANDS];        // dBFS (a full-scale sine reads 0 dB in its band), smoothed
+    float di_db[UI_SPEC_BANDS];
+} ui_spectrum_t;
+typedef bool (*ui_spectrum_cb)(bool want, ui_spectrum_t *out);
+void ui_set_spectrum_source(ui_spectrum_cb get);

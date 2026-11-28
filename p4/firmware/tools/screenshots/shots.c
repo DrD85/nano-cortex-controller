@@ -211,6 +211,224 @@ static void fake_note(int i, char *out, size_t n)
 }
 static void on_pad_corner_test(int k) { pad_move((float)(k % 2), (float)(k / 2)); }
 
+// Player drafts (2026-11-28): the jam player's answers to the screen's calls, as p4_jam.c gives them (Next / Back stay
+// inside the album, a track from its start); the Blues album has the example cover, the others none.
+static bool fake_same_album(int a, int b)
+{
+    const char *x = fake_name(a), *y = fake_name(b), *sx = strchr(x, '/'), *sy = strchr(y, '/');
+    int nx = sx ? (int)(sx - x) : 0, ny = sy ? (int)(sy - y) : 0;
+    return nx == ny && !strncmp(x, y, (size_t)nx);
+}
+static int s_fake_cue = -1;
+static void fake_jam_action(ui_phone_action_t a, int v)
+{
+    ui_jam_t *j = &s_fake_jam;
+    switch ((int)a) {
+    case UI_JAM_PLAY: j->current = v, j->playing = true, j->pos_s = 0, j->len_s = 280 + 23 * v, s_fake_cue = -1; break;
+    case UI_JAM_TOGGLE: if (j->current < 0) fake_jam_action(UI_JAM_PLAY, 0); else j->playing = !j->playing; break;
+    case UI_JAM_NEXT:
+        if (j->current >= 0 && j->current + 1 < j->count && fake_same_album(j->current, j->current + 1)) fake_jam_action(UI_JAM_PLAY, j->current + 1);
+        break;
+    case UI_JAM_PREV:
+        if (j->pos_s > 3) j->pos_s = 0;
+        else if (j->current > 0 && fake_same_album(j->current - 1, j->current)) fake_jam_action(UI_JAM_PLAY, j->current - 1);
+        break;
+    default: break;
+    }
+    s_fake_cover_has = j->current >= 2 && j->current <= 4;
+    j->cover_seq++;
+}
+
+// Footswitch n in player mode, as main.c's looper_switch maps it (draft B: 1 source, 3 the next album, 4 the
+// looper, 5 / 7 select the song before / after, 6 plays the selected one)
+static void player_press(int n)
+{
+    static const int ACTION[9] = { -1, UI_PLAYER_SOURCE, -1, UI_PLAYER_ALBUM_NEXT, -1,
+                                   UI_PLAYER_SONG_PREV, UI_PLAYER_START, UI_PLAYER_SONG_NEXT, -1 };
+    if (n >= 1 && n <= 8 && ACTION[n] >= 0) ui_player_action(ACTION[n]);
+    loop_poll(NULL);
+}
+
+static void player_playing_texas(void)   // Texas Blues E plays, 2:14 in, nothing selected
+{
+    fake_jam_action(UI_JAM_PLAY, 3);
+    s_fake_jam.pos_s = 134, s_fake_jam.len_s = 372;
+    s_sel = -1;
+    loop_poll(NULL);
+}
+
+static void player_drafts(void)
+{
+    ui_set_phone_handler(fake_jam_action);
+    view.player = true;
+    s_source = 1;
+    s_fake_cover_has = false;
+    s_fake_jam = (ui_jam_t){ .card = true, .count = 7, .current = -1, .volume_db = -6, .target_lufs = -21, .cover_seq = 100 };
+    ui_show_state(&st, &view);
+    loop_poll(NULL);
+    shot("90-player-idle");             // nothing played since the start: 6 plays the first song
+    player_playing_texas();
+    shot("91-player-playing");
+    player_press(7);                    // Twelve Bar Shuffle selected, Texas Blues E plays on
+    shot("92-player-selected");
+    player_playing_texas();
+    player_press(3);                    // the next album: Funk, its first song selected
+    shot("93-player-album");
+    ui_player_toggle();                 // ... and the jam page with it
+    loop_poll(NULL);
+    shot("94-player-page");
+    ui_player_toggle();
+    player_press(6);                    // 6: Funk Groove E9 plays
+    s_fake_jam.pos_s = 12;
+    loop_poll(NULL);
+    shot("95-player-started");
+    view.player = false;
+    s_sel = -1;
+    ui_show_state(&st, &view);
+    ui_set_phone_handler(NULL);
+}
+
+// ---- The EQ editor's live spectrum (draft 2026-11-28): the three EQ models as they are and with A / B / C ----
+// A made-up sound in 1/12-octave bands: a pink-noise-like slope with a guitar's body (low mids), presence and the
+// cab's roll-off, the harmonics of an A - and the EQ's own curve on it, since the spectrum is the sound after it.
+// The DI: flatter, brighter, quieter.
+static bool s_fake_spec_live = true, s_fake_spec_di;
+static float fake_level(float f, bool di)
+{
+    float lf = log2f(f / 200.0f), db;
+    if (!di) {
+        db = -40 - 2.5f * (lf > 0 ? lf : 0) + 9 * expf(-powf(log2f(f / 260), 2) / (2 * 0.55f * 0.55f))
+           + 6 * expf(-powf(log2f(f / 2600), 2) / (2 * 0.40f * 0.40f)) - (f > 5500 ? 22 * log2f(f / 5500) : 0)
+           - (f < 90 ? 20 * log2f(90 / f) : 0);
+    } else {
+        db = -52 - 1.5f * (lf > 0 ? lf : 0) + 4 * expf(-powf(log2f(f / 180), 2) / (2 * 0.8f * 0.8f))
+           - (f > 9000 ? 12 * log2f(f / 9000) : 0) - (f < 80 ? 18 * log2f(80 / f) : 0);
+    }
+    for (int k = 1; k <= 8; k++) db += (6.0f / k) * expf(-powf(log2f(f / (110.0f * k)) * 24, 2));
+    return db + 1.5f * sinf(f * 0.013f) + 1.0f * sinf(f * 0.0031f + 1.3f);
+}
+static float fake_eq_db(float f)
+{
+    if (!s_spec) return 0;
+    spec_eq_read(s_spec);
+    float db = s_spec->eq_known ? s_spec->out_db : 0;
+    for (int i = 0; s_spec->eq_known && i < s_spec->bands; i++) db += spec_band_db(&s_spec->band[i], f);
+    return db;
+}
+static bool fake_spectrum(bool want, ui_spectrum_t *out)
+{
+    static uint32_t seq;
+    if (!want || !out) return false;
+    out->seq = ++seq;
+    out->live = s_fake_spec_live;
+    out->has_di = s_fake_spec_di;
+    for (int i = 0; i < UI_SPEC_BANDS; i++) {
+        float f = UI_SPEC_F0 * powf(2.0f, i / 12.0f);
+        out->out_db[i] = fake_level(f, false) + fake_eq_db(f);
+        out->di_db[i] = fake_level(f, true);
+    }
+    return true;
+}
+static float eq_norm(uint32_t type, const char *name, float value)
+{
+    const nano_fx_model_t *m = nano_fx_model(type);
+    for (int i = 0; m && i < m->param_count; i++) {
+        const nano_param_t *p = &m->params[i];
+        if (strcmp(p->name, name)) continue;
+        if (p->kind == NANO_PARAM_ENUM) return p->option_count > 1 ? value / (p->option_count - 1) : 0;
+        float n = (value - p->min) / (p->max - p->min);
+        return powf(n < 0 ? 0 : n > 1 ? 1 : n, p->skew > 0 ? p->skew : 1);
+    }
+    fprintf(stderr, "eq_norm: no %s\n", name);
+    return 0;
+}
+static void eq_values(uint32_t type, const char *const *names, const float *v, int n, float *out, int *count)
+{
+    const nano_fx_model_t *m = nano_fx_model(type);
+    *count = m->param_count;
+    for (int i = 0; i < m->param_count; i++) out[i] = 0.5f;
+    for (int k = 0; k < n; k++)
+        for (int i = 0; i < m->param_count; i++) if (!strcmp(m->params[i].name, names[k])) out[i] = eq_norm(type, names[k], v[k]);
+}
+#ifdef SPEC_TIMING   // DRAFT=-DSPEC_TIMING tools/screenshots/make_p4.sh: what one look costs on this computer (stderr)
+#include <time.h>
+static double spec_us(clock_t t0, int n) { return (double)(clock() - t0) / CLOCKS_PER_SEC * 1e6 / n; }
+static void spec_timing(int style)
+{
+    const int n = 300;
+    clock_t t0 = clock();
+    if (!style) {
+        for (int i = 0; i < n; i++) { lv_obj_invalidate(lv_screen_active()); lv_refr_now(NULL); }
+        fprintf(stderr, "TIMING the whole screen drawn anew: %.0f us\n", spec_us(t0, n));
+        return;
+    }
+    double paint = 0, curve = 0;
+    lv_obj_t *area = s_spec->img;
+    if (style != SPEC_STYLE_B) {
+        for (int i = 0; i < n; i++) spec_paint(s_spec);
+        paint = spec_us(t0, n);
+        t0 = clock();
+        for (int i = 0; i < n; i++) spec_eq_curve(s_spec);
+        curve = spec_us(t0, n);
+    }
+    t0 = clock();
+    for (int i = 0; i < n; i++) { lv_obj_invalidate(area); lv_refr_now(NULL); }
+    fprintf(stderr, "TIMING style %c: made %.0f us, EQ curve %.0f us, LVGL draws its area %.0f us (%d rows)\n", 'A' + style - 1,
+            paint, curve, spec_us(t0, n), (int)lv_obj_get_height(area));
+}
+#endif
+
+static void eq_spectrum_shots(void)
+{
+    // Parametric 3: less mud at 250 Hz, presence at 2.5 kHz, band 3 (a high shelf) switched off
+    static const char *const p3n[] = { "1 Gain", "1 Freq", "1 Q", "1 Type", "1 Active", "2 Gain", "2 Freq", "2 Q", "2 Type", "2 Active",
+                                       "3 Gain", "3 Freq", "3 Q", "3 Type", "3 Active", "Output" };
+    static const float p3v[] = { -5, 250, 1.2f, 0, 1, 3.5f, 2500, 0.9f, 0, 1, -4, 7000, 0.7f, 3, 0, 0 };
+    // Graphic 9: a smile with less low end, high pass 80 Hz, low pass 12 kHz
+    static const char *const g9n[] = { "HPF", "65Hz", "125Hz", "250Hz", "500hz", "1kHz", "2kHz", "4kHz", "8kHz", "16kHz", "LPF", "Output" };
+    static const float g9v[] = { 80, -2, 0.5f, -3, -1.5f, 1, 3, 2.5f, -1.5f, -4, 12000, 0 };
+    // Low-High Cut: -12 dB per octave from 90 Hz, -24 from 7.5 kHz
+    static const char *const lhn[] = { "HPF Slope", "HPF Freq", "LPF Slope", "LPF Freq", "Output" };
+    static const float lhv[] = { 2, 90, 4, 7500, 0 };
+    static const struct { const char *name; uint32_t type; const char *const *names; const float *v; int n; } eqs[3] = {
+        { "p3", 4001, p3n, p3v, 16 }, { "g9", 4005, g9n, g9v, 12 }, { "lhc", 4003, lhn, lhv, 5 } };
+    static const char *const styles[4] = { "current", "a", "b", "c" };
+    static const int drawn[] = { 0,
+        SPEC_STYLE_C,
+    };
+    static const char empty[UI_FX_PRESETS][16] = { "", "", "", "" };
+    ui_set_spectrum_source(fake_spectrum);
+    int was = s_spec_style;
+    for (int e = 0; e < 3; e++) {
+        float vals[NANO_MAX_PARAMS];
+        int count;
+        eq_values(eqs[e].type, eqs[e].names, eqs[e].v, eqs[e].n, vals, &count);
+        for (unsigned k = 0; k < sizeof(drawn) / sizeof(drawn[0]); k++) {
+            int s = drawn[k];
+            s_spec_style = s;
+            ui_fx_editor_close();
+            ui_fx_editor_show(2, eqs[e].type, true, vals, count);
+            ui_fx_presets_show(empty, 0, true);
+            char name[48];
+            snprintf(name, sizeof(name), "eq-%s-%d-%s", eqs[e].name, s, styles[s]);
+            shot(name);
+#ifdef SPEC_TIMING
+            if (e == 0) spec_timing(s);
+#endif
+            if (e == 0 && s == SPEC_STYLE_C) {   // C: HOLD - the sound before the EQ was set, kept as a line
+                for (int i = 0; i < UI_SPEC_BANDS; i++) s_spec->data.out_db[i] = fake_level(UI_SPEC_F0 * powf(2.0f, i / 12.0f), false);
+                s_spec->data.live = true;
+                on_spec_hold(NULL);
+                shot("eq-p3-3-c-hold");
+                on_spec_hold(NULL);
+            }
+        }
+    }
+    s_spec_style = was;
+    ui_fx_editor_close();
+    ui_set_spectrum_source(NULL);
+}
+
 int main(void)
 {
     lv_init();
@@ -297,9 +515,25 @@ int main(void)
     s_fake_loop.paused = false;
     loop_poll(NULL);
     s_fake_loop.part_groove[0] = s_fake_loop.part_groove[1] = -1, s_fake_loop.acoustic_kit = true, s_fake_loop.drum_kit = DRUM_KIT_ACOUSTIC;
+    s_fake_loop.save_state = UI_SAVE_READY;   // (two loops, not saved yet)
     loop_poll(NULL);
     ui_drum_menu_toggle();
     shot("18g-drum-menu");
+    // saving the loops to the card (p4_loops.c): while it saves, saved, the message after it, no card
+    s_fake_loop.save_state = UI_SAVE_BUSY, s_fake_loop.save_pct = 45;
+    loop_poll(NULL);
+    shot("18i-drum-menu-saving");
+    s_fake_loop.save_state = UI_SAVE_DONE;
+    loop_poll(NULL);
+    shot("18j-drum-menu-saved");
+    ui_show_message("Saved to the card: Loop 7 A and B");
+    shot("18k-drum-menu-saved-message");
+    lv_obj_set_hidden(s_toast, true);
+    s_fake_loop.save_state = UI_SAVE_NO_CARD;
+    loop_poll(NULL);
+    shot("18l-drum-menu-no-card");
+    s_fake_loop.save_state = UI_SAVE_NONE;
+    loop_poll(NULL);
     ui_drum_menu_toggle();
     s_fake_loop.part_groove[1] = 60;   // part B with its own groove, and that part chosen in the menu
     loop_poll(NULL);
@@ -404,6 +638,9 @@ int main(void)
     loop_poll(NULL);
     shot("80-player-mode-phone");
     view.player = false;
+    s_source = 0;
+    ui_show_state(&st, &view);
+    player_drafts();
     s_source = 0;
     ui_show_state(&st, &view);
 
@@ -756,17 +993,23 @@ int main(void)
     shot("12-cab-settings");
     close_all();
 
-    // Tile layout: 6 fields (mode, Pre FX 1-2, tuner, Post FX 1-2; Post FX 3 and the reverb switch left out)
-    static const uint8_t six[8] = { 1, 3, 4, 2, 5, 6, 7, 8 };
+    // Tile layout: 6 fields (mode, Pre FX 1-2, tuner, Post FX 1-2; Post FX 3 and the reverb switch left out) - in FX
+    // mode its own order (FX mode's six-field default: Pre FX 1-2, mode; Post FX 1-3)
+    static const uint8_t six[8] = { 1, 3, 4, 2, 5, 6, 7, 8 }, six_fx[8] = { 3, 4, 1, 5, 6, 7, 2, 8 };
     ui_set_layout(6, six, UI_SWITCH1_ALL);
+    ui_set_layout_fx(six_fx);
     view.fx_mode = true;
     ui_show_state(&st, &view);
     shot("27-six-fields");
     open_layout(NULL);
-    shot("28-tile-layout");
+    shot("28-tile-layout");   // (FX mode's order: the board is in FX mode)
+    s_lay_fx = 0;   // (the "Presets" tab)
+    fill_layout();
+    shot("28b-tile-layout-presets");
     close_all();
-    static const uint8_t eight[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+    static const uint8_t eight[8] = { 1, 2, 3, 4, 5, 6, 7, 8 }, eight_fx[8] = { 3, 4, 7, 2, 5, 6, 8, 1 };
     ui_set_layout(8, eight, UI_SWITCH1_FX_PRESETS);
+    ui_set_layout_fx(eight_fx);
 
     // Set list: eight songs, the fourth (preset 8) is on
     static const uint8_t songs[] = { 7, 9, 12, 8, 10, 11, 7, 9 };
@@ -907,5 +1150,8 @@ int main(void)
         typed.open = false;
         ui_set_tempo(&typed);
     }
+    view.fx_mode = true;   // the EQ editor's live spectrum (draft 2026-11-28)
+    ui_show_state(&st, &view);
+    eq_spectrum_shots();
     return 0;
 }

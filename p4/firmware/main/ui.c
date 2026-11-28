@@ -34,6 +34,14 @@
 #define TILE_H 166
 #define TILE_GAP 12
 #define TILE_Y 244
+// A tile's note (what holding does, the looper's state ...): its own line under the symbol row, in the smaller font
+// when it is too long for the larger one
+#define NOTE_FONT (&ui_font_20)
+#define NOTE_FONT_SMALL (&ui_font_16)
+#define NOTE_FONT_GIG (&ui_font_24)
+#define NOTE_Y 50
+#define NOTE_Y_GIG 54
+#define NOTE_ICON 22          // the symbol in front of a note (pedal, scene), px
 // Swipe up: the gig view - a slim status bar (preset, bank, mode) and the tiles over the rest of the screen;
 // swipe down: back.
 #define GIG_BAR_H 52
@@ -72,6 +80,7 @@
 #define TILE_OFF_BG 0x111315
 #define PANEL_BG 0x121416
 #define GREEN 0x45F862
+#define SEL_BLUE 0x4D8DFF     // P4 player: a song selected, not playing yet (the jam tracks' blue)
 #define FILL_LINE 0x3A3F45    // the edge of a dialog
 #define ORANGE 0xFFB02E       // unsaved changes (the dot next to the name)
 
@@ -121,6 +130,7 @@ static char s_tile_note_text[TILES][24];    // a note that is not a fixed text (
 static const char *s_tile_note[TILES];   // a line of text under the caption instead (looper mode, what holding does), NULL = none
 static const lv_image_dsc_t *s_tile_note_icon[TILES];   // ... with this symbol in front of it, NULL = none
 static lv_obj_t *s_tile_note_image[TILES];
+static lv_obj_t *s_tile_badge[TILES];   // beside the symbol: how the footswitch is used for the note's line (HOLD / TAP / PRESS)
 static uint32_t s_tile_color[TILES];   // the tile's colour and state as set_tile drew it (for the editor)
 static bool s_tile_active[TILES], s_tile_empty[TILES], s_tiles_drawn;
 static volatile bool s_tiles_stale;   // P4: the looper's tiles were drawn anew by the screen's own task (loop_poll)
@@ -169,6 +179,7 @@ static void build_loopbar(lv_obj_t *parent);
 static void build_playerbar(lv_obj_t *parent);
 static void show_playerbar(void);
 static void show_player_tiles(void);
+static bool player_pending(void);
 static void build_jam(lv_obj_t *screen);
 static void source_chooser(lv_obj_t *parent, int x, int y, int chosen);
 static void on_phone_toggle(lv_event_t *e);
@@ -291,6 +302,8 @@ static lv_obj_t *s_layout;   // the tile layout dialog
 // first s_layout_count positions are on the screen (6 = 2 x 3, 8 = 2 x 4). Tiles stay indexed by their switch.
 static uint8_t s_layout_order[TILES] = { 1, 2, 3, 4, 5, 6, 7, 8 };
 static int s_layout_count = TILES;
+// ... and FX mode's own order (ui_set_layout_fx; main.c has the default: Pre FX on the top row, Post FX below them)
+static uint8_t s_layout_fx_order[TILES] = { 3, 4, 7, 2, 5, 6, 8, 1 };
 static int s_tile_w = TILE_W;
 static uint32_t s_gesture_tick;   // a swipe ends with a click on the tile under the finger: ignore that one
 static lv_timer_t *s_toast_timer;
@@ -332,6 +345,7 @@ static int s_fxp_active = -1;
 static bool s_fxp_usable;
 static lv_obj_t *s_param_bar[NANO_MAX_PARAMS];
 static float s_param_norm[NANO_MAX_PARAMS];   // value of each parameter (0-1), < 0 = not known
+static bool s_spec_eq_dirty;                   // P4: a value changed - the EQ's curve over the spectrum is made anew
 static char s_param_text[NANO_MAX_PARAMS][16]; // its text as drawn (number or option)
 static int16_t s_param_unit_w[NANO_MAX_PARAMS];
 static int32_t s_drag_x;                       // a bar follows the finger sideways (relative, from s_drag_from)
@@ -355,7 +369,7 @@ static struct {
     bool finger;
 } s_padv;
 // The FX editor's third page, the info page (P4 board only; see "The info page" below)
-#define INFO_MAX_SOUNDS 44   // starting points + players' sounds (12 at most, tools/gen_info.py) + an own build's presets (28, tools/gen_neural.py)
+#define INFO_MAX_SOUNDS 44   // starting points + players' sounds (16 at most, tools/gen_info.py) + an own build's presets (28, tools/gen_neural.py)
 static const nano_info_t *s_info;        // the notes of the editor's model, NULL = none (no button then)
 static const nano_info_t *s_info_for;    // ... the page is filled with
 static bool s_info_on;                   // the page is wanted
@@ -593,10 +607,15 @@ static lv_obj_t *panel(lv_obj_t *parent, int x, int y, int w, int h)
 // P4: a dialog that takes the screen under the top bar (as the phone player): the top bar stays in sight.
 #define DLG_W (SCREEN_W - 2 * MARGIN)
 #define DLG_H (SCREEN_H - 72 - MARGIN)
+// (kept to be moved up in the gig view: under its slimmer bar the tiles' top edges showed above the dialog)
+static lv_obj_t *s_full_dialogs[24];
+static int s_full_dialog_count;
+
 static lv_obj_t *dialog_full(lv_obj_t *screen)
 {
     lv_obj_t *c = panel(screen, 0, 0, DLG_W, DLG_H);
     lv_obj_set_pos(c, MARGIN, 72);
+    if (s_full_dialog_count < (int)(sizeof(s_full_dialogs) / sizeof(s_full_dialogs[0]))) s_full_dialogs[s_full_dialog_count++] = c;
     return c;
 }
 
@@ -726,7 +745,8 @@ static int tile_height(void)
 static int tile_position(int i)
 {
     if (s_looper_mode || s_player_mode) return i >= 0 && i < TILES ? i : -1;
-    for (int p = 0; p < s_layout_count; p++) if (s_layout_order[p] == i + 1) return p;
+    const uint8_t *order = s_fx_mode ? s_layout_fx_order : s_layout_order;   // (FX mode: its own order)
+    for (int p = 0; p < s_layout_count; p++) if (order[p] == i + 1) return p;
     return -1;
 }
 
@@ -739,7 +759,7 @@ static void place_tile(int i)
     lv_obj_set_size(s_tile[i], s_tile_w, h);
     lv_obj_set_pos(s_tile[i], MARGIN + (p % columns) * (s_tile_w + TILE_GAP), (s_fullscreen ? FULL_TILE_Y : TILE_Y) + (p / columns) * (h + TILE_GAP));
     if (!s_tile_name[i]) return;   // (still being built)
-    lv_obj_set_width(s_tile_other[i], s_tile_w - 62);
+    lv_obj_set_width(s_tile_other[i], s_tile_w - 28);
     lv_obj_set_width(s_tile_name[i], s_tile_w - 24);
     lv_label_set_text_fmt(s_tile_number[i], "%d", p + 1);   // the footswitch that presses it
 }
@@ -771,14 +791,21 @@ static void fit_names(void)
     // Measuring takes a while and the names rarely change: only when a name or the view (gig / normal) changed.
     static char measured[TILES][65];
     static int measured_view = -1, measured_w;
+    static bool measured_note[TILES];
     bool same = measured_view == s_fullscreen && measured_w == s_tile_w;
-    for (int i = 0; i < TILES && same; i++) same = !strcmp(measured[i], lv_label_get_text(s_tile_name[i]));
+    for (int i = 0; i < TILES && same; i++)
+        same = !strcmp(measured[i], lv_label_get_text(s_tile_name[i])) && measured_note[i] == !lv_obj_is_hidden(s_tile_other[i]);
     if (same) return;
     measured_view = s_fullscreen;
     measured_w = s_tile_w;
-    for (int i = 0; i < TILES; i++) strlcpy(measured[i], lv_label_get_text(s_tile_name[i]), sizeof(measured[i]));
+    for (int i = 0; i < TILES; i++) {
+        strlcpy(measured[i], lv_label_get_text(s_tile_name[i]), sizeof(measured[i]));
+        measured_note[i] = !lv_obj_is_hidden(s_tile_other[i]);
+    }
     const lv_font_t *const *fonts = s_fullscreen ? gig : normal;
     int room = tile_height() - (s_fullscreen ? 66 : 58);
+    // a tile with a note: the name stays below the note's line
+    int note_room = tile_height() - 10 - (s_fullscreen ? NOTE_Y_GIG + lv_font_get_line_height(NOTE_FONT_GIG) : NOTE_Y + lv_font_get_line_height(NOTE_FONT)) - 2;
     const lv_font_t *font = fonts[SIZES - 1];
     for (int f = 0; f < SIZES; f++) {
         int line_space = -lv_font_get_line_height(fonts[f]) / 6;
@@ -788,7 +815,7 @@ static void fit_names(void)
             if (!name[0]) continue;
             lv_point_t size;
             lv_text_get_size(&size, name, fonts[f], 0, line_space, s_tile_w - 24, LV_TEXT_FLAG_NONE);
-            fits = size.y <= room && words_fit(name, fonts[f], s_tile_w - 24);
+            fits = size.y <= (measured_note[i] ? note_room : room) && words_fit(name, fonts[f], s_tile_w - 24);
         }
         if (fits) {
             font = fonts[f];
@@ -1094,7 +1121,8 @@ static void build_pedals(lv_obj_t *parent)
     lv_obj_set_style_bg_opa(amp, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(amp, 1, 0);
     lv_obj_set_style_border_color(amp, lv_color_hex(0x33383E), 0);
-    lv_obj_align(amp, LV_ALIGN_TOP_LEFT, 2 * PV_SLOT_W - 22, 8);
+    // (on the line below the fields above the pedals: at the top, the field of Pre FX 2's second effect covered it)
+    lv_obj_align(amp, LV_ALIGN_TOP_LEFT, 2 * PV_SLOT_W - 22, PV_FIELD_Y + PV_FIELD_H + 8);
     for (int slot = 0; slot < NANO_FX_SLOTS; slot++) {
         lv_obj_t *box = lv_obj_create(s_pedals);
         s_pv_slot[slot] = box;
@@ -1226,7 +1254,7 @@ static void build_pedals(lv_obj_t *parent)
 // The five slots as they are now (called with every state while the pedals are shown, and when they come up).
 static void show_pedals(const nano_state_t *st, const ui_view_t *view)
 {
-    char text[8];
+    char text[12];
     // The reverb's setting (see s_pv_rp)
     int rslot = view->mix_slot;
     bool rp = view->rp_used && rslot >= 0 && rslot < NANO_FX_SLOTS && nano_fx_model(st->fx_known ? st->fx_type[rslot] : 0);
@@ -1365,18 +1393,29 @@ static void build_tile(lv_obj_t *parent, int i)
     lv_label_set_long_mode(s_tile_caption[i], LV_LABEL_LONG_CLIP);
     lv_obj_set_pos(s_tile_caption[i], 56, 10);
 
-    s_tile_other[i] = label(tile, &ui_font_14, TEXT);
-    lv_obj_set_size(s_tile_other[i], s_tile_w - 66, lv_font_get_line_height(&ui_font_14));   // one line
+    // The note (what holding does, the looper's state ...): a line of its own under the symbol row, 20 px (24 px in the
+    // gig view) - beside the symbol at 14 px it could not be read from standing height (2026-11-28, draft A)
+    s_tile_other[i] = label(tile, NOTE_FONT, TEXT);
+    lv_obj_set_size(s_tile_other[i], s_tile_w - 28, lv_font_get_line_height(NOTE_FONT));   // one line
     lv_label_set_long_mode(s_tile_other[i], LV_LABEL_LONG_DOT);
-    lv_obj_set_pos(s_tile_other[i], 56, 29);
+    lv_obj_set_pos(s_tile_other[i], 14, NOTE_Y);
     lv_obj_set_hidden(s_tile_other[i], true);
     s_tile_note_image[i] = lv_image_create(tile);   // a small symbol in front of that line
-    lv_image_set_scale(s_tile_note_image[i], 256 * 17 / 36);
-    lv_obj_set_size(s_tile_note_image[i], 17, 17);
+    lv_image_set_scale(s_tile_note_image[i], 256 * NOTE_ICON / 36);
+    lv_obj_set_size(s_tile_note_image[i], NOTE_ICON, NOTE_ICON);
     lv_image_set_inner_align(s_tile_note_image[i], LV_IMAGE_ALIGN_CENTER);
     lv_obj_set_style_image_recolor_opa(s_tile_note_image[i], LV_OPA_COVER, 0);
-    lv_obj_set_pos(s_tile_note_image[i], 55, 30);
+    lv_obj_set_pos(s_tile_note_image[i], 12, NOTE_Y);
     lv_obj_set_hidden(s_tile_note_image[i], true);
+    // (draft B) the key of a note "Hold: ...": a small outlined key beside the symbol, the function large below it
+    s_tile_badge[i] = label(tile, &ui_font_title_14, TEXT);
+    lv_obj_set_style_text_letter_space(s_tile_badge[i], 1, 0);
+    lv_obj_set_style_pad_hor(s_tile_badge[i], 8, 0);
+    lv_obj_set_style_pad_ver(s_tile_badge[i], 2, 0);
+    lv_obj_set_style_radius(s_tile_badge[i], 6, 0);
+    lv_obj_set_style_border_width(s_tile_badge[i], 2, 0);
+    lv_obj_set_pos(s_tile_badge[i], 56, 15);
+    lv_obj_set_hidden(s_tile_badge[i], true);
 
     s_tile_number[i] = label(tile, &ui_font_title_18, TEXT);
     lv_label_set_text_fmt(s_tile_number[i], "%d", i + 1);
@@ -1496,14 +1535,51 @@ static void set_tile(int i, const char *caption, const char *name, uint32_t colo
     if (!empty) set_text(s_tile_caption[i], "");
 }
 
+// A note that starts with how the footswitch is used ("Hold: Tuner", LV_SYMBOL_PLAY " Hold: Player"): that word as
+// the key's badge (HOLD) and the rest, with its first letter large, as the line (draft B). Else the note as it is.
+static bool split_note(const char *note, char *key, size_t key_n, char *rest, size_t rest_n)
+{
+    static const char *const KEYS[] = { "Hold: ", "Tap: ", "Press: " };
+    char symbol[8] = "";
+    if ((uint8_t)note[0] == 0xEF && note[1] && note[2] && note[3] == ' ') {   // a leading LV_SYMBOL_* (3 bytes) stays with the rest
+        snprintf(symbol, sizeof(symbol), "%.4s", note);
+        note += 4;
+    }
+    for (size_t k = 0; k < sizeof(KEYS) / sizeof(KEYS[0]); k++) {
+        size_t n = strlen(KEYS[k]);
+        if (strncmp(note, KEYS[k], n)) continue;
+        size_t j = 0;
+        for (; j < n - 2 && j < key_n - 1; j++) key[j] = (char)(KEYS[k][j] >= 'a' && KEYS[k][j] <= 'z' ? KEYS[k][j] - 32 : KEYS[k][j]);
+        key[j] = 0;
+        snprintf(rest, rest_n, "%s%s", symbol, note + n);
+        char *first = rest + strlen(symbol);
+        if (*first >= 'a' && *first <= 'z') *first -= 32;
+        return true;
+    }
+    snprintf(rest, rest_n, "%s%s", symbol, note);
+    key[0] = 0;
+    return false;
+}
+
 // After the tiles are set: the pedal drawings (FX tiles), the A/B lines and the marks of the scenes.
 static void show_tile_extras(void)
 {
-    char text[48];
+    char text[48], key[8];
     static int drawn_marks[TILES];
     static uint32_t drawn_types[NANO_FX_SLOTS];   // the marks have the colours of these effects
     bool types_changed = memcmp(drawn_types, s_slot_type, sizeof(drawn_types)) != 0;
     memcpy(drawn_types, s_slot_type, sizeof(drawn_types));
+    // The notes: one size for all (as the names) - the larger one unless a note is too long for it
+    const lv_font_t *font = s_fullscreen ? NOTE_FONT_GIG : NOTE_FONT;
+    for (int i = 0; i < TILES; i++) {
+        if (s_fullscreen && s_tile_hint[i]) s_tile_note[i] = NULL;   // the gig view: no hints on holding
+        if (lv_label_get_text(s_tile_caption[i])[0]) s_tile_note[i] = NULL;   // (an empty tile's caption: "UNDO / REDO", no "Hold: clear")
+        if (!s_tile_note[i] || tile_position(i) < 0) continue;
+        split_note(s_tile_note[i], key, sizeof(key), text, sizeof(text));
+        lv_point_t size;
+        lv_text_get_size(&size, text, font, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        if (size.x > s_tile_w - (s_tile_note_icon[i] ? 12 + NOTE_ICON + 6 : 14) - 14) font = s_fullscreen ? NOTE_FONT : NOTE_FONT_SMALL;
+    }
     for (int i = 0; i < TILES; i++) {
         static tile_pair_t drawn_pair[TILES];
         static tile_split_t drawn_split[TILES];
@@ -1517,8 +1593,6 @@ static void show_tile_extras(void)
             lv_obj_invalidate(s_tile[i]);
         }
         const lv_image_dsc_t *pedal = NULL;   // (calm tiles: no pedal drawing behind the name)
-        if (s_fullscreen && s_tile_hint[i]) s_tile_note[i] = NULL;   // the gig view: no hints on holding
-        if (lv_label_get_text(s_tile_caption[i])[0]) s_tile_note[i] = NULL;   // (a caption is in that line: "UNDO / REDO" over "Hold: clear")
         set_hidden(s_tile_pedal[i], pedal == NULL);
         if (pedal) {
             set_image(s_tile_pedal[i], pedal);
@@ -1527,25 +1601,40 @@ static void show_tile_extras(void)
         uint32_t other = s_tile_other_type[i];
         const lv_image_dsc_t *note_icon = s_tile_note[i] ? s_tile_note_icon[i] : NULL;
         bool line = other || s_tile_note[i];
+        int32_t y = s_fullscreen ? NOTE_Y_GIG : NOTE_Y, h = lv_font_get_line_height(s_fullscreen ? NOTE_FONT_GIG : NOTE_FONT);
         set_hidden(s_tile_other[i], !line);
         set_hidden(s_tile_note_image[i], note_icon == NULL);
-        set_num_prop(s_tile_note_image[i], LV_STYLE_X, 55);
-        set_num_prop(s_tile_note_image[i], LV_STYLE_Y, 20);
+        set_num_prop(s_tile_note_image[i], LV_STYLE_X, 12);
+        set_num_prop(s_tile_note_image[i], LV_STYLE_Y, y + (h - NOTE_ICON) / 2);
+        bool keyed = false;
         if (line) {
-            if (s_tile_note[i]) snprintf(text, sizeof(text), "%s", s_tile_note[i]);
+            if (s_tile_note[i]) keyed = split_note(s_tile_note[i], key, sizeof(key), text, sizeof(text));
             else snprintf(text, sizeof(text), LV_SYMBOL_SHUFFLE " %.40s", nano_fx_name(other));
             set_text(s_tile_other[i], text);
             uint32_t color = s_tile_ink[i] == TEXT ? 0xC8CCD1 : s_tile_ink[i];   // a little lighter than the caption: it is read
             set_color_prop(s_tile_other[i], LV_STYLE_TEXT_COLOR, color);
             set_num_prop(s_tile_other[i], LV_STYLE_TEXT_OPA, 230);
-            set_num_prop(s_tile_other[i], LV_STYLE_X, note_icon ? 77 : 56);
-            set_num_prop(s_tile_other[i], LV_STYLE_Y, 19);   // (no caption above it: beside the symbol)
-            set_num_prop(s_tile_other[i], LV_STYLE_WIDTH, s_tile_w - (note_icon ? 77 : 56) - 30);   // (up to the number)
+            if (keyed) {   // the key beside the symbol: outlined (a label, not a state), in the caption's grey
+                uint32_t kc = s_tile_ink[i] == TEXT ? 0xB9BDC2 : s_tile_ink[i];
+                set_text(s_tile_badge[i], key);
+                set_color_prop(s_tile_badge[i], LV_STYLE_TEXT_COLOR, kc);
+                set_color_prop(s_tile_badge[i], LV_STYLE_BORDER_COLOR, kc);
+                set_num_prop(s_tile_badge[i], LV_STYLE_BORDER_OPA, s_tile_ink[i] == TEXT ? 150 : 120);
+                set_num_prop(s_tile_badge[i], LV_STYLE_X, lv_obj_is_hidden(s_tile_square[i]) ? 12 : 56);
+            }
+            int32_t x = note_icon ? 12 + NOTE_ICON + 6 : 14;
+            int32_t fh = lv_font_get_line_height(font);
+            set_ptr_prop(s_tile_other[i], LV_STYLE_TEXT_FONT, font);
+            set_num_prop(s_tile_other[i], LV_STYLE_X, x);
+            set_num_prop(s_tile_other[i], LV_STYLE_Y, y + (h - fh) / 2);   // (its own line under the symbol row: the whole width)
+            set_num_prop(s_tile_other[i], LV_STYLE_WIDTH, s_tile_w - x - 14);
+            set_num_prop(s_tile_other[i], LV_STYLE_HEIGHT, fh);
             if (note_icon) {
                 set_image(s_tile_note_image[i], note_icon);
                 set_color_prop(s_tile_note_image[i], LV_STYLE_IMAGE_RECOLOR, color);
             }
         }
+        set_hidden(s_tile_badge[i], !keyed);
     }
 }
 
@@ -2385,7 +2474,7 @@ static void fill_bank_list(void)
 {
     char text[80];
     for (int k = 0; k < 2; k++) {
-    lv_obj_t *list = k ? s_bank_list2 : s_bank_list;
+    lv_obj_t *list = k ? s_bank_list2 : s_bank_list, *chosen = NULL;
     lv_obj_clean(list);
     for (int preset = k ? 0 : 1; preset <= NANO_PRESETS; preset++) {   // (held: "None" first)
         bool selected = preset == (k ? s_be_preset2 : s_be_preset);
@@ -2404,7 +2493,14 @@ static void fill_bank_list(void)
         lv_obj_set_width(l, LV_PCT(100));
         lv_label_set_long_mode(l, LV_LABEL_LONG_DOT);
         lv_obj_align(l, LV_ALIGN_LEFT_MID, 0, 0);
-        if (selected) lv_obj_scroll_to_view(btn, LV_ANIM_OFF);
+        if (selected) chosen = btn;
+    }
+    if (chosen) {   // the chosen preset in the middle of the list: the ones before and after it in sight, none cut at the top
+        lv_obj_update_layout(list);
+        lv_area_t row, box;
+        lv_obj_get_coords(chosen, &row);
+        lv_obj_get_coords(list, &box);
+        lv_obj_scroll_by_bounded(list, 0, (box.y1 + box.y2) / 2 - (row.y1 + row.y2) / 2, LV_ANIM_OFF);
     }
     }
 }
@@ -2449,8 +2545,9 @@ static void build_bank_editor(lv_obj_t *screen)
     for (int i = 0; i < UI_BANK_COLOR_COUNT; i++) {
         lv_obj_t *sw = lv_obj_create(s_bank_editor);
         s_bank_swatch[i] = sw;
-        lv_obj_set_size(sw, 56, 56);
-        lv_obj_set_pos(sw, 18 + i * 96, 76);
+        // (48 px colours and symbols, 2026-11-28 draft: the preset lists below get a third whole row)
+        lv_obj_set_size(sw, 48, 48);
+        lv_obj_set_pos(sw, 22 + i * 96, 76);
         lv_obj_set_style_radius(sw, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_color(sw, lv_color_hex(BANK_COLORS[i]), 0);
         lv_obj_set_scrollable(sw, false);
@@ -2458,9 +2555,9 @@ static void build_bank_editor(lv_obj_t *screen)
         lv_obj_add_event_cb(sw, on_swatch, LV_EVENT_CLICKED, (void *)(intptr_t)i);
     }
     for (int i = 0; i <= PRESET_ICON_COUNT; i++) {   // "none" and the symbols, ten per row
-        lv_obj_t *sq = icon_square(s_bank_editor, 56);
+        lv_obj_t *sq = icon_square(s_bank_editor, 48);
         s_bank_symbol[i] = sq;
-        lv_obj_set_pos(sq, 18 + (i % 10) * 96, 144 + (i / 10) * 66);
+        lv_obj_set_pos(sq, 22 + (i % 10) * 96, 134 + (i / 10) * 56);
         lv_obj_set_clickable(sq, true);
         lv_obj_add_event_cb(sq, on_symbol, LV_EVENT_CLICKED, (void *)(intptr_t)i);
     }
@@ -2471,11 +2568,11 @@ static void build_bank_editor(lv_obj_t *screen)
         lv_obj_t *c = label(s_bank_editor, CAPTION_FONT, MUTED);
         lv_label_set_text(c, LISTS[k]);
         lv_obj_set_style_text_letter_space(c, 2, 0);
-        lv_obj_set_pos(c, 16 + k * (lw + 16), 280);
+        lv_obj_set_pos(c, 16 + k * (lw + 16), 250);
     }
     s_bank_list = lv_obj_create(s_bank_editor);
-    lv_obj_set_pos(s_bank_list, 10, 300);
-    lv_obj_set_size(s_bank_list, lw, 140);
+    lv_obj_set_pos(s_bank_list, 10, 270);
+    lv_obj_set_size(s_bank_list, lw, 172);
     lv_obj_set_style_bg_opa(s_bank_list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_bank_list, 0, 0);
     lv_obj_set_style_pad_all(s_bank_list, 4, 0);
@@ -2483,8 +2580,8 @@ static void build_bank_editor(lv_obj_t *screen)
     lv_obj_set_flex_flow(s_bank_list, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_scroll_dir(s_bank_list, LV_DIR_VER);
     s_bank_list2 = lv_obj_create(s_bank_editor);
-    lv_obj_set_pos(s_bank_list2, 10 + lw + 16, 300);
-    lv_obj_set_size(s_bank_list2, lw, 140);
+    lv_obj_set_pos(s_bank_list2, 10 + lw + 16, 270);
+    lv_obj_set_size(s_bank_list2, lw, 172);
     lv_obj_set_style_bg_opa(s_bank_list2, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_bank_list2, 0, 0);
     lv_obj_set_style_pad_all(s_bank_list2, 4, 0);
@@ -2874,6 +2971,8 @@ void ui_show_message(const char *text)
 {
     lvgl_port_lock(0);
     lv_label_set_text(lv_obj_get_child(s_toast, 0), text);
+    // over the keyboard's page: under the text field (at the top it covered the title and Cancel / OK)
+    lv_obj_set_y(s_toast, lv_obj_is_hidden(s_rename) ? 8 : 150);
     lv_obj_set_hidden(s_toast, false);
     lv_obj_move_foreground(s_toast);
     lv_timer_reset(s_toast_timer);
@@ -3620,14 +3719,18 @@ static void on_midi_button(lv_event_t *e)
 // ---- tile layout: 6 or 8 fields, in any order ----
 
 static lv_obj_t *s_layout_tab[2], *s_layout_cell[TILES], *s_layout_cell_number[TILES], *s_layout_cell_name[TILES];
+static lv_obj_t *s_layout_mode_tab[2];   // which order is edited: presets (and scenes) | FX mode
 static lv_obj_t *s_layout_hidden_label, *s_layout_switch1;
 static int s_switch1, s_lay_switch1;   // what footswitch 1 changes between (UI_SWITCH1_*): stored / being edited
 static const char *const SWITCH1_NAMES[UI_SWITCH1_COUNT] = {
     "Switch 1: FX / presets", "Switch 1: FX / scenes", "Switch 1: presets / scenes",
     "Switch 1: presets, scenes, FX",
 };
-static uint8_t s_lay_order[TILES];   // being edited: position -> switch 1-8 (all eight; the last ones are not shown)
-static int s_lay_count, s_lay_selected = -1;
+// Being edited: position -> switch 1-8 (all eight; the last ones are not shown), [0] presets and scenes, [1] FX mode.
+static uint8_t s_lay_orders[2][TILES];
+static int s_lay_count, s_lay_selected = -1, s_lay_fx;
+// FX mode's order when it is not set (as main.c's LAYOUT_FX_DEFAULT): [0] 6 fields, [1] 8 fields
+static const uint8_t LAY_FX_DEFAULT[2][TILES] = { { 3, 4, 1, 5, 6, 7, 2, 8 }, { 3, 4, 7, 2, 5, 6, 8, 1 } };
 
 static const char *const LAYOUT_NAMES[TILES] = {
     "Mode", "Tuner", "Pre FX 1\npreset / scene 1", "Pre FX 2\npreset / scene 2", "Post FX 1\npreset / scene 3",
@@ -3641,6 +3744,8 @@ static void fill_layout(void)
 {
     style_tab(s_layout_tab[0], s_lay_count == 6);
     style_tab(s_layout_tab[1], s_lay_count == 8);
+    style_tab(s_layout_mode_tab[0], !s_lay_fx);
+    style_tab(s_layout_mode_tab[1], s_lay_fx);
     int columns = s_lay_count / 2, w = (DLG_W - 2 - 40 - (columns - 1) * 10) / columns;
     for (int p = 0; p < TILES; p++) {
         lv_obj_t *c = s_layout_cell[p];
@@ -3654,10 +3759,10 @@ static void fill_layout(void)
             lv_obj_set_size(c, 230, 56);
             lv_label_set_text(s_layout_cell_number[p], "");
         }
-        int sw = s_lay_order[p] - 1;
-        if (shown) {
+        int sw = s_lay_orders[s_lay_fx][p] - 1;
+        if (shown && !s_lay_fx) {
             lv_label_set_text(s_layout_cell_name[p], LAYOUT_NAMES[sw]);
-        } else {   // one line: the name only
+        } else {   // one line: the name only (FX mode: what the switch is there)
             char first[24];
             strlcpy(first, LAYOUT_NAMES[sw], sizeof(first));
             first[strcspn(first, "\n")] = 0;
@@ -3679,9 +3784,9 @@ static void on_layout_cell(lv_event_t *e)
     if (s_lay_selected < 0) {
         s_lay_selected = p;
     } else {   // the second tap: the two swap places
-        uint8_t t = s_lay_order[p];
-        s_lay_order[p] = s_lay_order[s_lay_selected];
-        s_lay_order[s_lay_selected] = t;
+        uint8_t t = s_lay_orders[s_lay_fx][p];
+        s_lay_orders[s_lay_fx][p] = s_lay_orders[s_lay_fx][s_lay_selected];
+        s_lay_orders[s_lay_fx][s_lay_selected] = t;
         s_lay_selected = -1;
     }
     fill_layout();
@@ -3689,22 +3794,35 @@ static void on_layout_cell(lv_event_t *e)
 
 static void on_layout_button(lv_event_t *e)
 {
-    int action = (int)(intptr_t)lv_event_get_user_data(e);   // 0 close, 6 / 8 fields, -1 default, 1 save, 2 switch 1
+    // 0 close, 6 / 8 fields, -1 default, 1 save, 2 switch 1, 10 / 11 the presets' / FX mode's order
+    int action = (int)(intptr_t)lv_event_get_user_data(e);
     s_lay_selected = -1;
     if (action == 2) {
         s_lay_switch1 = (s_lay_switch1 + 1) % UI_SWITCH1_COUNT;
+    } else if (action == 10 || action == 11) {
+        s_lay_fx = action == 11;
     } else if (action == 6 || action == 8) {
+        // (FX mode's order as it came: the one for the other number of fields)
+        if (!memcmp(s_lay_orders[1], LAY_FX_DEFAULT[s_lay_count == TILES], TILES))
+            memcpy(s_lay_orders[1], LAY_FX_DEFAULT[action == TILES], TILES);
         s_lay_count = action;
-    } else if (action == -1) {
-        for (int p = 0; p < TILES; p++) s_lay_order[p] = (uint8_t)(p + 1);
-        s_lay_count = TILES;
-        s_lay_switch1 = UI_SWITCH1_FX_PRESETS;
+    } else if (action == -1) {   // the order shown back as it came
+        if (s_lay_fx) {
+            memcpy(s_lay_orders[1], LAY_FX_DEFAULT[s_lay_count == TILES], TILES);
+        } else {
+            for (int p = 0; p < TILES; p++) s_lay_orders[0][p] = (uint8_t)(p + 1);
+            if (!memcmp(s_lay_orders[1], LAY_FX_DEFAULT[s_lay_count == TILES], TILES)) memcpy(s_lay_orders[1], LAY_FX_DEFAULT[1], TILES);
+            s_lay_count = TILES;
+            s_lay_switch1 = UI_SWITCH1_FX_PRESETS;
+        }
     } else {
         lv_obj_set_hidden(s_layout, true);
-        if (action == 1) {
-            int packed = s_lay_switch1 << 28 | s_lay_count << 24;
-            for (int p = 0; p < TILES; p++) packed |= (s_lay_order[p] - 1) << (3 * p);
-            send(']', packed);
+        if (action == 1) {   // the presets' order (with the count and switch 1), then FX mode's
+            for (int fx = 0; fx < 2; fx++) {
+                int packed = fx << 30 | s_lay_switch1 << 28 | s_lay_count << 24;
+                for (int p = 0; p < TILES; p++) packed |= (s_lay_orders[fx][p] - 1) << (3 * p);
+                send(']', packed);
+            }
         }
         return;
     }
@@ -3713,7 +3831,9 @@ static void on_layout_button(lv_event_t *e)
 
 static void open_layout(lv_event_t *e)
 {
-    memcpy(s_lay_order, s_layout_order, sizeof(s_lay_order));
+    memcpy(s_lay_orders[0], s_layout_order, TILES);
+    memcpy(s_lay_orders[1], s_layout_fx_order, TILES);
+    s_lay_fx = s_fx_mode;   // (the order of the mode the board is in)
     s_lay_count = s_layout_count;
     s_lay_switch1 = s_switch1;
     s_lay_selected = -1;
@@ -3728,11 +3848,13 @@ static void build_layout(lv_obj_t *screen)
     dialog_title(s_layout, "Tile layout");
     s_layout_tab[0] = small_button(s_layout, DLG_W - 60 - 268, 12, 120, 44, "6 fields", on_layout_button, 6);
     s_layout_tab[1] = small_button(s_layout, DLG_W - 60 - 140, 12, 120, 44, "8 fields", on_layout_button, 8);
+    s_layout_mode_tab[0] = small_button(s_layout, DLG_W - 60 - 268 - 24 - 2 * 140, 12, 136, 44, "Presets", on_layout_button, 10);
+    s_layout_mode_tab[1] = small_button(s_layout, DLG_W - 60 - 268 - 24 - 140, 12, 136, 44, "FX mode", on_layout_button, 11);
     close_button(s_layout, DLG_W - 60, 12, on_layout_button, 0);
     lv_obj_t *info = label(s_layout, HINT_FONT, MUTED);
     lv_obj_set_width(info, DLG_W - 40);
     lv_label_set_long_mode(info, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(info, "Tap two fields to swap them. Field n is footswitch n and MIDI CC 49 + n.");
+    lv_label_set_text(info, "Tap two fields to swap them. Field n is footswitch n and MIDI CC 49 + n. FX mode has its own order.");
     lv_obj_set_pos(info, 20, 68);
     s_layout_hidden_label = label(s_layout, CAPTION_FONT, MUTED);
     lv_obj_set_style_text_letter_space(s_layout_hidden_label, 2, 0);
@@ -4368,6 +4490,14 @@ void ui_set_layout(int count, const uint8_t order[TILES], int switch1)
     memcpy(s_layout_order, order, sizeof(s_layout_order));
     for (int i = 0; i < TILES; i++) place_tile(i);
     fit_names();
+    lvgl_port_unlock();
+}
+
+void ui_set_layout_fx(const uint8_t order[TILES])
+{
+    lvgl_port_lock(0);
+    memcpy(s_layout_fx_order, order, sizeof(s_layout_fx_order));
+    for (int i = 0; i < TILES; i++) place_tile(i);
     lvgl_port_unlock();
 }
 
@@ -5936,13 +6066,18 @@ static void build_transport(transport_t *t, lv_obj_t *parent, const lv_event_cb_
 
 static void show_transport(transport_t *t, bool playing)
 {
-    // (2026-11-26: play / pause on one switch, 8 back out - as the player mode's tiles)
-    set_text(t->sym[1], playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
-    set_text(t->name[1], playing ? "Pause" : "Play");
+    // (2026-11-26: play / pause on one switch, 8 back out - as the player mode's tiles; 2026-11-28, player draft: in
+    // player mode the jam page's row is the footswitches' selection - previous / next song, 6 plays the selected one)
+    bool select = s_player_mode && t == &s_jam_tr, pending = select && player_pending();
+    set_text(t->sym[0], select ? LV_SYMBOL_UP : LV_SYMBOL_PREV);
+    set_text(t->name[0], select ? "Previous" : "Back");
+    set_text(t->sym[2], select ? LV_SYMBOL_DOWN : LV_SYMBOL_NEXT);
+    set_text(t->sym[1], playing && !pending ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+    set_text(t->name[1], playing && !pending ? "Pause" : "Play");
     set_text(t->name[3], s_player_mode ? "Presets" : "Close");
     for (int k = 0; k < 4; k++) {
-        bool on = k == 1 && playing;
-        player_tile_look(t->tile[k], t->sym[k], t->num[k], t->name[k], k == 1 ? 0x45F862 : 0x9AA0A6, on);
+        bool on = k == 1 && playing && !pending;
+        player_tile_look(t->tile[k], t->sym[k], t->num[k], t->name[k], k == 1 ? (pending ? SEL_BLUE : 0x45F862) : 0x9AA0A6, on);
         char n[4] = "";
         int sw = transport_switch(k);
         if (sw >= 1 && sw <= 8) snprintf(n, sizeof(n), "%d", sw);
@@ -6425,18 +6560,25 @@ static void show_loopbar(void)
 #define PART_TEAL 0x2EC4B6
 
 // ---- the player mode (P4, 2026-11-26, after the looper mode): footswitch 1 held - the tiles become the player's
-//      switches in fixed places and the signal chain becomes the player's bar. 1 back (out of the mode), 2 tuner,
-//      3 jam tracks / phone, 4 the player's page (the list), 5 back, 6 play, 7 pause, 8 next. ----
-// The player's stage (2026-11-27, user: "take the preset out, put the title and the player in the centre"; draft C
-// with the cover instead of the record and the previous title instead of the one after next): in player mode the
-// preset row and the bar give their place (y 72-234) to one box - the cover at the left (the record with the
-// track's number while there is none), what plays and its time in the middle, NEXT and PREVIOUS at the right.
+//      switches in fixed places and the signal chain becomes the player's stage. ----
+// The player's stage (2026-11-27, user: "take the preset out, put the title and the player in the centre"): in player
+// mode the preset row and the bar give their place (y 72-234) to one box - the cover at the left (the record with the
+// track's number while there is none), what plays and its time beside it.
+// Player draft (2026-11-28, user: "choose a song without playing it" and "the albums on the footswitches"): at the
+// right a wheel, drawn as the capture wheel of footswitch I - the album in view with its place as dots, the song the
+// switches point at in a frame between the one before and the one after. Green = it plays, blue = selected and not
+// playing yet; the song that plays stays at the left the whole time. Nothing here moves by itself: the stage changes
+// on a press and once a second (the time line, a few pixels).
 #define PB_Y 72
 #define PB_H 162
-#define PB_STRIP_X 172
-#define PB_STRIP_W 520
-static lv_obj_t *s_playerbar, *s_pb_dot, *s_pb_state, *s_pb_title, *s_pb_track, *s_pb_fill, *s_pb_left, *s_pb_right, *s_pb_value;
-static lv_obj_t *s_pb_head, *s_pb_prev, *s_pb_prev_cap, *s_pb_disc, *s_pb_disc_label, *s_pb_disc_text, *s_pb_cover;
+#define PB_STRIP_X 170
+#define PB_STRIP_W 404
+#define PW_X 614                                        // the wheel
+#define PW_W (SCREEN_W - 2 * MARGIN - 2 - PW_X - 16)
+#define PW_PIPS 10                                      // album dots at most (more albums: "3 / 14" in their place)
+static lv_obj_t *s_playerbar, *s_pb_dot, *s_pb_state, *s_pb_album, *s_pb_title, *s_pb_track, *s_pb_fill, *s_pb_knob;
+static lv_obj_t *s_pb_left, *s_pb_right, *s_pb_head, *s_pb_disc, *s_pb_disc_label, *s_pb_disc_text, *s_pb_cover;
+static lv_obj_t *s_pw_head, *s_pw_pos, *s_pw_pip[PW_PIPS], *s_pw_row[3], *s_pw_num[3], *s_pw_title[3];
 static uint32_t s_player_sig;
 // the cover of the jam track that plays (p4_cover.c, through ui_set_cover_source)
 static ui_cover_cb s_cover_get;
@@ -6444,6 +6586,73 @@ static uint16_t *s_cover_px;
 static lv_image_dsc_t s_cover_dsc;
 static bool s_cover_has;
 static uint32_t s_cover_seq = UINT32_MAX;
+
+// ---- the song the switches point at (draft B): selected with 5 / 7 (inside its album) and 3 (the next album, round),
+//      played with 6; it stays until it plays (or 8 leaves the mode). -1 = none: they point at the song that plays
+//      (before any played: the first). ----
+static int s_sel = -1;
+static char s_sel_note[48];      // tile 6's note: the song it plays
+
+static bool player_listed(void) { return s_source == 1 && s_jam_st.card && s_jam_st.count > 0 && s_jam_names; }
+static int player_sel(void)
+{
+    const ui_jam_t *j = &s_jam_st;
+    if (s_sel >= 0 && s_sel < j->count) return s_sel;
+    if (j->current >= 0 && j->current < j->count) return j->current;
+    return j->count > 0 ? 0 : -1;
+}
+static bool player_pending(void)   // a song is selected that does not play (yet)
+{
+    return player_listed() && player_sel() >= 0 && player_sel() != s_jam_st.current;
+}
+static int jam_album_index(int i)   // the place of track i's album, 0-based
+{
+    int k = -1;
+    for (int t = 0; t <= i && t < s_jam_st.count; t++) k += t == 0 || !jam_same_album(t - 1, t);
+    return k;
+}
+// The album before / after the selection's: its first song - or the song that plays, back in the album it plays in.
+static int player_album_target(int step)
+{
+    const int n = s_jam_st.count, cur = s_jam_st.current;
+    int sel = player_sel(), first, last;
+    if (n <= 0 || sel < 0) return -1;
+    jam_album_range(sel, &first, &last);
+    int to;
+    if (step > 0) to = last + 1 < n ? last + 1 : 0;   // (round: after the last album the first)
+    else {
+        jam_album_range(first > 0 ? first - 1 : n - 1, &first, &last);
+        to = first;
+    }
+    if (cur >= 0 && cur < n && jam_same_album(to, cur)) to = cur;
+    return to;
+}
+static void player_select(int i)
+{
+    if (i < 0) return;
+    s_sel = i == s_jam_st.current ? -1 : i;
+    s_jam_view = i;   // (the jam page shows the selection's album)
+}
+static void player_song_step(int step)
+{
+    int sel = player_sel(), first, last;
+    if (sel < 0) return;
+    jam_album_range(sel, &first, &last);
+    if (sel + step >= first && sel + step <= last) player_select(sel + step);   // (inside the album: at its ends it stays)
+}
+// The selection after a look at the player: gone when it plays now or the list changed - else it stays (draft B: no
+// time limit; a song that ends and the album's next that follows do not move it)
+static void player_check_sel(void)
+{
+    if (s_sel < 0) return;
+    if (s_sel == s_jam_st.current || s_sel >= s_jam_st.count || s_source != 1) s_sel = -1;
+}
+static uint32_t player_sig(void)   // what the player's tiles are drawn from
+{
+    bool pl = s_source == 1 ? s_jam_st.playing : s_phone_state.playing;
+    return ((uint32_t)s_source | (uint32_t)pl << 1 | (uint32_t)player_pending() << 2 | (uint32_t)s_jam_st.card << 3
+            | (uint32_t)(player_sel() + 2) << 4) ^ (uint32_t)(s_jam_st.current + 2) * 2654435761u ^ (uint32_t)s_jam_st.count * 0x85EBCA6Bu;
+}
 
 static lv_obj_t *pb_plain(lv_obj_t *parent)
 {
@@ -6475,7 +6684,7 @@ static void build_playerbar(lv_obj_t *parent)
     // the record while there is no cover: black with three grooves, the label in the source tile's teal
     s_pb_disc = pb_plain(s_playerbar);
     lv_obj_set_size(s_pb_disc, 130, 130);
-    lv_obj_set_pos(s_pb_disc, 16, PB_H / 2 - 66);
+    lv_obj_set_pos(s_pb_disc, 15, PB_H / 2 - 66);
     pb_ring(s_pb_disc, 65, 65, 130, 0x08090A, 0x2A2F35);
     pb_ring(s_pb_disc, 65, 65, 108, 0x08090A, 0x24282D);
     pb_ring(s_pb_disc, 65, 65, 86, 0x08090A, 0x24282D);
@@ -6483,7 +6692,7 @@ static void build_playerbar(lv_obj_t *parent)
     s_pb_disc_text = label(s_pb_disc_label, &ui_font_title_22, INK);
     lv_obj_align(s_pb_disc_text, LV_ALIGN_CENTER, 0, -6);
     pb_ring(s_pb_disc_label, 29, 43, 5, 0x08090A, 0);   // (the spindle hole, below the number)
-    // the cover, square with round corners, where the record is
+    // the cover, square with round corners, where the record is (drawn from its own pixels: never scaled)
     s_cover_px = lv_malloc(UI_COVER_PX * UI_COVER_PX * 2);
     s_cover_dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
     s_cover_dsc.header.cf = LV_COLOR_FORMAT_RGB565;
@@ -6493,26 +6702,30 @@ static void build_playerbar(lv_obj_t *parent)
     s_cover_dsc.data_size = UI_COVER_PX * UI_COVER_PX * 2;
     s_cover_dsc.data = (const uint8_t *)s_cover_px;
     s_pb_cover = lv_image_create(s_playerbar);
-    lv_obj_set_pos(s_pb_cover, 17, (PB_H - 2 - UI_COVER_PX) / 2);
+    lv_obj_set_pos(s_pb_cover, 16, (PB_H - 2 - UI_COVER_PX) / 2);
     lv_obj_set_size(s_pb_cover, UI_COVER_PX, UI_COVER_PX);
-    lv_obj_set_style_radius(s_pb_cover, 8, 0);
+    lv_obj_set_style_radius(s_pb_cover, 10, 0);
     lv_obj_set_style_clip_corner(s_pb_cover, true, 0);
     if (s_cover_px) lv_image_set_src(s_pb_cover, &s_cover_dsc);
     lv_obj_set_hidden(s_pb_cover, true);
-    // the state line: a dot and NOW PLAYING / PAUSED with the source, in one row
+    // the state line: a dot, NOW PLAYING / PAUSED in the state's colour, the album and the place in it in grey
     s_pb_head = pb_plain(s_playerbar);
-    lv_obj_set_size(s_pb_head, LV_SIZE_CONTENT, 20);
+    lv_obj_set_size(s_pb_head, PB_STRIP_W, 20);
     lv_obj_set_flex_flow(s_pb_head, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(s_pb_head, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(s_pb_head, 8, 0);
-    lv_obj_set_pos(s_pb_head, PB_STRIP_X, 16);
+    lv_obj_set_pos(s_pb_head, PB_STRIP_X, 14);
     s_pb_dot = pb_plain(s_pb_head);
     lv_obj_set_size(s_pb_dot, 9, 9);
     lv_obj_set_style_radius(s_pb_dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_border_color(s_pb_dot, lv_color_hex(DIMMED), 0);
     s_pb_state = label(s_pb_head, &ui_font_12, CAPTION);
     lv_obj_set_style_text_letter_space(s_pb_state, 1, 0);
-    // the title large, the time as a thin line with the times below its ends
+    s_pb_album = label(s_pb_head, &ui_font_12, CAPTION);
+    lv_obj_set_style_text_letter_space(s_pb_album, 1, 0);
+    lv_label_set_long_mode(s_pb_album, LV_LABEL_LONG_DOT);
+    lv_obj_set_flex_grow(s_pb_album, 1);
+    // the title large; the time as a thin line with a knob at the place, the times below its ends
     s_pb_title = label(s_playerbar, &ui_font_title_40, TEXT);
     lv_label_set_long_mode(s_pb_title, LV_LABEL_LONG_DOT);
     lv_obj_set_width(s_pb_title, PB_STRIP_W);
@@ -6520,39 +6733,62 @@ static void build_playerbar(lv_obj_t *parent)
     s_pb_track = pb_plain(s_playerbar);
     lv_obj_set_style_bg_color(s_pb_track, lv_color_hex(SURF_ON), 0);
     lv_obj_set_style_bg_opa(s_pb_track, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(s_pb_track, 3, 0);
+    lv_obj_set_style_radius(s_pb_track, 2, 0);
     lv_obj_set_style_clip_corner(s_pb_track, true, 0);
-    lv_obj_set_size(s_pb_track, PB_STRIP_W, 6);
-    lv_obj_set_pos(s_pb_track, PB_STRIP_X, 104);
+    lv_obj_set_size(s_pb_track, PB_STRIP_W, 4);
+    lv_obj_set_pos(s_pb_track, PB_STRIP_X, 106);
     s_pb_fill = pb_plain(s_pb_track);
     lv_obj_set_style_bg_opa(s_pb_fill, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(s_pb_fill, 3, 0);
-    lv_obj_set_size(s_pb_fill, 0, 6);
+    lv_obj_set_style_radius(s_pb_fill, 2, 0);
+    lv_obj_set_size(s_pb_fill, 0, 4);
+    s_pb_knob = pb_plain(s_playerbar);
+    lv_obj_set_size(s_pb_knob, 12, 12);
+    lv_obj_set_style_radius(s_pb_knob, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(s_pb_knob, LV_OPA_COVER, 0);
+    lv_obj_set_pos(s_pb_knob, PB_STRIP_X - 6, 102);
     s_pb_left = label(s_playerbar, &ui_font_14, CAPTION);
-    lv_obj_set_pos(s_pb_left, PB_STRIP_X, 118);
+    lv_obj_set_pos(s_pb_left, PB_STRIP_X, 120);
     s_pb_right = label(s_playerbar, &ui_font_14, CAPTION);
     lv_obj_set_width(s_pb_right, PB_STRIP_W);
     lv_obj_set_style_text_align(s_pb_right, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_pos(s_pb_right, PB_STRIP_X, 118);
-    // at the right: the next song, and the one before
-    int fx = PB_STRIP_X + PB_STRIP_W + 24, fw = SCREEN_W - 2 * MARGIN - 2 - fx - 36;
-    vline(s_playerbar, fx);
-    lv_obj_t *c = label(s_playerbar, &ui_font_12, CAPTION);
-    lv_obj_set_style_text_letter_space(c, 1, 0);
-    lv_label_set_text(c, "NEXT");
-    lv_obj_set_pos(c, fx + 20, 18);
-    s_pb_value = label(s_playerbar, &ui_font_title_22, TEXT);
-    lv_obj_set_width(s_pb_value, fw);
-    lv_label_set_long_mode(s_pb_value, LV_LABEL_LONG_DOT);
-    lv_obj_set_pos(s_pb_value, fx + 20, 40);
-    s_pb_prev_cap = label(s_playerbar, &ui_font_12, CAPTION);
-    lv_obj_set_style_text_letter_space(s_pb_prev_cap, 1, 0);
-    lv_label_set_text(s_pb_prev_cap, "PREVIOUS");
-    lv_obj_set_pos(s_pb_prev_cap, fx + 20, 88);
-    s_pb_prev = label(s_playerbar, &ui_font_16, CAPTION);
-    lv_obj_set_width(s_pb_prev, fw);
-    lv_label_set_long_mode(s_pb_prev, LV_LABEL_LONG_DOT);
-    lv_obj_set_pos(s_pb_prev, fx + 20, 108);
+    lv_obj_set_pos(s_pb_right, PB_STRIP_X, 120);
+    // the wheel at the right: the album in view and its dots, the song before, the one pointed at, the one after
+    vline(s_playerbar, PW_X - 20);
+    s_pw_head = label(s_playerbar, &ui_font_12, CAPTION);
+    lv_obj_set_style_text_letter_space(s_pw_head, 1, 0);
+    lv_obj_set_size(s_pw_head, PW_W - 28 - PW_PIPS * 14, lv_font_get_line_height(&ui_font_12));
+    lv_label_set_long_mode(s_pw_head, LV_LABEL_LONG_DOT);
+    lv_obj_set_pos(s_pw_head, PW_X + 14, 16);
+    s_pw_pos = label(s_playerbar, &ui_font_12, CAPTION);
+    lv_obj_set_style_text_letter_space(s_pw_pos, 1, 0);
+    lv_obj_set_width(s_pw_pos, 120);
+    lv_obj_set_style_text_align(s_pw_pos, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_pos(s_pw_pos, PW_X + PW_W - 14 - 120, 16);
+    for (int k = 0; k < PW_PIPS; k++) {
+        s_pw_pip[k] = pb_plain(s_playerbar);
+        lv_obj_set_size(s_pw_pip[k], 8, 8);
+        lv_obj_set_style_radius(s_pw_pip[k], LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_border_width(s_pw_pip[k], 1, 0);
+        lv_obj_set_hidden(s_pw_pip[k], true);
+    }
+    static const int RY[3] = { 38, 68, 116 }, RH[3] = { 28, 46, 28 };
+    for (int r = 0; r < 3; r++) {
+        lv_obj_t *row = s_pw_row[r] = pb_plain(s_playerbar);
+        lv_obj_set_pos(row, PW_X, RY[r]);
+        lv_obj_set_size(row, PW_W, RH[r]);
+        lv_obj_set_style_radius(row, 10, 0);
+        if (r == 1) {
+            lv_obj_set_style_border_width(row, 2, 0);
+            lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+        }
+        s_pw_num[r] = label(row, r == 1 ? &ui_font_title_16 : &ui_font_12, CAPTION);
+        lv_obj_set_width(s_pw_num[r], 24);
+        lv_obj_align(s_pw_num[r], LV_ALIGN_LEFT_MID, 14, 0);
+        s_pw_title[r] = label(row, r == 1 ? &ui_font_title_22 : &ui_font_16, r == 1 ? TEXT : CAPTION);
+        lv_obj_set_width(s_pw_title[r], PW_W - 46 - 14);
+        lv_label_set_long_mode(s_pw_title[r], LV_LABEL_LONG_DOT);
+        lv_obj_align(s_pw_title[r], LV_ALIGN_LEFT_MID, 46 - (r == 1 ? 2 : 0), 0);
+    }
     lv_obj_set_hidden(s_playerbar, true);
 }
 
@@ -6573,6 +6809,74 @@ void ui_set_cover_source(ui_cover_cb get)
     lvgl_port_unlock();
 }
 
+// The wheel: the songs around the one the switches point at, inside its album. The frame is green while that song
+// is the one that plays (6 pauses it), blue while it is only selected (6 plays it).
+static void show_wheel(void)
+{
+    const ui_jam_t *j = &s_jam_st;
+    const ui_phone_t *ph = &s_phone_state;
+    char text[96];
+    int sel = player_listed() ? player_sel() : -1;
+    bool pending = sel >= 0 && player_pending();
+    uint32_t accent = sel < 0 ? DIMMED : pending ? SEL_BLUE : GREEN;
+    set_color_prop(s_pw_row[1], LV_STYLE_BORDER_COLOR, sel < 0 ? HAIRLINE : blend(accent, SURF, 0.85f));
+    set_color_prop(s_pw_row[1], LV_STYLE_BG_COLOR, sel < 0 ? SURF : blend(accent, SURF, 0.10f));
+    if (sel < 0) {   // the phone (it has no list), or no tracks on the card
+        bool jam = s_source == 1;
+        snprintf(text, sizeof(text), "%s", jam ? "JAM TRACKS" : "PHONE");
+        set_text(s_pw_head, text);
+        set_color_prop(s_pw_head, LV_STYLE_TEXT_COLOR, CAPTION);
+        set_hidden(s_pw_pos, true);
+        for (int k = 0; k < PW_PIPS; k++) set_hidden(s_pw_pip[k], true);
+        for (int r = 0; r < 3; r++) {
+            set_text(s_pw_num[r], r == 1 && !jam ? LV_SYMBOL_BLUETOOTH : "");
+            set_text(s_pw_title[r], "");
+        }
+        set_text(s_pw_title[1], jam ? (!j->card ? "No card" : "No tracks on the card")
+                                    : ph->connected ? (ph->artist[0] ? ph->artist : ph->device) : "Not connected");
+        set_color_prop(s_pw_title[1], LV_STYLE_TEXT_COLOR, CAPTION);
+        return;
+    }
+    int first, last;
+    jam_album_range(sel, &first, &last);
+    char album[72];
+    jam_album_name(sel, album, sizeof(album), true);
+    if (pending) snprintf(text, sizeof(text), "SELECTED \xC2\xB7 %s", album);
+    else snprintf(text, sizeof(text), "%s", album);
+    set_text(s_pw_head, text);
+    set_color_prop(s_pw_head, LV_STYLE_TEXT_COLOR, pending ? SEL_BLUE : CAPTION);
+    // the albums as dots at the right: the one in view filled, the one that plays ringed in green
+    int albums = jam_album_count(), in_view = jam_album_index(sel), playing_in = j->current >= 0 ? jam_album_index(j->current) : -1;
+    bool dots = albums > 1 && albums <= PW_PIPS;
+    for (int k = 0; k < PW_PIPS; k++) {
+        set_hidden(s_pw_pip[k], !dots || k >= albums);
+        if (!dots || k >= albums) continue;
+        set_num_prop(s_pw_pip[k], LV_STYLE_X, PW_X + PW_W - 14 - (albums - k) * 14 + 6);
+        set_num_prop(s_pw_pip[k], LV_STYLE_Y, 18);
+        bool on = k == in_view;
+        uint32_t c = on ? (pending ? SEL_BLUE : TEXT) : k == playing_in ? GREEN : DIMMED;
+        set_color_prop(s_pw_pip[k], LV_STYLE_BORDER_COLOR, c);
+        set_color_prop(s_pw_pip[k], LV_STYLE_BG_COLOR, c);
+        set_num_prop(s_pw_pip[k], LV_STYLE_BG_OPA, on ? LV_OPA_COVER : LV_OPA_TRANSP);
+    }
+    set_hidden(s_pw_pos, albums <= PW_PIPS);
+    if (albums > PW_PIPS) {
+        snprintf(text, sizeof(text), "%d / %d", in_view + 1, albums);
+        set_text(s_pw_pos, text);
+    }
+    for (int r = 0; r < 3; r++) {
+        int i = sel - 1 + r;
+        bool in = i >= first && i <= last, plays = in && i == j->current;
+        if (plays) snprintf(text, sizeof(text), "%s", j->playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+        else if (in) snprintf(text, sizeof(text), "%d", i - first + 1);
+        else text[0] = 0;
+        set_text(s_pw_num[r], text);
+        set_color_prop(s_pw_num[r], LV_STYLE_TEXT_COLOR, plays ? GREEN : r == 1 && pending ? SEL_BLUE : CAPTION);
+        set_text(s_pw_title[r], in ? jam_title(jam_name(i)) : r == 2 ? "End of the album" : "");
+        set_color_prop(s_pw_title[r], LV_STYLE_TEXT_COLOR, r == 1 ? TEXT : in ? CAPTION : DIMMED);
+    }
+}
+
 static void show_playerbar(void)
 {
     bool jam = s_source == 1;
@@ -6582,40 +6886,35 @@ static void show_playerbar(void)
     int pos = jam ? j->pos_s : ph->pos_s, len = jam ? j->len_s : ph->len_s;
     char text[96], a[12], b[12];
     bool listed = jam && j->card && j->count && j->current >= 0 && j->current < j->count && s_jam_names;
-    int first = 0, last = -1;   // the playing track's album
-    if (listed) jam_album_range(j->current, &first, &last);
-    if (jam) {
+    const char *state = jam ? (!j->card ? (j->unreadable ? "CARD NOT READABLE" : "NO CARD") : !listed ? "NOT PLAYING" : playing ? "NOW PLAYING" : "PAUSED")
+                            : !ph->connected ? "NOT CONNECTED" : playing ? "NOW PLAYING" : "PAUSED";
+    set_text(s_pb_state, state);
+    if (listed) {
+        int first, last;
         char album[72];
-        if (listed) jam_album_name(j->current, album, sizeof(album), true);
-        if (!j->card) snprintf(text, sizeof(text), "JAM TRACKS \xC2\xB7 %s", j->unreadable ? "CARD NOT READABLE" : "NO CARD");
-        else if (!listed) snprintf(text, sizeof(text), "JAM TRACKS \xC2\xB7 %d", j->count);
-        else snprintf(text, sizeof(text), "%s \xC2\xB7 %.28s \xC2\xB7 %d / %d", playing ? "NOW PLAYING" : "PAUSED", album,
-                      j->current - first + 1, last - first + 1);
-        set_text(s_pb_title, listed ? jam_title(jam_name(j->current)) : "No track");
-    } else {
-        snprintf(text, sizeof(text), "%s \xC2\xB7 PHONE", !ph->connected ? "NOT CONNECTED" : playing ? "NOW PLAYING" : "PAUSED");
-        set_text(s_pb_title, ph->connected && ph->title[0] ? ph->title : ph->connected ? (ph->device[0] ? ph->device : "Phone") : "Connect the phone");
-    }
-    set_text(s_pb_state, text);
-    uint32_t color = playing ? 0x45F862 : 0x9AA0A6;
+        jam_album_range(j->current, &first, &last);
+        jam_album_name(j->current, album, sizeof(album), true);
+        snprintf(text, sizeof(text), "\xC2\xB7  %.28s  \xC2\xB7  %d / %d", album, j->current - first + 1, last - first + 1);
+    } else if (jam) snprintf(text, sizeof(text), j->card ? "\xC2\xB7  %d TRACKS" : "", j->count);
+    else snprintf(text, sizeof(text), "\xC2\xB7  PHONE");
+    set_text(s_pb_album, text);
+    if (jam) set_text(s_pb_title, listed ? jam_title(jam_name(j->current)) : j->card && j->count ? "Nothing playing" : "No track");
+    else set_text(s_pb_title, ph->connected && ph->title[0] ? ph->title : ph->connected ? (ph->device[0] ? ph->device : "Phone") : "Connect the phone");
+    set_color_prop(s_pb_title, LV_STYLE_TEXT_COLOR, jam && !listed ? CAPTION : TEXT);
+    uint32_t color = playing ? GREEN : 0x9AA0A6;
     set_color_prop(s_pb_state, LV_STYLE_TEXT_COLOR, playing ? color : CAPTION);
     set_dot(s_pb_dot, playing, color);
     float k = len > 0 ? (float)pos / len : 0;
     if (k > 1) k = 1;
     set_num_prop(s_pb_fill, LV_STYLE_WIDTH, (int)(k * PB_STRIP_W));
-    set_color_prop(s_pb_fill, LV_STYLE_BG_COLOR, playing ? 0x45F862 : 0x5A6067);
+    set_color_prop(s_pb_fill, LV_STYLE_BG_COLOR, playing ? GREEN : DIMMED);
+    set_hidden(s_pb_knob, len <= 0);
+    set_num_prop(s_pb_knob, LV_STYLE_X, PB_STRIP_X - 6 + (int)(k * PB_STRIP_W));
+    set_color_prop(s_pb_knob, LV_STYLE_BG_COLOR, playing ? GREEN : 0x9AA0A6);
     fmt_time(a, sizeof(a), pos);
     fmt_time(b, sizeof(b), len);
-    set_text(s_pb_left, a);
+    set_text(s_pb_left, len > 0 ? a : "");
     set_text(s_pb_right, len > 0 ? b : "");
-    // the next and the previous song as the switches go - inside the album (Next stops at its last track, Back at its
-    // first; the jam tracks play on to the album's end); the phone does not say
-    bool has_next = listed && j->current < last, has_prev = listed && j->current > first;
-    set_text(s_pb_value, has_next ? jam_title(jam_name(j->current + 1)) : !jam ? "On the phone" : listed ? "End of the album" : "\xE2\x80\x93");
-    set_color_prop(s_pb_value, LV_STYLE_TEXT_COLOR, has_next ? TEXT : CAPTION);
-    set_hidden(s_pb_prev_cap, !jam);
-    set_hidden(s_pb_prev, !jam);
-    if (jam) set_text(s_pb_prev, has_prev ? jam_title(jam_name(j->current - 1)) : listed ? "Start of the album" : "\xE2\x80\x93");
     // the cover (dimmed while paused), else the record: its label teal while playing, grey while paused, with the
     // track's number or the phone's mark
     bool cover = listed && s_cover_has;
@@ -6624,34 +6923,45 @@ static void show_playerbar(void)
     if (cover) set_num_prop(s_pb_cover, LV_STYLE_IMAGE_OPA, playing ? LV_OPA_COVER : 110);
     else {
         set_color_prop(s_pb_disc_label, LV_STYLE_BG_COLOR, !playing ? 0x3A3F45 : 0x2EC4B6);
-        if (listed) snprintf(text, sizeof(text), "%d", j->current + 1);
+        int first = 0, last = 0;   // (its number in the album, as the state line and the wheel count)
+        if (listed) jam_album_range(j->current, &first, &last);
+        if (listed) snprintf(text, sizeof(text), "%d", j->current - first + 1);
         else snprintf(text, sizeof(text), "%s", jam ? "\xE2\x80\x93" : LV_SYMBOL_BLUETOOTH);
         set_text(s_pb_disc_text, text);
         set_color_prop(s_pb_disc_text, LV_STYLE_TEXT_COLOR, playing ? INK : TEXT);
     }
+    show_wheel();
 }
 
+// The player's switches (draft B): top row 1 jam tracks / phone, 2 tuner, 3 the next album (round), 4 the looper (as
+// before); bottom row 5 / 7 the song before / after (selected, not played; the phone: skip at once), 6 plays the
+// selected song - or pauses / plays the one that plays -, 8 back out.
 static void show_player_tiles(void)
 {
-    bool jam = s_source == 1;
+    bool jam = s_source == 1, listed = player_listed();
     bool playing = jam ? s_jam_st.playing : s_phone_state.playing;
-    // top row: 1 jam tracks / phone, 2 tuner, 3 the player's page, 4 to the looper
+    bool pending = player_pending();
     set_tile(0, "SOURCE", jam ? "Jam tracks" : "Phone", 0x2EC4B6, true, false, NULL, jam ? LV_SYMBOL_SD_CARD : LV_SYMBOL_BLUETOOTH);
     s_tile_note[0] = jam ? "Tap: phone" : "Tap: jam tracks";
-    set_tile(1, "TUNER", "Tuner", 0xBDBDBD, false, false, NANO_ICONS[NANO_ICON_TUNER], NANO_ICONS[NANO_ICON_TUNER] ? NULL : LV_SYMBOL_AUDIO);
-    set_tile(2, jam ? "TRACKS" : "PHONE", jam ? "List" : "Volume", 0x9AA0A6, false, false, NULL, LV_SYMBOL_LIST);
-    {   // (the volume into the Nano, as the bar has the next song)
-        static char vol[32];
-        float db = jam ? s_jam_st.volume_db : s_phone_state.volume_db;
-        snprintf(vol, sizeof(vol), "%s %s%.1f dB", jam ? "Jam" : "Phone", db < -0.05f ? "\xE2\x88\x92" : "", fabsf(db));
-        s_tile_note[2] = vol;
+    set_tile(1, "LIST", jam ? "Songs" : "Phone", 0x9AA0A6, false, false, NULL, LV_SYMBOL_LIST);   // (2026-11-28: the list, not the tuner)
+    static char album_note[48];
+    bool albums = listed && jam_album_count() > 1;
+    set_tile(2, "ALBUM", "Album", 0x9AA0A6, false, !albums, NULL, LV_SYMBOL_RIGHT);
+    if (albums) {   // (the note: the album a press goes to - after the last one the first)
+        jam_album_name(player_album_target(1), album_note, sizeof(album_note), false);
+        s_tile_note[2] = album_note;
     }
     set_tile(3, "LOOPER", "Looper", 0x9AA0A6, false, false, NULL, LV_SYMBOL_LOOP);
     s_tile_note[3] = "Loop over it";
-    // bottom row: 5 back, 6 play / pause, 7 next, 8 back out (as in looper mode)
-    set_tile(4, "BACK", "Back", 0x9AA0A6, false, false, NULL, LV_SYMBOL_PREV);
-    set_tile(5, "PLAY / PAUSE", playing ? "Pause" : "Play", 0x45F862, playing, false, NULL, playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
-    set_tile(6, "NEXT", "Next", 0x9AA0A6, false, false, NULL, LV_SYMBOL_NEXT);
+    set_tile(4, jam ? "SONG" : "BACK", jam ? "Previous" : "Back", 0x9AA0A6, false, false, NULL, jam ? LV_SYMBOL_UP : LV_SYMBOL_PREV);
+    if (pending) {   // 6 plays the selected song: blue, not lit (it does not play yet), its title as the note
+        snprintf(s_sel_note, sizeof(s_sel_note), "%s", jam_title(jam_name(player_sel())));
+        set_tile(5, "PLAY", "Play", SEL_BLUE, false, false, NULL, LV_SYMBOL_PLAY);
+        s_tile_note[5] = s_sel_note;
+    } else {
+        set_tile(5, "PLAY / PAUSE", playing ? "Pause" : "Play", 0x45F862, playing, false, NULL, playing ? LV_SYMBOL_PAUSE : LV_SYMBOL_PLAY);
+    }
+    set_tile(6, jam ? "SONG" : "NEXT", "Next", 0x9AA0A6, false, false, NULL, jam ? LV_SYMBOL_DOWN : LV_SYMBOL_NEXT);
     set_tile(7, "MODE", "Player", 0x8A9099, false, false, NULL, LV_SYMBOL_AUDIO);
     s_tile_note[7] = "Press: back";
 }
@@ -7034,10 +7344,10 @@ static void build_level_sheet(lv_obj_t *screen)
     lv_obj_set_style_text_align(s_lv_count, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_pos(s_lv_count, 210, 4);
     lv_obj_set_hidden(s_lv_count, true);
-    lv_obj_t *pt = lv_line(g, 14, 78, 300, 6, HAIRLINE);
+    lv_obj_t *pt = lv_line(g, 14, 76, 300, 6, HAIRLINE);
     s_lv_prog = lv_line(pt, 0, 0, 0, 6, GREEN);
     s_lv_result = label(g, &ui_font_14, TEXT);
-    lv_obj_set_pos(s_lv_result, 14, 92);
+    lv_obj_set_pos(s_lv_result, 14, 86);   // (room for four lines: the question about the LEVEL knob has four)
     lv_obj_set_width(s_lv_result, gw - 28);
     lv_label_set_long_mode(s_lv_result, LV_LABEL_LONG_WRAP);
     lv_label_set_text(s_lv_result, "Choose what the preset is, then measure while you play.");
@@ -7061,13 +7371,17 @@ static void open_level_sheet(void)
 static void on_level_open(lv_event_t *e) { (void)e; open_level_sheet(); }
 
 // ---- the drum menu (looper mode: the drums' tile or footswitch 1 held) ----
-// The groove by style, a looper part's own groove, the kit, the level, and how a part's first take starts.
+// The groove by style, a looper part's own groove, the kit, the level, and how a part's first take starts; at the
+// top right "Save loops" - the looper's parts to the card as WAV files (p4_loops.c, 2026-11-28).
 #define DRUM_STYLES 10
 #define DRUM_PICK 15                       // grooves shown per style
 #define DRUM_CHIP 0xE8EAED                 // the chosen part / kit
-static lv_obj_t *s_drums, *s_drum_style[DRUM_STYLES], *s_drum_pick[DRUM_PICK], *s_drum_part[3], *s_drum_kit[2];
+static lv_obj_t *s_drums, *s_drum_style[DRUM_STYLES], *s_drum_pick[DRUM_PICK], *s_drum_part[3], *s_drum_kit[3];
+static const int DRUM_KIT_OF[3] = { DRUM_KIT_ACOUSTIC, DRUM_KIT_COMPUTED, DRUM_KIT_LOFI };   // the kit buttons, left to right
 static lv_obj_t *s_drum_now, *s_drum_level, *s_drum_level_value;
 static lv_obj_t *s_drum_switch[4];   // start with the first take, count in, on the bar lines, the first note starts it
+static lv_obj_t *s_drum_save;        // "Save loops"
+static int s_drum_save_shown = -1;
 static const ui_phone_action_t DRUM_SWITCH_ACTION[4] = { UI_DRUM_SYNC, UI_DRUM_COUNT, UI_LOOP_QUANTIZE, UI_LOOP_ARM };
 static int s_drum_style_shown = -1, s_drum_groove_shown = -1, s_drum_kit_shown = -1, s_drum_parts_shown = -999;
 static int s_drum_pick_groove[DRUM_PICK];  // the groove a button plays (-1 = none)
@@ -7146,9 +7460,27 @@ static void on_drum_part(lv_event_t *e)
 }
 static void on_drum_kit(lv_event_t *e)
 {
-    phone_action(UI_DRUM_KIT, (int)(intptr_t)lv_event_get_user_data(e) ? DRUM_KIT_COMPUTED : DRUM_KIT_ACOUSTIC);
+    phone_action(UI_DRUM_KIT, DRUM_KIT_OF[(int)(intptr_t)lv_event_get_user_data(e)]);
 }
 static void on_drum_close(lv_event_t *e) { (void)e; lv_obj_set_hidden(s_drums, true); }
+static void on_drum_save(lv_event_t *e) { (void)e; phone_action(UI_LOOP_SAVE, 0); }
+
+// "Save loops" as the board has it: to save, saving (percent; another tap does nothing), saved as they are (a tap
+// says they are on the card already), nothing to save / no card (dimmed).
+static void drum_save_show(void)
+{
+    int st = s_loop.save_state, key = st * 1000 + (st == UI_SAVE_BUSY ? s_loop.save_pct : 0);
+    if (key == s_drum_save_shown) return;
+    s_drum_save_shown = key;
+    char text[32];
+    if (st == UI_SAVE_BUSY) snprintf(text, sizeof(text), "Saving %d %%", s_loop.save_pct);
+    else snprintf(text, sizeof(text), "%s", st == UI_SAVE_DONE ? LV_SYMBOL_OK "  Saved" : st == UI_SAVE_NO_CARD ? "No card" : "Save loops");
+    lv_obj_t *l = lv_obj_get_child(s_drum_save, 0);
+    set_text(l, text);
+    set_color_prop(l, LV_STYLE_TEXT_COLOR, st == UI_SAVE_DONE ? GREEN : TEXT);
+    if (st == UI_SAVE_NONE || st == UI_SAVE_NO_CARD) lv_obj_add_state(s_drum_save, LV_STATE_DISABLED);
+    else lv_obj_remove_state(s_drum_save, LV_STATE_DISABLED);   // (saving: a tap does nothing more)
+}
 static void on_drum_switch(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
@@ -7177,13 +7509,13 @@ static void drum_menu_show(void)
 {
     if (s_loop.groove != s_drum_groove_shown || drum_parts_key() != s_drum_parts_shown)
         drum_menu_fill(s_drum_style_shown >= 0 ? s_drum_style_shown : groove_style(drum_marked()));
-    int kit = s_loop.acoustic_kit ? s_loop.drum_kit : DRUM_KIT_COMPUTED;
+    int kit = s_loop.drum_kit == DRUM_KIT_ACOUSTIC && !s_loop.acoustic_kit ? DRUM_KIT_COMPUTED : s_loop.drum_kit;
     if (kit != s_drum_kit_shown) {
         s_drum_kit_shown = kit;
-        drum_chip(s_drum_kit[0], DRUM_CHIP, kit == DRUM_KIT_ACOUSTIC);
-        drum_chip(s_drum_kit[1], DRUM_CHIP, kit == DRUM_KIT_COMPUTED);
+        for (int i = 0; i < 3; i++) drum_chip(s_drum_kit[i], DRUM_CHIP, kit == DRUM_KIT_OF[i]);
         if (!s_loop.acoustic_kit) set_color_prop(lv_obj_get_child(s_drum_kit[0], 0), LV_STYLE_TEXT_COLOR, DIMMED);   // (its samples are not on the board)
     }
+    drum_save_show();
     const bool want[4] = { s_loop.drum_sync, s_loop.count_in, s_loop.quantize, s_loop.arm };
     for (int i = 0; i < 4; i++) {
         lv_obj_t *sw = s_drum_switch[i];
@@ -7202,6 +7534,7 @@ void ui_drum_menu_toggle(void)
         lv_obj_set_hidden(s_drums, false);
         lv_obj_move_foreground(s_drums);
         s_drum_kit_shown = -1;
+        s_drum_save_shown = -1;
         drum_menu_fill(groove_style(drum_marked()));
         int v = (int)lroundf(s_loop.drum_level_db);
         lv_slider_set_value(s_drum_level, v, LV_ANIM_OFF);
@@ -7243,6 +7576,8 @@ static void build_drums(lv_obj_t *screen)
     lv_label_set_text(sub, st);
     lv_obj_set_pos(sub, 20, 48);
     close_button(s_drums, DLG_W - 60, 16, on_drum_close, 0);
+    // the loops to the card: beside the close button, as "Look again" in the list of networks
+    s_drum_save = small_button(s_drums, DLG_W - 76 - 184, 12, 184, 52, "Save loops", on_drum_save, 0);
     int lw = 624;   // the left column: the groove, whose it is, styles, grooves
     s_drum_now = label(s_drums, &ui_font_title_26, TEXT);
     lv_obj_set_pos(s_drum_now, 20, 84);
@@ -7265,8 +7600,9 @@ static void build_drums(lv_obj_t *screen)
     lv_label_set_text(cap, "KIT");
     lv_obj_set_style_text_letter_space(cap, 2, 0);
     lv_obj_set_pos(cap, rx, 84);
-    static const char *const KITS[2] = { "Acoustic", "Electronic" };
-    for (int i = 0; i < 2; i++) s_drum_kit[i] = drum_button(rx + i * (rw / 2 + 3), 108, rw / 2 - 3, 46, &ui_font_16, KITS[i], on_drum_kit, i);
+    static const char *const KITS[3] = { "Acoustic", "Electronic", "Lo-Fi" };   // (DRUM_KIT_OF)
+    int kw = (rw - 2 * 6) / 3;
+    for (int i = 0; i < 3; i++) s_drum_kit[i] = drum_button(rx + i * (kw + 6), 108, kw, 46, &ui_font_16, KITS[i], on_drum_kit, i);
     s_drum_level = fill_bar(s_drums, rx, 170, rw, "Level", &s_drum_level_value);
     lv_slider_set_range(s_drum_level, -40, 6);
     lv_obj_add_event_cb(s_drum_level, on_drum_level, LV_EVENT_VALUE_CHANGED, NULL);
@@ -7308,10 +7644,12 @@ static void show_jam_field(void)
 
 // ---- the jam player (Jam A: list and player side by side) ----
 
+static void player_do(int action);
 static void on_jam_row(lv_event_t *e) { phone_action(UI_JAM_PLAY, (int)(intptr_t)lv_event_get_user_data(e)); }
-static void on_jam_toggle(lv_event_t *e) { phone_action(UI_JAM_TOGGLE, 0); }
-static void on_jam_prev(lv_event_t *e) { phone_action(UI_JAM_PREV, 0); }
-static void on_jam_next(lv_event_t *e) { phone_action(UI_JAM_NEXT, 0); }
+// (in player mode the row along the bottom is the footswitches 5-7: the selection, as they)
+static void on_jam_toggle(lv_event_t *e) { if (s_player_mode) player_do(UI_PLAYER_START); else phone_action(UI_JAM_TOGGLE, 0); }
+static void on_jam_prev(lv_event_t *e) { if (s_player_mode) player_do(UI_PLAYER_SONG_PREV); else phone_action(UI_JAM_PREV, 0); }
+static void on_jam_next(lv_event_t *e) { if (s_player_mode) player_do(UI_PLAYER_SONG_NEXT); else phone_action(UI_JAM_NEXT, 0); }
 static void on_jam_play(lv_event_t *e) { if (!s_jam_st.playing) phone_action(UI_JAM_TOGGLE, 0); }
 static void on_jam_pause(lv_event_t *e) { if (s_jam_st.playing) phone_action(UI_JAM_TOGGLE, 0); }
 static void close_jam(lv_event_t *e) { lv_obj_set_hidden(s_jam, true); }
@@ -7394,12 +7732,28 @@ void ui_player_hide(void)
     lvgl_port_lock(0);
     lv_obj_set_hidden(s_phone, true);
     lv_obj_set_hidden(s_jam, true);
+    s_sel = -1;   // (a selection not started does not wait for the next time)
     lvgl_port_unlock();
 }
 
-void ui_player_action(int action)
+// After a press: the stage, the tiles and the jam page at once (not at the next look, 100 ms later)
+static void player_refresh(void)
 {
-    lvgl_port_lock(0);
+    if (!s_player_mode) return;
+    if (!lv_obj_is_hidden(s_playerbar)) show_playerbar();
+    if (s_tiles_drawn) {
+        s_player_sig = player_sig();
+        show_player_tiles();
+        show_tile_extras();
+        fit_names();
+        s_tiles_stale = true;
+    }
+    if (!lv_obj_is_hidden(s_jam)) show_jam();
+}
+
+// What a player switch does (its footswitch, its tile, the jam page's row in player mode). In the screen's task.
+static void player_do(int action)
+{
     bool jam = s_source == 1, playing = jam ? s_jam_st.playing : s_ph_playing;
     ui_phone_action_t prev = jam ? UI_JAM_PREV : UI_PHONE_PREV, next = jam ? UI_JAM_NEXT : UI_PHONE_NEXT;
     ui_phone_action_t toggle = jam ? UI_JAM_TOGGLE : UI_PHONE_TOGGLE;
@@ -7412,8 +7766,31 @@ void ui_player_action(int action)
     case UI_PLAYER_SOURCE:   // jam tracks <-> phone; its page follows if it shows
         if (!lv_obj_is_hidden(s_phone) || !lv_obj_is_hidden(s_jam)) open_source(!s_source);
         else s_source = !s_source;
+        s_sel = -1;
+        break;
+    case UI_PLAYER_SONG_PREV:   // the selection moves - the song that plays goes on (the phone: it skips at once)
+    case UI_PLAYER_SONG_NEXT:
+        if (player_listed()) player_song_step(action == UI_PLAYER_SONG_NEXT ? 1 : -1);
+        else if (!jam) phone_action(action == UI_PLAYER_SONG_NEXT ? UI_PHONE_NEXT : UI_PHONE_PREV, 0);
+        break;
+    case UI_PLAYER_ALBUM_PREV:
+    case UI_PLAYER_ALBUM_NEXT:
+        if (player_listed()) player_select(player_album_target(action == UI_PLAYER_ALBUM_NEXT ? 1 : -1));
+        break;
+    case UI_PLAYER_START:   // the selected song from its start; else play / pause (the selection goes when it plays)
+        if (player_pending()) {
+            phone_action(UI_JAM_PLAY, player_sel());
+            s_sel = player_sel();
+        } else phone_action(toggle, 0);
         break;
     }
+    player_refresh();
+}
+
+void ui_player_action(int action)
+{
+    lvgl_port_lock(0);
+    player_do(action);
     lvgl_port_unlock();
 }
 
@@ -7635,16 +8012,25 @@ static void jam_fill_list(void)
 
 // The rows: the current one lit with its play / pause mark, the others numbered in their album; each with its
 // correction.
+static int s_jam_list_sel = -1, s_jam_list_sel_shown = -1;   // the selected row (player mode), -1 = none
+static int jam_list_sel(void) { return s_player_mode && player_pending() ? player_sel() : -1; }
 static void jam_mark_list(void)
 {
+    s_jam_list_sel = jam_list_sel();
     uint32_t n_children = lv_obj_get_child_count(s_jam_list);
     for (uint32_t c = 0; c < n_children; c++) {
         lv_obj_t *r = lv_obj_get_child(s_jam_list, c);
         int i = (int)(intptr_t)lv_obj_get_user_data(r);
         if (i < 0 || i >= s_jam_st.count) continue;
-        bool cur = i == s_jam_st.current;
-        set_color_prop(r, LV_STYLE_BG_COLOR, cur ? SURF_ON : SURF);
-        if (cur && s_jam_list_current != s_jam_st.current) lv_obj_scroll_to_view(r, LV_ANIM_OFF);   // (the playing row in sight)
+        bool cur = i == s_jam_st.current, sel = i == s_jam_list_sel;
+        // (player mode: the selected song framed in blue, as on the stage - the one that plays keeps its green mark)
+        set_color_prop(r, LV_STYLE_BG_COLOR, cur ? SURF_ON : sel ? blend(SEL_BLUE, SURF, 0.10f) : SURF);
+        set_num_prop(r, LV_STYLE_BORDER_SIDE, sel ? LV_BORDER_SIDE_FULL : LV_BORDER_SIDE_TOP);
+        set_num_prop(r, LV_STYLE_BORDER_WIDTH, sel ? 2 : c > 0 ? 1 : 0);
+        set_color_prop(r, LV_STYLE_BORDER_COLOR, sel ? blend(SEL_BLUE, SURF, 0.85f) : HAIRLINE);
+        set_num_prop(r, LV_STYLE_RADIUS, sel ? 10 : 0);
+        if ((cur && s_jam_list_current != s_jam_st.current) || (sel && s_jam_list_sel_shown != i))
+            lv_obj_scroll_to_view(r, LV_ANIM_OFF);   // (the playing row in sight, or the selected one)
         int first, last;
         jam_album_range(i, &first, &last);
         char text[16];
@@ -7652,13 +8038,14 @@ static void jam_mark_list(void)
         else snprintf(text, sizeof(text), "%d", i - first + 1);
         lv_obj_t *n = lv_obj_get_child(r, 0), *v = lv_obj_get_child(r, 2);
         set_text(n, text);
-        set_color_prop(n, LV_STYLE_TEXT_COLOR, cur ? TEXT : CAPTION);
+        set_color_prop(n, LV_STYLE_TEXT_COLOR, cur ? (s_jam_st.playing ? GREEN : TEXT) : sel ? SEL_BLUE : CAPTION);
         char note[48] = "";
         if (s_jam_notes) s_jam_notes(i, note, sizeof(note));
         set_text(v, note);
     }
     s_jam_list_current = s_jam_st.current;
     s_jam_list_playing = s_jam_st.playing;
+    s_jam_list_sel_shown = s_jam_list_sel;
 }
 
 // The album in view: it follows the playing track when that changes; the arrows step through the albums.
@@ -7670,6 +8057,7 @@ static void jam_show_albums(void)
         s_jam_view_current = j->current;
         if (j->current >= 0) s_jam_view = j->current;
     }
+    if (s_player_mode && player_listed()) s_jam_view = player_sel();   // (player mode: the selection's album)
     if (s_jam_view >= j->count) s_jam_view = j->count ? 0 : -1;
     if (s_jam_view < 0 && j->count) s_jam_view = 0;
     int albums = jam_album_count();
@@ -7689,6 +8077,10 @@ static void jam_show_albums(void)
 static void on_jam_album(lv_event_t *e)
 {
     int step = (int)(intptr_t)lv_obj_get_user_data(lv_event_get_current_target(e));
+    if (s_player_mode && player_listed()) {   // (player mode: the arrows move the selection, as the footswitches)
+        player_do(step > 0 ? UI_PLAYER_ALBUM_NEXT : UI_PLAYER_ALBUM_PREV);
+        return;
+    }
     const int n = s_jam_st.count;
     if (n <= 0 || s_jam_view < 0) return;
     int first, last;
@@ -7711,7 +8103,7 @@ static void show_jam(void)
         s_jam_list_sig = sig;
         jam_fill_list();
     }
-    if (j->current != s_jam_list_current || j->playing != s_jam_list_playing) jam_mark_list();
+    if (j->current != s_jam_list_current || j->playing != s_jam_list_playing || jam_list_sel() != s_jam_list_sel) jam_mark_list();
     char text[128], pos[12], len[12];
     if (!j->card) snprintf(text, sizeof(text), j->unreadable ? "CARD NOT READABLE \xC2\xB7 FORMAT IT AS MS-DOS (FAT32)" : "NO MICROSD CARD");
     else if (!j->count) snprintf(text, sizeof(text), "NO WAV FILES IN THE FOLDER JAM");
@@ -7802,12 +8194,12 @@ static void loop_poll(lv_timer_t *t)
         fit_names();
         s_tiles_stale = true;   // (the editor's strip: these tiles changed without a ui_show_state, see tiles_copy)
     }
+    player_check_sel();
     if (s_source == 1) show_jam_field();
     if (!lv_obj_is_hidden(s_jam)) show_jam();
     if (s_player_mode) {
         if (!lv_obj_is_hidden(s_playerbar)) show_playerbar();
-        bool pl = s_source == 1 ? j.playing : s_phone_state.playing;
-        uint32_t ps = (uint32_t)s_source | (uint32_t)pl << 1;
+        uint32_t ps = player_sig();
         if (s_tiles_drawn && ps != s_player_sig) {
             s_player_sig = ps;
             show_player_tiles();
@@ -8443,6 +8835,10 @@ static void set_fullscreen(bool on)
     lv_obj_set_hidden(s_playerbar, on || !s_player_mode);
     lv_obj_set_hidden(s_gig_bar, !on);
     if (!on) s_pedals_shown = false, lv_obj_set_hidden(s_pedals, true);   // (the pedals belong to the full-screen view)
+    for (int i = 0; i < s_full_dialog_count; i++) {   // the dialogs cover the tiles from their top edge (64) in the gig view
+        lv_obj_set_y(s_full_dialogs[i], on ? FULL_TILE_Y : 72);
+        lv_obj_set_height(s_full_dialogs[i], on ? DLG_H + 72 - FULL_TILE_Y : DLG_H);
+    }
     for (int i = 0; i < TILES; i++) place_tile(i);
     fit_names();
     if (on && s_pedal_view) send('_', 1);   // the state once more: the pedals come up with it
@@ -8767,8 +9163,9 @@ void ui_show_state(const nano_state_t *st, const ui_view_t *view)
     char text[96];
     lvgl_port_lock(0);
 
+    bool looper_changed = s_looper_mode != view->looper || s_player_mode != (view->player && !view->looper)
+                          || s_fx_mode != view->fx_mode;   // (FX mode has its own order)
     s_fx_mode = view->fx_mode;
-    bool looper_changed = s_looper_mode != view->looper || s_player_mode != (view->player && !view->looper);
     s_looper_mode = view->looper;
     s_player_mode = view->player && !view->looper;
     if (looper_changed) for (int i = 0; i < TILES; i++) place_tile(i);   // (the looper's fixed places, or the layout's)
@@ -9480,6 +9877,7 @@ static void set_param_norm(int idx, float n)
 {
     const nano_param_t *p = ed_param(idx);
     s_param_norm[idx] = n;
+    s_spec_eq_dirty = true;
     if (n < 0) strlcpy(s_param_text[idx], "\xE2\x80\x93", sizeof(s_param_text[idx]));   // en dash: not known
     else if (p->kind == NANO_PARAM_RANGE)
         snprintf(s_param_text[idx], sizeof(s_param_text[idx]), "%.*f", p->decimals < 0 ? 1 : p->decimals, (double)param_from_normalized(p, n));
@@ -9531,14 +9929,26 @@ static void draw_bar(lv_obj_t *bar, int idx, lv_layer_t *layer)
         int32_t shift = edge.x1 < a.x1 + 4 ? a.x1 + 4 - edge.x1 : edge.x2 > a.x2 - 4 ? a.x2 - 4 - edge.x2 : 0;
         lv_area_move(&glow, shift, 0);
         lv_area_move(&edge, shift, 0);
+        // Over the name (a low value): the line above and below the name, not through its letters
+        lv_point_t name_size;
+        lv_text_get_size(&name_size, p->name, &ui_font_16, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        bool over_name = glow.x2 >= a.x1 + 16 - 2 && glow.x1 <= a.x1 + 16 + name_size.x + 2;
         lv_draw_rect_dsc_init(&r);   // a soft glow without a shadow (shadows are slow to draw)
         r.bg_color = lv_color_hex(color);
-        r.bg_opa = LV_OPA_30;
-        r.radius = 5;
-        lv_draw_rect(layer, &r, &glow);
-        r.bg_opa = LV_OPA_COVER;
-        r.radius = 2;
-        lv_draw_rect(layer, &r, &edge);
+        for (int part = 0; part < (over_name ? 2 : 1); part++) {
+            lv_area_t g = glow, l = edge;
+            if (over_name) {   // (the name's line: cy - 11 to cy + 11)
+                if (part == 0) g.y2 = l.y2 = cy - 14;
+                else g.y1 = l.y1 = cy + 13;
+                if (l.y1 > l.y2) continue;
+            }
+            r.bg_opa = LV_OPA_30;
+            r.radius = 5;
+            lv_draw_rect(layer, &r, &g);
+            r.bg_opa = LV_OPA_COVER;
+            r.radius = 2;
+            lv_draw_rect(layer, &r, &l);
+        }
     }
 
     int32_t name_end = a.x1 + 220;
@@ -9912,12 +10322,512 @@ static void show_env_row(void)
     set_text(s_env_note, w->live ? "FROM THE DRY INPUT (DI)" : w->mode ? "SWITCH THE WAH ON TO SEE IT MOVE" : "AUTO-WAH IS OFF");
 }
 
+// ---- P4: the live spectrum in the EQ editor (draft 2026-11-28, drafts/eq-spectrum-2026-11-28) ----
+// The Nano's sound (USB 3/4, after the whole chain) behind / beside the EQ's controls. One of three ways per build
+// (EQ_SPECTRUM_STYLE; the screenshots draw all three):
+//   A  a graph above the rows, as the desktop editor's EQ view (FabFilter Pro-Q): the sound as a soft grey shape, the
+//      EQ's curve in white over it, its bands as points (filled = on, outlined = off); it stays while the rows scroll
+//   B  third-octave bars in a strip below the rows (a classic analyser, no curve)
+//   C  a slim graph below the rows (sound + curve) and HOLD: the sound of now kept as a line, to compare with while
+//      the EQ changes
+// What it costs the screen (REALTIME.md rule 6): only its own area is drawn anew - A 168 rows, B 56, C 112 - at most
+// 15 times a second and only when a new spectrum came. A and C are one RGB565 picture made here column by column
+// (spec_paint, PSRAM), so LVGL blits one image instead of drawing hundreds of lines. The analysis (main/p4_spectrum.c)
+// runs only while this asks: no EQ editor, no spectrum, no work.
+#define SPEC_STYLE_A 1
+#define SPEC_STYLE_B 2
+#define SPEC_STYLE_C 3
+#ifndef EQ_SPECTRUM_STYLE
+#define EQ_SPECTRUM_STYLE SPEC_STYLE_C
+#endif
+#define SPEC_MS 66                  // the screen asks ~15 times a second
+#define SPEC_A_H 168                // A: the graph's height (above the rows)
+#define SPEC_DOCK_H 112             // B, C: the strip's height (below the rows)
+#define SPEC_W (SCREEN_W - 2 * MARGIN)
+#define SPEC_HOLD_W 96              // C: the HOLD button beside the graph
+#define SPEC_TOP_DB -12.0f          // the sound's own scale, as in the desktop editor: top and bottom edge in dBFS
+#define SPEC_FLOOR_DB -96.0f
+#define SPEC_EQ_SPAN 18.0f          // the curve's scale: +-18 dB
+#define SPEC_COLOR 0xBECDE1         // the sound: a cool light grey
+#define SPEC_EDGE 0xDCE4EE
+#define SPEC_THIRDS 30              // B: third octaves, 20 Hz .. 16 kHz
+#define SPEC_BAR_TOP_DB -6.0f       // B: its scale (a third octave holds four of the twelfths: ~6 dB more)
+#define SPEC_BAR_FLOOR_DB -78.0f
+#define SPEC_POINTS 11
+
+static int s_spec_style = EQ_SPECTRUM_STYLE;   // 0: none (the editor as before)
+static ui_spectrum_cb s_spec_get;
+static lv_timer_t *s_spec_timer;
+
+enum { EQB_PEAK, EQB_HP, EQB_LP, EQB_HS, EQB_LS, EQB_HPN, EQB_LPN };
+typedef struct {
+    uint8_t kind;                    // EQB_*
+    bool on;
+    float f, gain, q;
+    int order;                       // Low-High Cut: the slope in steps of 6 dB per octave
+    const char *label;               // NULL: a small point
+} spec_band_t;
+
+typedef struct {
+    ui_spectrum_t data;              // the newest the analysis handed over
+    uint32_t seq;
+    bool asking, drawn_live, drawn_any, drawn_di;
+    lv_obj_t *box, *img, *caption, *hold, *bars, *dot[SPEC_POINTS];
+    lv_image_dsc_t dsc;
+    uint16_t *px;                    // the picture (A, C): w x h RGB565
+    uint16_t tpl[6 * SPEC_A_H];      // per row: the background of the three kinds of column, then each under the sound
+    float eq_y[SPEC_W], spec_y[SPEC_W];
+    uint8_t col_kind[SPEC_W];        // 0 plain, 1 a faint grid line, 2 a decade
+    int w, h;
+    bool eq_known;
+    spec_band_t band[SPEC_POINTS];
+    int bands;
+    float out_db;                    // the EQ's Output
+    float ref_db[UI_SPEC_BANDS];     // C: the sound held (HOLD)
+    float drawn_db[UI_SPEC_BANDS];   // A, C: the sound as drawn last (less than half a dB moved: not drawn again)
+    bool ref_on;
+    float third_db[SPEC_THIRDS], peak_db[SPEC_THIRDS];   // B
+    uint32_t peak_ms[SPEC_THIRDS];
+} spec_view_t;
+static spec_view_t *s_spec;          // made at the first EQ editor and kept (lv_malloc: PSRAM on the board)
+
+static bool spec_is_eq(const nano_fx_model_t *m) { return m && (m->type == 4001 || m->type == 4003 || m->type == 4005); }
+static bool spec_wanted(const nano_fx_model_t *m) { return s_spec_style && spec_is_eq(m); }
+
+static bool spec_value(const char *name, float *v)
+{
+    const nano_fx_model_t *m = s_editor_model_def;
+    for (int i = 0; m && i < m->param_count && i < NANO_MAX_PARAMS; i++) {
+        if (strcmp(m->params[i].name, name)) continue;
+        const nano_param_t *p = &m->params[i];
+        if (s_param_norm[i] < 0) return false;
+        *v = p->kind == NANO_PARAM_ENUM ? (float)option_index(p, s_param_norm[i]) : param_from_normalized(p, s_param_norm[i]);
+        return true;
+    }
+    return false;
+}
+
+// The EQ's bands from its values - textbook filters, as the desktop editor's EQ view (the Nano's own shapes are
+// not known; the HP / LP of Graphic 9 taken as 12 dB per octave)
+static void spec_eq_read(spec_view_t *v)
+{
+    const nano_fx_model_t *m = s_editor_model_def;
+    v->bands = 0;
+    v->eq_known = false;
+    v->out_db = 0;
+    float a, b, c, d, e;
+    if (!m) return;
+    if (m->type == 4001) {   // Parametric 3: Peak, Hi Pass, Lo Pass, Hi Shelf, Lo Shelf
+        static const uint8_t kinds[5] = { EQB_PEAK, EQB_HP, EQB_LP, EQB_HS, EQB_LS };
+        static const char *const labels[3] = { "1", "2", "3" };
+        for (int i = 0; i < 3; i++) {
+            char n[5][12];
+            static const char *const what[5] = { "Gain", "Freq", "Q", "Type", "Active" };
+            for (int k = 0; k < 5; k++) snprintf(n[k], sizeof(n[k]), "%d %s", i + 1, what[k]);
+            if (!spec_value(n[0], &a) || !spec_value(n[1], &b) || !spec_value(n[2], &c) || !spec_value(n[3], &d) || !spec_value(n[4], &e)) return;
+            v->band[v->bands++] = (spec_band_t){ kinds[(int)d % 5], e >= 0.5f, b, a, c, 0, labels[i] };
+        }
+    } else if (m->type == 4005) {   // Graphic 9
+        static const char *const names[9] = { "65Hz", "125Hz", "250Hz", "500hz", "1kHz", "2kHz", "4kHz", "8kHz", "16kHz" };
+        static const float fc[9] = { 65, 125, 250, 500, 1000, 2000, 4000, 8000, 16000 };
+        if (!spec_value("HPF", &a) || !spec_value("LPF", &b)) return;
+        v->band[v->bands++] = (spec_band_t){ EQB_HP, a > 19.5f, a, 0, 0.707f, 0, "HP" };
+        for (int i = 0; i < 9; i++) {
+            if (!spec_value(names[i], &c)) return;
+            v->band[v->bands++] = (spec_band_t){ EQB_PEAK, true, fc[i], c, 1.41f, 0, NULL };
+        }
+        v->band[v->bands++] = (spec_band_t){ EQB_LP, b < 20000, b, 0, 0.707f, 0, "LP" };
+    } else if (m->type == 4003) {   // Low-High Cut: Flat, -6 .. -48 dB per octave
+        if (!spec_value("HPF Slope", &a) || !spec_value("HPF Freq", &b) || !spec_value("LPF Slope", &c) || !spec_value("LPF Freq", &d)) return;
+        v->band[v->bands++] = (spec_band_t){ EQB_HPN, a > 0.5f, b, 0, 0, (int)lroundf(a), "HP" };
+        v->band[v->bands++] = (spec_band_t){ EQB_LPN, c > 0.5f, d, 0, 0, (int)lroundf(c), "LP" };
+    } else return;
+    if (spec_value("Output", &a)) v->out_db = a;
+    v->eq_known = true;
+}
+
+// What one band does at f, in dB
+static float spec_band_db(const spec_band_t *b, float f)
+{
+    if (!b->on) return 0;
+    float w = f / b->f, w2 = w * w;
+    if (b->kind == EQB_HPN || b->kind == EQB_LPN) return -10 * log10f(1 + powf(b->kind == EQB_HPN ? 1 / w2 : w2, (float)b->order));
+    float q = b->q < 0.05f ? 0.05f : b->q, iq2 = 1 / (q * q), d = (1 - w2) * (1 - w2);
+    if (b->kind == EQB_HP) return 10 * log10f(w2 * w2 / (d + w2 * iq2) + 1e-12f);
+    if (b->kind == EQB_LP) return 10 * log10f(1 / (d + w2 * iq2) + 1e-12f);
+    float g = powf(10, b->gain / 40), g2 = g * g;
+    if (b->kind == EQB_PEAK) return 10 * log10f((d + w2 * g2 * iq2) / (d + w2 * iq2 / g2));
+    float mid = g * w2 * iq2, lo = (g - w2) * (g - w2) + mid, hi = (1 - g * w2) * (1 - g * w2) + mid;
+    return b->gain / 2 + 10 * log10f(b->kind == EQB_LS ? lo / hi : hi / lo);
+}
+
+static inline float spec_f_of_x(float x, int w) { return 20.0f * powf(1000.0f, x / (float)(w - 1)); }
+static inline float spec_x_of_f(float f, int w) { return log10f(f / 20.0f) / 3.0f * (float)(w - 1); }
+static inline float spec_y_of_eq(float db, int h) { return h * 0.5f - db / SPEC_EQ_SPAN * (h * 0.5f - 10); }
+static inline float spec_y_of_level(float db, int h)
+{
+    float t = (db - SPEC_FLOOR_DB) / (SPEC_TOP_DB - SPEC_FLOOR_DB);
+    return h - (t < 0 ? 0 : t > 1 ? 1 : t) * (h - 6);
+}
+static inline uint16_t spec_565(uint32_t rgb) { return (uint16_t)(((rgb >> 8) & 0xF800) | ((rgb >> 5) & 0x07E0) | ((rgb >> 3) & 0x001F)); }
+// fg over bg at a / 32
+static inline uint16_t spec_mix(uint16_t bg, uint16_t fg, uint32_t a)
+{
+    uint32_t b = (bg | (uint32_t)bg << 16) & 0x07E0F81Fu, f = (fg | (uint32_t)fg << 16) & 0x07E0F81Fu;
+    uint32_t r = ((f * a + b * (32 - a)) >> 5) & 0x07E0F81Fu;
+    return (uint16_t)(r | r >> 16);
+}
+
+// A line through one column from y0 to y1 (fractions: the ends partly covered)
+static void spec_vline(uint16_t *col, int stride, int h, float y0, float y1, uint16_t color, uint32_t alpha)
+{
+    int a = (int)floorf(y0), b = (int)ceilf(y1);
+    if (a < 0) a = 0;
+    if (b > h) b = h;
+    for (int y = a; y < b; y++) {
+        float lo = y0 > y ? y0 : (float)y, hi = y1 < y + 1 ? y1 : (float)(y + 1), cover = hi - lo;
+        if (cover <= 0) continue;
+        uint32_t k = (uint32_t)(alpha * cover + 0.5f);
+        if (k) col[y * stride] = spec_mix(col[y * stride], color, k);
+    }
+}
+
+// The background of each row: the graph's dark gradient with its level lines, as plain, faint-line and decade columns,
+// and each of them under the sound's shape (that fades from the top down)
+static void spec_templates(spec_view_t *v)
+{
+    int h = v->h;
+    bool big = s_spec_style == SPEC_STYLE_A;
+    for (int y = 0; y < h; y++) {
+        uint32_t row = blend(0x090A0C, 0x111418, (float)y / (h - 1));
+        for (int db = -12; db <= 12; db += big ? 6 : 12) {
+            if ((int)lroundf(spec_y_of_eq((float)db, h)) == y) row = blend(0xFFFFFF, row, db ? 0.05f : 0.13f);
+        }
+        uint32_t kinds[3] = { row, blend(0xFFFFFF, row, 0.035f), blend(0xFFFFFF, row, 0.09f) };
+        float a = 0.27f - 0.22f * (float)y / (h - 1);   // the sound's shape: brighter at the top
+        for (int k = 0; k < 3; k++) {
+            v->tpl[k * h + y] = spec_565(kinds[k]);
+            v->tpl[(3 + k) * h + y] = spec_565(blend(SPEC_COLOR, kinds[k], a));
+        }
+    }
+    for (int x = 0; x < v->w; x++) v->col_kind[x] = 0;
+    for (int dec = 10; dec <= 10000; dec *= 10) {
+        for (int k = 1; k < 10; k++) {
+            float f = (float)(dec * k);
+            if (f < 20 || f > 20000 || (k > 1 && !big)) continue;
+            int x = (int)lroundf(spec_x_of_f(f, v->w));
+            if (x >= 0 && x < v->w) v->col_kind[x] = k == 1 ? 2 : 1;
+        }
+    }
+}
+
+// The EQ's curve per column and its points (when a value changed)
+static void spec_eq_curve(spec_view_t *v)
+{
+    spec_eq_read(v);
+    int w = v->w, h = v->h;
+    if (!v->eq_known) {
+        for (int x = 0; x < w; x++) v->eq_y[x] = NAN;
+    } else {
+        float prev = 0;
+        for (int x = 0; x < w; x += 4) {   // (every fourth column, the ones between on a straight line)
+            float f = spec_f_of_x((float)x, w), db = v->out_db;
+            for (int i = 0; i < v->bands; i++) db += spec_band_db(&v->band[i], f);
+            float y = spec_y_of_eq(db < -40 ? -40 : db > 40 ? 40 : db, h);
+            v->eq_y[x] = y;
+            for (int k = 1; k < 4 && x >= 4; k++) v->eq_y[x - 4 + k] = prev + (y - prev) * k / 4;
+            prev = y;
+        }
+        for (int x = (w - 1) / 4 * 4 + 1; x < w; x++) v->eq_y[x] = prev;
+    }
+    for (int i = 0; i < SPEC_POINTS; i++) {
+        lv_obj_t *dot = v->dot[i];
+        if (!dot) continue;
+        bool there = v->eq_known && i < v->bands;
+        set_hidden(dot, !there);
+        if (!there) continue;
+        const spec_band_t *b = &v->band[i];
+        bool level = b->kind == EQB_PEAK || b->kind == EQB_HS || b->kind == EQB_LS;
+        float db = (level ? b->gain : 0) + v->out_db, f = b->f < 20 ? 20 : b->f > 20000 ? 20000 : b->f;
+        int size = lv_obj_get_width(dot);
+        int x = (int)lroundf(spec_x_of_f(f, w)) - size / 2;
+        int y = (int)lroundf(spec_y_of_eq(db < -SPEC_EQ_SPAN ? -SPEC_EQ_SPAN : db > SPEC_EQ_SPAN ? SPEC_EQ_SPAN : db, h)) - size / 2;
+        x = x < 2 ? 2 : x > w - size - 2 ? w - size - 2 : x;
+        y = y < 2 ? 2 : y > h - size - 2 ? h - size - 2 : y;
+        set_num_prop(dot, LV_STYLE_X, x);
+        set_num_prop(dot, LV_STYLE_Y, y);
+        bool on = b->on;   // filled = on, outlined = off
+        set_color_prop(dot, LV_STYLE_BG_COLOR, on ? s_editor_color : 0x15181C);
+        set_color_prop(dot, LV_STYLE_BORDER_COLOR, on ? 0x0A0B0D : s_editor_color);
+        lv_obj_t *l = lv_obj_get_child(dot, 0);
+        if (l) {
+            set_text(l, b->label ? b->label : "");
+            set_color_prop(l, LV_STYLE_TEXT_COLOR, on ? ink_for(s_editor_color) : s_editor_color);
+        }
+    }
+}
+
+// The picture: background, the sound (and the DI / the held sound as lines), the EQ's area and curve, round corners
+static void spec_paint(spec_view_t *v)
+{
+    const int w = v->w, h = v->h;
+    const ui_spectrum_t *d = &v->data;
+    bool sound = d->live, di = d->live && d->has_di, ref = v->ref_on && s_spec_style == SPEC_STYLE_C;
+    const float per_px = 12.0f * 9.965784f / (float)(w - 1);   // bands per column: 20 Hz .. 20 kHz is log2(1000) octaves
+    float sm[UI_SPEC_BANDS];   // (a little smoothed over the bands, as the editor's soft line)
+    for (int i = 0; i < UI_SPEC_BANDS; i++) {
+        float l = d->out_db[i > 0 ? i - 1 : 0], r = d->out_db[i < UI_SPEC_BANDS - 1 ? i + 1 : i];
+        sm[i] = 0.25f * l + 0.5f * d->out_db[i] + 0.25f * r;
+    }
+    for (int x = 0; x < w; x++) {
+        float b = x * per_px;
+        int i = (int)b;
+        float t = b - i, db = i >= UI_SPEC_BANDS - 1 ? sm[UI_SPEC_BANDS - 1] : sm[i] + (sm[i + 1] - sm[i]) * t;
+        v->spec_y[x] = sound ? spec_y_of_level(db, h) : (float)h;
+    }
+    const uint16_t edge = spec_565(SPEC_EDGE), white = spec_565(0xF4F5F6), fill = spec_565(s_editor_color),
+                   di_color = spec_565(0x8C96A3), ref_color = spec_565(0xF4F5F6);
+    float zero = spec_y_of_eq(v->out_db, h);
+    for (int x = 0; x < w; x++) {
+        uint16_t *col = v->px + x;
+        const uint16_t *bg = v->tpl + v->col_kind[x] * h, *sp = v->tpl + (3 + v->col_kind[x]) * h;
+        float yt = v->spec_y[x];
+        int top = (int)ceilf(yt);
+        if (top > h) top = h;
+        for (int y = 0; y < top; y++) col[y * w] = bg[y];
+        for (int y = top; y < h; y++) col[y * w] = sp[y];
+        if (sound && yt < h - 0.5f) {   // the shape's edge: through the middle to each neighbour
+            float yl = x ? 0.5f * (yt + v->spec_y[x - 1]) : yt, yr = x < w - 1 ? 0.5f * (yt + v->spec_y[x + 1]) : yt;
+            float lo = fminf(yt, fminf(yl, yr)), hi = fmaxf(yt, fmaxf(yl, yr));
+            if (top > 0) col[(top - 1) * w] = spec_mix(bg[top - 1], sp[top - 1], (uint32_t)((top - yt) * 32));
+            spec_vline(col, w, h, lo - 0.6f, hi + 0.6f, edge, 12);
+        }
+        if (di || ref) {   // the DI (the sound before the chain) / the held sound: a thin line
+            const float *src = di ? d->di_db : v->ref_db;
+            float bb = x * per_px;
+            int k = (int)bb;
+            float dbl = k >= UI_SPEC_BANDS - 1 ? src[UI_SPEC_BANDS - 1] : src[k] + (src[k + 1] - src[k]) * (bb - k);
+            float y = spec_y_of_level(dbl, h);
+            if (!ref || (x / 5) % 2 == 0) spec_vline(col, w, h, y - 0.7f, y + 0.7f, ref ? ref_color : di_color, ref ? 22 : 16);
+        }
+        if (v->eq_known) {   // the EQ: its area to the output's line in the effect's colour, the curve in white
+            float ye = v->eq_y[x];
+            float a0 = fminf(ye, zero), a1 = fmaxf(ye, zero);
+            for (int y = (int)a0; y < (int)a1 && y < h; y++) if (y >= 0) col[y * w] = spec_mix(col[y * w], fill, 8);
+            float yl = x ? 0.5f * (ye + v->eq_y[x - 1]) : ye, yr = x < w - 1 ? 0.5f * (ye + v->eq_y[x + 1]) : ye;
+            float lo = fminf(ye, fminf(yl, yr)), hi = fmaxf(ye, fmaxf(yl, yr));
+            spec_vline(col, w, h, lo - 1.1f, hi + 1.1f, white, 32);
+        }
+    }
+    // round corners (radius 10) against the black around the graph
+    static const float inset[10] = { 5.64f, 3.76f, 2.67f, 1.92f, 1.34f, 0.89f, 0.54f, 0.29f, 0.11f, 0.02f };
+    for (int r = 0; r < 10; r++) {
+        int rows[2] = { r, h - 1 - r };
+        for (int k = 0; k < 2; k++) {
+            uint16_t *line = v->px + rows[k] * w;
+            for (int x = 0; x < (int)ceilf(inset[r]) && x < w; x++) {
+                float cover = inset[r] - x >= 1 ? 1 : inset[r] - x;
+                line[x] = spec_mix(line[x], 0, (uint32_t)(cover * 32));
+                line[w - 1 - x] = spec_mix(line[w - 1 - x], 0, (uint32_t)(cover * 32));
+            }
+        }
+    }
+}
+
+
+
+static void spec_caption(spec_view_t *v)
+{
+    if (!v->caption) return;
+    set_text(v->caption, !v->data.live ? "SPECTRUM \xC2\xB7 NO SOUND OVER USB"
+                         : v->data.has_di ? "SPECTRUM \xC2\xB7 OUTPUT / DI" : "SPECTRUM \xC2\xB7 OUTPUT");
+}
+
+static void spec_tick(lv_timer_t *t)
+{
+    (void)t;
+    spec_view_t *v = s_spec;
+    if (v && v->box) set_hidden(v->box, lv_obj_is_hidden(s_editor_body));   // (the pad's page hides the rows: this too)
+    bool shown = v && v->box && !lv_obj_is_hidden(s_editor) && !lv_obj_is_hidden(s_editor_body) && !s_info_on
+                 && lv_obj_is_hidden(s_panel);
+    if (!shown) {
+        if (v && v->asking && s_spec_get) s_spec_get(false, NULL);
+        if (v) v->asking = false;
+        return;
+    }
+    v->asking = true;
+    if (!s_spec_get || !s_spec_get(true, &v->data)) v->data.live = false;
+    bool eq = s_spec_eq_dirty && s_spec_style != SPEC_STYLE_B;
+    if (!eq && v->drawn_any && v->data.seq == v->seq && v->data.live == v->drawn_live) return;   // nothing new
+    if (!eq && v->drawn_any && !v->data.live && !v->drawn_live) return;
+    bool was_live = v->drawn_live;
+    (void)was_live;
+    v->seq = v->data.seq;
+    v->drawn_live = v->data.live;
+    v->drawn_any = true;
+    spec_caption(v);
+    if (!eq && v->data.live && was_live && v->data.has_di == v->drawn_di) {   // a steady sound (or the floor in a pause): nothing to draw
+        float moved = 0;
+        for (int i = 0; i < UI_SPEC_BANDS; i++) {
+            float a = fmaxf(v->data.out_db[i], SPEC_FLOOR_DB), b = fmaxf(v->drawn_db[i], SPEC_FLOOR_DB);
+            moved = fmaxf(moved, fabsf(a - b));
+        }
+        if (moved < 0.5f) return;
+    }
+    memcpy(v->drawn_db, v->data.out_db, sizeof(v->drawn_db));
+    v->drawn_di = v->data.has_di;
+    if (eq) {
+        s_spec_eq_dirty = false;
+        spec_eq_curve(v);
+    }
+    spec_paint(v);
+    lv_obj_invalidate(v->img);
+}
+
+static void spec_stop(void)
+{
+    if (s_spec_timer) lv_timer_pause(s_spec_timer);
+    if (s_spec && s_spec->asking && s_spec_get) s_spec_get(false, NULL);
+    if (s_spec) s_spec->asking = false;
+}
+
+static void on_spec_hold(lv_event_t *e)
+{
+    (void)e;
+    spec_view_t *v = s_spec;
+    if (!v) return;
+    v->ref_on = !v->ref_on && v->data.live;
+    if (v->ref_on) memcpy(v->ref_db, v->data.out_db, sizeof(v->ref_db));
+    style_frame_button(v->hold, s_editor_color, v->ref_on, false);
+    set_color_prop(lv_obj_get_child(v->hold, 0), LV_STYLE_TEXT_COLOR, v->ref_on ? ink_for(s_editor_color) : TEXT);
+    s_spec_eq_dirty = true;   // (drawn again at the next look)
+}
+
+static lv_obj_t *spec_dot(lv_obj_t *parent, int size, bool text)
+{
+    lv_obj_t *dot = lv_obj_create(parent);
+    lv_obj_remove_style_all(dot);
+    lv_obj_set_size(dot, size, size);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(dot, 2, 0);
+    lv_obj_set_clickable(dot, false);
+    lv_obj_set_scrollable(dot, false);
+    if (text) lv_obj_center(label(dot, &ui_font_12, INK));
+    return dot;
+}
+
+static lv_obj_t *spec_text(lv_obj_t *parent, const char *text, int x, int y, lv_text_align_t align)
+{
+    lv_obj_t *l = label(parent, &ui_font_12, 0x6B7178);
+    lv_label_set_text(l, text);
+    lv_obj_set_width(l, 40);
+    lv_obj_set_style_text_align(l, align, 0);
+    lv_obj_set_pos(l, align == LV_TEXT_ALIGN_CENTER ? x - 20 : align == LV_TEXT_ALIGN_RIGHT ? x - 40 : x, y);
+    return l;
+}
+
+// The spectrum's box goes again, the rows get the whole body back (build_param_rows, before the rows are made)
+static void spec_remove(void)
+{
+    if (s_spec && s_spec->box) lv_obj_delete(s_spec->box);
+    if (s_spec) s_spec->box = NULL;
+    if (lv_obj_get_y(s_editor_body) != ED_BODY_Y || lv_obj_get_height(s_editor_body) != SCREEN_H - ED_BODY_Y) {
+        lv_obj_set_pos(s_editor_body, 0, ED_BODY_Y);
+        lv_obj_set_size(s_editor_body, SCREEN_W, SCREEN_H - ED_BODY_Y);
+    }
+}
+
+// The spectrum for the EQ editor (build_param_rows, after the rows): a box of its own above (A) or below (B, C) the
+// rows, which scroll in a shorter body. It lies just above the body: the pad, the info page and the panels cover it.
+static void spec_build(void)
+{
+    if (!s_spec) {
+        s_spec = lv_malloc(sizeof(spec_view_t));
+        if (!s_spec) return;
+        memset(s_spec, 0, sizeof(*s_spec));
+    }
+    spec_view_t *v = s_spec;
+    bool a = s_spec_style == SPEC_STYLE_A;
+    int bh = a ? SPEC_A_H : SPEC_DOCK_H;
+    v->box = lv_obj_create(s_editor);
+    lv_obj_remove_style_all(v->box);
+    lv_obj_move_to_index(v->box, lv_obj_get_index(s_editor_body) + 1);
+    lv_obj_set_size(v->box, SPEC_W, bh);
+    lv_obj_set_pos(v->box, MARGIN, a ? ED_BODY_Y : SCREEN_H - 8 - bh);
+    lv_obj_set_scrollable(v->box, false);
+    lv_obj_set_style_bg_color(v->box, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(v->box, LV_OPA_COVER, 0);
+    if (a) lv_obj_set_pos(s_editor_body, 0, ED_BODY_Y + bh + 8);
+    lv_obj_set_height(s_editor_body, SCREEN_H - ED_BODY_Y - bh - 8);
+    v->img = v->bars = v->hold = v->caption = NULL;
+    memset(v->dot, 0, sizeof(v->dot));
+    v->ref_on = false;
+    v->drawn_any = false;
+    memset(&v->data, 0, sizeof(v->data));
+    if (s_spec_style != SPEC_STYLE_B) {   // A, C: the picture with the points on it
+        if (!v->px) v->px = lv_malloc((size_t)SPEC_W * SPEC_A_H * 2);
+        if (!v->px) return;
+        v->w = a ? SPEC_W : SPEC_W - SPEC_HOLD_W - 8;
+        v->h = bh;
+        v->dsc.header.magic = LV_IMAGE_HEADER_MAGIC;
+        v->dsc.header.cf = LV_COLOR_FORMAT_RGB565;
+        v->dsc.header.w = v->w;
+        v->dsc.header.h = v->h;
+        v->dsc.header.stride = v->w * 2;
+        v->dsc.data_size = (uint32_t)(v->w * v->h * 2);
+        v->dsc.data = (const uint8_t *)v->px;
+        spec_templates(v);
+        v->img = lv_image_create(v->box);
+        lv_obj_set_pos(v->img, 0, 0);
+        lv_obj_set_size(v->img, v->w, v->h);
+        lv_image_set_src(v->img, &v->dsc);
+        const nano_fx_model_t *m = s_editor_model_def;
+        int count = m && m->type == 4005 ? 11 : m && m->type == 4001 ? 3 : 2;
+        for (int i = 0; i < count; i++) {
+            bool big = a && !(m && m->type == 4005 && i > 0 && i < 10);   // (Graphic 9's nine bands: small points)
+            v->dot[i] = spec_dot(v->box, big ? 26 : a ? 14 : 12, big);
+        }
+        v->caption = label(v->box, &ui_font_12, CAPTION);
+        lv_obj_set_style_text_letter_space(v->caption, 1, 0);
+        lv_obj_set_pos(v->caption, 14, 8);
+        if (!a) {
+            static const struct { float f; const char *t; } fl[] = { { 100, "100" }, { 1000, "1k" }, { 10000, "10k" } };
+            for (unsigned i = 0; i < sizeof(fl) / sizeof(fl[0]); i++)
+                spec_text(v->box, fl[i].t, (int)lroundf(spec_x_of_f(fl[i].f, v->w)) + 4, v->h - 18, LV_TEXT_ALIGN_LEFT);
+            v->hold = frame_button(v->box);   // C: HOLD - the sound of now as a line to compare with
+            lv_obj_set_size(v->hold, SPEC_HOLD_W, bh);
+            lv_obj_set_pos(v->hold, SPEC_W - SPEC_HOLD_W, 0);
+            lv_obj_add_event_cb(v->hold, on_spec_hold, LV_EVENT_CLICKED, NULL);
+            lv_obj_t *l = label(v->hold, &ui_font_16, TEXT);
+            lv_label_set_text(l, "HOLD");
+            lv_obj_center(l);
+            style_frame_button(v->hold, s_editor_color, false, false);
+        }
+    }
+    s_spec_eq_dirty = true;
+    v->seq = UINT32_MAX;
+    spec_caption(v);
+    if (!s_spec_timer) s_spec_timer = lv_timer_create(spec_tick, SPEC_MS, NULL);
+    lv_timer_resume(s_spec_timer);
+    spec_tick(NULL);
+}
+
+void ui_set_spectrum_source(ui_spectrum_cb get)
+{
+    lvgl_port_lock(0);
+    s_spec_get = get;
+    lvgl_port_unlock();
+}
+
 static void build_param_rows(void)
 {
     stop_drag();
+    spec_remove();   // (P4: the EQ's spectrum; made again below for an EQ)
     lv_obj_clean(s_editor_body);
     memset(s_param_bar, 0, sizeof(s_param_bar));
     const nano_fx_model_t *m = s_editor_model_def;
+    if (!spec_wanted(m)) spec_stop();
     int own = ed_model_params(), count = ed_param_count();   // the model's, then the auto-wah rows of a wah
     for (int i = 0; i < count; i++) {
         lv_point_t size = { 0, 0 };
@@ -9951,6 +10861,7 @@ static void build_param_rows(void)
     }
     s_env_row = NULL;
     if (m->icon == NANO_ICON_WAH && s_wah.follows) build_env_row((pos + 1) / 2);   // (following the playing: live)
+    if (spec_wanted(m)) spec_build();   // P4: the EQ's live spectrum
 }
 
 // ---- Building the editor ----
@@ -10538,6 +11449,7 @@ static void info_sounds(const char *caption, const nano_info_sound_t *sounds, in
 {
     if (!count) return;
     uint32_t color = s_editor_color;
+    int32_t width = -1;   // of the values' lines
     info_caption(caption);
     for (int i = 0; i < count && s_info_sounds < INFO_MAX_SOUNDS; i++) {
         const nano_info_sound_t *sound = &sounds[i];
@@ -10557,7 +11469,7 @@ static void info_sounds(const char *caption, const nano_info_sound_t *sounds, in
         lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_style_pad_row(col, 3, 0);
         info_text(col, &ui_font_title_18, TEXT, sound->name);
-        info_text(col, &ui_font_16, blend(color, 0xF2F2F2, 0.60f), sound->values_text);
+        lv_obj_t *vl = info_text(col, &ui_font_16, blend(color, 0xF2F2F2, 0.60f), sound->values_text);
         if (sound->why[0]) info_text(col, &ui_font_16, MUTED, sound->why);
         lv_obj_t *apply = frame_button(c);
         lv_obj_set_size(apply, INFO_APPLY_W, 52);
@@ -10565,6 +11477,36 @@ static void info_sounds(const char *caption, const nano_info_sound_t *sounds, in
         lv_obj_center(label(apply, &ui_font_20, TEXT));
         s_info_apply[s_info_sounds] = apply;
         s_info_sound[s_info_sounds++] = sound;
+        {   // the values break only between two controls: "Low Pass 2.50 kHz" stays on one line (LVGL would break it
+            // at a space or after the decimal point) - the lines are put together here, item by item (the width
+            // measured once: all rows have the same)
+            if (width < 0) {
+                lv_obj_update_layout(c);
+                width = lv_obj_get_content_width(vl);
+            }
+            char values[300] = "", line[160] = "", item[80];
+            const char *v = sound->values_text;
+            while (*v && width > 0) {
+                const char *sep = strstr(v, " \xC2\xB7 ");
+                size_t n = sep ? (size_t)(sep - v) : strlen(v);
+                snprintf(item, sizeof(item), "%.*s", (int)(n < sizeof(item) - 1 ? n : sizeof(item) - 1), v);
+                char next[160];
+                snprintf(next, sizeof(next), "%s%s%s", line, line[0] ? " \xC2\xB7 " : "", item);
+                lv_point_t size;
+                lv_text_get_size(&size, next, &ui_font_16, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+                if (line[0] && size.x > width) {   // this item on the next line
+                    size_t len = strlen(values);
+                    snprintf(values + len, sizeof(values) - len, "%s \xC2\xB7\n", line);
+                    snprintf(line, sizeof(line), "%s", item);
+                } else {
+                    snprintf(line, sizeof(line), "%s", next);
+                }
+                v += n + (sep ? 4 : 0);
+            }
+            size_t len = strlen(values);
+            snprintf(values + len, sizeof(values) - len, "%s", line);
+            if (width > 0) lv_label_set_text(vl, values);
+        }
     }
 }
 
@@ -11098,7 +12040,10 @@ void ui_fx_editor_show(int slot, uint32_t model, bool on, const float *values, i
     s_editor_color = m ? m->color : 0x5A5A5A;
     if (rebuild) {
         build_param_rows();
-        s_padv.focus = m ? nano_focus(m->type) : NULL;   // another effect: the pad starts again with its corners
+        // another effect: the pad starts again with its corners - an own build's from Neural DSP's presets
+        // (main/private, tools/gen_neural.py), else the editor's (fx_focus.c)
+        const nano_focus_t *neural = m ? nano_fx_neural_focus(m->type) : NULL;
+        s_padv.focus = neural ? neural : m ? nano_focus(m->type) : NULL;
         s_info = m ? nano_fx_info(m->type) : NULL;        // ... and the info page tells about it
         s_padv.page = false;
         s_padv.waiting = 0;
@@ -11188,6 +12133,7 @@ void ui_fx_editor_close(void)
     lv_obj_set_hidden(s_info_page, true);
     drop_panel();
     stop_drag();
+    spec_stop();   // (P4: the spectrum's analysis stops with it)
     lv_obj_set_hidden(s_editor, true);
     update_main_hidden();
     s_editor_slot_index = -1;

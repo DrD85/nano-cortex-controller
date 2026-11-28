@@ -1,7 +1,8 @@
 // Drum machine for the looper: the computed kit of the Duo DAW (DuoEngine/DrumKit.swift, "StartKit": nine sounds
 // made from sines, noise and square-wave clusters - no sample files) and its grooves (DuoKit/DrumLoops.swift, by pad
 // role, 16 steps per bar, "X" accent, "x" hit, "o" ghost note), played in the Nano's tempo into the Nano's USB
-// playback beside the loop, the jam track and the phone.
+// playback beside the loop, the jam track and the phone. Two more kits: the acoustic one from samples in the flash
+// (drum_machine_load_kit) and the Lo-Fi one, computed too (drum_lofi.c: muffled, dusty, a little room baked in).
 //
 // Threads: drum_machine_render runs on the audio side only (audio_mix). Commands (start, stop, groove, tempo) come from
 // other tasks as single atomic values; drum_machine_info reads a snapshot. Plain C, tested on the computer (test/).
@@ -27,14 +28,19 @@ extern const int DRUM_GROOVE_COUNT;
 #define DRUM_VOICES 16
 #define DRUM_LAYERS 3                         // sample kit: ghost, hit, accent
 #define DRUM_TAKES 2                          // sample kit: takes per layer, alternated
-enum { DRUM_KIT_COMPUTED, DRUM_KIT_ACOUSTIC, DRUM_KITS };
+enum { DRUM_KIT_COMPUTED, DRUM_KIT_ACOUSTIC, DRUM_KIT_LOFI, DRUM_KITS };   // (kept by number: only appended)
 typedef struct { const int16_t *data; uint32_t frames; uint8_t channels; } drum_take_t;
 
-typedef struct {
-    // the kit (made once by drum_machine_init)
+typedef struct {                              // a computed kit: made once, then only read
     int16_t *sound[DRUM_PADS];                // stereo frames
     uint32_t length[DRUM_PADS];
     float gain[DRUM_PADS];                    // the pads' levels (as the DAW's KitBalance: by the loudness of the attack)
+} drum_sounds_t;
+
+typedef struct {
+    drum_sounds_t computed;                   // the DAW's kit (made once by drum_machine_init)
+    drum_sounds_t lofi;                       // the Lo-Fi kit (drum_machine_make_lofi), there once lofi_made is set
+    _Atomic bool lofi_made;
     // the acoustic kit (drum_machine_load_kit; the data stays the caller's)
     drum_take_t take[DRUM_PADS][DRUM_LAYERS][DRUM_TAKES];
     uint8_t takes[DRUM_PADS][DRUM_LAYERS];
@@ -73,7 +79,11 @@ void drum_machine_set_bpm(drum_machine_t *d, float bpm);
 void drum_machine_set_level_db(drum_machine_t *d, float db);
 // The acoustic kit from a "NDK1" file (tools/gen_drum_kit.c) that stays in memory; false if it is not one.
 bool drum_machine_load_kit(drum_machine_t *d, const uint8_t *file, size_t size);
-void drum_machine_set_kit(drum_machine_t *d, int kit);   // DRUM_KIT_*: at the next hit (without samples: computed)
+// The Lo-Fi kit, once (about 1.1 MB at 48 kHz from alloc, NULL = malloc), from any task but the audio side and from one
+// at a time; false without memory. It may be made while the drums play: they take it from their next hit on.
+bool drum_machine_make_lofi(drum_machine_t *d, void *(*alloc)(size_t));
+// DRUM_KIT_*: at the next hit (the acoustic one without samples, the Lo-Fi one before it is made: computed)
+void drum_machine_set_kit(drum_machine_t *d, int kit);
 int drum_machine_kit(drum_machine_t *d);
 
 // Audio side (loop_parts.h): start in the frame `delay` of the next render, `steps` into the groove (fractions too).
@@ -92,3 +102,5 @@ void drum_machine_info(drum_machine_t *d, drum_machine_info_t *out);
 
 // One sound of the kit at full level (for tests and pictures): writes up to `max` stereo frames, returns the count.
 uint32_t drum_kit_sound(int pad, uint32_t rate, float *lr, uint32_t max);
+// The same of the Lo-Fi kit (drum_lofi.c; lr NULL: the frames it needs at most). 0 without memory for its room.
+uint32_t drum_lofi_sound(int pad, uint32_t rate, float *lr, uint32_t max);

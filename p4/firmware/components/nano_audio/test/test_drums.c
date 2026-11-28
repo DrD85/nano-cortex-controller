@@ -1,5 +1,6 @@
 // The drum machine on the computer: its sounds against the Duo DAW's own (a file of float samples written by
-// test/drumkit_ref.swift from the DAW's DrumKit.swift, when given), the timing of the hits, swing, levels.
+// test/drumkit_ref.swift from the DAW's DrumKit.swift, when given), the grooves' lanes, the Lo-Fi kit, the timing of
+// the hits, swing, levels.
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,8 +55,62 @@ int main(int argc, char **argv)
 
     static drum_machine_t d;
     CHECK(drum_machine_init(&d, RATE, NULL), "kit made");
-    for (int p = 0; p < DRUM_PADS; p++) CHECK(d.gain[p] > 0.03f && d.gain[p] < 4.0f, "pad %d level %.2f", p, d.gain[p]);
+    for (int p = 0; p < DRUM_PADS; p++) CHECK(d.computed.gain[p] > 0.03f && d.computed.gain[p] < 4.0f, "pad %d level %.2f", p, d.computed.gain[p]);
     CHECK(DRUM_GROOVE_COUNT >= 50, "%d grooves", DRUM_GROOVE_COUNT);
+    // every lane as long as its groove, of ". o x X" only; the drum menu shows ten styles of at most fifteen grooves
+    int bad = 0, styles = 0, most = 0;
+    const char *style[DRUM_GROOVE_COUNT];
+    for (int g = 0; g < DRUM_GROOVE_COUNT; g++) {
+        const drum_groove_t *gr = &DRUM_GROOVES[g];
+        for (int p = 0; p < DRUM_PADS; p++)
+            if (gr->lane[p] && (strlen(gr->lane[p]) != (size_t)gr->steps_per_bar * gr->bars || strspn(gr->lane[p], ".oxX") != strlen(gr->lane[p])))
+                bad++, printf("        %s: pad %d\n", gr->name, p);
+        int s = 0, n = 0;
+        while (s < styles && strcmp(style[s], gr->style)) s++;
+        if (s == styles) style[styles++] = gr->style;
+        for (int h = 0; h < DRUM_GROOVE_COUNT; h++) n += !strcmp(DRUM_GROOVES[h].style, gr->style);
+        if (n > most) most = n;
+    }
+    CHECK(!bad, "every lane as long as its groove");
+    CHECK(styles <= 10 && most <= 15, "%d styles, at most %d grooves in one (the drum menu shows 10 of 15)", styles, most);
+
+    printf("== Lo-Fi kit\n");
+    // chosen before it is made: the computed kit plays; made: its own sounds
+    drum_machine_set_kit(&d, DRUM_KIT_LOFI);
+    drum_machine_render(&d, s, 48);
+    drum_machine_hit_now(&d, DRUM_KICK, 0, 1);
+    bool computed = false, lofi = false;
+    for (int v = 0; v < DRUM_VOICES; v++) computed |= d.voice[v].on && d.voice[v].data == d.computed.sound[DRUM_KICK];
+    CHECK(drum_machine_make_lofi(&d, NULL) && drum_machine_make_lofi(&d, NULL), "made (once)");
+    drum_machine_hit_now(&d, DRUM_KICK, 0, 1);
+    for (int v = 0; v < DRUM_VOICES; v++) lofi |= d.voice[v].on && d.voice[v].data == d.lofi.sound[DRUM_KICK];
+    CHECK(computed && lofi, "chosen before it was made the computed kick played, then the Lo-Fi one");
+    size_t bytes = 0;
+    for (int p = 0; p < DRUM_PADS; p++) {
+        bytes += sizeof(int16_t) * 2 * d.lofi.length[p];
+        // the sampler's low pass: what lies above 10 kHz (two high passes), against the sound (the computed kit's snare,
+        // hats and cymbals: -2 to -10 dB)
+        double all = 0, top = 0;
+        float z[4][2] = { { 0 } };
+        const double w = 2 * M_PI * 10000 / RATE, al = sin(w) / (2 * 0.7071), c = cos(w), a0 = 1 + al;
+        const float b0 = (float)((1 + c) / 2 / a0), b1 = -2 * b0, a1 = (float)(-2 * c / a0), a2 = (float)((1 - al) / a0);
+        for (uint32_t i = 0; i < d.lofi.length[p]; i++) {
+            float x = d.lofi.sound[p][2 * i] / 32768.0f, y = x;
+            for (int k = 0; k < 2; k++) {   // (transposed direct form II)
+                float o = b0 * y + z[k][0];
+                z[k][0] = b1 * y - a1 * o + z[k][1];
+                z[k][1] = b0 * y - a2 * o;
+                y = o;
+            }
+            all += x * (double)x, top += y * (double)y;
+        }
+        double db = 10 * log10(fmax(top, 1e-30) / fmax(all, 1e-30));
+        CHECK(d.lofi.gain[p] > 0.03f && d.lofi.gain[p] < 4.0f && db < -18, "pad %d: %4.0f ms, level %.2f, %.0f dB above 10 kHz",
+              p, d.lofi.length[p] * 1000.0 / RATE, d.lofi.gain[p], db);
+    }
+    CHECK(bytes < 1200 * 1024, "%zu KB in all", bytes / 1024);
+    drum_machine_set_kit(&d, DRUM_KIT_COMPUTED);
+    for (int k = 0; k < RATE; k += 48) drum_machine_render(&d, s, 48);   // (the two kicks ring out)
 
     printf("== drum machine\n");
     static float out[RATE * 4 * 2];

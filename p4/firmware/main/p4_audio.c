@@ -32,12 +32,14 @@
 #include "p4_audio.h"
 #include "p4_cover.h"
 #include "p4_net.h"
+#include "p4_spectrum.h"
 #include "loudness.h"
 #include "uac2_host.h"
 #include "ui.h"
 
 static const char *TAG = "p4_audio";
-static atomic_int s_lufs_x10 = -900;   // the Nano's output, tenths of a LUFS: written by the audio task, shown by the screen's
+static double s_ms_pub[2];        // the Nano's output: mean square of the last 400 ms, written by the audio task
+static atomic_uint s_ms_seq;       // (which slot was written last; the screen makes the LUFS of it)
 
 #define RING_FRAMES 4096
 #define LOOPER_MAX_S 45
@@ -85,8 +87,9 @@ static float s_drum_level_db = -9;
 static bool s_drum_sync = true;
 static bool s_count_in;
 static bool s_quantize = true, s_arm;   // takes on the drums' bar lines; Rec arms
-static int s_drum_kit = DRUM_KIT_ACOUSTIC;   // (kept: NVS "p4" / "dkit")
+static int s_drum_kit = DRUM_KIT_ACOUSTIC;   // (kept: NVS "p4" / "dkit", the DRUM_KIT_* number)
 static bool s_acoustic_kit;                  // its samples were found in the flash
+static atomic_bool s_lofi_asked;             // the Lo-Fi kit is made or being made (once: see make_lofi)
 static void drums_store(void)
 {
     nvs_handle_t nvs;
@@ -181,6 +184,27 @@ static bool load_acoustic_kit(drum_machine_t *d)
     return true;   // (the file stays: the kit plays from it)
 }
 static void *psram_alloc(size_t size) { return heap_caps_malloc(size, MALLOC_CAP_SPIRAM); }
+// The Lo-Fi kit (drum_lofi.c, about 1.1 MB in PSRAM): made once, when it is first chosen - in drums_task when it is the
+// kept kit (before the Nano's sound runs), otherwise in a task of its own; the computed kit plays until it is there.
+static void make_lofi(void)
+{
+    if (atomic_exchange(&s_lofi_asked, true)) return;
+    int64_t t0 = esp_timer_get_time();
+    size_t before = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);
+    if (!drum_machine_make_lofi(&s_drums, psram_alloc)) {
+        ESP_LOGE(TAG, "drums: no memory for the Lo-Fi kit");
+        atomic_store(&s_lofi_asked, false);   // (tried again when it is chosen again)
+        return;
+    }
+    ESP_LOGI(TAG, "drums: Lo-Fi kit made in %d ms, %u KB PSRAM, %u KB left", (int)((esp_timer_get_time() - t0) / 1000),
+             (unsigned)((before - heap_caps_get_free_size(MALLOC_CAP_SPIRAM)) / 1024), (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
+}
+static void lofi_task(void *arg)
+{
+    make_lofi();
+    vTaskDelete(NULL);
+}
+static int kit_to_play(int kit) { return kit == DRUM_KIT_ACOUSTIC && !s_acoustic_kit ? DRUM_KIT_COMPUTED : kit; }
 static void drums_task(void *arg);
 static bool s_bar_lines;
 static portMUX_TYPE s_looper_lock = portMUX_INITIALIZER_UNLOCKED;   // commands come from the footswitch and app tasks
@@ -198,6 +222,9 @@ static biquad_t s_high[2] = {
     { 1.0f, -2.0f, 1.0f, -1.99004745483398f, 0.99007225036621f, 0, 0 },
     { 1.0f, -2.0f, 1.0f, -1.99004745483398f, 0.99007225036621f, 0, 0 },
 };
+// The capture callback's constants in internal RAM (2026-11-28): as literals they sat in the file's constant pool in
+// flash - IRAM_ATTR moves only the code - and every packet read them through the cache.
+static DRAM_ATTR float s_k_full = 1.0f / 8388608.0f, s_k_block = 1.0f / 960.0f;
 static double s_sum[WINDOW_FRAMES / 960];   // mean squares per 20 ms block, for a sliding 400 ms window
 static int s_block, s_block_frames;
 static float s_block_sum;   // (float: the P4 has no double unit - a double here cost a library call per frame)
@@ -315,46 +342,6 @@ void p4_audio_click(int pair, float db)
                      c + 1, (long)s_click.first[c], s_click.first[c] / 48.0f, peak_db - db, floor_db);
     }
 }
-
-void p4_audio_test_report(void)
-{
-    audio_mix_stats_t ms;
-    audio_mix_get_stats(&g_p4_mix, &ms);
-    looper_info_t li;
-    p4_looper_info(&li);
-    static const char *const STATES[] = { "empty", "recording", "playing", "overdub", "stopped" };
-    ESP_LOGI(TAG, "REPORT mixer: %u render frames without a capture frame, %u capture frames dropped, %u frames limited",
-             (unsigned)ms.capture_short, (unsigned)ms.capture_dropped, (unsigned)ms.limited);
-    ESP_LOGI(TAG, "REPORT looper: %s, length %u frames (%.2f s), position %.2f s, %u passes, %u clipped, undo %d, redo %d, to the bar line %d, latency set %u frames",
-             STATES[li.state <= LOOPER_STOP ? li.state : 0], (unsigned)li.len, li.len / 48000.0f, li.pos / 48000.0f, (unsigned)li.passes,
-             (unsigned)li.clipped, li.can_undo, li.can_redo, li.to_bar_line, (unsigned)atomic_load(&s_looper.set_latency));
-    uac2_host_stats_t us;
-    uac2_host_stats(&us);
-    ESP_LOGI(TAG, "REPORT streams: %u capture frames waiting in the mixer (cushion %d, settled %u times, last by %ld), %u packets skipped, %u errors, packet by packet %s (%u short, %u dropped)",
-             (unsigned)(atomic_load(&g_p4_mix.cw) - atomic_load(&g_p4_mix.cr)), MIX_CUSHION, (unsigned)g_p4_mix.settle_count, (long)g_p4_mix.settled, (unsigned)us.packets_skipped,
-             (unsigned)us.errors, us.mirroring ? "on" : "off", (unsigned)us.mirror_short, (unsigned)us.mirror_dropped);
-    // Where sounds begin in the loop and in the last overdub (a frame above -46 dBFS after 50 ms below it) - read
-    // while the audio runs, good enough to look at; up to 8 each.
-    for (int which = 0; which < 2 && s_looper_ready && li.len; which++) {
-        const int16_t *buf = which ? s_looper.layer : s_looper.base;
-        char text[160];
-        int n = 0, found = 0;
-        uint32_t quiet = 2400;
-        int peak = 0;
-        for (uint32_t i = 0; i < li.len; i++) {
-            int v = abs(buf[2 * i]) > abs(buf[2 * i + 1]) ? abs(buf[2 * i]) : abs(buf[2 * i + 1]);
-            if (v > peak) peak = v;
-            if (v > 164) {
-                if (quiet >= 2400 && found < 8) n += snprintf(text + n, sizeof(text) - (size_t)n, " %u", (unsigned)i), found++;
-                quiet = 0;
-            } else {
-                quiet++;
-            }
-        }
-        ESP_LOGI(TAG, "REPORT %s: peak %.1f dBFS, sounds begin at frame%s", which ? "overdub" : "loop",
-                 20 * log10f(fmaxf(peak / 32768.0f, 1e-6f)), found ? text : " - (none)");
-    }
-}
 #endif
 
 static void mix_held(uint32_t us);
@@ -370,6 +357,19 @@ static void mix_held(uint32_t us);
 static DRAM_ATTR int32_t s_lead[LEAD_RING * 2];   // left, right as they go out
 static atomic_uint s_lead_w, s_lead_r;            // frames rendered / sent since the start
 static atomic_uint s_lead_missing;                // frames that went out as silence (the render was behind)
+// For a look at the sound over a span of time (p4_audio_marks: saving the loops, 2026-11-28): the same frames since
+// the start, and the longest render of the mix since the last look.
+static atomic_uint s_lead_missing_all, s_mix_max_us;
+
+// The test click (console ':c', 2026-11-27): 10 ms of 1 kHz every 500 ms into playback 3/4, the Nano's re-amp input -
+// it comes back on capture 3/4 through the preset, so the looper records a known signal (p4-loop-test.py). From a
+// table in internal RAM: this is the USB task, no libm (flash) here.
+#define CLICK_TAB 48                  // one period of 1 kHz
+#define CLICK_LEN 480                 // 10 periods: starts and ends at zero
+#define CLICK_EVERY 24000
+static DRAM_ATTR int32_t s_click_tab[CLICK_TAB];
+static atomic_int s_click_db;         // its level below full scale, 0 = off
+static uint32_t s_click_at;           // (USB task only)
 
 static IRAM_ATTR void on_render(int32_t *frames, int count, int channels, void *arg)   // (USB task; internal RAM only)
 {
@@ -382,7 +382,16 @@ static IRAM_ATTR void on_render(int32_t *frames, int count, int channels, void *
         frames[i * channels + 1] = s_lead[2 * (r & (LEAD_RING - 1)) + 1];
     }
     atomic_store_explicit(&s_lead_r, r, memory_order_release);
-    if (missing) atomic_fetch_add_explicit(&s_lead_missing, missing, memory_order_relaxed);
+    if (missing) {
+        atomic_fetch_add_explicit(&s_lead_missing, missing, memory_order_relaxed);
+        atomic_fetch_add_explicit(&s_lead_missing_all, missing, memory_order_relaxed);
+    }
+    if (atomic_load_explicit(&s_click_db, memory_order_acquire) && channels >= 4) {
+        for (int i = 0; i < count; i++) {
+            if (s_click_at < CLICK_LEN) frames[i * channels + 2] = frames[i * channels + 3] = s_click_tab[s_click_at % CLICK_TAB];
+            if (++s_click_at == CLICK_EVERY) s_click_at = 0;
+        }
+    }
 #ifdef NANO_UITEST
     click_render(frames, count, channels);
 #endif
@@ -400,6 +409,7 @@ static IRAM_ATTR void mix_task(void *arg)
         audio_mix_render(&g_p4_mix, block, n, 2, 0, 1);
         uint32_t took = (uint32_t)(esp_timer_get_time() - t0);
         if (took > 3000) mix_held(took);   // (measuring: 'M' in the trace)
+        if (took > atomic_load_explicit(&s_mix_max_us, memory_order_relaxed)) atomic_store_explicit(&s_mix_max_us, took, memory_order_relaxed);
         for (uint32_t i = 0; i < n; i++) {
             s_lead[2 * ((w + i) & (LEAD_RING - 1))] = block[2 * i];
             s_lead[2 * ((w + i) & (LEAD_RING - 1)) + 1] = block[2 * i + 1];
@@ -408,53 +418,81 @@ static IRAM_ATTR void mix_task(void *arg)
     }
 }
 
-static float s_in_prev[2][2], s_in_sq[2], s_in_d2[2];
+// The sound's (capture 3/4) squares since input_task last looked: its 'played' gate. Written by on_capture.
+static float s_in_sq;
+static uint32_t s_in_n;
+static float s_in_db = -120;   // 3/4's mean level in input_task's last 5 s (the console's REPORT)
 // The levels a compressor sees, for the gain reduction in the FX editor (2026-11-27): squares and peak of the DI (1/2)
 // and the sound (3/4) since the screen last asked (loop_source, every 100 ms). Written here, read and cleared there -
 // a reading that tears now and then only moves a meter.
 static volatile float s_gr_sq[2], s_gr_pk[2];
 static volatile uint32_t s_gr_n;
 static volatile float s_env_pk;   // the DI's peak since the auto-wah last asked (p4_audio_di_peak)
+#if P4_SPECTRUM_DI
+// The DI (capture 1) for the EQ editor's spectrum, written only while it shows (p4_spectrum.c): 16 bits a frame
+// into internal RAM - the USB task must not touch PSRAM (REALTIME.md rule 1).
+DRAM_ATTR int16_t g_p4_di_ring[P4_DI_RING];
+atomic_uint g_p4_di_w;
+volatile bool g_p4_di_on;
+#endif
 float p4_audio_di_peak(void) { float p = s_env_pk; s_env_pk = 0; return p; }
-static uint32_t s_in_n;
 
-// Every 30 s while something is played: the level and the brightness (rms of the second difference / rms) of the
-// Nano's capture pair 1/2 (DI) and 3/4 (what the looper records) - to see whether 3/4 carries the cab (2026-11-19).
+// Every 5 s: the capture's packet sizes and rate (a line when something is off, else once a minute), frames the Nano
+// sent a second time (its garbled state), and the self-heal.
 #define GARBLE_REPEATS 30   // repeated frames in 5 s while playing that count as a garbled stream
+#define GARBLE_MILD 8       // ... and a mildly garbled one, if it lasts: three windows (15 s) in a row
+                            // (run 24, 2026-11-28: 2-39 per window for 95 s, never two windows over 30 - no heal)
 static unsigned s_heals;   // streams started anew because of it (since the start)
 static void input_task(void *arg)
 {
     for (;;) {
         vTaskDelay(pdMS_TO_TICKS(5000));
         uint32_t n = s_in_n;
-        float sq0 = s_in_sq[0], sq1 = s_in_sq[1], d0 = s_in_d2[0], d1 = s_in_d2[1];
+        float sq1 = s_in_sq;
         s_in_n = 0;
-        s_in_sq[0] = s_in_sq[1] = s_in_d2[0] = s_in_d2[1] = 0;
+        s_in_sq = 0;
+        s_in_db = n ? 10 * log10f(sq1 / n + 1e-12f) : -120;
         uac2_host_stats_t us;
         uac2_host_stats(&us);
-        static uint32_t sz_was[4];
-        ESP_LOGW(TAG, "input: capture packets of 5 / 6 / 7 / other frames: %u / %u / %u / %u (last 5 s), rate %.6f frames per microframe",
-                 (unsigned)(us.capture_sizes[0] - sz_was[0]), (unsigned)(us.capture_sizes[1] - sz_was[1]), (unsigned)(us.capture_sizes[2] - sz_was[2]),
-                 (unsigned)(us.capture_sizes[3] - sz_was[3]), us.rate_q16 / 65536.0);
-        for (int i = 0; i < 4; i++) sz_was[i] = us.capture_sizes[i];
+        // (every 5 s as a warning until 2026-11-27: 720 lines an hour that buried the real warnings - now a warning
+        // only when packets of other sizes came or the rate moved by more than 0.001, else once a minute)
+        static uint32_t sz_was[4], rate_was;
+        static int sz_windows;
+        sz_windows++;
+        bool odd_sizes = us.capture_sizes[3] != sz_was[3];
+        uint32_t moved = us.rate_q16 > rate_was ? us.rate_q16 - rate_was : rate_was - us.rate_q16;
+        bool rate_moved = rate_was && us.rate_q16 && moved > 66;   // (66 / 65536 = 0.001 frames per microframe)
+        if (odd_sizes || rate_moved || sz_windows >= 12) {
+            char line[160];
+            snprintf(line, sizeof(line), "input: capture packets of 5 / 6 / 7 / other frames: %u / %u / %u / %u (last %d s), rate %.6f frames per microframe",
+                     (unsigned)(us.capture_sizes[0] - sz_was[0]), (unsigned)(us.capture_sizes[1] - sz_was[1]), (unsigned)(us.capture_sizes[2] - sz_was[2]),
+                     (unsigned)(us.capture_sizes[3] - sz_was[3]), sz_windows * 5, us.rate_q16 / 65536.0);
+            if (odd_sizes || rate_moved) ESP_LOGW(TAG, "%s", line);
+            else ESP_LOGI(TAG, "%s", line);
+            for (int i = 0; i < 4; i++) sz_was[i] = us.capture_sizes[i];
+            rate_was = us.rate_q16;
+            sz_windows = 0;
+        }
         static uint32_t rep_was;
         uint32_t repeats = us.capture_repeats - rep_was;
         if (repeats) ESP_LOGW(TAG, "input: %u capture frames came a second time (garbled stream)", (unsigned)repeats);
         rep_was = us.capture_repeats;
         // Self-healing (2026-11-27, the user: after about an hour the Nano's stream went garbled again - robotic, "ganz
         // schlimm" - and only switching both off and on helped). While something is played, a clean stream repeats no
-        // frame (in silence the DI's noise now and then does, up to ~30 in 5 s); garbled it is dozens to hundreds.
+        // frame; garbled it is dozens to hundreds. (Frames with all four channels below about -70 dBFS are not counted
+        // since 2026-11-27, uac2_host.c: the DI's noise floor repeated by chance, up to ~30 in 5 s of silence.)
         // Two such windows in a row: the streams are started anew (alt 0, clock, alt 1 - a fraction of a second; the
         // Nano stays connected). At most once a minute, so a Nano that does not recover is not restarted for ever.
         {
-            static int bad_windows;
+            static int bad_windows, mild_windows;
             static int64_t last_restart_us;
             bool played = n && sq1 / n >= 1e-6f;   // (above -60 dBFS on 3/4)
             bad_windows = played && repeats >= GARBLE_REPEATS ? bad_windows + 1 : 0;
+            mild_windows = played && repeats >= GARBLE_MILD ? mild_windows + 1 : 0;   // (a clean stream repeats none)
             int64_t now = esp_timer_get_time();
             // (a clearly garbled window - twice the mark - is enough on its own: the first heal came after ~20 s)
-            if ((bad_windows >= 2 || (played && repeats >= 2 * GARBLE_REPEATS)) && (!last_restart_us || now - last_restart_us > 60 * 1000000LL)) {
-                bad_windows = 0;
+            if ((bad_windows >= 2 || mild_windows >= 3 || (played && repeats >= 2 * GARBLE_REPEATS)) && (!last_restart_us || now - last_restart_us > 60 * 1000000LL)) {
+                bad_windows = mild_windows = 0;
                 last_restart_us = now;
                 s_heals++;
                 ESP_LOGW(TAG, "input: the Nano's stream is garbled (%u repeated frames in 5 s) - starting the streams anew (%u. time)",
@@ -465,9 +503,6 @@ static void input_task(void *arg)
         static uint32_t odd_was;
         if (us.capture_odd != odd_was) ESP_LOGW(TAG, "input: %u capture packets that were not whole frames", (unsigned)(us.capture_odd - odd_was));
         odd_was = us.capture_odd;
-        if (!n || sq1 / n < 1e-6f) continue;   // (below -60 dBFS: nothing played)
-        ESP_LOGW(TAG, "input: DI 1/2 %.1f dB (brightness %.3f), sound 3/4 %.1f dB (brightness %.3f)",
-                 10 * log10f(sq0 / n + 1e-12f), sqrtf(d0 / (sq0 + 1e-12f)), 10 * log10f(sq1 / n + 1e-12f), sqrtf(d1 / (sq1 + 1e-12f)));
     }
 }
 
@@ -514,25 +549,36 @@ static IRAM_ATTR void on_capture(const int32_t *frames, int count, int channels,
     }
     if (channels <= OUT_RIGHT) return;
     audio_mix_capture(&g_p4_mix, frames, count, channels, OUT_LEFT, OUT_RIGHT);
-    // (measuring: how bright the looper's input is - its level and its second difference, per pair 1/2 and 3/4)
+    // The DI's (1/2) and the sound's (3/4) squares and peaks: summed here, stored once per packet (2026-11-27: into
+    // the volatiles per sample, that was a load and a store each). Compared, not fmaxf: a library call on this chip.
+    float sq_di = 0, sq_out = 0, pk_di = 0, pk_out = 0;
     for (int i = 0; i < count; i++) {
-        for (int pr = 0; pr < 2; pr++) {
-            float v = (float)(frames[i * channels + (pr ? OUT_LEFT : 0)] >> 8) / 8388608.0f;
-            float d2 = v - 2 * s_in_prev[pr][0] + s_in_prev[pr][1];
-            s_in_prev[pr][1] = s_in_prev[pr][0];
-            s_in_prev[pr][0] = v;
-            s_in_sq[pr] += v * v;
-            s_in_d2[pr] += d2 * d2;
-            s_gr_sq[pr] += v * v;
-            if (fabsf(v) > s_gr_pk[pr]) s_gr_pk[pr] = fabsf(v);
-            if (!pr && fabsf(v) > s_env_pk) s_env_pk = fabsf(v);
-        }
-        s_in_n++;
-        s_gr_n++;
+        float di = (float)(frames[i * channels] >> 8) * s_k_full;
+        float out = (float)(frames[i * channels + OUT_LEFT] >> 8) * s_k_full;
+        sq_di += di * di;
+        sq_out += out * out;
+        di = fabsf(di), out = fabsf(out);
+        if (di > pk_di) pk_di = di;
+        if (out > pk_out) pk_out = out;
     }
+    s_in_sq += sq_out;
+    s_in_n += (uint32_t)count;
+    s_gr_sq[0] += sq_di;
+    s_gr_sq[1] += sq_out;
+    if (pk_di > s_gr_pk[0]) s_gr_pk[0] = pk_di;
+    if (pk_out > s_gr_pk[1]) s_gr_pk[1] = pk_out;
+    if (pk_di > s_env_pk) s_env_pk = pk_di;   // (read and set back by p4_audio_di_peak)
+    s_gr_n += (uint32_t)count;
+#if P4_SPECTRUM_DI
+    if (g_p4_di_on) {   // (a store per frame while the EQ editor's spectrum shows; nothing else)
+        uint32_t w = atomic_load_explicit(&g_p4_di_w, memory_order_relaxed);
+        for (int i = 0; i < count; i++) g_p4_di_ring[(w + (uint32_t)i) & (P4_DI_RING - 1)] = (int16_t)(frames[i * channels] >> 16);
+        atomic_store_explicit(&g_p4_di_w, w + (uint32_t)count, memory_order_release);
+    }
+#endif
     for (int i = 0; i < count; i++) {
-        float l = (float)(frames[i * channels + OUT_LEFT] >> 8) / 8388608.0f;
-        float r = (float)(frames[i * channels + OUT_RIGHT] >> 8) / 8388608.0f;
+        float l = (float)(frames[i * channels + OUT_LEFT] >> 8) * s_k_full;
+        float r = (float)(frames[i * channels + OUT_RIGHT] >> 8) * s_k_full;
         float al = fabsf(l), ar = fabsf(r);   // (the peak: of the samples, before the K weighting)
         if (al > s_peak20) s_peak20 = al;
         if (ar > s_peak20) s_peak20 = ar;
@@ -540,9 +586,9 @@ static IRAM_ATTR void on_capture(const int32_t *frames, int count, int channels,
         r = run(&s_high[1], run(&s_shelf[1], r));
         s_block_sum += l * l + r * r;
         if (++s_block_frames == 960) {
-            s_sum[s_block] = s_block_sum / 960.0f;
+            s_sum[s_block] = s_block_sum * s_k_block;
             s_block = (s_block + 1) % (int)(sizeof(s_sum) / sizeof(s_sum[0]));
-            s_acc_e += s_block_sum / 960.0f;
+            s_acc_e += s_block_sum * s_k_block;
             if (s_peak20 > s_acc_peak) s_acc_peak = s_peak20;
             s_peak20 = 0;
             if (++s_acc_k == 5) {   // 100 ms
@@ -562,15 +608,22 @@ static IRAM_ATTR void on_capture(const int32_t *frames, int count, int channels,
     double ms = 0;
     for (size_t i = 0; i < sizeof(s_sum) / sizeof(s_sum[0]); i++) ms += s_sum[i];
     ms /= sizeof(s_sum) / sizeof(s_sum[0]);
-    // Only noted here: this is the USB audio task, which must never wait for the screen (show_level draws it).
-    atomic_store(&s_lufs_x10, ms > 1e-12 ? (int)lroundf((float)(-0.691 + 10 * log10(ms)) * 10) : -900);
+    // Only noted here: this is the USB audio task, which must never wait for the screen (show_level draws it). The
+    // logarithm is the screen's: log10 / lroundf / the double-to-float step run from flash, and code in flash on this
+    // core makes the USB interrupt late (firmware/REALTIME.md rule 1; found 2026-11-28). Two slots and a counter: the
+    // screen reads the slot written last, the next write goes to the other one 200 ms later.
+    unsigned k = atomic_load(&s_ms_seq) + 1;
+    s_ms_pub[k & 1] = ms;
+    atomic_store(&s_ms_seq, k);
 }
 
 // The OUT field, from the screen's own task. Below -70 LUFS nothing is being played: a dash instead of the noise floor.
 static void show_level(lv_timer_t *timer)
 {
     static int shown = 1;
-    int x10 = atomic_load(&s_lufs_x10);
+    unsigned k = atomic_load(&s_ms_seq);
+    double ms = s_ms_pub[k & 1];
+    int x10 = k && ms > 1e-12 ? (int)lroundf((float)(-0.691 + 10 * log10(ms)) * 10) : -900;
     if (x10 == shown) return;
     shown = x10;
     float lufs = x10 / 10.0f;
@@ -727,6 +780,7 @@ static void on_phone(ui_phone_action_t action, int value)
     case UI_BRIGHTNESS: board_set_brightness(value, false); return;
     case UI_LEVEL_SET: level_set(value); return;
     case UI_LEVEL_MEASURE: level_measure(value != 0); return;
+    case UI_LOOP_SAVE: p4_loops_save(); return;
     case UI_BRIGHTNESS_KEEP: board_set_brightness(value, true); return;
     default: return;
     }
@@ -741,12 +795,12 @@ typedef struct { uint32_t ms; uint32_t us; uint32_t extra; char kind; } trace_t;
 #define TRACE_N 256
 static trace_t s_trace[TRACE_N];
 static atomic_uint s_trace_n;
-static void trace(char kind, uint32_t us, uint32_t extra)
+static IRAM_ATTR void trace(char kind, uint32_t us, uint32_t extra)   // (from the USB path: internal RAM)
 {
     unsigned i = atomic_fetch_add(&s_trace_n, 1) % TRACE_N;
     s_trace[i] = (trace_t){ (uint32_t)(esp_timer_get_time() / 1000), us, extra, kind };
 }
-void uac2_host_stall(char kind, uint32_t us) { trace(kind, us, 0); }
+IRAM_ATTR void uac2_host_stall(char kind, uint32_t us) { trace(kind, us, 0); }
 static void mix_held(uint32_t us) { trace('M', us, 0); }
 esp_err_t __real_esp_flash_write(esp_flash_t *chip, const void *buffer, uint32_t address, uint32_t length);
 esp_err_t __wrap_esp_flash_write(esp_flash_t *chip, const void *buffer, uint32_t address, uint32_t length)
@@ -770,7 +824,8 @@ esp_err_t __wrap_esp_flash_erase_region(esp_flash_t *chip, uint32_t start, uint3
 // screen was drawn anew (measured 2026-11-26: capture gaps of 11 ms exactly at such draws, "short" in the loop, the
 // Nano's stream garbled after it). ESP-IDF's own chunking (CONFIG_ESP_MM_CACHE_MSYNC_C2M_CHUNKED_OPS) keeps a mutex
 // over the whole call, which the USB task would wait for as long. So here: large write-backs in pieces of 8 KB, each
-// its own short call.
+// its own short call. (Smaller pieces did not help the USB interrupt, 2026-11-27: under the screen's load every
+// piece took 100-390 us, 2 KB or 8 - the interrupt now stays out of the cache: components/espressif__usb.)
 #define MSYNC_PIECE 0x2000
 esp_err_t __real_esp_cache_msync(void *addr, size_t size, int flags);
 IRAM_ATTR esp_err_t __wrap_esp_cache_msync(void *addr, size_t size, int flags)
@@ -888,12 +943,6 @@ static void health_cb(void *arg)
     uint32_t now[9] = { ms.capture_short, ms.capture_dropped, ms.limited, us.packets_skipped, us.errors,
                         us.mirror_short, us.mirror_dropped, clipped, us.capture_empty };
     uint32_t d[9];
-    uint32_t render_max, gap_max, st[AUDIO_MIX_STAGES];
-    uac2_host_take_peaks(&render_max, &gap_max);
-    audio_mix_take_stages(&g_p4_mix, st);
-    float lv[AUDIO_SRC_COUNT], lsum, lmin;
-    audio_mix_take_levels(&g_p4_mix, lv, &lsum, &lmin);
-    float lin = audio_mix_take_input_peak(&g_p4_mix);
 #define DB(x) (20.0f * log10f(fmaxf((x), 1e-5f)))
     bool any = false;
     for (int i = 0; i < 9; i++) {
@@ -906,6 +955,14 @@ static void health_cb(void *arg)
     bool fault = d[0] || d[1] || d[3] || d[4] || d[7];   // short, dropped, skipped, errors, clipped
     if (!fault && ++quiet < 6) return;
     quiet = 0;
+    // The peaks are taken only for the line (2026-11-27: taken every 5 s, a line without a fault showed the last 5 s
+    // of its 30 - a render spike or capture gap in the other 25 s was lost). Now they cover all since the last line.
+    uint32_t render_max, gap_max, st[AUDIO_MIX_STAGES];
+    uac2_host_take_peaks(&render_max, &gap_max);
+    audio_mix_take_stages(&g_p4_mix, st);
+    float lv[AUDIO_SRC_COUNT], lsum, lmin;
+    audio_mix_take_levels(&g_p4_mix, lv, &lsum, &lmin);
+    float lin = audio_mix_take_input_peak(&g_p4_mix);
     ESP_LOGW(TAG, "sound: short %u, dropped %u, limited %u, skipped %u, errors %u, mirror %u/%u, clipped %u, empty in %u, "
              "render max %u us, capture gap max %u us; parts of one render (max us): capture %u, phone %u, track %u, looper %u, drums %u, sum %u",
              (unsigned)d[0], (unsigned)d[1], (unsigned)d[2], (unsigned)d[3], (unsigned)d[4], (unsigned)d[5], (unsigned)d[6], (unsigned)d[7],
@@ -932,6 +989,7 @@ void p4_audio_show(void)
         lv_timer_create(show_level, 100, NULL);
         lvgl_port_unlock();
     }
+    p4_spectrum_start();   // the EQ editor's live spectrum (a task that sleeps until the editor asks; draft 2026-11-28)
 
     // the looper takes what PSRAM is left after the screen, keeping 6 MB for the rest (the drums take 2.3 MB of it),
     // at most 45 s in all: two parts of 22 s
@@ -980,7 +1038,7 @@ static void drums_task(void *arg)
     if (drum_machine_init(&s_drums, 48000, psram_alloc)) {
         ESP_LOGI(TAG, "drums: computed kit made in %d ms", (int)((esp_timer_get_time() - t0) / 1000));
         s_acoustic_kit = load_acoustic_kit(&s_drums);
-        drum_machine_set_kit(&s_drums, s_acoustic_kit ? s_drum_kit : DRUM_KIT_COMPUTED);
+        drum_machine_set_kit(&s_drums, kit_to_play(s_drum_kit));
         audio_mix_set_drums(&g_p4_mix, &s_drums);
         drum_machine_set_level_db(&s_drums, s_drum_level_db + DRUM_TRIM_DB);
         drum_machine_set_groove(&s_drums, s_drum_groove);
@@ -992,6 +1050,7 @@ static void drums_task(void *arg)
         parts_groove_load();
         parts_groove_apply();
         s_drums_ready = true;
+        if (s_drum_kit == DRUM_KIT_LOFI) make_lofi();   // (after ready: a choice made meanwhile starts its own task)
         ui_splash_step(UI_SPLASH_DRUMS);
         ESP_LOGI(TAG, "drums: %d grooves, kit made in %d ms, %u KB PSRAM left", DRUM_GROOVE_COUNT,
                  (int)((esp_timer_get_time() - t0) / 1000), (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
@@ -1043,9 +1102,14 @@ void p4_drums_kit(int kit)
 {
     if (kit < 0 || kit >= DRUM_KITS) return;
     s_drum_kit = kit;
-    if (s_drums_ready) drum_machine_set_kit(&s_drums, s_acoustic_kit ? kit : DRUM_KIT_COMPUTED);
+    if (s_drums_ready) {
+        drum_machine_set_kit(&s_drums, kit_to_play(kit));
+        if (kit == DRUM_KIT_LOFI && !atomic_load(&s_lofi_asked))   // (first chosen: made beside the sound, below the mix)
+            xTaskCreatePinnedToCore(lofi_task, "drums_lofi", 4096, NULL, 2, NULL, 1);
+    }
     drums_store();
-    ESP_LOGI(TAG, "drums: %s kit", kit == DRUM_KIT_ACOUSTIC ? "acoustic" : "computed");
+    static const char *const NAME[DRUM_KITS] = { "computed", "acoustic", "Lo-Fi" };
+    ESP_LOGI(TAG, "drums: %s kit", NAME[kit]);
 }
 void p4_drums_level_db(float db)
 {
@@ -1096,11 +1160,21 @@ void p4_drums_info(drum_machine_info_t *out)
 
 bool p4_looper_ready(void) { return s_looper_ready; }
 
+// The loop's bar in frames from the tempo as the drums keep it (1/100 BPM, drum_machine_set_bpm); 0 = no usable tempo.
+// (2026-11-27: from the Nano's raw float, a tapped 116.996 made the bar 2.5 frames longer than the drums' - in a
+// 4-bar loop they reached their bar line ~10 frames before the wrap, struck the downbeat, and the resync at the wrap
+// struck it again. Computed this way and cut, the bar is never longer than the drums'.)
+static uint32_t bar_frames(float bpm)
+{
+    if (!(bpm >= 30 && bpm <= 300)) return 0;
+    long x100 = lrintf(bpm * 100);
+    return (uint32_t)(48000.0 * 60.0 * 100.0 / x100 * s_beats);
+}
+
 void p4_looper_command(looper_cmd_t cmd)
 {
     if (!s_looper_ready) return;
-    float bpm = p4_nano_tempo();
-    uint32_t bar = bpm >= 30 && bpm <= 300 ? (uint32_t)(48000.0f * 60.0f / bpm * s_beats) : 0;
+    uint32_t bar = bar_frames(p4_nano_tempo());
     loop_parts_set_bar(&s_parts, bar, s_bar_lines || (s_quantize && p4_drums_on()) ? bar : 0);   // (with the drums: whole bars)
     taskENTER_CRITICAL(&s_looper_lock);   // (the looper's queue takes one writer at a time)
     loop_parts_command(&s_parts, cmd);   // (to the part that plays)
@@ -1227,8 +1301,8 @@ static void loop_source(ui_loop_t *l, ui_jam_t *j, ui_net_t *n)
     l->passes = (int)li.passes;
     float bpm = p4_nano_tempo();
     l->bpm = bpm >= 30 && bpm <= 300 ? bpm : 0;
-    if (s_looper_ready && l->bpm > 0) {   // (the drums' bar line follows the Nano's tempo)
-        uint32_t bar = (uint32_t)(48000.0f * 60.0f / bpm * s_beats);
+    uint32_t bar = bar_frames(bpm);
+    if (s_looper_ready && bar) {   // (the drums' bar line follows the Nano's tempo)
         loop_parts_info_t qi;
         loop_parts_info(&s_parts, &qi);
         loop_parts_set_bar(&s_parts, bar, s_bar_lines || (s_quantize && qi.drums_on) ? bar : 0);
@@ -1247,6 +1321,7 @@ static void loop_source(ui_loop_t *l, ui_jam_t *j, ui_net_t *n)
             l->part_state[k] = pi.part[k].state;
         }
     }
+    l->save_state = p4_loops_state(&l->save_pct);   // (UI_SAVE_* follow P4_SAVE_*)
     l->drums_ready = s_drums_ready;
     l->drum_sync = s_drum_sync;
     l->count_in = s_count_in;
@@ -1262,10 +1337,9 @@ static void loop_source(ui_loop_t *l, ui_jam_t *j, ui_net_t *n)
         l->drum_level_db = s_drum_level_db;
     }
     if (s_drums_ready && l->bpm > 0) drum_machine_set_bpm(&s_drums, bpm);   // (the drums follow the Nano's tempo)
-    if (s_bar_lines && l->bpm > 0 && li.len) {
-        float bar = 48000.0f * 60.0f / l->bpm * s_beats;
-        l->bars = (int)lroundf(li.len / bar);
-        if (fabsf(l->bars * bar - li.len) > 480) l->bars = 0;   // the loop was made at another tempo / free: no bar fields
+    if (s_bar_lines && bar && li.len) {
+        l->bars = (int)lroundf(li.len / (float)bar);
+        if (fabsf(l->bars * (float)bar - li.len) > 480) l->bars = 0;   // the loop was made at another tempo / free: no bar fields
     }
     track_player_info_t ti;
     int cur;
@@ -1361,4 +1435,113 @@ void p4_looper_set_bar_lines(bool on, int beats)
 }
 
 void p4_looper_set_level_db(float db) { audio_mix_set_gain_db(&g_p4_mix, AUDIO_SRC_LOOPER, db); }
+
+// ---- for saving the loops (p4_loops.c) ----
+loop_parts_t *p4_loop_parts(void) { return s_looper_ready ? &s_parts : NULL; }
+uint32_t p4_looper_bar_now(void) { return bar_frames(p4_nano_tempo()); }
+int p4_looper_beats(void) { return s_beats; }
+void p4_audio_marks(p4_sound_marks_t *out, bool restart_max)
+{
+    audio_mix_stats_t ms;
+    audio_mix_get_stats(&g_p4_mix, &ms);
+    uac2_host_stats_t us;
+    uac2_host_stats(&us);
+    out->late_frames = atomic_load(&s_lead_missing_all);
+    out->skipped = us.packets_skipped;
+    out->short_frames = ms.capture_short;
+    out->mix_max_us = restart_max ? atomic_exchange(&s_mix_max_us, 0) : atomic_load(&s_mix_max_us);
+}
 void p4_looper_set_latency(uint32_t frames) { if (s_looper_ready) looper_set_latency(&s_looper, frames); }
+
+// ---- console test lines (main.c ':c', ':q'; 2026-11-27, for ~/Coding/claude-werkzeuge/p4-loop-test.py) ----
+
+void p4_audio_click_train(int db)
+{
+    atomic_store_explicit(&s_click_db, 0, memory_order_release);
+    if (db <= 0) {
+        ESP_LOGI(TAG, "test click off");
+        return;
+    }
+    float amp = powf(10.0f, -db / 20.0f) * 8388607.0f;
+    for (int k = 0; k < CLICK_TAB; k++)
+        s_click_tab[k] = (int32_t)((uint32_t)(int32_t)lrintf(amp * sinf(2 * (float)M_PI * k / CLICK_TAB)) << 8);
+    atomic_store_explicit(&s_click_db, db, memory_order_release);
+    ESP_LOGI(TAG, "test click: 10 ms of 1 kHz every 500 ms at -%d dBFS on playback 3/4", db);
+}
+
+static const char *state_name(int st)
+{
+    static const char *const STATES[] = { "empty", "recording", "playing", "overdub", "stopped" };
+    return STATES[st >= 0 && st <= LOOPER_STOP ? st : 0];
+}
+
+// Where sounds begin in a part's buffer (a frame above -46 dBFS after 50 ms below it) - read while the audio runs,
+// good enough to look at: the first 8, how many, and the spacing of those after the first (the first may be a sound
+// the loop's start cut).
+static void report_onsets(const char *what, const int16_t *buf, uint32_t len)
+{
+    char text[100];   // (8 numbers of at most 11 characters)
+    int n = 0, found = 0, peak = 0;
+    uint32_t quiet = 2400, last = 0, gap_min = UINT32_MAX, gap_max = 0;
+    for (uint32_t i = 0; i < len; i++) {
+        int a = abs(buf[2 * i]), b = abs(buf[2 * i + 1]), v = a > b ? a : b;
+        if (v > peak) peak = v;
+        if (v <= 164) {
+            quiet++;
+            continue;
+        }
+        if (quiet >= 2400) {
+            if (found < 8) n += snprintf(text + n, sizeof(text) - (size_t)n, " %u", (unsigned)i);
+            if (found >= 2) {
+                if (i - last < gap_min) gap_min = i - last;
+                if (i - last > gap_max) gap_max = i - last;
+            }
+            last = i;
+            found++;
+        }
+        quiet = 0;
+    }
+    ESP_LOGI(TAG, "REPORT %s: peak %.1f dBFS, %d sounds, beginning at frame%s; spacing after the first %u-%u frames", what,
+             20 * log10f(fmaxf(peak / 32768.0f, 1e-6f)), found, found ? text : " - (none)", found > 2 ? (unsigned)gap_min : 0, (unsigned)gap_max);
+}
+
+// Console ':q' (and the screen test's "@m"): what the looper, its parts, the settings and the streams are at. (main.c
+// runs it in a task of its own with 4 KB of stack, not on the console's 3 KB: long log lines with floats.)
+void p4_audio_test_report(bool scan)
+{
+    audio_mix_stats_t ms;
+    audio_mix_get_stats(&g_p4_mix, &ms);
+    looper_info_t li;
+    p4_looper_info(&li);
+    ESP_LOGI(TAG, "REPORT mixer: %u render frames without a capture frame, %u capture frames dropped, %u frames limited",
+             (unsigned)ms.capture_short, (unsigned)ms.capture_dropped, (unsigned)ms.limited);
+    ESP_LOGI(TAG, "REPORT looper: %s, length %u frames (%.2f s), position %.2f s, %u passes, %u clipped, undo %d, redo %d, to the bar line %d, latency set %u frames",
+             state_name(li.state), (unsigned)li.len, li.len / 48000.0f, li.pos / 48000.0f, (unsigned)li.passes,
+             (unsigned)li.clipped, li.can_undo, li.can_redo, li.to_bar_line, s_looper_ready ? (unsigned)atomic_load(&s_looper.set_latency) : 0);
+    uac2_host_stats_t us;
+    uac2_host_stats(&us);
+    ESP_LOGI(TAG, "REPORT streams: %u capture frames waiting in the mixer (cushion %d, settled %u times, last by %ld), %u packets skipped, %u errors, packet by packet %s (%u short, %u dropped)",
+             (unsigned)(atomic_load(&g_p4_mix.cw) - atomic_load(&g_p4_mix.cr)), MIX_CUSHION, (unsigned)g_p4_mix.settle_count, (long)g_p4_mix.settled, (unsigned)us.packets_skipped,
+             (unsigned)us.errors, us.mirroring ? "on" : "off", (unsigned)us.mirror_short, (unsigned)us.mirror_dropped);
+    if (s_looper_ready) {
+        loop_parts_info_t pi;
+        loop_parts_info(&s_parts, &pi);
+        ESP_LOGI(TAG, "REPORT parts: active %c, next %c, paused %d, drums %d, counting %d, armed %d; A %s %u frames, B %s %u frames",
+                 'A' + pi.active, pi.next < 0 ? '-' : 'A' + pi.next, pi.paused, pi.drums_on, pi.counting, pi.armed,
+                 state_name(pi.part[0].state), (unsigned)pi.part[0].len, state_name(pi.part[1].state), (unsigned)pi.part[1].len);
+    }
+    float bpm = p4_nano_tempo();
+    ESP_LOGI(TAG, "REPORT settings: drum sync %d, count-in %d, quantize %d, arm %d, bar lines %d, beats %d, tempo %.3f BPM, bar %u frames, drums ready %d, test click -%d dBFS (0 = off)",
+             s_drum_sync, s_count_in, s_quantize, s_arm, s_bar_lines, s_beats, bpm, (unsigned)bar_frames(bpm), s_drums_ready, atomic_load(&s_click_db));
+    ESP_LOGI(TAG, "REPORT health: %u self-heals, %u repeated capture frames, capture packets of 5 / 6 / 7 / other frames %u / %u / %u / %u, %u not whole frames, rate %.6f; "
+             "sound 3/4 %.1f dB in the last 5 s (played: above -60); lowest free internal %u bytes, PSRAM %u KB",
+             s_heals, (unsigned)us.capture_repeats, (unsigned)us.capture_sizes[0], (unsigned)us.capture_sizes[1], (unsigned)us.capture_sizes[2],
+             (unsigned)us.capture_sizes[3], (unsigned)us.capture_odd, us.rate_q16 / 65536.0, s_in_db,
+             (unsigned)heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL), (unsigned)(heap_caps_get_minimum_free_size(MALLOC_CAP_SPIRAM) / 1024));
+    // The onset scan reads the whole loop and layer from PSRAM (up to 2 x 4 MB): only when asked (":s"), not at every
+    // poll - polled every 0.2-0.4 s it competed with the mixer and the screen for PSRAM (run 1, 2026-11-27).
+    if (scan && s_looper_ready && li.len) {
+        report_onsets("loop", s_looper.base, li.len);
+        report_onsets("overdub", s_looper.layer, li.len);
+    }
+}

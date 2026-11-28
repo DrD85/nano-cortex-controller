@@ -20,6 +20,8 @@ static loop_parts_t P;
 static float in[BLOCK * 2], out[BLOCK * 2];
 static uint32_t t;            // frames processed
 static float level_in = 0;    // what the "guitar" plays now
+static float jump, prev_l;    // the largest step between two output frames since `jump` was reset (a click)
+static float last_heard;      // the output's last frame that was not silent
 
 static void run(uint32_t frames, float *peak)
 {
@@ -27,6 +29,11 @@ static void run(uint32_t frames, float *peak)
         for (int i = 0; i < BLOCK; i++) in[2 * i] = in[2 * i + 1] = level_in;
         loop_parts_process(&P, in, out, BLOCK);
         if (peak) for (int i = 0; i < 2 * BLOCK; i++) *peak = fmaxf(*peak, fabsf(out[i]));
+        for (int i = 0; i < BLOCK; i++) {
+            jump = fmaxf(jump, fabsf(out[2 * i] - prev_l));
+            prev_l = out[2 * i];
+            if (out[2 * i] != 0) last_heard = fabsf(out[2 * i]);
+        }
         t += BLOCK;
     }
 }
@@ -90,6 +97,33 @@ int main(void)
     CHECK(info.active == 0 && info.part[1].state == LOOPER_PLAY && fabsf(peak - 0.2f) < 0.02f,
           "back to A at B's end: A from the top (level %.2f, want 0.20), B's overdub stopped (%d)", peak, info.part[1].state);
     CHECK(info.part[1].can_undo, "B keeps its overdub (undo possible on B)");
+    uint32_t xf = P.part[1].xfade, len_b = info.part[1].len;   // (latency 0: B's overdub ends at its last frame)
+    const int16_t *lb = P.part[1].layer;
+    CHECK(abs(lb[2 * (len_b - 1)]) < 50 && lb[2 * (len_b - xf - 1)] > 3000,
+          "... faded out in its layer at the switch, no step at B's end (%d at the end, %d before the fade)", lb[2 * (len_b - 1)], lb[2 * (len_b - xf - 1)]);
+
+    // pause: faded out first (cut at once it clicked, 2026-11-27), then silence, the place is kept; again: faded in,
+    // on from there
+    loop_parts_info(&P, &info);
+    uint32_t at = info.part[0].pos;
+    loop_parts_pause(&P);
+    jump = 0;
+    run(xf + BLOCK, NULL);
+    float fade_jump = jump, fade_last = last_heard;
+    peak = 0;
+    run(RATE / 4, &peak);
+    loop_parts_info(&P, &info);
+    uint32_t moved = (info.part[0].pos + len_a - at) % len_a;
+    CHECK(info.paused && peak == 0 && moved >= xf && moved <= xf + BLOCK, "pause: faded out, then silence, A held (%u frames on, the fade is %u)", moved, xf);
+    CHECK(fade_jump < 0.01f && fade_last < 0.01f, "... no click at the pause (largest step %.4f, last frame %.4f)", fade_jump, fade_last);
+    at = info.part[0].pos;
+    loop_parts_pause(&P);
+    jump = 0;
+    peak = 0;
+    run(xf + 2 * BLOCK, &peak);
+    loop_parts_info(&P, &info);
+    CHECK(!info.paused && peak > 0.15f && (info.part[0].pos + len_a - at) % len_a >= BLOCK, "pause again: A goes on from there (frame %u)", info.part[0].pos);
+    CHECK(jump < 0.01f, "... faded in, no click (largest step %.4f)", jump);
 
     // undo works on the part that plays only
     loop_parts_command(&P, LOOPER_CMD_UNDO);
@@ -97,19 +131,35 @@ int main(void)
     loop_parts_info(&P, &info);
     CHECK(info.part[1].can_undo && !info.part[0].can_redo, "undo while A plays leaves B's overdub alone");
 
-    // pause: silence, the place is kept; again: on from there
+    // (A has no overdub: the undo fades its take out, then A is empty and B plays.) A pause within that fade, B taking
+    // over within the pause's own: faded to silence all the same, B held; going on, B is heard
+    loop_parts_pause(&P);
+    run(xf + BLOCK, NULL);
+    fade_last = last_heard;
     loop_parts_info(&P, &info);
-    uint32_t at = info.part[0].pos;
+    peak = 0;
+    run(RATE / 10, &peak);
+    CHECK(info.paused && info.active == 1 && info.part[0].state == LOOPER_EMPTY && peak == 0 && fade_last < 0.01f,
+          "a pause while A's take is undone and B takes over: still faded out (last frame %.4f), B held", fade_last);
     loop_parts_pause(&P);
     peak = 0;
-    run(RATE / 4, &peak);
+    run(xf + 2 * BLOCK, &peak);
     loop_parts_info(&P, &info);
-    CHECK(info.paused && peak == 0 && info.part[0].pos == at, "pause: silence, A held at frame %u", info.part[0].pos);
+    CHECK(!info.paused && info.active == 1 && peak > 0.3f, "... going on: B is heard (%.2f)", peak);
+
+    // a pause within a stop's fade: held once silent; going on, the stop is done (B at its top, silent)
+    loop_parts_command(&P, LOOPER_CMD_PLAY_STOP);
+    run(BLOCK, NULL);
+    loop_parts_pause(&P);
+    run(xf + BLOCK, NULL);
+    loop_parts_info(&P, &info);
+    bool held_b = info.paused;
     loop_parts_pause(&P);
     peak = 0;
-    run(BLOCK * 2, &peak);
+    run(RATE / 10, &peak);
     loop_parts_info(&P, &info);
-    CHECK(!info.paused && peak > 0.15f && info.part[0].pos >= at + BLOCK, "pause again: A goes on from there (frame %u)", info.part[0].pos);
+    CHECK(held_b && !info.paused && info.part[1].state == LOOPER_STOP && info.part[1].pos == 0 && peak == 0,
+          "a pause within a stop's fade: held, then B stopped at its top (state %d, frame %u, level %.3f)", info.part[1].state, info.part[1].pos, peak);
 
     printf("== drums with the parts\n");
     static drum_machine_t d;
@@ -125,12 +175,18 @@ int main(void)
     loop_parts_command(&Q, LOOPER_CMD_REC_DUB);
     BOTH();
     CHECK(d.running && d.step_pos > 0 && d.step_pos < 0.01, "the first take starts the drums with it (step %.4f)", d.step_pos);
-    // pause holds the drums too
+    // pause holds the drums too - at the loop's place (the loop's fade first: both move on by the same frames)
+    uint32_t loop_from = Q.part[Q.active].pos;
+    double drum_from = d.step_pos;
     loop_parts_pause(&Q);
     for (int k = 0; k < 100; k++) BOTH();
     double held = d.step_pos;
     for (int k = 0; k < 100; k++) BOTH();
     CHECK(d.step_pos == held && d.paused, "pause holds the drums at their step (%.2f)", held);
+    double drum_moved = (held - drum_from) * drum_machine_step_frames(&d);
+    uint32_t loop_moved = Q.part[Q.active].pos - loop_from;
+    CHECK(fabs(drum_moved - loop_moved) < 0.01 && loop_moved >= Q.part[0].xfade,
+          "... where the loop is held (both %u frames on, drums %.2f)", loop_moved, drum_moved);
     loop_parts_pause(&Q);
     for (int k = 0; k < 10; k++) BOTH();
     CHECK(d.step_pos > held && !d.paused, "... and they go on with the loop");

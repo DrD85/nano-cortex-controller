@@ -31,7 +31,8 @@ typedef struct {
     _Atomic uint32_t w, r;
 
     uint32_t out_rate, in_rate, prefill;
-    double step, frac;
+    double step;
+    float frac;                 // (float: a double is a library call per frame on the P4, 2026-11-27)
     float win[4][2];
     int state;
     float env;

@@ -7,7 +7,9 @@
 // browser on the Mac decodes them, measures them as the Jam Player does and sends 16-bit WAV), and a small API
 // (PUT /api/tracks/<name>.wav, PUT /api/covers/<name>.jpg, GET /api/tracks, POST /api/trims, POST /api/move,
 // POST /api/sources, POST /api/done; <name> "Album/Title" or "Title", 2026-11-27) for the Jam Player app, and
-// PUT /api/firmware for a new firmware (p4_ota.h).
+// PUT /api/firmware for a new firmware (p4_ota.h). The looper's saved loops (p4_loops.c, 2026-11-28): GET /api/loops
+// (name and size of each), GET /api/loops/<name>.wav, DELETE /api/loops/<name>.wav; POST /api/time sets the board's
+// clock from the Mac's ("<unix seconds> <minutes east of UTC>"), so loops saved after it carry the date.
 //
 // STATUS: builds; not yet run on hardware (C6 firmware, SDIO pins 18/19/14-17 and reset 54 are esp_hosted's defaults
 // for the P4 - to check on the board).

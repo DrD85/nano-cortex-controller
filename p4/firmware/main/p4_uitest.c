@@ -155,7 +155,7 @@ static void audio_report(void)
 }
 
 extern void p4_audio_click(int pair, float db);
-extern void p4_audio_test_report(void);
+extern void p4_audio_test_report(bool scan);
 
 static void click_task(void *arg)
 {
@@ -303,7 +303,7 @@ void p4_uitest_line(const char *line)
         }
         break;
     case 'm':
-        p4_audio_test_report();
+        p4_audio_test_report(true);
         break;
     case 'p':
         perf_report();
