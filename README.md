@@ -1,17 +1,14 @@
 # Nano Cortex Controller (unofficial)
 
-A touch screen and footswitch controller for the **Neural DSP Nano Cortex**. It runs on a
-**Waveshare ESP32-S3-Touch-LCD-4.3**, connects over Bluetooth and works like a small Quad Cortex floor unit:
-eight tiles for eight footswitches, your own preset banks, scenes, an FX editor, the capture and IR library, the
-expression pedal's assignments, a tuner and a looper mode. It is the hardware companion of the [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor).
+A touch screen and footswitch controller for the **Neural DSP Nano Cortex**, built on a Waveshare ESP32 display
+board. It works like a small Quad Cortex floor unit: eight tiles for eight footswitches, your own preset banks,
+scenes, an FX editor, the capture and IR library, the expression pedal's assignments and a tuner. The larger
+**7" board** is connected to the Nano with a USB cable and also plays its own sound into it: a looper with two
+parts, a drum machine and backing tracks.
 
-![Nano Cortex Controller](docs/images/00-overview.png)
+![The 7" board in looper mode, next to the Nano Cortex, with eight footswitches below](docs/images/photos/7inch-looper.jpg)
 
-**Two boards:** the **4.3" board** described here (ESP32-S3, Bluetooth), and the **[7" board](#the-7-board-esp32-p4)**
-(ESP32-P4): the same functions on a larger screen. It is connected to the Nano with a USB cable and adds a looper with
-two parts, a drum machine and a jam player.
-
-**Deutsch:** [Anleitung auf Deutsch](README.de.md) · **No board yet?** The same firmware runs in the browser:
+**Deutsch:** [Anleitung auf Deutsch](README.de.md) · **No board yet?** The 4.3" board's firmware runs in the browser:
 [Nano Cortex Controller Web](https://github.com/DrD85/nano-cortex-controller-web)
 
 > **Unofficial community project.** Not affiliated with, endorsed by or supported by Neural DSP.
@@ -19,282 +16,342 @@ two parts, a drum machine and a jam player.
 > The controller writes to your device. Use it at your own risk and keep backups of your presets
 > (for example with the official Cortex Cloud app).
 
-## What it can do
+**Contents:** [Two boards](#two-boards) · [The 7" board](#the-7-board) · [Getting started](#getting-started-7-board) ·
+[The 4.3" board](#the-43-board) · [Editor and Jam Player](#companions-editor-and-jam-player) ·
+[Build from source](#build-from-source) · [Not tested yet](#not-tested-yet) · [License](#license)
 
-- **Presets and banks** – six presets per bank on footswitches 3–8, 16 banks with your own colours and symbols
-- **Scenes** – six per preset: one footswitch switches several effects at once, without the gap of a preset change
-- **FX mode** – switch the five FX slots with your feet, plus a reverb switch (two mix positions, two reverbs, or
-  two named settings of a reverb) and a second effect (A / B) on any slot
-- **Pedal view** – the five FX slots as pedals on a shelf instead of tiles, in the gig view
-- **NanOS 2.3.0** – its five new effects (Poly Octaver, Wham, Chief OC2, Blossom, Shimmer); older NanOS versions
-  work as before
-- **Auto-wah** – the controller moves a wah in the Nano's tempo: while the wah is on, or only while you hold its footswitch
-- **FX editor** – choose models and set every parameter on the touch screen, with named FX presets
-- **Capture and Cab/IR** – pick slots or load anything from the Nano's library; capture tone, volume, cab settings
-- **Expression pedal** – choose per preset what the Nano's pedal moves (a wah, a mix, the level …) and how far
-- **Tuner**, **gig view** with large tiles, a **set list**, **Bluetooth MIDI** for an extra controller (for example
-  an M-VAVE Chocolate)
-- **Made for the stage** – it restarts itself after a hang, is back at once after a lost connection, and its
-  settings can be backed up as a file
-- **Looper mode** – the footswitches control a looper app on a phone (for example Loopy Pro)
-- The [Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor) can connect **through** the controller
+## Two boards
 
-## Get started
+<p align="center"><img src="docs/images/photos/both-boards.jpg" width="420" alt="The 7-inch board above, the 4.3-inch board below"></p>
+
+| | **7" board** | **4.3" board** |
+|---|---|---|
+| Display board | Waveshare ESP32-P4-WIFI6-Touch-LCD-7B, 1024 × 600 | Waveshare ESP32-S3-Touch-LCD-4.3, 800 × 480 |
+| Link to the Nano | USB cable (Bluetooth without the cable) | Bluetooth |
+| Presets, banks, scenes, FX editor, capture and cab, tuner, set list, expression pedal | yes | yes |
+| Looper, drums and backing tracks played into the Nano | yes | – (its switches can control a looper app on a phone) |
+| Level, gain reduction, auto-wah from the playing, EQ spectrum | yes | – |
+| Footswitches | 8, wired straight to the board (or an SX1509 board) | an SX1509 board with up to 8 |
+| Wi-Fi | tracks from the Mac, firmware updates | – |
+| Release files | `nano-controller-p4-<version>-…` | `nano-controller-<version>-…` |
+
+Both boards share most of their code, so their screens are laid out alike and work the same way. The table shows
+what only the 7" board has; it is the newer one and gets new features first.
+
+## The 7" board
+
+### The main screen
+
+![The 7-inch board's main screen with numbers](docs/images/p4/guide-main.png)
+
+1. **Settings** (the Nano, audio, phone, Wi-Fi, MIDI, footswitches, tile layout, display, system, capture) · **Reload**
+   reads everything from the Nano again
+2. Green dot = connected to the Nano; the preset's number and the bank. **Tap** for the set list
+3. The player: the jam track that plays (or the phone). **Tap** for its page with the list, the albums and the volume
+4. **Pedal**: what the expression pedal moves in this preset · **Scenes**: tiles 3–8 become the preset's scenes,
+   tap again for the bank's presets · **Save** turns green when there are unsaved changes
+5. Previous / next **bank**
+6. The preset's name: **tap** for the list of all 64 presets (with **New preset**), **hold** to rename.
+   **Swipe** left / right anywhere for the next / previous preset, **swipe up** for the gig view
+7. The signal chain: Pre FX 1–2, capture, cab, Post FX 1–3, a filled dot = on. **Tap** an effect for its FX editor;
+   capture and cab: **tap** to choose one, **hold** for its tone or cab settings
+8. **OUT**: the Nano's loudness. **Tap** for [Level](#level-gain-reduction-auto-wah-from-the-playing)
+9. Eight tiles for eight footswitches, the number in the corner. **Tap** a tile = press its switch. A tile is
+   filled when it is active (the preset that is loaded, an effect that is on)
+10. A small key says how a switch's second function is reached: **HOLD** the switch, **TAP** it, or **PRESS**
+    (it acts the moment the switch goes down). The line below the key says what it does – here: hold 6 for
+    "Ambient Swell", a second preset on that switch
+
+### Footswitches and modes
+
+<img src="docs/images/photos/7inch-presets.jpg" alt="The 7-inch board in the gig view with the footswitches below" width="560">
+
+Footswitches **1** and **2** lead to the modes; from every other mode, footswitch **8** leads back to the presets.
+In the default layout of eight fields:
+
+| Mode | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| **Presets** (or scenes) | FX mode · *hold:* player | looper · *hold:* tuner | preset | preset | preset | preset | preset | preset |
+| **FX** | Pre FX 1 | Pre FX 2 | Post FX 3 | looper · *hold:* tuner | Post FX 1 | Post FX 2 | reverb switch | presets · *hold:* player |
+| **Looper** | drums on / off · *hold:* drum menu | part A | part B | pause | undo / redo · *hold:* clear | record / overdub | play / stop | back |
+| **Player** | jam tracks / phone | song list | next album | looper | select previous | play selected | select next | back |
+
+- A preset switch can hold a **second preset**, loaded when the switch is released after a long press (hold its
+  tile to set it). With scenes on, switches 3–8 recall [scenes](#scenes-fx-mode-gig-view-and-pedal-view).
+- In FX mode an effect with a **second effect** (A / B) swaps or switches on a tap or a hold, as chosen in its editor.
+- Settings › **Tile layout** changes the order of the presets' and FX mode's switches (6 or 8 fields); Settings ›
+  **Footswitches** learns which switch is which, a MIDI controller's switch too.
+
+### Looper
+
+<img src="docs/images/p4/looper.gif" alt="Looper: record part A, overdub, part B at the loop's end" width="640">
+
+**Press 2** for looper mode. **6** records the first take of part A; pressed again, the loop is closed – rounded to
+whole bars of the Nano's tempo, so a take that ends a little early goes on to the bar line. **6** then switches
+between overdub and play, **7** stops and starts, **5** undoes the last overdub (hold: clear). **3** chooses part B: it
+takes over at the end of the loop that plays, and an empty part starts recording there. **4** pauses loop and drums
+together. Up to 22 seconds per part. The board records the Nano's sound from the USB cable and plays the loop back
+into it, with the round trip taken out. *(The GIF is shortened: the time runs faster than on the board.)*
+
+### Drums and saving loops
+
+<img src="docs/images/p4/drums.gif" alt="Drum menu: the Lo-Fi style, a groove, the Lo-Fi kit, Save loops" width="640">
+
+A drum machine in the Nano's tempo: 108 grooves in ten styles, two kits computed on the board (**Electronic** and
+**Lo-Fi**), a groove of its own per looper part. **Press 1** in looper mode for drums on / off, **hold 1** for the
+drum menu: styles, grooves, kit, level, and how a part's first take starts (with the drums, after a bar counted in, on
+the drums' bar lines, or with the first note). **Save loops** writes parts A and B as WAV files to the microSD card
+(`loops/`, with tempo and bars in the name) while the looper plays on. The menu's **Acoustic** kit needs a sample file
+that is not part of the release; it stays dimmed without it.
+
+### Jam tracks and player mode
+
+<img src="docs/images/p4/player.gif" alt="Player mode: hold 1, select with 7, play with 6, next album with 3, back with 8" width="640">
+
+Backing tracks (WAV) from a microSD card, one folder per album, with covers. Every track is measured and played at
+the same loudness (−21 LUFS), with a correction by ear per track. **Hold 1** for player mode: the playing track's
+cover, title and time, and the album's list. Songs are chosen first and then played: **5 / 7** select the song before /
+after while the current one plays on, **6** plays the selected song (or pauses), **3** goes to the next album, **8**
+back. Tracks come onto the card over Wi-Fi from the [Jam Player](https://github.com/DrD85/jam-player) on a Mac or from
+the board's page `http://nano-board.local`.
+
+<img src="docs/images/p4/51d-jam-albums.png" alt="The jam player page: one album, levelled tracks, volume, Wi-Fi" width="480">
+
+### FX editor, pad and info page
+
+![The FX editor with numbers](docs/images/p4/guide-fx-editor.png)
+
+Tap an effect in the signal chain (or hold its tile in FX mode).
+
+1. Back
+2. The model: **tap** for another one
+3. **i**: the info page – what the effect is based on, starting points and players' sounds, each with where its
+   settings come from; **Apply** sets them
+4. **A / +B**: a second effect on this slot, swapped with its footswitch
+5. On / off
+6. **PAD**: the pad page (below)
+7. **FX presets**: tap = load, **hold** = save the current settings under a name
+8. **Scenes**: keep these settings for a scene of the preset (the number: how many scenes have their own)
+9. **Slide sideways** on a bar to change its value; *Off | On* settings switch with a tap
+
+<img src="docs/images/p4/pad.gif" alt="The pad: the lens dragged between four sounds of a tape delay" width="640">
+
+**The pad** puts four sounds of the effect in its corners. Drag the lens between them and every control moves with
+it; let go and the sound stays where the lens is. A long press on a pedal in the pedal view opens it directly.
+
+<img src="docs/images/p4/59-fx-info-sounds.png" alt="The info page: starting points and players' sounds" width="480">
+
+### EQ with a live spectrum
+
+<img src="docs/images/p4/eq-spectrum.gif" alt="EQ editor: HOLD keeps the sound, then the EQ is changed" width="640">
+
+The editors of **Parametric 3**, **Graphic 9** and **Low-High Cut** show the Nano's sound as a spectrum below the
+controls, with the EQ's curve over it. **HOLD** keeps the sound of the moment as a dashed line: change the EQ and
+compare before and after. It reads the sound from the USB cable, so it needs the Nano plugged in. *(The sound in the
+GIF is made up for the picture.)*
+
+### Level, gain reduction, auto-wah from the playing
+
+<table>
+<tr>
+<td width="33%"><img src="docs/images/p4/77-level-measured.png" alt="Level"></td>
+<td width="33%"><img src="docs/images/p4/81-fx-editor-compressor.png" alt="Gain reduction"></td>
+<td width="33%"><img src="docs/images/p4/26b-auto-wah-playing.png" alt="Auto-wah from the playing"></td>
+</tr>
+<tr>
+<td valign="top">
+
+**Level** – tap OUT, choose what the preset is (clean, edge, drive, fuzz, lead), play for a few seconds: the board
+measures the loudness and suggests the preset's level, so presets match.
+
+</td>
+<td valign="top">
+
+**Gain reduction** – below a compressor's knobs, worked out from its knobs and the Nano's dry input (the Nano does
+not report it).
+
+</td>
+<td valign="top">
+
+**Auto-wah** – a wah the board moves in the Nano's tempo, or one that opens with your picking (sensitivity, attack,
+release), with a live view.
+
+</td>
+</tr>
+</table>
+
+### Scenes, FX mode, gig view and pedal view
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/p4/20-scene-mode.png" alt="Scenes"></td>
+<td width="50%"><img src="docs/images/p4/02-fx-mode.png" alt="FX mode"></td>
+</tr>
+<tr>
+<td valign="top">
+
+**Scenes** – six per preset. A scene is which of the five effects are on and, if you like, how they are set; its
+switch changes all of that at once, without the gap of a preset change. **Scenes** in the top bar; **hold** a tile
+to set a scene up.
+
+</td>
+<td valign="top">
+
+**FX mode** – the five effects on the switches in their own order: Pre FX on the top row, Post FX below, the reverb
+switch (two mix positions, two reverbs, or two named settings of a reverb) on 7.
+
+</td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/images/p4/03-fullscreen.png" alt="Gig view"></td>
+<td width="50%"><img src="docs/images/p4/39-pedal-view.png" alt="Pedal view"></td>
+</tr>
+<tr>
+<td valign="top">
+
+**Gig view** – swipe up: large tiles and a slim bar with connection, preset, bank, unsaved changes and the mode.
+Swipe down: back.
+
+</td>
+<td valign="top">
+
+**Pedal view** – **PEDALS** in the gig view's bar, in FX mode: the five effects as pedals, the amp between Pre and
+Post FX, each with its footswitch.
+
+</td>
+</tr>
+</table>
+
+### More on the screen
+
+<table>
+<tr>
+<td width="33%"><img src="docs/images/p4/64-preset-list.png" alt="Preset list"></td>
+<td width="33%"><img src="docs/images/p4/06-capture-library.png" alt="Capture library"></td>
+<td width="33%"><img src="docs/images/p4/08-tuner.png" alt="Tuner"></td>
+</tr>
+<tr>
+<td valign="top">
+
+**Preset list** – tap the preset's name: all 64 presets, **New preset** in any place.
+
+</td>
+<td valign="top">
+
+**Capture and cab** – the Nano's slots or its whole library, with filters.
+
+</td>
+<td valign="top">
+
+**Tuner** – hold 2. Reference pitch and output mute.
+
+</td>
+</tr>
+</table>
+
+Also: own banks with colours and symbols, a set list, the expression pedal's assignments per preset, Bluetooth
+MIDI controllers (for example an M-VAVE Chocolate) with MIDI learn, the Neural Capture assistant, tempo and
+metronome, a settings backup through the editor. Every function in detail: the [manual](docs/manual.md) – written
+for the 4.3" board; the screens are the same, the footswitches as in the table above.
+
+## Getting started (7" board)
 
 **1. What you need**
 
 | Part | Notes |
 |---|---|
-| [Waveshare ESP32-S3-Touch-LCD-4.3](https://www.waveshare.com/wiki/ESP32-S3-Touch-LCD-4.3) | 800 × 480 touch screen, version with ONE USB-C port (**USB**) |
-| Neural DSP Nano Cortex | The Nano can be found for a few seconds after it is switched on; later press **EXIT + CAPTURE** on it (the controller says so) |
-| Optional: SX1509 breakout + up to 8 momentary footswitches | [wiring](docs/manual.md#footswitches) – the touch screen works on its own |
+| [Waveshare ESP32-P4-WIFI6-Touch-LCD-7B](https://www.waveshare.com/wiki/ESP32-P4-WIFI6-Touch-LCD-7B) | 7", 1024 × 600, an ESP32-P4 with an ESP32-C6 for Bluetooth and Wi-Fi |
+| Neural DSP Nano Cortex | with a USB-C cable to the board's **USB-A** socket |
+| Optional: microSD card | **FAT32**, for jam tracks (folder `jam`, one sub-folder per album) and saved loops (`loops`) |
+| Optional: up to 8 momentary footswitches | each between a pin of the board's header **P3** and GND, no resistors – [wiring](p4/README.md#what-you-need) |
 
-**2. Install the firmware** – in the browser, no tools needed. The files are on the [Releases](../../releases) page.
+**2. Install the firmware** – the files are on the [Releases](../../releases) page (`nano-controller-p4-<version>-…`).
 
-1. Open **[esptool.spacehuhn.com](https://esptool.spacehuhn.com)** in **Chrome** or **Edge** and connect the board
-   with the USB-C port labelled **USB**.
-2. Click **Connect** and choose the board (usually "USB JTAG/serial debug unit"). No port? Hold **BOOT**, press and
-   release **RESET**, release **BOOT**, try again.
-3. Add the file and its address, then click **Program**:
+- **In the browser:** open [esptool.spacehuhn.com](https://esptool.spacehuhn.com) in **Chrome** or **Edge**, connect
+  the board's USB-C port **USB TO UART** and click **Connect**. First installation: **Erase**, then
+  `…-full.bin` at **`0x0`**. Update: `…-update.bin` at **`0x10000`**, no erase – banks and settings stay. Press
+  **RESET**. (No port? Hold **BOOT**, press and release **RESET**, release **BOOT**. Stops halfway? Choose 115200 baud.)
+- **Over Wi-Fi** (once a firmware is on the board): switch on Wi-Fi (Settings › Wi-Fi, or on the jam player's page),
+  open `http://nano-board.local` and choose
+  `…-wifi.bin` under **Firmware**. If the new firmware does not start properly, the board goes back to the old one.
+- **From the command line** (esptool 5): see [p4/README.md](p4/README.md#install-the-firmware).
 
-   | File | Address | Use it for |
-   |---|---|---|
-   | `nano-controller-<version>-full.bin` | `0x0` | the **first installation** (erases stored banks and settings) |
-   | `nano-controller-<version>-update.bin` | `0x10000` | **updates** – your banks and settings stay |
-   | `nano-controller-<version>-partitions.bin` | `0x8000` | **with the update** when coming from 1.18 or earlier (since 1.19 the settings memory is larger); settings stay |
+**3. First start** – switch the Nano on, plug it into the board's USB-A socket and power the board. It reads the
+presets over the cable and shows the current one; the green dot means connected.
 
-4. Press **RESET** on the board.
+More on the 7" board – the whole feature list, the footswitch pins, building: **[p4/README.md](p4/README.md)**.
 
-**3. First start** – switch the Nano on, close the Cortex Cloud app and the Nano Cortex Editor (the Nano accepts
-only one Bluetooth connection) and power the board. It finds the Nano, reads the presets and shows the current one.
-If it does not find the Nano within a minute, switch the Nano off and on again.
+## The 4.3" board
 
-## How to use it
+![The 4.3-inch board: preset mode, FX mode, gig view and FX editor](docs/images/00-overview.png)
 
-### The main screen
+The original controller, on a **Waveshare ESP32-S3-Touch-LCD-4.3** (800 × 480, the version with ONE USB-C port
+labelled **USB**). It talks to the Nano over **Bluetooth**, so it needs no cable to the Nano, and it plays no sound of
+its own. The screens and functions are those of the 7" board above, without the looper, drums, jam tracks, Level, gain
+reduction, the spectrum and Wi-Fi. Its footswitches are used differently:
 
-![Main screen with numbers](docs/images/guide-main.png)
-
-1. **↻** read everything again · **speaker** capture volume · **MIDI** devices · **USB** audio volume
-2. Green dot = connected to the Nano; preset and bank
-3. **pedal** what the [expression pedal](docs/manual.md#expression-pedal) moves · **layers** [scenes](#scenes) on
-   tiles 3–8, tap again for the bank's presets · **disk** save the preset on the Nano – green when there are unsaved changes
-4. Previous / next **bank**
-5. Preset name – **tap** for the [list of all presets](docs/manual.md#preset-list-and-new-presets), with **New preset**
-   for a fresh start in any place; **hold** to rename
-6. The signal chain: Pre FX 1-2, capture, cab, Post FX 1-3 – a filled dot = on. **Tap** an effect for its FX editor;
-   capture and cab: **tap** to choose, **hold** for tone / cab settings
-7. Eight tiles = eight footswitches. **Tap** a tile = press its switch
-
-A tile is **filled** when it is active (the loaded preset, an effect that is on) and dark with its colour along the
-top when it is not. **Swipe left / right** for the next / previous preset.
-
-### Presets and FX
-
-<table>
-<tr>
-<td width="50%"><img src="docs/images/01-preset-mode.png" alt="Preset mode"></td>
-<td width="50%"><img src="docs/images/02-fx-mode.png" alt="FX mode"></td>
-</tr>
-<tr>
-<td>
-
-**Preset mode** – tiles 3–8 are the six presets of the bank. **Hold** a tile to give that switch another preset,
-a colour and a symbol.
-
-</td>
-<td>
-
-**FX mode** – tiles 3–7 switch Pre FX 1–2 and Post FX 1–3, tile 8 is the reverb switch. **Hold** a tile to open
-its editor.
-
-</td>
-</tr>
-</table>
-
-**Footswitch 1** changes between the two modes, **footswitch 2** is the tuner.
-
-### Scenes
-
-<table>
-<tr>
-<td width="50%"><img src="docs/images/20-scene-mode.png" alt="Scene mode"></td>
-<td width="50%"><img src="docs/images/21-scene.png" alt="Scene dialog"></td>
-</tr>
-<tr>
-<td>
-
-**Scenes** (the layers button next to Save) – tiles 3–8 become six scenes of the current preset. A scene is which of its five effects
-are on – and, if you like, how they are set. Its footswitch changes all of that at once, without the gap of a preset
-change. The squares on a tile show the five effects in their colours: filled = on.
-
-</td>
-<td>
-
-**Hold** a tile to set a scene up: name, colour and the effects that are on – tap an effect to switch it. An empty
-scene starts from what is on right now. Scenes are stored on the controller, per preset.
-
-</td>
-</tr>
-</table>
-
-Tap the scenes button again for the bank's presets – or **hold footswitch 2** to change with your foot. Footswitch 1
-changes between FX and whichever of the two you chose.
-
-**Other settings per scene** (more delay in the solo): open the effect in the [FX editor](#fx-editor), set it and tap
-the scene button at the end of the FX preset row, then the scene that should use these settings.
-
-### Gig view
-
-<table>
-<tr>
-<td width="50%"><img src="docs/images/03-fullscreen.png" alt="Gig view"></td>
-<td>
-
-**Swipe up**: the tiles fill the screen with large names, and a slim bar shows connection, preset, bank, unsaved
-changes and the mode. **Swipe down**: back.
-
-</td>
-</tr>
-<tr>
-<td width="50%"><img src="docs/images/39-pedal-view.png" alt="Pedal view"></td>
-<td>
-
-**PEDALS** in that bar: in FX mode the five slots stand on a shelf as pedals – light, name and footswitch under
-each, filled while the effect is on. Tap to switch, hold for the FX editor. Tap **PEDALS** again for the tiles.
-
-</td>
-</tr>
-</table>
-
-### FX editor
-
-**Hold an FX tile** to open it.
-
-![FX editor with numbers](docs/images/guide-fx-editor.png)
-
-1. Back
-2. **Tap** to choose another model. The symbol is filled when the effect is on
-3. Effect on / off
-4. **FX presets**: tap = load, **hold** = save the current settings under a name
-5. **Scene**: these settings for a [scene](#scenes) of the preset – it sets them whenever its footswitch is pressed
-6. **Slide sideways** on a bar to change a value; up and down scrolls
-7. **PAD**: the effect on a pad with a sound in each corner – drag the lens between them
-   ([manual](docs/manual.md#the-pad)); a long press on a pedal in the pedal view opens it directly
-8. **i** beside the model: what the effect is based on, starting points and players' sounds to set with one tap
-   ([manual](docs/manual.md#the-info-page))
-
-Values are shown while the effect is on. *Off | On* settings switch with a tap. More: [manual](docs/manual.md#fx-editor).
-
-### Capture, cab and tuner
-
-<table>
-<tr>
-<td width="33%"><img src="docs/images/06-capture-library.png" alt="Capture library"></td>
-<td width="33%"><img src="docs/images/14-capture-amp.png" alt="Capture tone"></td>
-<td width="33%"><img src="docs/images/08-tuner.png" alt="Tuner"></td>
-</tr>
-<tr>
-<td>
-
-**Tap** the capture or cab card: the Nano's slots, or its whole library with filters.
-
-</td>
-<td>
-
-**Hold** the capture's field in the signal chain for gain, bass, mid and treble – the cab's field for output, high and low pass.
-
-</td>
-<td>
-
-**Footswitch 2** opens the tuner, with reference pitch and output mute. Tap to close.
-
-</td>
-</tr>
-</table>
-
-### Looper mode
-
-<table>
-<tr>
-<td width="50%"><img src="docs/images/18-looper-mode.png" alt="Looper mode"></td>
-<td>
-
-**Hold footswitch 1**: the tiles become the switches of a looper app on a phone, for example Loopy Pro playing
-through the Nano. Any press of footswitch 1 goes back.
-
-- In the app connect the Bluetooth device *Nano Cortex Controller* and bind the switches with MIDI Learn
-- **Hold** a tile to change its name, colour and symbol
-
-Setup step by step: [manual](docs/manual.md#looper-mode-a-looper-app-on-a-phone).
-
-</td>
-</tr>
-</table>
-
-### Touch and footswitches at a glance
-
-| Do this | Where | What happens |
+| Footswitch | Press | Hold |
 |---|---|---|
-| **Tap** | a tile | the same as its footswitch |
-| | an effect in the signal chain | its FX editor |
-| | the preset name | the list of all 64 presets; **New preset** there |
-| | the **scenes** button (top bar) | tiles 3–8: scenes of the preset ↔ presets of the bank |
-| | the **pedal** button (top bar) | what the Nano's expression pedal moves in this preset |
-| **Hold** | a preset tile | bank editor: preset, colour and symbol of this switch |
-| | a scene tile | the scene: name, colour and which effects are on |
-| | an FX tile | FX editor |
-| | tile 8 in FX mode | reverb switch: mix positions or a second reverb |
-| | tile 1 | looper mode on / off |
-| | a looper tile | its name, colour and symbol |
-| | tile 2 | learn which footswitch is which |
-| | the preset name | rename the preset |
-| | capture / cab field of the chain | capture tone / cab settings |
-| **Swipe** left / right | anywhere | next / previous preset |
-| **Swipe** up / down | anywhere | gig view on / off |
-| **Footswitch 1** | | short: presets or scenes ↔ FX · held: looper mode |
-| **Footswitch 2** | | short: tuner · held: scenes ↔ presets |
-| **Footswitch 3–7** held | FX mode | a slot with a second effect swaps A ↔ B (or switches on / off, if a tap swaps) |
+| 1 | presets or scenes ↔ FX mode | looper mode: the switches control a looper app on a phone (for example Loopy Pro) over Bluetooth MIDI |
+| 2 | tuner | scenes ↔ presets |
+| 3–8 | presets, scenes or effects | 3–7 in FX mode: a slot's second effect (A / B) |
 
-## The 7" board (ESP32-P4)
+**What you need:** the board, the Nano, and optionally an SX1509 breakout with up to 8 momentary footswitches
+([wiring](docs/manual.md#footswitches) – the touch screen works on its own).
 
-The same controller on a **Waveshare ESP32-P4-WIFI6-Touch-LCD-7B** (7", 1024 × 600). It has every function above,
-and the Nano is plugged into the board's USB-A socket instead of connecting over Bluetooth. Over the same cable the
-board plays its own sound into the Nano:
+**Install the firmware** – in the browser, as above: [esptool.spacehuhn.com](https://esptool.spacehuhn.com),
+the board's port **USB** (usually "USB JTAG/serial debug unit"), then:
 
-- **Nano over USB** – no pairing and no Bluetooth window. Without a cable it uses Bluetooth
-- **Looper on the board** – two parts A / B, overdub, undo / redo, loops rounded to bars of the Nano's tempo; loops saved to the card as WAV files, for the Jam Player on a Mac to fetch
-- **Drum machine** – two computed kits (electronic and Lo-Fi), 108 grooves in the Nano's tempo, a groove per looper part, a count-in, and drums that start with the take
-- **Jam player** – backing tracks in albums with covers from a microSD card, levelled to the same loudness, sent from the Jam Player on a Mac over Wi-Fi; a player mode on the footswitches: choose a song, then play it
-- **Level, gain reduction, auto-wah from your playing, EQ spectrum** – loudness per preset, a compressor's gain reduction in its editor, a wah that follows the picking, the Nano's sound as a live spectrum under the EQ's curve
-- **Bluetooth** through its ESP32-C6 – MIDI controllers with MIDI learn, a looper app, the editor through the board
-- **Firmware updates over Wi-Fi**, eight footswitches straight on the board (no extra board needed), FX mode with its own footswitch order
+| File | Address | Use it for |
+|---|---|---|
+| `nano-controller-<version>-full.bin` | `0x0` | the **first installation** (erases stored banks and settings) |
+| `nano-controller-<version>-update.bin` | `0x10000` | **updates** – your banks and settings stay |
+| `nano-controller-<version>-partitions.bin` | `0x8000` | **with the update** when coming from 1.18 or earlier (since 1.19 the settings memory is larger); settings stay |
 
-<table>
-<tr>
-<td width="50%"><img src="docs/images/p4/01-preset-mode.png" alt="7-inch board: main screen"></td>
-<td width="50%"><img src="docs/images/p4/18e-looper-to-part-b.png" alt="7-inch board: looper"></td>
-</tr>
-<tr>
-<td width="50%"><img src="docs/images/p4/79-player-mode.png" alt="7-inch board: player mode"></td>
-<td width="50%"><img src="docs/images/p4/03-fullscreen.png" alt="7-inch board: gig view"></td>
-</tr>
-</table>
+**First start** – switch the Nano on, close the Cortex Cloud app and the Nano Cortex Editor (the Nano accepts only one
+Bluetooth connection) and power the board. The Nano can be found for a few seconds after it is switched on; later,
+press **EXIT + CAPTURE** on it (the controller says so). If the board does not find the Nano within a minute, switch
+the Nano off and on again.
 
-Hardware, footswitch wiring, installation and building: **[p4/README.md](p4/README.md)**. Release files:
-`nano-controller-p4-<version>-…` on the [Releases](../../releases) page.
+Everything in detail: the **[manual](docs/manual.md)** – banks, scenes, expression pedal, capture and cab, FX
+presets, reverb switch, second effect, [Bluetooth MIDI](docs/manual.md#bluetooth-midi) with all messages, the looper
+app mode, what is stored where.
 
-## More
+## Companions: Editor and Jam Player
 
-- **[Manual](docs/manual.md)** – every function in detail: banks, scenes, expression pedal, capture and cab, FX presets, reverb switch, second
-  effect, [Bluetooth MIDI](docs/manual.md#bluetooth-midi) with all messages, looper mode, the editor through the
-  controller, [footswitch wiring](docs/manual.md#footswitches), what is stored where
-- **[Development](docs/development.md)** – build from source, project layout, serial console, how the controller talks
-  to the Nano
-- **[Web version](web/README.md)** – how the browser build is made
+- **[Nano Cortex Editor](https://github.com/DrD85/nano-cortex-editor)** – the desktop editor for the Nano. It can
+  connect **through** either board (Bluetooth device "Nano Cortex Controller"), so editor and board work side by
+  side. It also keeps automatic backups of the board's settings.
+- **[Jam Player](https://github.com/DrD85/jam-player)** – a backing-track player for the Mac that plays every track at
+  the same loudness. It sends tracks to the 7" board over Wi-Fi (each folder becomes an album; only new or changed
+  tracks go), and from version 1.5.0 on also their covers, and it fetches the loops saved on the board.
 
-The screenshots show example presets and are rendered from the firmware's own UI code
-(`tools/screenshots/make_screenshots.sh`).
+## Build from source
+
+- **4.3" board:** ESP-IDF 6.0, `idf.py build` in the project folder – [docs/development.md](docs/development.md) (project
+  layout, serial console, how the controller talks to the Nano). The browser version: [web/README.md](web/README.md).
+- **7" board:** ESP-IDF 6.0, in `p4/firmware`:
+  `idf.py -B build-public -D SDKCONFIG=build-public/sdkconfig -DNANO_PUBLIC=1 build` – details, host tests and the
+  real-time rules for the audio path in [p4/README.md](p4/README.md#build-from-source).
+
+The pictures of the screens are not photos: the firmware's own UI code draws them on a computer with example presets
+(`tools/screenshots/make_screenshots.sh`, `p4/firmware/tools/screenshots/make_p4.sh`); the GIFs are sequences of
+such pictures. The photos show the author's boards, with his own presets.
+
+## Not tested yet
+
+On the 7" board:
+
+- New in 1.2.0 and not yet played much: the Lo-Fi kit and its grooves, the live spectrum, saving loops (fetching them
+  with the Jam Player was only tried against a simulated board), the player mode's song selection
+- The Nano Cortex Editor through the board was tried with the board's ESP32-C6 updated to esp_hosted 2.13.1
+  (`p4/firmware/main/p4_c6_update.c` says how); with the C6's factory firmware it has not been tried yet
+- The Nano over Bluetooth **without** the cable, and changing between cable and Bluetooth while playing
+- Phone audio through the optional ESP32 bridge (`p4/a2dp-bridge`) into the Nano: the bridge alone was tried with a
+  phone, not yet wired to the board
+- The published build itself on a board: the screens and host tests come from the same code, and the author's own
+  build differs only in private artwork and data (pictures, an extra group of presets on the info page, the acoustic
+  drum samples) and the log port. The looper's long runs were measured with the author's build
 
 ## Credits
 
